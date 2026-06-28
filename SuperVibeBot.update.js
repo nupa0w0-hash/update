@@ -1,13 +1,13 @@
 //@name SuperVibeBot
-//@display-name 🐸 SuperVibeBot v1.4.8
-//@version 1.4.8
+//@display-name 🐸 SuperVibeBot v1.4.9
+//@version 1.4.9
 //@api 3.0
 //@update-url https://cdn.jsdelivr.net/gh/nupa0w0-hash/update@main/SuperVibeBot.update.js
 //@arg api_key string "" "Google AI Studio API 키를 입력하세요 (Vertex AI, API Hub 또는 GitHub Copilot 연동 시 불필요)."
 //@arg disable_safety int 0 "안전 필터 비활성화 (1=OFF, 0=ON)"
 
 if (typeof risuai === "undefined") {
-    alert("⚠️ SuperVibeBot v1.4.8는 RisuAI Plugin API 3.0이 필요합니다.");
+    alert("⚠️ SuperVibeBot v1.4.9는 RisuAI Plugin API 3.0이 필요합니다.");
     throw new Error("API 3.0 required");
 }
 
@@ -163,7 +163,7 @@ async function safeCopyText(text, options = {}) {
 }
 
 /**
- * SuperVibeBot v1.4.8 Release Notes
+ * SuperVibeBot v1.4.9 Release Notes
  *
  * 🎉 Major Changes
  * - Migrated to RisuAI Plugin API 3.0
@@ -7442,7 +7442,9 @@ const keroRuntimeLocalOps = {
     addBotMessage: null,
     handleKeroActionRequest: null,
     openKeroToolsPanel: null,
-    bindKeroToolsEvents: null
+    bindKeroToolsEvents: null,
+    runKeroBulkCreate: null,
+    autoResumeKeroBulkJobsUntilSettled: null
 };
 const keroReleasedZombieJobIds = new Set();
 const keroReleasedZombieJobMeta = new Map();
@@ -7991,6 +7993,626 @@ function normalizeKeroDependsOnList(action) {
             seen.add(value);
             return true;
         });
+}
+
+function normalizeKeroActionTypeName(type) {
+    const value = safeString(type).trim();
+    const key = value.toLowerCase().replace(/[\s_-]+/g, '');
+    const aliases = {
+        improve: 'improve',
+        enhance: 'improve',
+        fix: 'improve',
+        edit: 'improve',
+        revise: 'improve',
+        rewrite: 'improve',
+        update: 'update',
+        patch: 'patch',
+        apply: 'apply',
+        save: 'apply',
+        create: 'create',
+        add: 'create',
+        append: 'create',
+        generate: 'create',
+        make: 'create',
+        bulkcreate: 'bulk_create',
+        bulkadd: 'bulk_create',
+        delete: 'delete',
+        remove: 'delete'
+    };
+    return aliases[key] || value;
+}
+
+function normalizeKeroActionTargetName(target) {
+    const value = safeString(target).trim();
+    const key = value.toLowerCase().replace(/[\s_-]+/g, '');
+    const aliases = {
+        character: 'character',
+        char: 'character',
+        bot: 'character',
+        profile: 'character',
+        description: 'desc',
+        descriptiontext: 'desc',
+        characterdescription: 'desc',
+        desc: 'desc',
+        globalnote: 'globalNote',
+        posthistory: 'globalNote',
+        posthistoryinstructions: 'globalNote',
+        background: 'background',
+        backgroundhtml: 'background',
+        statushhtml: 'background',
+        statushtml: 'background',
+        statuswindow: 'background',
+        status: 'background',
+        ui: 'background',
+        css: 'background',
+        html: 'background',
+        vars: 'vars',
+        variables: 'vars',
+        defaultvariables: 'vars',
+        lorebook: 'lorebook',
+        lorebooks: 'lorebook',
+        globallore: 'lorebook',
+        lorebookentries: 'lorebook',
+        regex: 'regex',
+        regexscript: 'regex',
+        regexscripts: 'regex',
+        customscript: 'regex',
+        trigger: 'trigger',
+        triggers: 'trigger',
+        triggerscript: 'trigger',
+        triggerscripts: 'trigger',
+        authornote: 'authorNote',
+        authornotes: 'authorNote',
+        creatornote: 'creatorComment',
+        creatorcomment: 'creatorComment',
+        creatorcomments: 'creatorComment',
+        firstmessage: 'firstMessage',
+        firstmsg: 'firstMessage',
+        greeting: 'firstMessage',
+        initialmessage: 'firstMessage',
+        alternategreeting: 'alternateGreetings',
+        alternategreetings: 'alternateGreetings',
+        alternatemessage: 'alternateGreetings',
+        alternatemessages: 'alternateGreetings',
+        additionalfirstmessages: 'alternateGreetings',
+        translatornote: 'translatorNote',
+        translatornotes: 'translatorNote',
+        translationnote: 'translatorNote',
+        translationnotes: 'translatorNote',
+        chatlorebook: 'chatLorebook',
+        chatlore: 'chatLorebook',
+        locallore: 'chatLorebook',
+        module: 'module',
+        plugin: 'plugin'
+    };
+    return aliases[key] || value;
+}
+
+function getKeroActionLabel(type) {
+    const key = normalizeKeroActionTypeName(type);
+    const labels = {
+        improve: '개선',
+        update: '수정',
+        patch: '패치',
+        apply: '적용',
+        create: '생성',
+        bulk_create: '대량 생성',
+        delete: '삭제'
+    };
+    return labels[key] || safeString(type || '작업');
+}
+
+function getTargetLabel(target) {
+    const key = normalizeKeroActionTargetName(target);
+    const labels = {
+        character: '캐릭터',
+        desc: '디스크립션',
+        globalNote: '작가의 노트',
+        background: '상태창/배경',
+        vars: '변수',
+        lorebook: '로어북',
+        regex: '정규식',
+        trigger: '트리거',
+        authorNote: '작가의 노트',
+        creatorComment: '제작자 코멘트',
+        firstMessage: '첫 메시지',
+        alternateGreetings: '추가 첫 메시지',
+        translatorNote: '번역가의 노트',
+        chatLorebook: '챗 로어북',
+        module: '모듈',
+        plugin: '플러그인'
+    };
+    return labels[key] || safeString(target || '대상');
+}
+
+function findKeroActionJsonEnd(text, startIndex) {
+    const pairs = { '{': '}', '[': ']' };
+    const stack = [];
+    let inString = false;
+    let escaped = false;
+
+    for (let i = startIndex; i < text.length; i += 1) {
+        const ch = text[i];
+
+        if (inString) {
+            if (escaped) {
+                escaped = false;
+            } else if (ch === '\\') {
+                escaped = true;
+            } else if (ch === '"') {
+                inString = false;
+            }
+            continue;
+        }
+
+        if (ch === '"') {
+            inString = true;
+            continue;
+        }
+
+        if (pairs[ch]) {
+            stack.push(pairs[ch]);
+            continue;
+        }
+
+        if (ch === '}' || ch === ']') {
+            if (stack.pop() !== ch) return -1;
+            if (stack.length === 0) return i + 1;
+        }
+    }
+
+    return -1;
+}
+
+function isKeroActionShapedObject(entry) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return false;
+    const type = normalizeKeroActionTypeName(entry.type);
+    const target = normalizeKeroActionTargetName(entry.target);
+    if (!type || !target) return false;
+    return ['apply', 'bulk_create', 'create', 'delete', 'improve', 'patch', 'update'].includes(type);
+}
+
+function getKeroGlobalSingleFieldPatchKeys(target) {
+    const key = normalizeKeroActionTargetName(target);
+    if (key === 'desc') return ['desc', 'description', 'profile', 'characterDescription', 'character_description', 'descriptionText', 'description_text'];
+    if (key === 'globalNote') return ['globalNote', 'global_note', 'postHistoryInstructions', 'postHistory', 'post_history', 'post_history_instructions', 'instructions', 'systemPrompt', 'system_prompt'];
+    if (key === 'background') return ['backgroundHTML', 'backgroundHtml', 'background_html', 'background', 'statusWindow', 'statusHtml', 'statusHTML', 'html', 'css', 'statusCss', 'statusCSS'];
+    if (key === 'vars') return ['defaultVariables', 'variables', 'vars'];
+    if (typeof getTextFieldStudioConfig === 'function') {
+        const config = getTextFieldStudioConfig(key);
+        if (config) return [key, ...(config.candidates || [])];
+    }
+    return [key];
+}
+
+function assignKeroGlobalSingleFieldPatchPayload(payload, target, value) {
+    const key = normalizeKeroActionTargetName(target);
+    if (key === 'desc') payload.desc = value;
+    else if (key === 'globalNote') payload.globalNote = value;
+    else if (key === 'background') payload.backgroundHTML = value;
+    else if (key === 'vars') payload.defaultVariables = value;
+    else if (key) payload[key] = value;
+}
+
+function getKeroGlobalPatchValue(sources, keys) {
+    for (const source of ensureArray(sources)) {
+        if (!source || typeof source !== 'object') continue;
+        for (const key of ensureArray(keys)) {
+            if (Object.prototype.hasOwnProperty.call(source, key)) {
+                return { found: true, value: source[key], key };
+            }
+        }
+    }
+    return { found: false, value: undefined, key: '' };
+}
+
+function buildKeroGlobalSingleFieldPatchPayload(action, target) {
+    const canonicalTarget = normalizeKeroActionTargetName(target);
+    const keys = getKeroGlobalSingleFieldPatchKeys(canonicalTarget);
+    const payload = {};
+    const sources = [];
+    if (action?.payload && typeof action.payload === 'object' && !Array.isArray(action.payload)) sources.push(action.payload);
+    ['fields', 'data', 'character'].forEach((key) => {
+        if (action?.[key] && typeof action[key] === 'object' && !Array.isArray(action[key])) sources.push(action[key]);
+    });
+    if (sources.length) {
+        const backgroundSource = sources[0] || {};
+        if (canonicalTarget === 'background') {
+            const html = backgroundSource.backgroundHTML || backgroundSource.backgroundHtml || backgroundSource.background_html || backgroundSource.background || backgroundSource.statusWindow || backgroundSource.statusHtml || backgroundSource.statusHTML || backgroundSource.html || '';
+            const css = backgroundSource.css || backgroundSource.statusCss || backgroundSource.statusCSS || '';
+            if (html || css) {
+                payload.backgroundHTML = [safeString(html), css ? `<style>\n${safeString(css)}\n</style>` : ''].filter(Boolean).join('\n').trim();
+                return payload;
+            }
+        }
+        const match = getKeroGlobalPatchValue(sources, keys);
+        if (match.found) {
+            assignKeroGlobalSingleFieldPatchPayload(payload, canonicalTarget, match.value);
+            return payload;
+        }
+        const generic = getKeroGlobalPatchValue(sources, ['value', 'text', 'content', 'body']);
+        if (generic.found) {
+            assignKeroGlobalSingleFieldPatchPayload(payload, canonicalTarget, generic.value);
+            return payload;
+        }
+        Object.assign(payload, sources[0]);
+        return payload;
+    }
+    const direct = getKeroGlobalPatchValue([action || {}], [...keys, 'value', 'text', 'content', 'body']);
+    if (direct.found) assignKeroGlobalSingleFieldPatchPayload(payload, canonicalTarget, direct.value);
+    else if (action?.payload !== undefined && action?.payload !== null && typeof action.payload !== 'object') {
+        assignKeroGlobalSingleFieldPatchPayload(payload, canonicalTarget, action.payload);
+    }
+    return payload;
+}
+
+function normalizeKeroParsedActionForExecution(action) {
+    if (!action || typeof action !== 'object' || Array.isArray(action)) return null;
+    const type = normalizeKeroActionTypeName(action.type);
+    const target = normalizeKeroActionTargetName(action.target);
+    if (!type || !target) return null;
+    const normalized = { ...action, type, target };
+    const isTextTarget = ['desc', 'globalNote', 'background', 'vars'].includes(target)
+        || (typeof isTextFieldStudioTarget === 'function' && isTextFieldStudioTarget(target));
+    if (isTextTarget) {
+        if (['update', 'patch'].includes(type)) {
+            const payload = buildKeroGlobalSingleFieldPatchPayload(normalized, target);
+            if (!payload || !Object.keys(payload).length) return null;
+            return {
+                ...normalized,
+                type: 'update',
+                target: 'character',
+                payload,
+                reason: normalized.reason || 'single_field_action_normalized',
+                expectedCoverage: { ...(normalized.expectedCoverage && typeof normalized.expectedCoverage === 'object' ? normalized.expectedCoverage : {}), [target]: true }
+            };
+        }
+        if (['improve', 'apply'].includes(type)) return normalized;
+        return null;
+    }
+    if (['lorebook', 'regex', 'trigger'].includes(target)) {
+        if (type === 'create' && !normalized.payload && Number(normalized.count || normalized.total || normalized.requestedCount || 0) > 1) {
+            return { ...normalized, type: 'bulk_create' };
+        }
+        if (['improve', 'apply', 'create', 'bulk_create', 'delete'].includes(type)) return normalized;
+        return null;
+    }
+    if (target === 'character') {
+        if (['update', 'patch'].includes(type) && normalized.payload && typeof normalized.payload === 'object') return normalized;
+        return null;
+    }
+    if (['module', 'plugin'].includes(target)) {
+        if (['create', 'update', 'delete'].includes(type)) return normalized;
+        return null;
+    }
+    return null;
+}
+
+function normalizeKeroParsedActionList(actions = []) {
+    const normalizedActions = [];
+    const invalidActions = [];
+    ensureArray(actions).forEach((action) => {
+        const normalized = normalizeKeroParsedActionForExecution(action);
+        if (normalized) normalizedActions.push(normalized);
+        else invalidActions.push(makeCloneableData(action || {}));
+    });
+    if (invalidActions.length) {
+        Logger.warn(`Kero ignored ${invalidActions.length} non-runnable action(s) before fallback/coverage.`);
+    }
+    return { actions: normalizedActions, invalidActions };
+}
+
+function normalizeKeroCreatePayloads(payload) {
+    if (!payload) return [];
+    if (Array.isArray(payload)) return payload;
+    if (payload && typeof payload === 'object') {
+        if (Array.isArray(payload.items)) return payload.items;
+        if (Array.isArray(payload.entries)) return payload.entries;
+        if (Array.isArray(payload.payload)) return payload.payload;
+    }
+    return [payload];
+}
+
+function getKeroDeclaredCreateCount(req = {}, payloadCount = 0) {
+    const payload = req?.payload && typeof req.payload === 'object' && !Array.isArray(req.payload) ? req.payload : {};
+    const raw = Number(req?.count ?? req?.total ?? req?.totalCount ?? req?.amount ?? req?.requestedCount ?? payload.count ?? payload.total ?? payload.totalCount ?? payload.amount);
+    if (Number.isFinite(raw) && raw > 0) return Math.floor(raw);
+    const inferred = inferKeroBulkCreateCountFromText(req?.userRequest || req?.request || req?.prompt || req?.goal || req?.description || payload.userRequest || payload.request || '');
+    if (Number(inferred || 0) > 0) return Number(inferred);
+    return Math.max(0, Math.floor(Number(payloadCount) || 0));
+}
+
+function buildKeroCreateCountCoverageActions(userInput, actions = [], options = {}) {
+    const added = [];
+    ensureArray(actions).forEach((action, index) => {
+        if (!action || typeof action !== 'object') return;
+        const type = normalizeKeroActionTypeName(action.type);
+        const target = normalizeKeroActionTargetName(action.target);
+        if (type !== 'create' || !['lorebook', 'regex', 'trigger'].includes(target)) return;
+        const payloads = normalizeKeroCreatePayloads(action.payload);
+        const declared = getKeroDeclaredCreateCount(action, payloads.length);
+        const remaining = declared - payloads.length;
+        if (remaining <= 0) return;
+        added.push({
+            type: 'bulk_create',
+            target,
+            count: remaining,
+            requestedCount: remaining,
+            chunkSize: Math.min(KERO_BULK_DEFAULT_CHUNK_SIZE, Math.max(1, remaining)),
+            userRequest: safeString(action.userRequest || action.request || userInput).trim(),
+            reason: action.reason || 'create_count_coverage',
+            dependsOn: [safeString(action.stepId || action.actionJobId || `coverage-source-${index + 1}`)].filter(Boolean),
+            fullBuild: options.fullBuild === true || action.fullBuild === true
+        });
+    });
+    return added;
+}
+
+function parseBareKeroActionJson(text) {
+    const trimmed = safeString(text).trim();
+    if (!trimmed) return null;
+    const candidates = [trimmed];
+    const fenceMatch = trimmed.match(/^```\s*(?:json|javascript|js)?\s*([\s\S]*?)\s*```$/i);
+    if (fenceMatch) candidates.unshift(safeString(fenceMatch[1]).trim());
+    for (const candidate of candidates) {
+        const opener = candidate[0];
+        if (opener !== '{' && opener !== '[') continue;
+        const jsonEnd = findKeroActionJsonEnd(candidate, 0);
+        if (jsonEnd !== candidate.length) continue;
+        try {
+            const parsed = JSON.parse(candidate);
+            const parsedActions = Array.isArray(parsed) ? parsed : [parsed];
+            if (parsedActions.length > 0 && parsedActions.every(isKeroActionShapedObject)) {
+                const normalized = normalizeKeroParsedActionList(parsedActions);
+                return { text: '', actions: normalized.actions, invalidActions: normalized.invalidActions };
+            }
+        } catch (error) {
+            Logger.warn('Bare Kero action JSON parse failed:', error);
+        }
+    }
+    return null;
+}
+
+function parseKeroAction(text) {
+    const source = safeString(text);
+    const actionRanges = [];
+    const actions = [];
+    const tagRegex = /(^|\n|[\s:>])\s*(?:[-*]\s*)?@?\s*action\b/gi;
+    let match;
+
+    while ((match = tagRegex.exec(source))) {
+        const actionStart = match.index + safeString(match[1] || '').length;
+        let cursor = tagRegex.lastIndex;
+        while (cursor < source.length && /[\s:]/.test(source[cursor])) cursor += 1;
+        const fenceMatch = source.slice(cursor, cursor + 24).match(/^```\s*(?:json|javascript|js)?\s*/i);
+        if (fenceMatch) {
+            cursor += fenceMatch[0].length;
+            while (cursor < source.length && /[\s:]/.test(source[cursor])) cursor += 1;
+        }
+
+        const opener = source[cursor];
+        if (opener !== '{' && opener !== '[') continue;
+        const jsonEnd = findKeroActionJsonEnd(source, cursor);
+        if (jsonEnd < 0) {
+            Logger.warn('Kero action JSON block is incomplete.');
+            continue;
+        }
+
+        const rawJson = source.slice(cursor, jsonEnd);
+        let nextSearchIndex = jsonEnd;
+        try {
+            const parsed = JSON.parse(rawJson);
+            const parsedActions = Array.isArray(parsed) ? parsed : [parsed];
+            parsedActions
+                .filter((entry) => entry && typeof entry === 'object')
+                .forEach((entry) => actions.push(entry));
+            const closeFenceMatch = fenceMatch ? source.slice(jsonEnd, jsonEnd + 16).match(/^\s*```/) : null;
+            const rangeEnd = closeFenceMatch ? jsonEnd + closeFenceMatch[0].length : jsonEnd;
+            nextSearchIndex = rangeEnd;
+            actionRanges.push([actionStart, rangeEnd]);
+        } catch (error) {
+            Logger.warn('Kero action JSON parse failed:', error);
+        }
+        tagRegex.lastIndex = nextSearchIndex;
+    }
+
+    if (actionRanges.length === 0) {
+        const bareAction = parseBareKeroActionJson(source);
+        if (bareAction) return bareAction;
+        return { text: source, actions: [], invalidActions: [] };
+    }
+
+    let cleaned = '';
+    let lastIndex = 0;
+    for (const [start, end] of actionRanges) {
+        cleaned += source.slice(lastIndex, start);
+        lastIndex = end;
+    }
+    cleaned += source.slice(lastIndex);
+    const normalized = normalizeKeroParsedActionList(actions);
+    return { text: cleaned.trim(), actions: normalized.actions, invalidActions: normalized.invalidActions };
+}
+
+function recoverKeroActionDirectivesFromFieldText(value, label = '필드', collector = null, options = {}) {
+    const source = safeString(value);
+    if (!hasKeroActionDirectiveText(source)) return source;
+
+    const parsed = parseKeroAction(source);
+    const extractedActions = ensureArray(parsed.actions).filter((action) => action && typeof action === 'object');
+    if (!extractedActions.length) return source;
+
+    if (Array.isArray(collector)) {
+        collector.push(...extractedActions);
+    } else if (typeof collector === 'function') {
+        extractedActions.forEach((action) => collector(action));
+    }
+
+    if (options.silentRecoveryEvent !== true && options.suppressWorkstreamEvent !== true) {
+        try {
+            addKeroWorkstreamEvent(
+                '필드 내 액션 분리',
+                `${label} 본문에 섞인 @action ${extractedActions.length}개를 분리해 후속 작업으로 이어 실행합니다.`,
+                'action',
+                typeof resolveKeroActionProgressOptions === 'function' ? resolveKeroActionProgressOptions(options) : options
+            );
+        } catch (error) {
+            Logger.warn('Kero field action recovery event failed:', error?.message || error);
+        }
+    }
+    return safeString(parsed.text).trim();
+}
+
+function normalizeKeroBulkCreateRequest(action = {}) {
+    const target = normalizeKeroActionTargetName(action?.target);
+    const payload = action?.payload && typeof action.payload === 'object' && !Array.isArray(action.payload) ? action.payload : {};
+    const autoBudget = typeof getKeroCreateModelBudget === 'function'
+        ? getKeroCreateModelBudget(action)
+        : {
+            itemCharLimit: KERO_CREATE_DEFAULT_ITEM_CHAR_LIMIT,
+            chunkCharLimit: KERO_CREATE_DEFAULT_CHUNK_CHAR_LIMIT,
+            maxOutputTokens: 8192,
+            outputTokens: 8192
+        };
+    const rawCount = Number(action?.count ?? action?.total ?? action?.totalCount ?? action?.amount ?? action?.requestedCount ?? payload.count ?? payload.total ?? payload.totalCount ?? payload.amount);
+    const requestedCount = Number.isFinite(rawCount) && rawCount > 0 ? Math.floor(rawCount) : 0;
+    const count = requestedCount > 0 ? Math.max(1, Math.min(KERO_BULK_CREATE_MAX_ITEMS, requestedCount)) : 0;
+    const rawChunkSize = Number(action?.chunkSize ?? action?.batchSize ?? action?.limit ?? payload.chunkSize ?? payload.batchSize ?? payload.limit);
+    const userChunkSize = Number.isFinite(rawChunkSize) ? Math.floor(rawChunkSize) : KERO_BULK_DEFAULT_CHUNK_SIZE;
+    const rawItemCharLimit = Number(action?.itemCharLimit ?? action?.perItemCharLimit ?? payload.itemCharLimit ?? payload.perItemCharLimit);
+    const itemCharLimit = Number.isFinite(rawItemCharLimit) && rawItemCharLimit > 0
+        ? Math.max(KERO_CREATE_MIN_ITEM_CHAR_LIMIT, Math.min(KERO_CREATE_MAX_ITEM_CHAR_LIMIT, Math.floor(rawItemCharLimit)))
+        : autoBudget.itemCharLimit;
+    const rawChunkCharLimit = Number(action?.chunkCharLimit ?? action?.maxChunkChars ?? payload.chunkCharLimit ?? payload.maxChunkChars);
+    const chunkCharLimit = Number.isFinite(rawChunkCharLimit) && rawChunkCharLimit > 0
+        ? Math.max(KERO_CREATE_MIN_CHUNK_CHAR_LIMIT, Math.min(KERO_CREATE_MAX_CHUNK_CHAR_LIMIT, Math.floor(rawChunkCharLimit)))
+        : autoBudget.chunkCharLimit;
+    const userRequest = safeString(action?.userRequest || action?.request || action?.prompt || action?.goal || action?.description || payload.userRequest || payload.request || payload.prompt || payload.goal || payload.description).trim();
+    const subject = safeString(action?.subject || action?.bulkSubject || payload.subject || payload.bulkSubject || '').trim();
+    const qualityProfile = safeString(action?.qualityProfile || action?.profile || payload.qualityProfile || payload.profile || '').trim();
+    const perEntity = action?.perEntity === true || payload.perEntity === true || /^(true|1|yes)$/i.test(safeString(action?.perEntity || payload.perEntity || ''));
+    const fullBuild = action?.fullBuild === true || action?.coverageFullBuild === true || payload.fullBuild === true || payload.coverageFullBuild === true;
+    const strictBulkChunkLimit = target === 'lorebook' && (fullBuild || perEntity || !!qualityProfile)
+        ? Math.min(KERO_CREATE_BATCH_LIMIT, KERO_BULK_DEFAULT_CHUNK_SIZE)
+        : KERO_CREATE_BATCH_LIMIT;
+    const chunkSize = Math.max(1, Math.min(strictBulkChunkLimit, userChunkSize));
+    return { target, count, requestedCount, chunkSize, itemCharLimit, chunkCharLimit, maxOutputTokens: autoBudget.maxOutputTokens, modelOutputTokens: autoBudget.outputTokens, userRequest, subject, perEntity, qualityProfile, fullBuild };
+}
+
+function buildKeroBulkCreateChunks(total, requestedChunkSize, itemCharLimit, chunkCharLimit) {
+    const safeTotal = Math.max(0, Math.floor(Number(total) || 0));
+    const safeItemLimit = Math.max(1, Math.floor(Number(itemCharLimit) || KERO_CREATE_DEFAULT_ITEM_CHAR_LIMIT));
+    const safeChunkLimit = Math.max(safeItemLimit + KERO_CREATE_ENTRY_OVERHEAD_CHARS, Math.floor(Number(chunkCharLimit) || KERO_CREATE_DEFAULT_CHUNK_CHAR_LIMIT));
+    const requested = Math.max(1, Math.floor(Number(requestedChunkSize) || KERO_BULK_DEFAULT_CHUNK_SIZE));
+    const budgetChunkSize = Math.max(1, Math.floor((safeChunkLimit - 24) / (safeItemLimit + KERO_CREATE_ENTRY_OVERHEAD_CHARS)));
+    const effectiveChunkSize = Math.max(1, Math.min(requested, KERO_CREATE_BATCH_LIMIT, budgetChunkSize));
+    const chunks = [];
+    for (let start = 0; start < safeTotal; start += effectiveChunkSize) {
+        chunks.push({ start, count: Math.min(effectiveChunkSize, safeTotal - start), retries: 0, itemCharLimit: safeItemLimit, chunkCharLimit: safeChunkLimit });
+    }
+    return { chunks, effectiveChunkSize };
+}
+
+function normalizeKeroBulkRanges(ranges = []) {
+    return ensureArray(ranges)
+        .map((range) => {
+            const start = Math.max(0, Math.floor(Number(range?.start)));
+            const count = Math.max(0, Math.floor(Number(range?.count)));
+            if (!Number.isFinite(start) || !Number.isFinite(count) || count <= 0) return null;
+            return { ...range, start, count };
+        })
+        .filter(Boolean)
+        .sort((a, b) => a.start - b.start)
+        .reduce((acc, range) => {
+            const last = acc[acc.length - 1];
+            if (!last) {
+                acc.push({ ...range });
+                return acc;
+            }
+            const lastEnd = last.start + last.count;
+            const rangeEnd = range.start + range.count;
+            if (range.start <= lastEnd) {
+                last.count = Math.max(lastEnd, rangeEnd) - last.start;
+                last.saved = Number(last.saved || 0) + Number(range.saved || 0);
+                last.created = Number(last.created || 0) + Number(range.created || 0);
+                last.skipped = Number(last.skipped || 0) + Number(range.skipped || 0);
+                last.retryCount = Math.max(
+                    Math.max(0, Math.floor(Number(last.retryCount || last.retries || last.attempts || 0) || 0)),
+                    Math.max(0, Math.floor(Number(range.retryCount || range.retries || range.attempts || 0) || 0))
+                );
+                last.transportRetries = Math.max(
+                    Math.max(0, Math.floor(Number(last.transportRetries || 0) || 0)),
+                    Math.max(0, Math.floor(Number(range.transportRetries || 0) || 0))
+                );
+                return acc;
+            }
+            acc.push({ ...range });
+            return acc;
+        }, []);
+}
+
+function buildKeroRemainingBulkChunks(chunks = [], completedRanges = []) {
+    const doneRanges = normalizeKeroBulkRanges(completedRanges);
+    const remaining = [];
+    for (const rawChunk of ensureArray(chunks)) {
+        const chunk = {
+            ...rawChunk,
+            start: Math.max(0, Math.floor(Number(rawChunk?.start))),
+            count: Math.max(0, Math.floor(Number(rawChunk?.count)))
+        };
+        if (!Number.isFinite(chunk.start) || !Number.isFinite(chunk.count) || chunk.count <= 0) continue;
+        let cursor = chunk.start;
+        const chunkEnd = chunk.start + chunk.count;
+        for (const done of doneRanges) {
+            const doneEnd = done.start + done.count;
+            if (doneEnd <= cursor || done.start >= chunkEnd) continue;
+            if (done.start > cursor) {
+                remaining.push({ ...chunk, start: cursor, count: done.start - cursor });
+            }
+            cursor = Math.max(cursor, doneEnd);
+            if (cursor >= chunkEnd) break;
+        }
+        if (cursor < chunkEnd) {
+            remaining.push({ ...chunk, start: cursor, count: chunkEnd - cursor });
+        }
+    }
+    return remaining;
+}
+
+function normalizeKeroBulkFailedRanges(ranges = [], completedRanges = []) {
+    const completed = normalizeKeroBulkRanges(completedRanges);
+    return normalizeKeroBulkRanges(ranges)
+        .map((range) => {
+            const remaining = buildKeroRemainingBulkChunks([range], completed);
+            if (!remaining.length) return null;
+            return remaining.map((chunk) => ({
+                ...range,
+                ...chunk,
+                retryCount: Math.max(0, Math.floor(Number(range.retryCount || range.retries || range.attempts || 0) || 0))
+            }));
+        })
+        .filter(Boolean)
+        .flat();
+}
+
+function serializeKeroBulkChunks(chunks = []) {
+    return normalizeKeroBulkRanges(chunks).map((chunk) => ({
+        start: chunk.start,
+        count: chunk.count,
+        retries: Math.max(0, Math.floor(Number(chunk.retries || chunk.retryCount || 0) || 0)),
+        itemCharLimit: Number(chunk.itemCharLimit) || undefined,
+        chunkCharLimit: Number(chunk.chunkCharLimit) || undefined
+    }));
+}
+
+function summarizeKeroBulkCompletedRanges(completedRanges = []) {
+    return normalizeKeroBulkRanges(completedRanges).reduce((acc, range) => {
+        acc.ranges += 1;
+        acc.count += Number(range.count || 0);
+        acc.saved += Number(range.saved || range.count || 0);
+        acc.created += Number(range.created || 0);
+        acc.skipped += Number(range.skipped || 0);
+        return acc;
+    }, { ranges: 0, count: 0, saved: 0, created: 0, skipped: 0 });
 }
 
 function attachKeroActionPlanToMission(actions = []) {
@@ -11101,8 +11723,8 @@ function runSvbRuntimeSelfCheck(options = {}) {
     addSvbRuntimeFunctionCheck(checks, '캐릭터 패치 적용 applyKeroCharacterPatchAction', () => applyKeroCharacterPatchAction);
     addSvbRuntimeFunctionCheck(checks, '게이트웨이 복구 runKeroGatewayRecovery', () => runKeroGatewayRecovery);
     addSvbRuntimeFunctionCheck(checks, '로컬 복구 액션 buildKeroLocalGatewayFallbackResponse', () => buildKeroLocalGatewayFallbackResponse);
-    addSvbRuntimeFunctionCheck(checks, '대량 생성 실행 runKeroBulkCreate', () => runKeroBulkCreate);
-    addSvbRuntimeFunctionCheck(checks, '대량 생성 자동 재개 autoResumeKeroBulkJobsUntilSettled', () => autoResumeKeroBulkJobsUntilSettled);
+    addSvbRuntimeFunctionCheck(checks, '대량 생성 실행 runKeroBulkCreate', () => localFunctions.runKeroBulkCreate || globalThis?.runKeroBulkCreate);
+    addSvbRuntimeFunctionCheck(checks, '대량 생성 자동 재개 autoResumeKeroBulkJobsUntilSettled', () => localFunctions.autoResumeKeroBulkJobsUntilSettled || globalThis?.autoResumeKeroBulkJobsUntilSettled);
     addSvbRuntimeFunctionCheck(checks, '백그라운드 상태 renderKeroBackgroundStatus', () => renderKeroBackgroundStatus);
     addSvbRuntimeFunctionCheck(checks, '대기 요청 패널 renderKeroQueuePanel', () => renderKeroQueuePanel);
     addSvbRuntimeFunctionCheck(checks, '작업 흐름 렌더 renderKeroWorkstream', () => localFunctions.renderKeroWorkstream || keroWorkstreamRenderer);
@@ -11587,6 +12209,12 @@ function registerKeroRuntimeLocalOps(ops = {}) {
     if (typeof ops.bindKeroToolsEvents === 'function') {
         keroRuntimeLocalOps.bindKeroToolsEvents = ops.bindKeroToolsEvents;
     }
+    if (typeof ops.runKeroBulkCreate === 'function') {
+        keroRuntimeLocalOps.runKeroBulkCreate = ops.runKeroBulkCreate;
+    }
+    if (typeof ops.autoResumeKeroBulkJobsUntilSettled === 'function') {
+        keroRuntimeLocalOps.autoResumeKeroBulkJobsUntilSettled = ops.autoResumeKeroBulkJobsUntilSettled;
+    }
 }
 
 function clearKeroRuntimeLocalOps() {
@@ -11597,6 +12225,8 @@ function clearKeroRuntimeLocalOps() {
     keroRuntimeLocalOps.handleKeroActionRequest = null;
     keroRuntimeLocalOps.openKeroToolsPanel = null;
     keroRuntimeLocalOps.bindKeroToolsEvents = null;
+    keroRuntimeLocalOps.runKeroBulkCreate = null;
+    keroRuntimeLocalOps.autoResumeKeroBulkJobsUntilSettled = null;
 }
 
 async function resolveKeroWakeStorageId() {
@@ -27503,7 +28133,9 @@ ${steeringBlock ? `\n${steeringBlock}` : ''}`;
             handleKeroActionRequest,
             renderKeroWorkstream,
             openKeroToolsPanel,
-            bindKeroToolsEvents
+            bindKeroToolsEvents,
+            runKeroBulkCreate,
+            autoResumeKeroBulkJobsUntilSettled
         });
 
         bindSafeClick(document.getElementById('kero-runtime-diagnostics-btn'), async () => {
@@ -30100,7 +30732,9 @@ ${stringifyKeroContextPayload(effectiveContextPayload)}
         addBotMessage,
         handleKeroActionRequest,
         openKeroToolsPanel,
-        bindKeroToolsEvents
+        bindKeroToolsEvents,
+        runKeroBulkCreate,
+        autoResumeKeroBulkJobsUntilSettled
     });
     Logger.debug('=== Event Binding Check ===');
     Logger.debug(`Chat send: ${document.getElementById('risu-trans-chat-send') ? '✅' : '❌'}`);
@@ -34322,7 +34956,7 @@ function validatePluginScriptMetadata(script, expectedName, options = {}) {
         throw new Error(`${label} script는 //@api 3.0 메타데이터가 필요합니다.`);
     }
     if (api && api !== '3.0') {
-        throw new Error(`${label} script의 //@api ${api}는 v1.4.8 기준 권장 API 3.0이 아니어서 저장을 중단했습니다.`);
+        throw new Error(`${label} script의 //@api ${api}는 v1.4.9 기준 권장 API 3.0이 아니어서 저장을 중단했습니다.`);
     }
     if (metadata.updateURL) {
         if (!metadata.updateUrlValid) {
@@ -37116,7 +37750,7 @@ function getBulkOutputHint(targetType) {
     return 'result는 항목 JSON 배열이어야 합니다.';
 }
 
-/* === RisuAI SuperVibeBot v1.4.8 Guide (Concise Version) === */
+/* === RisuAI SuperVibeBot v1.4.9 Guide (Concise Version) === */
 const RISUAI_GUIDE = {
     overview: `
 ## System Overview
@@ -48085,7 +48719,7 @@ async function loadInitialSettings() {
 async function registerUIElements() {
     // 채팅 화면 메뉴에 버튼 추가 (플로팅 버튼 대신)
     await risuai.registerButton({
-        name: "SuperVibeBot v1.4.8",
+        name: "SuperVibeBot v1.4.9",
         icon: "🐸",
         iconType: "html",
         location: "chat"  // 채팅 메뉴에 배치 (화면 가림 방지)
@@ -48094,7 +48728,7 @@ async function registerUIElements() {
     });
 
     await risuai.registerSetting(
-        "SuperVibeBot v1.4.8 Settings",
+        "SuperVibeBot v1.4.9 Settings",
         async () => {
             await openSettingsWindow();
         },
@@ -48137,7 +48771,7 @@ function cleanup() {
 (async () => {
     try {
         Logger.info("=".repeat(50));
-        Logger.info("SuperVibeBot v1.4.8");
+        Logger.info("SuperVibeBot v1.4.9");
         Logger.info("RisuAI Plugin API 3.0");
         Logger.info("=".repeat(50));
         await loadInitialSettings();
