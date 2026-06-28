@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 4.0.3
+//@display-name ☸Eros Tower 4.0.4
 //@api 3.0
-//@version 4.0.3
+//@version 4.0.4
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -32,18 +32,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 4.0.3
+ * Eros Tower 4.0.4
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 4.0.3 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 4.0.4 requires the RisuAI API v3 global.');
 
-  const VERSION = '4.0.3';
+  const VERSION = '4.0.4';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 4.0.3`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 4.0.4`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -59,7 +59,7 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 4.0.3 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 4.0.4 analysis context';
   const GOOGLE_OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
   const GOOGLE_CLOUD_PLATFORM_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
   const PSYCHE_RECOMMENDED_MODELS = Object.freeze([
@@ -3721,7 +3721,10 @@
     const baseContextMessages = chatMessages.length ? chatMessages : normalizedRequestMessages;
     const firstMessageContext = withVirtualFirstMessage(baseContextMessages, registeredFirstMessage);
     const contextMessages = firstMessageContext.messages.length ? trimToLastUser(firstMessageContext.messages) : normalizedRequestMessages;
-    const mode = resolveMode(conf.mode, character, contextMessages, db, currentChat, conf);
+    const modeSignals = normalizedRequestMessages.length
+      ? normalizedRequestMessages.concat(contextMessages.slice(-8))
+      : contextMessages;
+    const mode = resolveMode(conf.mode, character, modeSignals, db, currentChat, conf);
     const noSession = !currentChat && !normalizedRequestMessages.length && !chatIdentity.key;
     const canonicalSources = collectCanonicalSources(character, db, currentChat, conf);
     const settingBlocks = buildSettingBlocks(character, db, currentChat, canonicalSources, registeredFirstMessage);
@@ -3809,7 +3812,7 @@
   function normalizeRequestMessages(messages) {
     return (Array.isArray(messages) ? messages : [])
       .filter(msg => msg && (msg.role === 'user' || msg.role === 'assistant' || msg.role === 'system'))
-      .map(msg => ({ role: msg.role, content: stringifyContent(msg.content) }))
+      .map(msg => ({ role: msg.role, content: stringifyContent(msg.content), promptInfo: msg.promptInfo || msg.data?.promptInfo || null }))
       .filter(msg => msg.content.trim());
   }
 
@@ -3866,6 +3869,7 @@
         role,
         content: content.trim(),
         id: firstNonEmpty(item?.id, item?.messageId, item?.mesId, item?.send_date, `${index}`),
+        promptInfo: item?.promptInfo || item?.data?.promptInfo || null,
         _sourceIndex: index,
       } : null;
     }).filter(Boolean);
@@ -3971,6 +3975,8 @@
   function resolveMode(configMode, character, messages, db = null, chat = null, conf = null) {
     const normalizedConfigMode = String(configMode || '').toLowerCase();
     if (normalizedConfigMode === 'rp' || normalizedConfigMode === 'novel') return normalizedConfigMode;
+    const promptMessageMode = resolvePromptMessageMode(messages);
+    if (promptMessageMode) return promptMessageMode;
     const promptToggleMode = resolvePromptToggleMode(character, db, chat, conf);
     if (promptToggleMode) return promptToggleMode;
     const text = [
@@ -3979,16 +3985,118 @@
       character?.desc,
       messages.slice(-4).map(m => m.content).join('\n'),
     ].join('\n').toLowerCase();
-    if (/(소설|서술|서사|장편|3인칭|삼인칭|novel|fiction|prose|chapter|third\s*person)/.test(text)) return 'novel';
-    if (/소설|novel|chapter|prose|3인칭|third person|문체|서술/.test(text)) return 'novel';
+    if (/(소설|장편|3인칭|삼인칭|novel|fiction|prose|chapter|third\s*person)/.test(text)) return 'novel';
     return 'rp';
   }
 
   function resolvePromptToggleMode(character, db, chat, conf = null) {
     const entries = collectModeVariableEntries(character, db, chat, conf);
-    for (const entry of entries) {
-      const mode = inferModeFromVariable(entry.key, entry.value);
-      if (mode) return mode;
+    return resolveModeFromEntries(entries);
+  }
+
+  function resolvePromptMessageMode(messages) {
+    const entries = [];
+    (Array.isArray(messages) ? messages : []).slice(-32).forEach((msg, index) => {
+      addPromptInfoModeEntries(entries, `request:${index}:promptInfo`, msg?.promptInfo || msg?.data?.promptInfo);
+      const explicit = extractExplicitPromptMode(msg?.content);
+      if (explicit) {
+        entries.push({
+          source: `request:${index}:text`,
+          key: 'mode',
+          value: explicit,
+          explicitPromptMode: true,
+        });
+      }
+    });
+    return resolveModeFromEntries(entries);
+  }
+
+  function resolveModeFromEntries(entries) {
+    const ranked = (Array.isArray(entries) ? entries : [])
+      .map((entry, index) => ({ entry, index, mode: inferModeFromVariable(entry?.key, entry?.value), score: modeVariablePriority(entry) }))
+      .filter(item => item.mode)
+      .sort((a, b) => (b.score - a.score) || (b.index - a.index));
+    return ranked[0]?.mode || '';
+  }
+
+  function addPromptInfoModeEntries(entries, source, info) {
+    if (!Array.isArray(entries) || !info || typeof info !== 'object') return;
+    if (Array.isArray(info.promptToggles)) {
+      info.promptToggles.slice(0, 40).forEach((toggle, index) => {
+        if (!toggle || typeof toggle !== 'object') return;
+        entries.push({
+          source: `${source}:toggle:${index}`,
+          key: firstNonEmpty(toggle.key, toggle.name, toggle.label, 'mode'),
+          value: firstNonEmpty(toggle.value, toggle.selected, toggle.current, toggle.option),
+          promptInfoToggle: true,
+        });
+      });
+    }
+    if (info.promptName) entries.push({ source: `${source}:name`, key: 'promptName', value: info.promptName });
+  }
+
+  function collectPromptToggleDefinitionText(character, db) {
+    const texts = [];
+    const add = value => {
+      if (typeof value === 'string' && value.trim()) texts.push(value);
+    };
+    add(db?.customPromptTemplateToggle);
+    add(character?.customModuleToggle);
+    add(character?.data?.customModuleToggle);
+    (Array.isArray(db?.modules) ? db.modules : []).forEach(module => {
+      add(module?.customModuleToggle);
+      add(module?.customPromptTemplateToggle);
+      add(module?.toggle);
+      add(module?.toggles);
+    });
+    return texts.join('\n');
+  }
+
+  function addToggleDefinitionModeEntries(entries, globalVars, definitionText) {
+    if (!Array.isArray(entries) || !globalVars || typeof globalVars !== 'object' || !definitionText) return;
+    parsePromptToggleDefinitions(definitionText).forEach(toggle => {
+      const raw = globalVars[`toggle_${toggle.key}`];
+      if (raw === undefined || raw === null || raw === '') return;
+      const index = parseNumber(raw, -1, -1, 9999);
+      const selected = index >= 0 ? toggle.options[index] : '';
+      if (!selected) return;
+      entries.push({
+        source: 'promptToggleDefinition',
+        key: `${toggle.key} ${toggle.label}`,
+        value: selected,
+        promptInfoToggle: true,
+      });
+    });
+  }
+
+  function parsePromptToggleDefinitions(text) {
+    return String(text || '')
+      .split(/\r?\n/)
+      .map(line => line.trim())
+      .filter(line => line && !line.startsWith('=') && line.includes('=select='))
+      .map(line => {
+        const parts = line.split('=');
+        const selectIndex = parts.findIndex(part => String(part).trim().toLowerCase() === 'select');
+        if (selectIndex < 2) return null;
+        return {
+          key: String(parts[0] || '').trim(),
+          label: String(parts[1] || '').trim(),
+          options: parts.slice(selectIndex + 1).join('=').split(',').map(option => option.trim()).filter(Boolean),
+        };
+      })
+      .filter(item => item?.key && item.options.length);
+  }
+
+  function extractExplicitPromptMode(text) {
+    const raw = normalizeModeTokenText(text);
+    if (!raw) return '';
+    const lines = raw.split(/\n|[;|]/).map(line => line.trim()).filter(Boolean).slice(0, 240);
+    for (const line of lines) {
+      if (!/(eros|psyche|에로스|사이키|mode|모드|이야기의\s*모드|출력\s*모드|writing\s*mode|rp|소설|novel)/.test(line)) continue;
+      if (/(?:mode|모드|이야기의\s*모드|출력\s*모드|writing\s*mode)\s*[:：=]\s*(?:소설|novel|fiction|prose)\b/.test(line)) return 'novel';
+      if (/(?:mode|모드|이야기의\s*모드|출력\s*모드|writing\s*mode)\s*[:：=]\s*(?:rp|롤플레잉|롤플레이|role\s*play|roleplay)\b/.test(line)) return 'rp';
+      if (/(?:selected|active|current|선택|현재|활성).{0,48}(?:소설|novel|fiction|prose)/.test(line)) return 'novel';
+      if (/(?:selected|active|current|선택|현재|활성).{0,48}(?:rp|롤플레잉|롤플레이|role\s*play|roleplay)/.test(line)) return 'rp';
     }
     return '';
   }
@@ -4020,10 +4128,14 @@
     };
     addMap('cbs', getEffectiveCbsToggles(conf, character, chat));
     addMap('globalChatVariables', db?.globalChatVariables);
+    addToggleDefinitionModeEntries(entries, db?.globalChatVariables, collectPromptToggleDefinitionText(character, db));
     addMap('chat.scriptState', chat?.scriptstate || chat?.scriptState || chat?.data?.scriptstate || chat?.data?.scriptState);
     addMap('chat.variables', chat?.variables || chat?.data?.variables);
     addMap('character.variables', character?.variables || character?.data?.variables);
     addMap('character.defaultVariables', parseCanonicalVariablePairs(firstNonEmpty(character?.defaultVariables, character?.data?.defaultVariables)));
+    (Array.isArray(chat?.message) ? chat.message : []).slice(-12).forEach((item, index) => {
+      addPromptInfoModeEntries(entries, `chat.message:${index}`, item?.promptInfo || item?.data?.promptInfo);
+    });
     addDeepMap('pluginCustomStorage', db?.pluginCustomStorage);
     getDatabasePlugins(db).forEach(plugin => {
       const label = referencePluginKey(plugin) || referenceLabel(plugin, 'plugin');
@@ -4043,6 +4155,8 @@
   }
 
   function inferModeFromVariable(key, value) {
+    const explicit = inferExplicitModeFromVariable(key, value);
+    if (explicit) return explicit;
     const k = normalizeModeTokenText(key);
     const v = normalizeModeTokenText(value);
     const direct = parseModeToken(v);
@@ -4052,13 +4166,27 @@
     return '';
   }
 
+  function inferExplicitModeFromVariable(key, value) {
+    const k = normalizeModeTokenText(key);
+    const v = normalizeModeTokenText(value);
+    if (!k && !v) return '';
+    const keyLooksLikeStoryMode = /(eros|psyche|에로스|사이키|mode|모드|이야기의\s*모드|출력\s*모드|writing\s*mode|toggle\s*모드|toggle\s*mode)/.test(k);
+    if (keyLooksLikeStoryMode) {
+      if (/(^|[^0-9a-z가-힣])(?:2|소설|novel|fiction|prose)(?=$|[^0-9a-z가-힣])/.test(v)) return 'novel';
+      if (/(^|[^0-9a-z가-힣])(?:rp|롤플레잉|롤플레이|role\s*play|roleplay)(?=$|[^0-9a-z가-힣])/.test(v)) return 'rp';
+    }
+    if (/(소설|novel|fiction|prose)/.test(k) && truthyCanonicalValue(v)) return 'novel';
+    if (/(rp|롤플레잉|롤플레이|role\s*play|roleplay)/.test(k) && truthyCanonicalValue(v)) return 'rp';
+    return '';
+  }
+
   function modeVariablePriority(entry) {
     const k = normalizeModeTokenText(entry?.key);
     let score = 0;
+    if (entry?.explicitPromptMode) score += 120;
+    if (entry?.promptInfoToggle) score += 95;
     if (/(eros|psyche|에로스|사이키)/.test(k)) score += 45;
     if (/(mode|모드|preset|프리셋|type|타입|style|스타일|format|형식|writing|작동|출력)/.test(k)) score += 24;
-    if (/(eros|psyche|에로스|사이키)/.test(k)) score += 40;
-    if (/(mode|모드|preset|프리셋|type|타입|style|스타일|format|형식|writing|작동|출력)/.test(k)) score += 20;
     if (parseModeToken(k)) score += 14;
     if (parseModeToken(normalizeModeTokenText(entry?.value))) score += 10;
     return score;
@@ -4066,16 +4194,16 @@
 
   function isModeVariableKey(text) {
     const raw = normalizeModeTokenText(text);
-    if (/(eros|psyche|에로스|사이키|mode|모드|preset|프리셋|type|타입|style|스타일|format|형식|writing|작동|출력|rp|role|novel|fiction|소설|서술)/.test(raw)) return true;
+    if (/(eros|psyche|에로스|사이키|mode|모드|preset|프리셋|type|타입|style|스타일|format|형식|writing|작동|출력|rp|role|novel|fiction|소설)/.test(raw)) return true;
     return /(eros|psyche|에로스|사이키|mode|모드|preset|프리셋|type|타입|style|스타일|format|형식|writing|작동|출력)/.test(raw)
       || Boolean(parseModeToken(raw));
   }
 
   function parseModeToken(text) {
     const raw = normalizeModeTokenText(text);
-    if (/(소설|서술|서사|장편|3인칭|삼인칭|novel|fiction|prose|chapter|third\s*person)/.test(raw)) return 'novel';
+    if (/(소설|장편|3인칭|삼인칭|novel|fiction|prose|chapter|third\s*person)/.test(raw)) return 'novel';
     if (/(역극|역할극|롤플|role\s*play|roleplay|role-play|rp\b)/.test(raw)) return 'rp';
-    if (/(^|[^a-z0-9가-힣])(?:novel|fiction|prose|chapter|third\s*person|3인칭|소설|서술)(?=$|[^a-z0-9가-힣])/.test(raw)) return 'novel';
+    if (/(^|[^a-z0-9가-힣])(?:novel|fiction|prose|chapter|third\s*person|3인칭|소설)(?=$|[^a-z0-9가-힣])/.test(raw)) return 'novel';
     if (/(^|[^a-z0-9가-힣])(?:rp|role\s*play|roleplay|role-play|역극|역할극|롤플)(?=$|[^a-z0-9가-힣])/.test(raw)) return 'rp';
     return '';
   }
@@ -9472,11 +9600,40 @@
     } catch (_) {}
   }
 
+  function prepareRunProgressDocumentSurface(doc) {
+    try {
+      if (!doc) return;
+      const body = doc.body || null;
+      if (body) {
+        const hasDashboardResidue = Boolean(body.querySelector?.('.et-wrap, #et-close, .et-head, .et-view'));
+        if (hasDashboardResidue) body.innerHTML = '';
+      }
+      if (doc.documentElement?.style) {
+        doc.documentElement.style.margin = '0';
+        doc.documentElement.style.width = '100%';
+        doc.documentElement.style.minHeight = '0';
+        doc.documentElement.style.background = 'transparent';
+        doc.documentElement.style.overflow = 'visible';
+      }
+      if (body?.style) {
+        body.style.margin = '0';
+        body.style.width = '100%';
+        body.style.minHeight = '0';
+        body.style.height = '0';
+        body.style.background = 'transparent';
+        body.style.overflow = 'visible';
+      }
+    } catch (err) {
+      log('run progress surface reset failed', err?.message || err);
+    }
+  }
+
   function ensureRunProgressNode() {
     try {
       if (Runtime.dashboardVisible) return null;
       const doc = getRunProgressDocument();
       if (!doc) return null;
+      prepareRunProgressDocumentSurface(doc);
       const styleId = runProgressStyleId();
       if (!doc.getElementById(styleId)) {
         const style = doc.createElement('style');
@@ -12586,12 +12743,38 @@
               realArg: { writingMode: 'novel' },
             }],
           }, {}, DEFAULT_CONFIG);
+          const byGlobalSelect = resolveMode('auto', targetCharacter, targetMessages, {
+            globalChatVariables: {
+              'toggle_모드': '2',
+            },
+          }, {}, DEFAULT_CONFIG);
+          const byDefinitionIndexOne = resolveMode('auto', targetCharacter, targetMessages, {
+            customPromptTemplateToggle: '모드=이야기의 모드=select=RP,소설',
+            globalChatVariables: {
+              'toggle_모드': '1',
+            },
+          }, {}, DEFAULT_CONFIG);
+          const byPromptInfo = resolveMode('auto', targetCharacter, [{
+            role: 'system',
+            content: 'Prompt info',
+            promptInfo: { promptToggles: [{ key: '이야기의 모드', value: '소설' }] },
+          }], {}, {}, DEFAULT_CONFIG);
+          const byLatestPromptInfo = resolveMode('auto', targetCharacter, targetMessages, {}, {
+            message: [
+              { promptInfo: { promptToggles: [{ key: '이야기의 모드', value: 'RP' }] } },
+              { promptInfo: { promptToggles: [{ key: '이야기의 모드', value: '소설' }] } },
+            ],
+          }, DEFAULT_CONFIG);
+          const byRequestText = resolveMode('auto', targetCharacter, [{
+            role: 'system',
+            content: 'Eros Tower bridge: 이야기의 모드: 소설',
+          }], {}, {}, DEFAULT_CONFIG);
           const manualOverride = resolveMode('rp', targetCharacter, targetMessages, {
             pluginCustomStorage: {
               psyche: { mode: '소설' },
             },
           }, {}, DEFAULT_CONFIG);
-          return { byPluginStorage, byPluginRealArg, manualOverride };
+          return { byPluginStorage, byPluginRealArg, byGlobalSelect, byDefinitionIndexOne, byPromptInfo, byLatestPromptInfo, byRequestText, manualOverride };
         },
         testSessionRewind: async (beforeCount = 12, targetCount = 8) => {
           const scope = `${context?.scope || 'debug'}:rewind-test:${Date.now().toString(36)}`;
