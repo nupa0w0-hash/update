@@ -1,13 +1,13 @@
 //@name SuperVibeBot
-//@display-name 🐸 SuperVibeBot v1.5.20
-//@version 1.5.20
+//@display-name 🐸 SuperVibeBot v1.5.21
+//@version 1.5.21
 //@api 3.0
 //@update-url https://github.com/nupa0w0-hash/supervibebot-update/releases/latest/download/SuperVibeBot.update.js
 //@arg api_key string "" "Google AI Studio API 키를 입력하세요 (Vertex AI, API Hub 또는 GitHub Copilot 연동 시 불필요)."
 //@arg disable_safety int 0 "안전 필터 비활성화 (1=OFF, 0=ON)"
 
 if (typeof risuai === "undefined") {
-    alert("⚠️ SuperVibeBot v1.5.20는 RisuAI Plugin API 3.0이 필요합니다.");
+    alert("⚠️ SuperVibeBot v1.5.21는 RisuAI Plugin API 3.0이 필요합니다.");
     throw new Error("API 3.0 required");
 }
 
@@ -164,7 +164,7 @@ async function safeCopyText(text, options = {}) {
 }
 
 /**
- * SuperVibeBot v1.5.20 Release Notes
+ * SuperVibeBot v1.5.21 Release Notes
  *
  * 🎉 Major Changes
  * - Caps sub-agent consultation packets to 120k desktop, 80k constrained, and 60k background chars
@@ -187,6 +187,7 @@ async function safeCopyText(text, options = {}) {
  * - Model context hides legacy lorebook activation details and character personality/scenario aliases by default
  * - Runtime diagnostics now verify the legacy field policy for lorebook writes and model context
  * - Runtime diagnostics now verify SuperVibeBot uses the GitHub Releases latest update URL
+ * - Plugin creation guidance now recommends GitHub Releases latest/download over raw branch URLs
  * - Sub-agent report calls now default to 4096 output tokens on desktop and 2048 on constrained/mobile/webview profiles
  * - Explicit sub-agent output overrides are clamped to a WebView-safe hard cap
  * - API responses that ignore max_tokens are shortened before entering Kero's parser/renderer
@@ -201,6 +202,7 @@ async function safeCopyText(text, options = {}) {
  * - Runtime diagnostics now verify bulk apply idx filtering
  * - Runtime diagnostics now verify secondkey/multiple mode suppression and personality/scenario alias filtering
  * - Runtime diagnostics now reject raw refs update-url regressions for SuperVibeBot
+ * - RisuAI plugin metadata guide now warns against raw.githubusercontent branch URLs as default update channels
  * - Prevents GLM/Kimi/API Hub sub-agents from returning or rendering oversized manager reports
  * - Runtime diagnostics now verify sub-agent hard caps, response truncation, and conservative large-payload parallel limits
  * - Safer selected-item expansion in both global and Kero chat execution paths
@@ -12483,7 +12485,7 @@ function addSvbRuntimePluginMetadataSelfTest(checks) {
         const superVibeMetadata = buildPluginMetadataSummary([
             '//@name SuperVibeBot',
             '//@display-name 🐸 SuperVibeBot diagnostic',
-            '//@version 1.5.20',
+            '//@version 1.5.21',
             '//@api 3.0',
             `//@update-url ${SUPER_VIBE_BOT_RELEASE_UPDATE_URL}`
         ].join('\n'));
@@ -32558,7 +32560,8 @@ ${metaBlock}
 - 모듈 생성: @action {"type":"create","target":"module","payload":{"name":"모듈 이름","description":"설명","namespace":"선택","lorebook":[],"regex":[],"trigger":[],"cjs":"","assets":[]},"enabled":false}
 - 플러그인 생성: @action {"type":"create","target":"plugin","payload":{"name":"plugin_id","displayName":"표시 이름","script":"//@name plugin_id\\n//@api 3.0\\n//@version 0.1.0\\n...","enabled":false}}
 - 플러그인 자동 업데이트를 요청받으면 script 상단 512바이트 안에 //@version을 두고, 배포 URL이 확인된 경우에만 //@update-url https://... 원본 JS URL을 추가한다. 임의/가짜 update-url은 넣지 않는다.
-- //@update-url은 https 원본 JS여야 하며 서버가 CORS와 Range 요청을 지원해야 한다. GitHub raw 또는 Cloudflare Workers 같은 안정적인 배포 URL을 사용한다.
+- //@update-url은 https 원본 JS여야 하며 서버가 CORS와 Range 요청을 지원해야 한다. GitHub를 쓰는 경우 raw 브랜치 URL보다 Releases latest/download/FILENAME.js를 우선 사용한다.
+- raw.githubusercontent.com 브랜치 경로와 GitHub raw refs 경로는 캐시/지연으로 업데이트가 안 보일 수 있으므로 자동 업데이트 기본값으로 추천하지 않는다.
 
         ### update (수정)
         - 사용자가 명시적으로 수정/업데이트를 요청하면 별도 승인 없이 바로 실행된다.
@@ -39791,7 +39794,7 @@ function getBulkOutputHint(targetType) {
     return 'result는 항목 JSON 배열이어야 합니다.';
 }
 
-/* === RisuAI SuperVibeBot v1.5.20 Guide (Concise Version) === */
+/* === RisuAI SuperVibeBot v1.5.21 Guide (Concise Version) === */
 const RISUAI_GUIDE = {
     overview: `
 ## System Overview
@@ -39824,7 +39827,8 @@ RisuAI plugins are JavaScript extensions running in a sandboxed iframe.
 - Recommended: \`//@display-name\`, \`//@version\`, \`//@arg\`, \`//@link\`, \`//@update-url\`
 - \`//@name\` is the stable plugin identity. Do not rename it during updates; use displayName/\`//@display-name\` for visible labels.
 - \`//@version\` is required for RisuAI update checks and should be within the first 512 bytes.
-- \`//@update-url\` must be an HTTPS raw JavaScript URL that supports CORS and Range requests. Do not invent a placeholder update URL.
+- \`//@update-url\` must be an HTTPS JavaScript file URL that supports browser fetches. For GitHub-hosted plugins, prefer Releases \`latest/download/FILENAME.js\` over raw branch URLs.
+- Avoid \`raw.githubusercontent.com\` branch URLs and GitHub raw refs URLs for default auto-update guidance because branch raw caches can stay stale.
 - When updating an existing plugin, keep \`//@name\` unchanged, bump \`//@version\`, and preserve \`//@update-url\` unless the user provides a new release URL.
 
 ### Runtime Rules
@@ -50930,7 +50934,7 @@ async function loadInitialSettings() {
 async function registerUIElements() {
     // 채팅 화면 메뉴에 버튼 추가 (플로팅 버튼 대신)
     await risuai.registerButton({
-        name: "SuperVibeBot v1.5.20",
+        name: "SuperVibeBot v1.5.21",
         icon: "🐸",
         iconType: "html",
         location: "chat"  // 채팅 메뉴에 배치 (화면 가림 방지)
@@ -50939,7 +50943,7 @@ async function registerUIElements() {
     });
 
     await risuai.registerSetting(
-        "SuperVibeBot v1.5.20 Settings",
+        "SuperVibeBot v1.5.21 Settings",
         async () => {
             await openSettingsWindow();
         },
@@ -50982,7 +50986,7 @@ function cleanup() {
 (async () => {
     try {
         Logger.info("=".repeat(50));
-        Logger.info("SuperVibeBot v1.5.20");
+        Logger.info("SuperVibeBot v1.5.21");
         Logger.info("RisuAI Plugin API 3.0");
         Logger.info("=".repeat(50));
         await loadInitialSettings();
