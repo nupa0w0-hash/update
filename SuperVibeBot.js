@@ -1,13 +1,13 @@
 ﻿//@name SuperVibeBot
-//@display-name 🐸 SuperVibeBot v1.5.5
-//@version 1.5.5
+//@display-name 🐸 SuperVibeBot v1.5.6
+//@version 1.5.6
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/supervibebot-update/main/SuperVibeBot.update.js
 //@arg api_key string "" "Google AI Studio API 키를 입력하세요 (Vertex AI, API Hub 또는 GitHub Copilot 연동 시 불필요)."
 //@arg disable_safety int 0 "안전 필터 비활성화 (1=OFF, 0=ON)"
 
 if (typeof risuai === "undefined") {
-    alert("⚠️ SuperVibeBot v1.5.5는 RisuAI Plugin API 3.0이 필요합니다.");
+    alert("⚠️ SuperVibeBot v1.5.6는 RisuAI Plugin API 3.0이 필요합니다.");
     throw new Error("API 3.0 required");
 }
 
@@ -163,7 +163,7 @@ async function safeCopyText(text, options = {}) {
 }
 
 /**
- * SuperVibeBot v1.5.5 Release Notes
+ * SuperVibeBot v1.5.6 Release Notes
  *
  * 🎉 Major Changes
  * - Migrated to RisuAI Plugin API 3.0
@@ -8256,6 +8256,16 @@ function mergeSelectedArrayResult(fullOriginal, sourceIndexes, replacementItems)
     return full;
 }
 
+function getTargetIdxFallback(target, actionIdx) {
+    if (Number.isInteger(actionIdx)) return actionIdx;
+    const parsedIdx = Number(actionIdx);
+    if (Number.isInteger(parsedIdx)) return parsedIdx;
+    if (target === 'lorebook') return currentLorebookResult?.idx;
+    if (target === 'regex') return currentRegexResult?.idx;
+    if (target === 'trigger') return currentTriggerResult?.idx;
+    return undefined;
+}
+
 function expandIdxList(target, action, char) {
     const isSelected = action?.selected === true || action?.idx === 'selected';
     if (isSelected) {
@@ -11835,6 +11845,46 @@ function addSvbRuntimeMissingImproveFallbackSelfTest(checks) {
     ));
 }
 
+function addSvbRuntimeIndexFallbackSelfTest(checks) {
+    const result = readSvbRuntimeValue('선택 항목 idx fallback 자체 테스트', () => {
+        const previousLoreResult = currentLorebookResult;
+        const previousRegexResult = currentRegexResult;
+        try {
+            currentLorebookResult = { idx: 7 };
+            currentRegexResult = { idx: 3 };
+            const explicitNumber = expandIdxList('lorebook', { idx: 2 }, {});
+            const explicitString = expandIdxList('regex', { idx: '4' }, {});
+            const fallbackLore = expandIdxList('lorebook', { idx: undefined }, {});
+            const invalid = expandIdxList('trigger', { idx: 'not-a-number' }, {});
+            return {
+                explicitNumber: explicitNumber[0],
+                explicitString: explicitString[0],
+                fallbackLore: fallbackLore[0],
+                invalidLength: invalid.length
+            };
+        } finally {
+            currentLorebookResult = previousLoreResult;
+            currentRegexResult = previousRegexResult;
+        }
+    });
+    if (!result.ok) {
+        checks.push(makeSvbRuntimeCheck(false, '선택 항목 idx fallback 자체 테스트', result.error, 'error'));
+        return;
+    }
+    const value = result.value || {};
+    const problems = [];
+    if (value.explicitNumber !== 2) problems.push('숫자 idx 처리 실패');
+    if (value.explicitString !== 4) problems.push('문자열 idx 처리 실패');
+    if (value.fallbackLore !== 7) problems.push('현재 로어북 결과 fallback 실패');
+    if (value.invalidLength !== 0) problems.push('무효 idx 차단 실패');
+    checks.push(makeSvbRuntimeCheck(
+        problems.length === 0,
+        '선택 항목 idx fallback 자체 테스트',
+        problems.length ? `문제: ${problems.join(' / ')}` : '명시 idx와 현재 결과 fallback idx가 undefined helper 없이 처리됨',
+        problems.length ? 'error' : 'ok'
+    ));
+}
+
 function addSvbRuntimeKeroChatContinuitySelfTest(checks) {
     const result = readSvbRuntimeValue('Kero recent chat continuity self test', () => {
         const currentInput = 'apply that fix now';
@@ -13138,6 +13188,7 @@ function runSvbRuntimeSelfCheck(options = {}) {
     addSvbRuntimeSteeringQueueSelfTest(checks);
     addSvbRuntimeControlRoutingSelfTest(checks);
     addSvbRuntimeMissingImproveFallbackSelfTest(checks);
+    addSvbRuntimeIndexFallbackSelfTest(checks);
     addSvbRuntimeKeroChatContinuitySelfTest(checks);
     addSvbRuntimeInputQueueRecoverySelfTest(checks);
     addSvbRuntimeWarningReplaySelfTest(checks);
@@ -32177,6 +32228,11 @@ ${stringifyKeroContextPayload(effectiveContextPayload)}
     bindChatEvents();
     bindKeroToolsEvents();
     bindDebugButton();
+    registerKeroRuntimeLocalOps({
+        renderWorkstream: renderKeroWorkstream,
+        updateQueuedInputUi: updateKeroQueuedInputUi,
+        addBotMessage
+    });
     await initializeKeroAssistantState();
     registerKeroRuntimeLocalOps({
         drainQueuedInputs: drainKeroQueuedInputs,
@@ -39203,7 +39259,7 @@ function getBulkOutputHint(targetType) {
     return 'result는 항목 JSON 배열이어야 합니다.';
 }
 
-/* === RisuAI SuperVibeBot v1.5.5 Guide (Concise Version) === */
+/* === RisuAI SuperVibeBot v1.5.6 Guide (Concise Version) === */
 const RISUAI_GUIDE = {
     overview: `
 ## System Overview
@@ -50217,7 +50273,7 @@ async function loadInitialSettings() {
 async function registerUIElements() {
     // 채팅 화면 메뉴에 버튼 추가 (플로팅 버튼 대신)
     await risuai.registerButton({
-        name: "SuperVibeBot v1.5.5",
+        name: "SuperVibeBot v1.5.6",
         icon: "🐸",
         iconType: "html",
         location: "chat"  // 채팅 메뉴에 배치 (화면 가림 방지)
@@ -50226,7 +50282,7 @@ async function registerUIElements() {
     });
 
     await risuai.registerSetting(
-        "SuperVibeBot v1.5.5 Settings",
+        "SuperVibeBot v1.5.6 Settings",
         async () => {
             await openSettingsWindow();
         },
@@ -50269,7 +50325,7 @@ function cleanup() {
 (async () => {
     try {
         Logger.info("=".repeat(50));
-        Logger.info("SuperVibeBot v1.5.5");
+        Logger.info("SuperVibeBot v1.5.6");
         Logger.info("RisuAI Plugin API 3.0");
         Logger.info("=".repeat(50));
         await loadInitialSettings();
@@ -50386,6 +50442,7 @@ function bindAllResultApplyButtons() {
         });
     }
 }
+
 
 
 
