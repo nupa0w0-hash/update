@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.6
+//@display-name ☸Eros Tower 1.1.7
 //@api 3.0
-//@version 1.1.6
+//@version 1.1.7
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -33,18 +33,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.6
+ * Eros Tower 1.1.7
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.6 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.7 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.6';
+  const VERSION = '1.1.7';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.6`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.7`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -61,7 +61,7 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.6 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.7 analysis context';
   const GOOGLE_OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
   const GOOGLE_CLOUD_PLATFORM_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
   const PSYCHE_RECOMMENDED_MODELS = Object.freeze([
@@ -517,6 +517,7 @@
     snapshots: scope => `snapshots:${scope}`,
     runLog: scope => `runlog:${scope}`,
     usage: 'usage-ledger',
+    quota: 'quota-snapshots',
     embeddingCache: (providerId, model) => `embedding-cache:${slug(providerId || 'provider')}:${hashString(model || 'model')}`,
   };
 
@@ -930,7 +931,7 @@
     const raw = String(provider || '').trim().toLowerCase();
     if (['anthropic', 'claude'].includes(raw)) return 'claude';
     if (['vertex', 'vertexai', 'vertex-ai'].includes(raw)) return 'vertex-ai';
-    if (['ollama', 'openai', 'deepseek', 'google', 'vertex-ai', 'openrouter', 'groq', 'together', 'mistral', 'fireworks', 'perplexity', 'nanogpt', 'vercel-ai-gateway', 'lmstudio', 'vllm', 'custom'].includes(raw)) return raw;
+    if (['ollama', 'openai', 'deepseek', 'google', 'vertex-ai', 'openrouter', 'groq', 'together', 'mistral', 'fireworks', 'perplexity', 'nanogpt', 'vercel-ai-gateway', 'lmstudio', 'vllm', 'copilot', 'custom'].includes(raw)) return raw;
     return 'ollama';
   }
 
@@ -952,6 +953,7 @@
       'vercel-ai-gateway': { baseUrl: 'https://ai-gateway.vercel.sh/v1', model: 'openai/gpt-4.1-mini' },
       lmstudio: { baseUrl: 'http://127.0.0.1:1234/v1', model: '' },
       vllm: { baseUrl: 'http://127.0.0.1:8000/v1', model: '' },
+      copilot: { baseUrl: '', model: '' },
       custom: { baseUrl: '', model: '' },
     };
     return map[normalizeProvider(provider)] || map.ollama;
@@ -9752,6 +9754,59 @@
     return normalized;
   }
 
+  function normalizeQuotaSnapshot(snapshot) {
+    if (!snapshot || typeof snapshot !== 'object') return null;
+    const providerId = cleanString(snapshot.providerId, '');
+    if (!providerId) return null;
+    return {
+      provider: normalizeProvider(snapshot.provider || ''),
+      providerId,
+      checkedAt: cleanString(snapshot.checkedAt, nowIso()),
+      billingKind: cleanString(snapshot.billingKind, 'manual'),
+      unit: cleanString(snapshot.unit, ''),
+      planName: cleanString(snapshot.planName, ''),
+      limit: snapshot.limit === null || snapshot.limit === undefined ? null : numberOrNull(snapshot.limit),
+      used: snapshot.used === null || snapshot.used === undefined ? null : numberOrNull(snapshot.used),
+      remaining: snapshot.remaining === null || snapshot.remaining === undefined ? null : numberOrNull(snapshot.remaining),
+      resetAt: cleanString(snapshot.resetAt, ''),
+      source: cleanString(snapshot.source, 'manual'),
+      message: cleanString(snapshot.message, ''),
+      details: snapshot.details && typeof snapshot.details === 'object' ? snapshot.details : null,
+    };
+  }
+
+  function emptyQuotaSnapshots() {
+    return { version: VERSION, updatedAt: '', providers: {} };
+  }
+
+  function normalizeQuotaSnapshots(value) {
+    const providers = {};
+    Object.entries(value?.providers || {}).forEach(([key, snapshot]) => {
+      const normalized = normalizeQuotaSnapshot({ providerId: key, ...(snapshot || {}) });
+      if (normalized) providers[normalized.providerId] = normalized;
+    });
+    return {
+      version: cleanString(value?.version, VERSION),
+      updatedAt: cleanString(value?.updatedAt, ''),
+      providers,
+    };
+  }
+
+  async function loadQuotaSnapshots() {
+    return normalizeQuotaSnapshots(await Storage.get(STORAGE.quota, emptyQuotaSnapshots()));
+  }
+
+  async function saveQuotaSnapshot(snapshot) {
+    const normalized = normalizeQuotaSnapshot(snapshot);
+    if (!normalized) return null;
+    const store = await loadQuotaSnapshots();
+    store.providers[normalized.providerId] = normalized;
+    store.updatedAt = nowIso();
+    store.version = VERSION;
+    await Storage.set(STORAGE.quota, store);
+    return normalized;
+  }
+
   function usageEventId() {
     return `usage-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
   }
@@ -9855,6 +9910,7 @@
       month: emptyUsageBucket(thisMonth),
       providers: {},
       providersMonth: {},
+      providerEvents: {},
       recent: normalized.events.slice(0, 40),
       updatedAt: normalized.updatedAt,
     };
@@ -9864,6 +9920,8 @@
       if (parts.day === today) addUsageToBucket(summary.today, event);
       if (parts.month === thisMonth) addUsageToBucket(summary.month, event);
       const providerKey = event.providerId || event.provider || 'provider';
+      summary.providerEvents[providerKey] = summary.providerEvents[providerKey] || [];
+      summary.providerEvents[providerKey].push(event);
       summary.providers[providerKey] = summary.providers[providerKey] || emptyUsageBucket(providerKey);
       summary.providers[providerKey].provider = event.provider || '';
       summary.providers[providerKey].providerId = event.providerId || '';
@@ -10764,8 +10822,9 @@
       const snapshots = context.noSession ? [] : await loadStateSnapshots(context.scope);
       const backup = context.noSession ? null : await Storage.get(STORAGE.backup(context.scope), null);
       const usageLedger = await loadUsageLedger();
+      const quotaSnapshots = await loadQuotaSnapshots();
       installDebugApi(conf, context, state, snapshots, backup);
-      await paintDashboardHtml(buildDashboardHtml(conf, context, state, runLogs, snapshots, backup, usageLedger));
+      await paintDashboardHtml(buildDashboardHtml(conf, context, state, runLogs, snapshots, backup, usageLedger, quotaSnapshots));
       setupDashboardHandlers(conf, context, state);
     } catch (err) {
       Runtime.lastError = err?.message || String(err || 'dashboard open failed');
@@ -10777,7 +10836,7 @@
     }
   }
 
-  function buildDashboardHtml(conf, context, state, runLogs, snapshots = [], backup = null, usageLedger = null) {
+  function buildDashboardHtml(conf, context, state, runLogs, snapshots = [], backup = null, usageLedger = null, quotaSnapshots = null) {
     const logs = Array.isArray(runLogs) ? runLogs : [];
     return `
       <style>${dashboardStyles()}</style>
@@ -10806,7 +10865,7 @@
           <section class="et-view" data-view="agents">${renderAgentPanel(conf)}</section>
           <section class="et-view" data-view="references">${renderReferencePanel(conf, context)}</section>
           <section class="et-view" data-view="state">${renderStatePanel(conf, context, state, snapshots, backup)}</section>
-          <section class="et-view" data-view="usage">${renderUsagePanel(conf, usageLedger)}</section>
+          <section class="et-view" data-view="usage">${renderUsagePanel(conf, usageLedger, quotaSnapshots)}</section>
           <section class="et-view" data-view="runs">${renderRunLogPanel(logs)}</section>
         </main>
       </div>`;
@@ -11770,8 +11829,9 @@
     }).join('')}</div>${list.length > 24 ? `<details class="et-full"><summary>전체보기</summary><pre>${escHtml(safeJsonStringify(list))}</pre></details>` : ''}`;
   }
 
-  function renderUsagePanel(conf, usageLedger = null) {
+  function renderUsagePanel(conf, usageLedger = null, quotaSnapshots = null) {
     const summary = summarizeUsageLedger(usageLedger || emptyUsageLedger(), conf);
+    const quotas = normalizeQuotaSnapshots(quotaSnapshots || emptyQuotaSnapshots());
     return `
       <section class="et-panel">
         <div class="et-ops-head">
@@ -11795,7 +11855,7 @@
       </section>
       <section class="et-panel" style="margin-top:14px">
         <h2>Provider별 사용량</h2>
-        ${renderUsageProviderTable(conf, summary)}
+        ${renderUsageProviderTable(conf, summary, quotas)}
       </section>
       <section class="et-panel" style="margin-top:14px">
         <h2>최근 API 이벤트</h2>
@@ -11832,11 +11892,94 @@
     return `내장 단가 추정${estimated}`;
   }
 
+  function isLocalProviderId(provider) {
+    const id = String(provider?.id || provider?.providerId || provider?.preset || '').toLowerCase();
+    const baseUrl = String(provider?.baseUrl || '').toLowerCase();
+    return id.includes('ollama-local') || id === 'lmstudio' || id === 'vllm' || /127\.0\.0\.1|localhost/.test(baseUrl);
+  }
+
+  function isOllamaCloudProvider(provider) {
+    const id = String(provider?.id || provider?.providerId || provider?.preset || '').toLowerCase();
+    const baseUrl = String(provider?.baseUrl || '').toLowerCase();
+    return id.includes('ollama-cloud') || baseUrl.includes('ollama.com');
+  }
+
+  function normalizeUsageProviderId(value) {
+    return String(value || '').trim();
+  }
+
+  function providerRuntimeApiKey(provider, conf = null) {
+    if (!provider) return '';
+    return provider.apiKey || conf?.providerKeys?.[normalizeProvider(provider.provider)] || '';
+  }
+
+  function providerHasUsableConnection(provider, conf = null) {
+    if (!provider) return false;
+    if (providerRuntimeApiKey(provider, conf)) return true;
+    if (isUserCustomProvider(provider) && (provider.baseUrl || provider.modelsPath || provider.chatPath)) return true;
+    return false;
+  }
+
+  function collectConfiguredUsageProviderIds(conf, summary) {
+    const ids = new Set();
+    const agents = pipelineAgents(conf).filter(agent => agent?.enabled !== false);
+    agents.forEach(agent => {
+      const id = normalizeUsageProviderId(agent.providerId || conf.activeProviderId);
+      if (id) ids.add(id);
+    });
+    if (conf?.embeddingEnabled) {
+      const id = normalizeUsageProviderId(conf.embeddingProviderId || conf.activeProviderId);
+      if (id) ids.add(id);
+    }
+    Object.entries(summary?.providers || {}).forEach(([id, bucket]) => {
+      if (Number(bucket?.events || 0) > 0) ids.add(id);
+    });
+    return ids;
+  }
+
+  function isProviderVisibleForUsage(provider, key, conf, summary, configuredIds) {
+    const id = normalizeUsageProviderId(key || provider?.id || provider?.providerId || '');
+    const bucket = summary?.providers?.[id] || null;
+    if (Number(bucket?.events || 0) > 0) return true;
+    if (providerHasUsableConnection(provider, conf)) return true;
+    if (configuredIds?.has?.(id)) {
+      if (providerRuntimeApiKey(provider, conf) || isLocalProviderId(provider)) return true;
+      if (isUserCustomProvider(provider) && (provider?.baseUrl || provider?.modelsPath || provider?.chatPath)) return true;
+    }
+    return false;
+  }
+
+  function usageWindowBucket(events, windowMs) {
+    const cutoff = Date.now() - Number(windowMs || 0);
+    const bucket = emptyUsageBucket('window');
+    (Array.isArray(events) ? events : []).forEach(event => {
+      const at = new Date(event.at || 0).getTime();
+      if (!Number.isFinite(at) || at < cutoff) return;
+      addUsageToBucketFlat(bucket, event);
+    });
+    return bucket;
+  }
+
+  function formatOllamaCloudAllowanceLine(events) {
+    const session = usageWindowBucket(events, 5 * 60 * 60 * 1000);
+    const weekly = usageWindowBucket(events, 7 * 24 * 60 * 60 * 1000);
+    return `로컬 누적: 최근 5시간 ${session.events}회/${formatUsageTokens(session.totalTokens)} tokens · 최근 7일 ${weekly.events}회/${formatUsageTokens(weekly.totalTokens)} tokens`;
+  }
+
+  function providerAllowanceLine(provider, key, summary, quota = null) {
+    const events = summary?.providerEvents?.[key] || [];
+    if (isOllamaCloudProvider(provider)) return formatOllamaCloudAllowanceLine(events);
+    if (quota) return formatQuotaSnapshotLine(quota);
+    return '';
+  }
+
   function quotaSupportInfo(provider) {
     const providerKey = normalizeProvider(provider?.provider || provider?.id || '');
+    if (providerKey === 'ollama' && isOllamaCloudProvider(provider)) return { checkable: false, label: '5시간/7일 리셋 · 로컬 누적' };
     if (providerKey === 'openrouter') return { checkable: true, label: '크레딧 조회 가능' };
     if (providerKey === 'deepseek') return { checkable: true, label: '잔액 조회 가능' };
-    if (providerKey === 'nanogpt') return { checkable: true, label: '잔액 조회 가능' };
+    if (providerKey === 'nanogpt') return { checkable: true, label: '잔액/구독 사용량 조회 가능' };
+    if (providerKey === 'copilot') return { checkable: false, label: 'GitHub org/enterprise metrics 필요' };
     if (providerKey === 'ollama' || providerKey === 'lmstudio' || providerKey === 'vllm') return { checkable: false, label: '로컬/비과금' };
     if (providerKey === 'openai' || providerKey === 'claude' || providerKey === 'vertex-ai') {
       return { checkable: false, label: 'Admin/IAM 별도 필요' };
@@ -11844,17 +11987,21 @@
     return { checkable: false, label: '표준 조회 없음' };
   }
 
-  function renderUsageProviderTable(conf, summary) {
+  function renderUsageProviderTable(conf, summary, quotaSnapshots = null) {
     const registry = Array.isArray(conf?.providerRegistry) ? conf.providerRegistry : [];
-    const keys = uniqueStrings(registry.map(item => item.id).concat(Object.keys(summary.providers || {})));
-    if (!keys.length) return emptyState('등록된 Provider가 없습니다.');
+    const configuredIds = collectConfiguredUsageProviderIds(conf, summary);
+    const keys = uniqueStrings(registry.map(item => item.id).concat(Object.keys(summary.providers || {})))
+      .filter(key => isProviderVisibleForUsage(findProviderEntry(registry, key), key, conf, summary, configuredIds));
+    if (!keys.length) return emptyState('사용량을 표시할 Provider가 없습니다. API Key가 저장됐거나, 에이전트/임베딩에서 실제 선택됐거나, 사용 이력이 생긴 Provider만 여기에 표시됩니다.');
     const rows = keys.map(key => {
       const provider = findProviderEntry(registry, key) || null;
       const total = summary.providers[key] || emptyUsageBucket(key);
       const month = summary.providersMonth[key] || emptyUsageBucket(key);
       const providerKey = normalizeProvider(provider?.provider || total.provider || '');
       const support = quotaSupportInfo(provider || total);
-      const hasKey = Boolean(provider?.apiKey);
+      const hasKey = Boolean(providerRuntimeApiKey(provider, conf));
+      const quota = quotaSnapshots?.providers?.[key] || null;
+      const allowanceLine = providerAllowanceLine(provider || total, key, summary, quota);
       const quotaButton = support.checkable
         ? `<button type="button" data-usage-quota-provider="${escHtml(key)}" ${hasKey ? '' : 'disabled'}>할당량 체크</button>`
         : '';
@@ -11873,6 +12020,7 @@
           <td>${escHtml(formatUsageBucketCost(month))}</td>
           <td>
             <div class="et-note">${escHtml(support.label)}</div>
+            ${allowanceLine ? `<div class="et-note">${escHtml(allowanceLine)}</div>` : ''}
             ${quotaButton}
           </td>
         </tr>`;
@@ -11883,6 +12031,24 @@
         <tbody>${rows}</tbody>
       </table>
       <div class="et-note" style="margin-top:10px">OpenAI/Anthropic/Vertex의 조직 사용량/비용 API는 별도 Admin 또는 IAM 권한이 필요해서 기본 API Key만으로는 조회하지 않습니다.</div>`;
+  }
+
+  function formatQuotaNumber(value, unit = '') {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return '-';
+    if (unit === 'usd') return formatUsageUsd(n);
+    return `${n.toLocaleString('ko-KR')}${unit && !['credits'].includes(unit) ? ` ${unit}` : ''}`;
+  }
+
+  function formatQuotaSnapshotLine(snapshot) {
+    if (!snapshot) return '';
+    const parts = [];
+    if (snapshot.remaining !== null && snapshot.remaining !== undefined) parts.push(`남음 ${formatQuotaNumber(snapshot.remaining, snapshot.unit)}`);
+    if (snapshot.used !== null && snapshot.used !== undefined) parts.push(`사용 ${formatQuotaNumber(snapshot.used, snapshot.unit)}`);
+    if (snapshot.limit !== null && snapshot.limit !== undefined) parts.push(`한도 ${formatQuotaNumber(snapshot.limit, snapshot.unit)}`);
+    if (snapshot.resetAt) parts.push(`리셋 ${formatDateShort(snapshot.resetAt)}`);
+    if (!parts.length && snapshot.message) parts.push(snapshot.message);
+    return `${parts.join(' / ')}${snapshot.checkedAt ? ` · ${formatDateShort(snapshot.checkedAt)}` : ''}`;
   }
 
   function renderUsageRecentEvents(events) {
@@ -12431,6 +12597,65 @@
     return readResponseJsonWithTimeout(res, runtime.timeoutMs, label);
   }
 
+  function originFromApiBase(baseUrl, fallback = '') {
+    const raw = normalizeUrl(baseUrl || fallback || '');
+    if (!raw) return '';
+    try {
+      const url = new URL(raw);
+      return `${url.protocol}//${url.host}`;
+    } catch (_) {
+      return raw.replace(/\/api(?:\/v\d+(?:\w+)?)?$/i, '');
+    }
+  }
+
+  async function readQuotaJsonWith(runtime, url, label, options = {}) {
+    const res = await fetchWithTimeout(url, {
+      method: options.method || 'GET',
+      headers: options.headers || await buildApiHeaders(runtime, false),
+      body: options.body,
+    }, runtime.timeoutMs, label);
+    if (!res.ok) {
+      const text = await readResponseTextWithTimeout(res, runtime.timeoutMs, label).catch(() => '');
+      throw new Error(`${label} ${res.status}: ${text.slice(0, 220)}`);
+    }
+    return readResponseJsonWithTimeout(res, runtime.timeoutMs, label);
+  }
+
+  async function fetchNanoGptQuota(runtime) {
+    const origin = originFromApiBase(runtime.baseUrl, 'https://nano-gpt.com');
+    const key = runtime.apiKey || '';
+    const headers = { Accept: 'application/json', 'x-api-key': key, Authorization: `Bearer ${key}` };
+    const balance = await readQuotaJsonWith(runtime, `${origin}/api/check-balance`, 'nanogpt balance', { method: 'POST', headers });
+    let subscription = null;
+    try {
+      subscription = await readQuotaJsonWith(runtime, `${origin}/api/subscription/v1/usage`, 'nanogpt subscription usage', { method: 'GET', headers });
+    } catch (err) {
+      subscription = { error: err.message };
+    }
+    const usd = numberOrNull(balance?.usd_balance ?? balance?.usdBalance ?? balance?.balance ?? balance?.data?.usd_balance);
+    const used = numberOrNull(subscription?.current_usage ?? subscription?.usage ?? subscription?.used ?? subscription?.data?.current_usage ?? subscription?.data?.usage);
+    const limit = numberOrNull(subscription?.limit ?? subscription?.monthly_limit ?? subscription?.daily_limit ?? subscription?.data?.limit ?? subscription?.data?.monthly_limit);
+    const remaining = limit !== null && used !== null ? Math.max(0, limit - used) : numberOrNull(subscription?.remaining ?? subscription?.data?.remaining);
+    const planName = cleanString(subscription?.plan ?? subscription?.plan_name ?? subscription?.data?.plan ?? subscription?.data?.plan_name, '');
+    return normalizeQuotaSnapshot({
+      provider: runtime.provider,
+      providerId: runtime.providerId,
+      checkedAt: nowIso(),
+      billingKind: subscription?.error ? 'balance' : 'monthly-allowance',
+      unit: limit !== null || used !== null ? 'requests' : 'usd',
+      planName,
+      limit,
+      used,
+      remaining,
+      source: 'provider-api',
+      message: [
+        usd !== null ? `잔액 ${formatUsageUsd(usd)}` : '',
+        subscription?.error ? `구독 사용량 조회 실패: ${subscription.error}` : '',
+      ].filter(Boolean).join(' / '),
+      details: { balance, subscription },
+    });
+  }
+
   async function checkProviderQuota(provider, conf) {
     const runtime = quotaProviderRuntime(provider, conf);
     const providerKey = normalizeProvider(runtime.provider);
@@ -12444,10 +12669,24 @@
       const totalCredits = numberOrNull(payload.total_credits ?? payload.totalCredits ?? payload.limit);
       const totalUsage = numberOrNull(payload.total_usage ?? payload.totalUsage ?? payload.usage);
       const remaining = totalCredits !== null && totalUsage !== null ? totalCredits - totalUsage : numberOrNull(payload.remaining ?? payload.limit_remaining);
+      const snapshot = await saveQuotaSnapshot({
+        provider: providerKey,
+        providerId: runtime.providerId,
+        checkedAt: nowIso(),
+        billingKind: 'balance',
+        unit: 'usd',
+        limit: totalCredits,
+        used: totalUsage,
+        remaining,
+        source: 'provider-api',
+        message: `OpenRouter 크레딧 조회 완료`,
+        details: payload,
+      });
       return {
         provider: providerKey,
         message: `OpenRouter 크레딧: 사용 ${formatUsageUsd(totalUsage)} / 총 ${formatUsageUsd(totalCredits)}${remaining !== null ? ` / 남음 ${formatUsageUsd(remaining)}` : ''}`,
         details: payload,
+        snapshot,
       };
     }
     if (providerKey === 'deepseek') {
@@ -12455,19 +12694,34 @@
       const data = await readQuotaJson(runtime, `${base}/user/balance`, 'deepseek balance');
       const balances = Array.isArray(data?.balance_infos) ? data.balance_infos : Array.isArray(data?.data?.balance_infos) ? data.data.balance_infos : [];
       const lines = balances.map(item => `${item.currency || item.currency_code || 'balance'} ${item.total_balance ?? item.granted_balance ?? item.topped_up_balance ?? '-'}`).join(' / ');
+      const first = balances[0] || {};
+      const total = numberOrNull(first.total_balance ?? first.granted_balance ?? first.topped_up_balance);
+      const snapshot = await saveQuotaSnapshot({
+        provider: providerKey,
+        providerId: runtime.providerId,
+        checkedAt: nowIso(),
+        billingKind: 'balance',
+        unit: first.currency || first.currency_code || '',
+        remaining: total,
+        source: 'provider-api',
+        message: lines ? `DeepSeek 잔액: ${lines}` : '',
+        details: data,
+      });
       return {
         provider: providerKey,
         message: lines ? `DeepSeek 잔액: ${lines}` : 'DeepSeek 잔액 응답을 받았지만 표시할 balance_infos가 없습니다.',
         details: data,
+        snapshot,
       };
     }
     if (providerKey === 'nanogpt') {
-      const data = await readQuotaJson(runtime, buildApiUrl(runtime.baseUrl || 'https://nano-gpt.com/api/v1', '/balance'), 'nanogpt balance');
-      const balance = numberOrNull(data?.balance ?? data?.data?.balance ?? data?.credits ?? data?.data?.credits);
+      const snapshot = await fetchNanoGptQuota(runtime);
+      await saveQuotaSnapshot(snapshot);
       return {
         provider: providerKey,
-        message: balance !== null ? `NanoGPT 잔액: ${formatUsageUsd(balance)}` : 'NanoGPT 잔액 응답을 받았지만 표준 balance 필드를 찾지 못했습니다.',
-        details: data,
+        message: snapshot.message || formatQuotaSnapshotLine(snapshot) || 'NanoGPT 사용량 조회 완료.',
+        details: snapshot.details,
+        snapshot,
       };
     }
     const support = quotaSupportInfo(runtime);
