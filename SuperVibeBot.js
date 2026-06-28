@@ -1,13 +1,13 @@
 //@name SuperVibeBot
-//@display-name 🐸 SuperVibeBot v1.5.12
-//@version 1.5.12
+//@display-name 🐸 SuperVibeBot v1.5.13
+//@version 1.5.13
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/supervibebot-update/refs/heads/main/SuperVibeBot.update.js
 //@arg api_key string "" "Google AI Studio API 키를 입력하세요 (Vertex AI, API Hub 또는 GitHub Copilot 연동 시 불필요)."
 //@arg disable_safety int 0 "안전 필터 비활성화 (1=OFF, 0=ON)"
 
 if (typeof risuai === "undefined") {
-    alert("⚠️ SuperVibeBot v1.5.12는 RisuAI Plugin API 3.0이 필요합니다.");
+    alert("⚠️ SuperVibeBot v1.5.13는 RisuAI Plugin API 3.0이 필요합니다.");
     throw new Error("API 3.0 required");
 }
 
@@ -163,10 +163,12 @@ async function safeCopyText(text, options = {}) {
 }
 
 /**
- * SuperVibeBot v1.5.12 Release Notes
+ * SuperVibeBot v1.5.13 Release Notes
  *
  * 🎉 Major Changes
- * - Added a separate output-token cap for sub-agent reports to reduce WebView/PocketRisu crash pressure
+ * - Added hard output-token and response-character caps for sub-agent reports to reduce WebView/PocketRisu crash pressure
+ * - Truncates oversized sub-agent responses before JSON parsing and manager-board rendering
+ * - Limits sub-agent parallelism to 1 for payloads over 120k chars even if WebView/mobile detection fails
  * - Stabilized missing @action recovery for character and part editing jobs
  * - Prevented unqualified lorebook/regex/trigger improve fallback from expanding to all items
  * - Blocked malformed embedded @action text from being saved inside character fields
@@ -174,13 +176,17 @@ async function safeCopyText(text, options = {}) {
  *
  * ✨ New Features
  * - Sub-agent report calls now default to 4096 output tokens on desktop and 2048 on constrained/mobile/webview profiles
+ * - Explicit sub-agent output overrides are clamped to a WebView-safe hard cap
+ * - API responses that ignore max_tokens are shortened before entering Kero's parser/renderer
+ * - Large sub-agent payloads use serial consultation to avoid multiplying memory pressure
  * - Lorebook/regex/trigger improve requests can recover from model responses that forgot @action
  * - Unqualified part edits prefer checked items or the currently open item
  * - Explicit all/every/전체 requests still run as all-item jobs
  * - Malformed embedded action directives now fail before corrupting saved text
  *
  * 🔧 Improvements
- * - Prevents GLM/Kimi/API Hub sub-agents from returning oversized manager reports unless explicitly overridden
+ * - Prevents GLM/Kimi/API Hub sub-agents from returning or rendering oversized manager reports
+ * - Runtime diagnostics now verify sub-agent hard caps, response truncation, and conservative large-payload parallel limits
  * - Safer selected-item expansion in both global and Kero chat execution paths
  * - Runtime diagnostics now catch missing lorebook fallback regressions
  * - Field-action recovery behavior is consistent between global save paths and Kero UI paths
@@ -2751,6 +2757,15 @@ const KERO_SUBAGENT_PACKET_CHAR_LIMIT = 260000;
 const KERO_SUBAGENT_SYSTEM_EXCERPT_CHAR_LIMIT = 6000;
 const KERO_SUBAGENT_USER_TEXT_CHAR_LIMIT = 12000;
 const KERO_SUBAGENT_MANAGER_BOARD_CHAR_LIMIT = 14000;
+const KERO_SUBAGENT_DESKTOP_OUTPUT_TOKEN_CAP = 4096;
+const KERO_SUBAGENT_CONSTRAINED_OUTPUT_TOKEN_CAP = 2048;
+const KERO_SUBAGENT_DESKTOP_OUTPUT_TOKEN_HARD_CAP = 8192;
+const KERO_SUBAGENT_CONSTRAINED_OUTPUT_TOKEN_HARD_CAP = 4096;
+const KERO_SUBAGENT_DESKTOP_RESPONSE_CHAR_LIMIT = 18000;
+const KERO_SUBAGENT_CONSTRAINED_RESPONSE_CHAR_LIMIT = 9000;
+const KERO_SUBAGENT_DESKTOP_RESPONSE_CHAR_HARD_LIMIT = 26000;
+const KERO_SUBAGENT_CONSTRAINED_RESPONSE_CHAR_HARD_LIMIT = 12000;
+const SVB_SUBAGENT_SERIALIZED_PARALLEL_ONE_CHARS = 120000;
 const SVB_RUNTIME_PROFILE_CACHE_MS = 3000;
 const SVB_RUNTIME_UA_MAX_CHARS = 512;
 const SVB_MOBILE_VIEWPORT_MAX_WIDTH = 768;
@@ -4794,8 +4809,7 @@ function resolveSvbSubAgentParallelLimit(trace = null, requestedCount = 0) {
     const serializedChars = Number(trace?.serializedChars || 0) || 0;
     const adaptiveLimits = getSvbAdaptiveRuntimeLimits();
     let limit = adaptiveLimits.subAgentMaxParallel;
-    if (serializedChars > 900000) limit = adaptiveLimits.subAgentHugeParallel;
-    else if (serializedChars > 350000) limit = adaptiveLimits.subAgentLargeParallel;
+    if (serializedChars > SVB_SUBAGENT_SERIALIZED_PARALLEL_ONE_CHARS) limit = adaptiveLimits.subAgentHugeParallel;
     return Math.max(1, Math.min(limit, requestedCount || limit));
 }
 
@@ -12691,7 +12705,7 @@ function addSvbRuntimeSubAgentPayloadBudgetSelfTest(checks) {
             parallelLarge: resolveSvbSubAgentParallelLimit({ serializedChars: 400000 }, 8),
             parallelNormal: resolveSvbSubAgentParallelLimit({ serializedChars: 100000 }, 8),
             expectedHuge: adaptiveLimits.subAgentHugeParallel,
-            expectedLarge: adaptiveLimits.subAgentLargeParallel,
+            expectedLarge: adaptiveLimits.subAgentHugeParallel,
             expectedNormal: adaptiveLimits.subAgentMaxParallel,
             desktopOutputCap: resolveSvbSubAgentMaxOutputTokens({
                 adaptiveLimits: computeSvbAdaptiveRuntimeLimits({ tier: 'desktop', constrained: false, lowMemory: false, backgrounded: false })
@@ -12699,7 +12713,25 @@ function addSvbRuntimeSubAgentPayloadBudgetSelfTest(checks) {
             constrainedOutputCap: resolveSvbSubAgentMaxOutputTokens({
                 adaptiveLimits: computeSvbAdaptiveRuntimeLimits({ tier: 'mobile', constrained: true, lowMemory: true, backgrounded: false, isMobile: true, isWebView: true })
             }, 65536),
-            explicitOutputCap: resolveSvbSubAgentMaxOutputTokens({ subAgentMaxOutputTokens: 1234 }, 65536)
+            explicitOutputCap: resolveSvbSubAgentMaxOutputTokens({ subAgentMaxOutputTokens: 1234 }, 65536),
+            explicitHugeDesktopCap: resolveSvbSubAgentMaxOutputTokens({
+                subAgentMaxOutputTokens: 64000,
+                adaptiveLimits: computeSvbAdaptiveRuntimeLimits({ tier: 'desktop', constrained: false, lowMemory: false, backgrounded: false })
+            }, 65536),
+            explicitHugeConstrainedCap: resolveSvbSubAgentMaxOutputTokens({
+                subAgentMaxOutputTokens: 64000,
+                adaptiveLimits: computeSvbAdaptiveRuntimeLimits({ tier: 'mobile', constrained: true, lowMemory: true, backgrounded: false, isMobile: true, isWebView: true })
+            }, 65536),
+            desktopResponseLimit: resolveSvbSubAgentResponseCharLimit({
+                adaptiveLimits: computeSvbAdaptiveRuntimeLimits({ tier: 'desktop', constrained: false, lowMemory: false, backgrounded: false })
+            }, 4096),
+            constrainedResponseLimit: resolveSvbSubAgentResponseCharLimit({
+                adaptiveLimits: computeSvbAdaptiveRuntimeLimits({ tier: 'mobile', constrained: true, lowMemory: true, backgrounded: false, isMobile: true, isWebView: true })
+            }, 2048),
+            truncatedResponseLength: limitSvbSubAgentEndpointResponse('x'.repeat(30000), {
+                adaptiveLimits: computeSvbAdaptiveRuntimeLimits({ tier: 'mobile', constrained: true, lowMemory: true, backgrounded: false, isMobile: true, isWebView: true }),
+                silentRecoveryEvent: true
+            }, 2048).length
         };
     });
     if (!result.ok) {
@@ -12713,15 +12745,20 @@ function addSvbRuntimeSubAgentPayloadBudgetSelfTest(checks) {
     if (!value.budgetApplied && !value.modelCompacted) problems.push('대형 payload 예산 미적용');
     if (Number(value.packetChars || 0) > 120000) problems.push('패킷 hard cap 초과');
     if (Number(value.parallelHuge || 0) !== Number(value.expectedHuge || 0)) problems.push('초대형 병렬 제한 실패');
-    if (Number(value.parallelLarge || 0) !== Number(value.expectedLarge || 0)) problems.push('대형 병렬 제한 실패');
+    if (Number(value.parallelLarge || 0) !== Number(value.expectedLarge || 0)) problems.push('대형 payload 병렬 1 제한 실패');
     if (Number(value.parallelNormal || 0) !== Number(value.expectedNormal || 0)) problems.push('일반 병렬 제한 실패');
     if (Number(value.desktopOutputCap || 0) > 4096) problems.push('데스크톱 서브에이전트 출력 cap 과다');
     if (Number(value.constrainedOutputCap || 0) > 2048) problems.push('웹뷰/모바일 서브에이전트 출력 cap 과다');
     if (Number(value.explicitOutputCap || 0) !== 1234) problems.push('명시 출력 cap 반영 실패');
+    if (Number(value.explicitHugeDesktopCap || 0) > KERO_SUBAGENT_DESKTOP_OUTPUT_TOKEN_HARD_CAP) problems.push('데스크톱 명시 출력 hard cap 실패');
+    if (Number(value.explicitHugeConstrainedCap || 0) > KERO_SUBAGENT_CONSTRAINED_OUTPUT_TOKEN_HARD_CAP) problems.push('웹뷰/모바일 명시 출력 hard cap 실패');
+    if (Number(value.desktopResponseLimit || 0) > KERO_SUBAGENT_DESKTOP_RESPONSE_CHAR_HARD_LIMIT) problems.push('데스크톱 응답 문자 hard cap 실패');
+    if (Number(value.constrainedResponseLimit || 0) > KERO_SUBAGENT_CONSTRAINED_RESPONSE_CHAR_HARD_LIMIT) problems.push('웹뷰/모바일 응답 문자 hard cap 실패');
+    if (Number(value.truncatedResponseLength || 0) > KERO_SUBAGENT_CONSTRAINED_RESPONSE_CHAR_HARD_LIMIT + 120) problems.push('긴 서브에이전트 응답 사전 절단 실패');
     checks.push(makeSvbRuntimeCheck(
         problems.length === 0,
         '서브에이전트 payload 예산 자체 테스트',
-        `원본 ${value.fullChars || 0}자 · packet ${value.packetChars || 0}자 · 병렬 ${value.parallelNormal || 0}/${value.parallelLarge || 0}/${value.parallelHuge || 0} · 출력 cap ${value.desktopOutputCap || 0}/${value.constrainedOutputCap || 0}${problems.length ? ` · 문제: ${problems.join(' / ')}` : ''}`,
+        `원본 ${value.fullChars || 0}자 · packet ${value.packetChars || 0}자 · 병렬 ${value.parallelNormal || 0}/${value.parallelLarge || 0}/${value.parallelHuge || 0} · 출력 cap ${value.desktopOutputCap || 0}/${value.constrainedOutputCap || 0} · 응답 cap ${value.desktopResponseLimit || 0}/${value.constrainedResponseLimit || 0}${problems.length ? ` · 문제: ${problems.join(' / ')}` : ''}`,
         problems.length ? 'error' : 'ok'
     ));
 }
@@ -39403,7 +39440,7 @@ function getBulkOutputHint(targetType) {
     return 'result는 항목 JSON 배열이어야 합니다.';
 }
 
-/* === RisuAI SuperVibeBot v1.5.12 Guide (Concise Version) === */
+/* === RisuAI SuperVibeBot v1.5.13 Guide (Concise Version) === */
 const RISUAI_GUIDE = {
     overview: `
 ## System Overview
@@ -41858,14 +41895,14 @@ async function callModelEndpoint(endpoint, systemPrompt, userText, options = {})
     if (providerType === "api-hub") {
         const result = await callApiHubAPI(systemPrompt, userText, settings.apiHubSettings, endpointOptions);
         throwIfSvbAborted(options.signal, '서브 모델 응답이 늦게 도착해 폐기되었습니다.');
-        return result;
+        return limitSvbSubAgentEndpointResponse(result, endpointOptions, endpointOutputCap);
     }
     if (providerType === "google-ai") {
         const apiKey = settings.apiKey || (typeof risuai?.getArgument === "function" ? (await risuai.getArgument("api_key") || "") : "");
         if (!apiKey) throw new Error("Google AI Studio API Key가 필요합니다.");
         const result = await callGeminiAPI(apiKey, settings.model || currentModel, systemPrompt, userText, endpointOptions);
         throwIfSvbAborted(options.signal, '서브 모델 응답이 늦게 도착해 폐기되었습니다.');
-        return result;
+        return limitSvbSubAgentEndpointResponse(result, endpointOptions, endpointOutputCap);
     }
     if (providerType === "vertex-ai-direct") {
         const endpointVertexSettings = {
@@ -41878,7 +41915,7 @@ async function callModelEndpoint(endpoint, systemPrompt, userText, options = {})
             vertexSettingsOverride: endpointVertexSettings
         });
         throwIfSvbAborted(options.signal, '서브 모델 응답이 늦게 도착해 폐기되었습니다.');
-        return result;
+        return limitSvbSubAgentEndpointResponse(result, endpointOptions, endpointOutputCap);
     }
     if (providerType === "github-copilot") {
         const result = await callGitHubCopilot_API(systemPrompt, userText, {
@@ -41888,7 +41925,7 @@ async function callModelEndpoint(endpoint, systemPrompt, userText, options = {})
             githubTokenOverride: settings.githubToken || ''
         });
         throwIfSvbAborted(options.signal, '서브 모델 응답이 늦게 도착해 폐기되었습니다.');
-        return result;
+        return limitSvbSubAgentEndpointResponse(result, endpointOptions, endpointOutputCap);
     }
     throw new Error(`지원하지 않는 서브 모델 provider: ${providerType}`);
 }
@@ -43437,23 +43474,60 @@ function resolveKeroWorkModelCallTimeoutMs(options = {}, fallbackMs = KERO_WORK_
     return Math.max(30000, Number(fallbackMs) || KERO_WORK_MODEL_CALL_TIMEOUT_MS);
 }
 
-function resolveSvbSubAgentMaxOutputTokens(options = {}, endpointMaxOutputTokens = 8192) {
-    const endpointMax = Math.max(512, Math.floor(Number(endpointMaxOutputTokens) || 8192));
-    const explicit = Math.floor(Number(options.subAgentMaxOutputTokens || options.endpointMaxOutputTokens));
-    if (Number.isFinite(explicit) && explicit > 0) {
-        return Math.max(512, Math.min(endpointMax, explicit));
-    }
-    const adaptiveLimits = options.adaptiveLimits && typeof options.adaptiveLimits === 'object'
-        ? options.adaptiveLimits
-        : getSvbAdaptiveRuntimeLimits();
-    const constrained = adaptiveLimits.constrained === true
+function isSvbConstrainedSubAgentRuntime(limits = null) {
+    const adaptiveLimits = limits && typeof limits === 'object' ? limits : getSvbAdaptiveRuntimeLimits();
+    return adaptiveLimits.constrained === true
         || adaptiveLimits.backgrounded === true
         || adaptiveLimits.lowMemory === true
         || adaptiveLimits.isMobile === true
         || adaptiveLimits.isWebView === true
         || adaptiveLimits.isPocketRisu === true;
-    const defaultCap = constrained ? 2048 : 4096;
-    return Math.max(512, Math.min(endpointMax, defaultCap));
+}
+
+function resolveSvbSubAgentMaxOutputTokens(options = {}, endpointMaxOutputTokens = 8192) {
+    const endpointMax = Math.max(512, Math.floor(Number(endpointMaxOutputTokens) || 8192));
+    const adaptiveLimits = options.adaptiveLimits && typeof options.adaptiveLimits === 'object'
+        ? options.adaptiveLimits
+        : getSvbAdaptiveRuntimeLimits();
+    const constrained = isSvbConstrainedSubAgentRuntime(adaptiveLimits);
+    const hardCap = constrained ? KERO_SUBAGENT_CONSTRAINED_OUTPUT_TOKEN_HARD_CAP : KERO_SUBAGENT_DESKTOP_OUTPUT_TOKEN_HARD_CAP;
+    const explicit = Math.floor(Number(options.subAgentMaxOutputTokens || options.endpointMaxOutputTokens));
+    if (Number.isFinite(explicit) && explicit > 0) {
+        return Math.max(512, Math.min(endpointMax, hardCap, explicit));
+    }
+    const defaultCap = constrained ? KERO_SUBAGENT_CONSTRAINED_OUTPUT_TOKEN_CAP : KERO_SUBAGENT_DESKTOP_OUTPUT_TOKEN_CAP;
+    return Math.max(512, Math.min(endpointMax, hardCap, defaultCap));
+}
+
+function resolveSvbSubAgentResponseCharLimit(options = {}, outputTokenCap = 4096) {
+    const adaptiveLimits = options.adaptiveLimits && typeof options.adaptiveLimits === 'object'
+        ? options.adaptiveLimits
+        : getSvbAdaptiveRuntimeLimits();
+    const constrained = isSvbConstrainedSubAgentRuntime(adaptiveLimits);
+    const defaultLimit = constrained ? KERO_SUBAGENT_CONSTRAINED_RESPONSE_CHAR_LIMIT : KERO_SUBAGENT_DESKTOP_RESPONSE_CHAR_LIMIT;
+    const hardLimit = constrained ? KERO_SUBAGENT_CONSTRAINED_RESPONSE_CHAR_HARD_LIMIT : KERO_SUBAGENT_DESKTOP_RESPONSE_CHAR_HARD_LIMIT;
+    const tokenDerived = Math.max(3000, Math.floor((Number(outputTokenCap) || 4096) * 4.4));
+    const explicit = Math.floor(Number(options.subAgentResponseCharLimit || options.endpointResponseCharLimit));
+    if (Number.isFinite(explicit) && explicit > 0) {
+        return Math.max(1200, Math.min(hardLimit, explicit));
+    }
+    return Math.max(1200, Math.min(hardLimit, defaultLimit, tokenDerived));
+}
+
+function limitSvbSubAgentEndpointResponse(response, options = {}, outputTokenCap = 4096) {
+    const text = safeString(response);
+    const limit = resolveSvbSubAgentResponseCharLimit(options, outputTokenCap);
+    if (!text || text.length <= limit) return text;
+    const omitted = text.length - limit;
+    if (options.silentRecoveryEvent !== true && options.suppressWorkstreamEvent !== true) try {
+        addKeroWorkstreamEvent(
+            '서브에이전트 응답 길이 제한',
+            `응답 ${text.length}자 중 ${omitted}자를 파싱/렌더 전에 생략해 WebView 메모리 압박을 줄였습니다.`,
+            'warning',
+            options
+        );
+    } catch (_) {}
+    return `${text.slice(0, limit)}\n\n[SVB_SUBAGENT_RESPONSE_TRUNCATED: ${omitted} chars omitted before parse/render]`;
 }
 
 const activeSubAgentConsultationGuards = new Map();
@@ -50474,7 +50548,7 @@ async function loadInitialSettings() {
 async function registerUIElements() {
     // 채팅 화면 메뉴에 버튼 추가 (플로팅 버튼 대신)
     await risuai.registerButton({
-        name: "SuperVibeBot v1.5.12",
+        name: "SuperVibeBot v1.5.13",
         icon: "🐸",
         iconType: "html",
         location: "chat"  // 채팅 메뉴에 배치 (화면 가림 방지)
@@ -50483,7 +50557,7 @@ async function registerUIElements() {
     });
 
     await risuai.registerSetting(
-        "SuperVibeBot v1.5.12 Settings",
+        "SuperVibeBot v1.5.13 Settings",
         async () => {
             await openSettingsWindow();
         },
@@ -50526,7 +50600,7 @@ function cleanup() {
 (async () => {
     try {
         Logger.info("=".repeat(50));
-        Logger.info("SuperVibeBot v1.5.12");
+        Logger.info("SuperVibeBot v1.5.13");
         Logger.info("RisuAI Plugin API 3.0");
         Logger.info("=".repeat(50));
         await loadInitialSettings();
