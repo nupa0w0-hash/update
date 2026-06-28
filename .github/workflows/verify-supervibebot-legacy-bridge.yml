@@ -1,0 +1,102 @@
+name: Verify SuperVibeBot legacy bridge
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "SuperVibeBot.update.js"
+      - "SuperVibeBot.js"
+      - "SuperVibeBot.auto.js"
+      - ".github/workflows/verify-supervibebot-legacy-bridge.yml"
+  workflow_dispatch:
+  schedule:
+    - cron: "41 */6 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  verify-legacy-bridge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify local legacy bridge
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          dedicated_url="https://raw.githubusercontent.com/nupa0w0-hash/supervibebot-update/main/SuperVibeBot.update.js"
+
+          for file in SuperVibeBot.update.js SuperVibeBot.js SuperVibeBot.auto.js; do
+            test -s "$file"
+            node --check "$file"
+            grep -q '^//@name SuperVibeBot$' "$file"
+            grep -q '^//@api 3\.0$' "$file"
+            grep -q '^//@version [0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*$' "$file"
+            grep -q "^//@update-url ${dedicated_url}$" "$file"
+          done
+
+          cmp -s SuperVibeBot.update.js SuperVibeBot.js
+          cmp -s SuperVibeBot.update.js SuperVibeBot.auto.js
+
+      - name: Compare with dedicated SuperVibeBot channel
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          dedicated_url="https://raw.githubusercontent.com/nupa0w0-hash/supervibebot-update/main/SuperVibeBot.update.js"
+          curl -fsSL -H "Cache-Control: no-cache" "${dedicated_url}?legacy-check=${GITHUB_RUN_ID}" -o /tmp/dedicated.js
+
+          local_version="$(sed -n 's|^//@version ||p' SuperVibeBot.update.js | head -n 1)"
+          dedicated_version="$(sed -n 's|^//@version ||p' /tmp/dedicated.js | head -n 1)"
+
+          if [[ "$local_version" != "$dedicated_version" ]]; then
+            echo "Legacy bridge version ${local_version} does not match dedicated channel ${dedicated_version}" >&2
+            exit 1
+          fi
+
+          echo "Legacy bridge matches dedicated channel: ${local_version}"
+
+      - name: Purge jsDelivr legacy cache
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for path in SuperVibeBot.update.js SuperVibeBot.js SuperVibeBot.auto.js; do
+            curl -fsSL "https://purge.jsdelivr.net/gh/nupa0w0-hash/update@main/${path}"
+          done
+
+      - name: Verify public legacy endpoints
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          local_version="$(sed -n 's|^//@version ||p' SuperVibeBot.update.js | head -n 1)"
+          expected_url="https://raw.githubusercontent.com/nupa0w0-hash/supervibebot-update/main/SuperVibeBot.update.js"
+          endpoints=(
+            "https://raw.githubusercontent.com/nupa0w0-hash/update/main/SuperVibeBot.update.js"
+            "https://cdn.jsdelivr.net/gh/nupa0w0-hash/update@main/SuperVibeBot.update.js"
+          )
+
+          for endpoint in "${endpoints[@]}"; do
+            ok=0
+            for attempt in $(seq 1 12); do
+              curl -fsSL -H "Cache-Control: no-cache" "${endpoint}?legacy-check=${GITHUB_RUN_ID}-${attempt}" -o /tmp/legacy.js
+              remote_version="$(sed -n 's|^//@version ||p' /tmp/legacy.js | head -n 1)"
+              remote_url="$(sed -n 's|^//@update-url ||p' /tmp/legacy.js | head -n 1)"
+              if [[ "$remote_version" == "$local_version" && "$remote_url" == "$expected_url" ]]; then
+                echo "Endpoint current: ${endpoint} -> ${remote_version}"
+                ok=1
+                break
+              fi
+              echo "Endpoint stale: ${endpoint} version=${remote_version:-missing} url=${remote_url:-missing}; retry ${attempt}/12"
+              sleep 20
+            done
+            if [[ "$ok" != "1" ]]; then
+              echo "Legacy endpoint did not update: ${endpoint}" >&2
+              exit 1
+            fi
+          done
