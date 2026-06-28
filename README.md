@@ -4,7 +4,7 @@ This repository is no longer the main SuperVibeBot update channel.
 
 ## SuperVibeBot
 
-- Latest bridged version: `1.5.8`
+- Latest bridged version: `1.5.9`
 - Dedicated update repository:
 
 ```text
@@ -14,7 +14,7 @@ https://github.com/nupa0w0-hash/supervibebot-update
 - Recommended update URL:
 
 ```text
-https://raw.githubusercontent.com/nupa0w0-hash/supervibebot-update/main/SuperVibeBot.update.js
+https://raw.githubusercontent.com/nupa0w0-hash/supervibebot-update/refs/heads/main/SuperVibeBot.update.js
 ```
 
 This shared repository only keeps `SuperVibeBot.update.js`, `SuperVibeBot.js`, and `SuperVibeBot.auto.js` as a legacy bridge for old installs.
