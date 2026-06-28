@@ -47,7 +47,7 @@ jobs:
             echo "verify attempt ${attempt}"
             body="$(curl -fsSL "${target}" || true)"
             echo "${body}" | sed -n '1,8p'
-            if echo "${body}" | grep -q '^//@version 1\.4\.12' \
+            if echo "${body}" | grep -q '^//@version 1\.5\.0' \
               && echo "${body}" | grep -q '^//@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/refs/heads/main/SuperVibeBot.update.js'; then
               echo "SuperVibeBot legacy jsDelivr update URL is fresh."
               exit 0
