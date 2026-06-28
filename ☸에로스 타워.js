@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.0.5
+//@display-name ☸Eros Tower 1.0.6
 //@api 3.0
-//@version 1.0.5
+//@version 1.0.6
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -32,18 +32,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.0.5
+ * Eros Tower 1.0.6
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.0.5 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.0.6 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.0.5';
+  const VERSION = '1.0.6';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.0.5`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.0.6`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -59,7 +59,7 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.0.5 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.0.6 analysis context';
   const GOOGLE_OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
   const GOOGLE_CLOUD_PLATFORM_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
   const PSYCHE_RECOMMENDED_MODELS = Object.freeze([
@@ -3976,10 +3976,12 @@
   function resolveMode(configMode, character, messages, db = null, chat = null, conf = null) {
     const normalizedConfigMode = String(configMode || '').toLowerCase();
     if (normalizedConfigMode === 'rp' || normalizedConfigMode === 'novel') return rememberModeResolution(normalizedConfigMode, 'manual-config');
-    const promptMessageMode = resolvePromptMessageMode(messages);
-    if (promptMessageMode) return rememberModeResolution(promptMessageMode, 'prompt-message');
+    const promptInfoMode = resolvePromptMessageMode(messages, { includeExplicitText: false });
+    if (promptInfoMode) return rememberModeResolution(promptInfoMode, 'prompt-info');
     const promptToggleMode = resolvePromptToggleMode(character, db, chat, conf);
     if (promptToggleMode) return rememberModeResolution(promptToggleMode, 'prompt-toggle');
+    const promptTextMode = resolvePromptMessageMode(messages, { includePromptInfo: false });
+    if (promptTextMode) return rememberModeResolution(promptTextMode, 'prompt-text');
     const text = [
       character?.name,
       character?.description,
@@ -4006,11 +4008,13 @@
     return resolveModeFromEntries(entries);
   }
 
-  function resolvePromptMessageMode(messages) {
+  function resolvePromptMessageMode(messages, options = {}) {
+    const includePromptInfo = options?.includePromptInfo !== false;
+    const includeExplicitText = options?.includeExplicitText !== false;
     const entries = [];
     (Array.isArray(messages) ? messages : []).slice(-32).forEach((msg, index) => {
-      addPromptInfoModeEntries(entries, `request:${index}:promptInfo`, msg?.promptInfo || msg?.data?.promptInfo);
-      const explicit = extractExplicitPromptMode(msg?.content);
+      if (includePromptInfo) addPromptInfoModeEntries(entries, `request:${index}:promptInfo`, msg?.promptInfo || msg?.data?.promptInfo);
+      const explicit = includeExplicitText ? extractExplicitPromptMode(msg?.content) : '';
       if (explicit) {
         entries.push({
           source: `request:${index}:text`,
@@ -12817,6 +12821,11 @@
             content: 'Prompt info',
             promptInfo: { promptToggles: [{ key: '이야기의 모드', value: '소설' }] },
           }], {}, {}, DEFAULT_CONFIG);
+          const byPromptInfoBeatsText = resolveMode('auto', targetCharacter, [{
+            role: 'system',
+            content: 'RP handling is active. This rendered prompt text is stale.',
+            promptInfo: { promptToggles: [{ key: '이야기의 모드', value: '소설' }] },
+          }], {}, {}, DEFAULT_CONFIG);
           const byLatestPromptInfo = resolveMode('auto', targetCharacter, targetMessages, {}, {
             message: [
               { promptInfo: { promptToggles: [{ key: '이야기의 모드', value: 'RP' }] } },
@@ -12835,6 +12844,14 @@
             role: 'system',
             content: 'RP handling is active. With protected user control, {{user}} is not an interior focal character.',
           }], {}, {}, DEFAULT_CONFIG);
+          const byStoredToggleBeatsText = resolveMode('auto', targetCharacter, [{
+            role: 'system',
+            content: 'RP handling is active. This text should not override stored Eros/Psyche mode.',
+          }], {
+            pluginCustomStorage: {
+              psyche: { mode: '소설' },
+            },
+          }, {}, DEFAULT_CONFIG);
           const byToggleTextIndex = resolveMode('auto', targetCharacter, [{
             role: 'system',
             content: '{{getglobalvar::toggle_모드}}=2',
@@ -12858,10 +12875,12 @@
             byGlobalSelect,
             byDefinitionIndexOne,
             byPromptInfo,
+            byPromptInfoBeatsText,
             byLatestPromptInfo,
             byRequestText,
             bySaikiNovelHandling,
             bySaikiRpHandling,
+            byStoredToggleBeatsText,
             byToggleTextIndex,
             byErosNovelName,
             byFormatToggleIgnored,
