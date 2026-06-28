@@ -1,13 +1,13 @@
 //@name SuperVibeBot
-//@display-name 🐸 SuperVibeBot v1.4.11
-//@version 1.4.11
+//@display-name 🐸 SuperVibeBot v1.4.12
+//@version 1.4.12
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/refs/heads/main/SuperVibeBot.update.js
 //@arg api_key string "" "Google AI Studio API 키를 입력하세요 (Vertex AI, API Hub 또는 GitHub Copilot 연동 시 불필요)."
 //@arg disable_safety int 0 "안전 필터 비활성화 (1=OFF, 0=ON)"
 
 if (typeof risuai === "undefined") {
-    alert("⚠️ SuperVibeBot v1.4.11는 RisuAI Plugin API 3.0이 필요합니다.");
+    alert("⚠️ SuperVibeBot v1.4.12는 RisuAI Plugin API 3.0이 필요합니다.");
     throw new Error("API 3.0 required");
 }
 
@@ -163,7 +163,7 @@ async function safeCopyText(text, options = {}) {
 }
 
 /**
- * SuperVibeBot v1.4.11 Release Notes
+ * SuperVibeBot v1.4.12 Release Notes
  *
  * 🎉 Major Changes
  * - Migrated to RisuAI Plugin API 3.0
@@ -2436,6 +2436,224 @@ const API_HUB_SERVICE_TIERS = Object.freeze(["", "flex", "priority", "default", 
 function normalizeApiHubServiceTier(value) {
     const tier = safeString(value).trim().toLowerCase();
     return API_HUB_SERVICE_TIERS.includes(tier) ? tier : "";
+}
+
+async function getLbiPluginFromDB() {
+    const db = await risuai.getDatabase();
+    if (!db || !Array.isArray(db.plugins)) throw new Error("DB 접근 권한이 필요합니다. LBI 설정을 읽을 수 없습니다.");
+    const lbiAuto = db.plugins.find((plugin) => plugin?.name?.startsWith("LBI"));
+    if (lbiAuto) return lbiAuto;
+    throw new Error("DB에서 LBI 플러그인을 찾지 못했습니다.");
+}
+
+async function getLbiArgFromDB(key) {
+    const plugin = await getLbiPluginFromDB();
+    const realArg = plugin?.realArg ?? {};
+    if (realArg[key] !== undefined && realArg[key] !== null) return realArg[key];
+    if (typeof key !== "string") return undefined;
+    const candidates = [];
+    if (key.startsWith("common") && !key.startsWith("common_")) candidates.push(`common_${key.slice("common".length)}`);
+    if (key.startsWith("tools") && !key.startsWith("tools_")) candidates.push(`tools_${key.slice("tools".length)}`);
+    if (key.startsWith("common_")) candidates.push(`common${key.slice("common_".length)}`);
+    if (key.startsWith("tools_")) candidates.push(`tools${key.slice("tools_".length)}`);
+    if (key.startsWith("other_")) candidates.push(`other${key.slice("other_".length)}`);
+    if (key.startsWith("other") && !key.startsWith("other_")) candidates.push(`other_${key.slice("other".length)}`);
+    for (const candidate of candidates) {
+        if (realArg[candidate] !== undefined && realArg[candidate] !== null) return realArg[candidate];
+    }
+    return undefined;
+}
+
+async function getLbiArgCompat(...keys) {
+    for (const key of keys) {
+        const value = await getLbiArgFromDB(key);
+        if (value !== undefined && value !== null && safeString(value).trim() !== "") return value;
+    }
+    return null;
+}
+
+async function getApiKeysCompat(...keys) {
+    return parseApiKeys(await getLbiArgCompat(...keys));
+}
+
+async function getTextCompat(...keys) {
+    return await getLbiArgCompat(...keys);
+}
+
+function normalizeOllamaSettings(settings = {}) {
+    const merged = { ...DEFAULT_OLLAMA_SETTINGS, ...(settings || {}) };
+    merged.baseUrl = safeString(merged.baseUrl || DEFAULT_OLLAMA_SETTINGS.baseUrl).trim().replace(/\/+$/, "");
+    merged.apiKey = safeString(merged.apiKey || "").trim();
+    merged.model = safeString(merged.model || DEFAULT_OLLAMA_SETTINGS.model).trim();
+    const timeoutValue = Number(merged.timeoutMs);
+    merged.timeoutMs = Number.isFinite(timeoutValue) && timeoutValue <= 0
+        ? 0
+        : Math.max(10000, Math.min(3600000, timeoutValue || DEFAULT_OLLAMA_SETTINGS.timeoutMs));
+    return merged;
+}
+
+function resolveOllamaModel(modelName) {
+    const model = safeString(modelName).trim();
+    if (!model || model === "auto") return DEFAULT_OLLAMA_SETTINGS.model;
+    return model;
+}
+
+function buildOllamaUrl(path, settings = ollamaSettings) {
+    const normalized = normalizeOllamaSettings(settings);
+    const suffix = safeString(path).startsWith("/") ? safeString(path) : `/${path || ""}`;
+    let base = normalized.baseUrl || DEFAULT_OLLAMA_SETTINGS.baseUrl;
+    if (suffix.startsWith("/v1/")) {
+        base = base.replace(/\/api$/i, "");
+        return `${base}${suffix}`;
+    }
+    return /\/api$/i.test(base) ? `${base}${suffix}` : `${base}/api${suffix}`;
+}
+
+function getOllamaHeaders(settings = ollamaSettings, hasBody = false) {
+    const normalized = normalizeOllamaSettings(settings);
+    const headers = { Accept: "application/json" };
+    if (hasBody) headers["Content-Type"] = "application/json";
+    if (normalized.apiKey) headers.Authorization = `Bearer ${normalized.apiKey}`;
+    return headers;
+}
+
+async function ollamaFetchJson(path, options = {}) {
+    const settings = normalizeOllamaSettings({
+        ...(options.settings || ollamaSettings),
+        ...(options.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {})
+    });
+    const hasBody = options.body !== undefined && options.body !== null;
+    const requestOptions = {
+        method: options.method || (hasBody ? "POST" : "GET"),
+        headers: { ...getOllamaHeaders(settings, hasBody), ...(options.headers || {}) }
+    };
+    if (options.signal) requestOptions.signal = options.signal;
+    if (hasBody) requestOptions.body = typeof options.body === "string" ? options.body : JSON.stringify(options.body);
+    return await pluginFetchJson(buildOllamaUrl(path, settings), requestOptions, options.label || "Ollama", settings.timeoutMs);
+}
+
+function mergeOllamaModelNames(remoteNames = []) {
+    const seen = new Set();
+    const names = [];
+    for (const modelName of [...Object.keys(AVAILABLE_OLLAMA_MODELS), ...remoteNames]) {
+        const name = safeString(modelName).trim();
+        if (!name || seen.has(name)) continue;
+        seen.add(name);
+        names.push(name);
+    }
+    return names;
+}
+
+async function fetchOllamaModels(settings = ollamaSettings) {
+    const errors = [];
+    try {
+        const data = await ollamaFetchJson("/tags", { settings, label: "Ollama 모델 목록" });
+        const names = (data?.models || []).map((model) => model?.name || model?.model).filter(Boolean);
+        if (names.length > 0) return mergeOllamaModelNames(names);
+    } catch (error) {
+        errors.push(error);
+    }
+    try {
+        const data = await ollamaFetchJson("/v1/models", { settings, label: "Ollama v1 모델 목록" });
+        const names = (data?.data || data?.models || []).map((model) => model?.id || model?.name || model?.model).filter(Boolean);
+        if (names.length > 0) return mergeOllamaModelNames(names);
+    } catch (error) {
+        errors.push(error);
+    }
+    if (errors.length > 0) throw new Error(errors.map((error) => error.message || String(error)).join(" / "));
+    return mergeOllamaModelNames();
+}
+
+async function callOllamaAPI(systemPrompt, userText, settings = ollamaSettings, options = {}) {
+    const normalized = normalizeOllamaSettings({
+        ...(settings || {}),
+        ...(options.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {})
+    });
+    const parsed = parseChatMLPrompt(systemPrompt, userText);
+    const messages = parsed.messages
+        ? [
+            ...(parsed.systemPrompt ? [{ role: "system", content: parsed.systemPrompt }] : []),
+            ...parsed.messages.map((msg) => ({ role: msg.role === "model" ? "assistant" : msg.role, content: msg.content }))
+        ]
+        : [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userText }
+        ];
+    const data = await ollamaFetchJson("/chat", {
+        method: "POST",
+        settings: normalized,
+        label: "Ollama 호출",
+        signal: options.signal,
+        body: {
+            model: resolveOllamaModel(normalized.model),
+            messages,
+            stream: false,
+            options: {
+                temperature: 0.1,
+                ...(options.maxOutputTokens ? { num_predict: options.maxOutputTokens } : {})
+            }
+        }
+    });
+    if (data?.error) throw new Error(`Ollama 오류: ${typeof data.error === "string" ? data.error : JSON.stringify(data.error)}`);
+    assertModelResponseNotTruncated(data, "Ollama");
+    const resultText = data?.message?.content || data?.response || data?.choices?.[0]?.message?.content || data?.choices?.[0]?.text;
+    if (!resultText) throw new Error("Ollama에서 유효한 응답을 받지 못했습니다.");
+    return resultText.trim();
+}
+
+function normalizeApiHubSettings(settings = {}) {
+    const provider = settings.provider || DEFAULT_API_HUB_SETTINGS.provider;
+    const preset = API_HUB_PROVIDER_PRESETS[provider] || API_HUB_PROVIDER_PRESETS["custom-openai"];
+    const defaults = {
+        ...DEFAULT_API_HUB_SETTINGS,
+        provider,
+        type: preset.type || DEFAULT_API_HUB_SETTINGS.type,
+        baseUrl: preset.baseUrl || "",
+        model: preset.defaultModel || "",
+        modelsPath: preset.modelsPath || DEFAULT_API_HUB_SETTINGS.modelsPath,
+        chatPath: preset.chatPath || DEFAULT_API_HUB_SETTINGS.chatPath
+    };
+    const merged = { ...defaults, ...(settings || {}), provider };
+    merged.type = merged.type || preset.type || DEFAULT_API_HUB_SETTINGS.type;
+    merged.baseUrl = safeString(merged.baseUrl || "").trim().replace(/\/+$/, "");
+    const pastedEndpoint = ["/chat/completions", "/responses", "/models"].find((suffix) => merged.baseUrl.toLowerCase().endsWith(suffix));
+    if (pastedEndpoint) {
+        merged.baseUrl = merged.baseUrl.slice(0, -pastedEndpoint.length).replace(/\/+$/, "");
+        if (pastedEndpoint === "/models") merged.modelsPath = pastedEndpoint;
+        else merged.chatPath = pastedEndpoint;
+    }
+    if (provider === "ollama-cloud" || provider === "ollama-local") {
+        merged.type = "openai-chat";
+        if (provider === "ollama-cloud" && /^https?:\/\/ollama\.com(?:\/api(?:\/chat)?)?$/i.test(merged.baseUrl)) {
+            merged.baseUrl = API_HUB_PROVIDER_PRESETS["ollama-cloud"].baseUrl;
+        }
+        if (provider === "ollama-local" && merged.baseUrl && !/\/v1$/i.test(merged.baseUrl)) {
+            merged.baseUrl = `${merged.baseUrl.replace(/\/api$/i, "").replace(/\/+$/, "")}/v1`;
+        }
+        if (!merged.modelsPath || merged.modelsPath === "/tags") merged.modelsPath = "/models";
+        if (!merged.chatPath || merged.chatPath === "/chat") merged.chatPath = "/chat/completions";
+    }
+    merged.apiKey = safeString(merged.apiKey || "").trim();
+    merged.model = safeString(merged.model || preset.defaultModel || "").trim();
+    merged.serviceTier = normalizeApiHubServiceTier(merged.serviceTier);
+    merged.modelsPath = safeString(merged.modelsPath || preset.modelsPath || "/models").trim();
+    merged.chatPath = safeString(merged.chatPath || preset.chatPath || "/chat/completions").trim();
+    const timeoutValue = Number(merged.timeoutMs);
+    merged.timeoutMs = Number.isFinite(timeoutValue) && timeoutValue <= 0
+        ? 0
+        : Math.max(10000, Math.min(3600000, timeoutValue || DEFAULT_API_HUB_SETTINGS.timeoutMs));
+    merged.extraHeaders = typeof merged.extraHeaders === "string"
+        ? merged.extraHeaders
+        : JSON.stringify(merged.extraHeaders || {}, null, 2);
+    return merged;
+}
+
+function buildApiHubUrl(settings, pathKey) {
+    const normalized = normalizeApiHubSettings(settings);
+    const pathRaw = safeString(normalized[pathKey] || "").trim();
+    if (/^https?:\/\//i.test(pathRaw)) return pathRaw;
+    if (!normalized.baseUrl) throw new Error("API Hub Base URL이 필요합니다.");
+    return `${normalized.baseUrl}/${pathRaw.replace(/^\/+/, "")}`;
 }
 
 const IMAGE_API_PROFILES_KEY = "Super_Vibe_Bot_image_api_profiles_v1";
@@ -7471,6 +7689,200 @@ const keroMissionPersistChains = new Map();
 let currentKeroPersistentStorageId = null;
 let keroWorkstreamPersistTimer = null;
 let bulkEditState = {}; // 일괄 수정 상태
+let keroGlobalApprovalBypassDepth = 0;
+
+function isKeroApprovalBypassActive() {
+    return keroGlobalApprovalBypassDepth > 0 || keroChatTaskRunning === true || !!currentKeroRequestJobId;
+}
+
+function confirmUnlessKeroApprovalBypass(message) {
+    return isKeroApprovalBypassActive() ? true : confirm(message);
+}
+
+async function withKeroApprovalBypass(task) {
+    keroGlobalApprovalBypassDepth++;
+    try {
+        return await task();
+    } finally {
+        keroGlobalApprovalBypassDepth = Math.max(0, keroGlobalApprovalBypassDepth - 1);
+    }
+}
+
+function resolveKeroActionProgressOptions(options = {}) {
+    const normalized = typeof normalizeKeroProgressOptions === 'function'
+        ? normalizeKeroProgressOptions(options)
+        : { ...(options || {}) };
+    return normalized.jobId ? normalized : { detached: true, allowCurrentJobFallback: false };
+}
+
+function assertKeroActionNotTimedOut(action = {}, label = '작업') {
+    if (action?._keroActionTimedOut === true || action?._keroActionAbortController?.signal?.aborted) {
+        const detail = safeString(action?._keroActionTimeoutDetail || `${label} 작업이 이미 중단되어 저장을 막았습니다.`);
+        const error = new Error(detail);
+        error.code = 'KERO_ACTION_LATE_SAVE_BLOCKED';
+        throw error;
+    }
+}
+
+function estimateKeroPayloadChars(payload) {
+    try {
+        return JSON.stringify(payload || '').length;
+    } catch (error) {
+        return 0;
+    }
+}
+
+function getKeroBatchItemSourceHash(target, item) {
+    try {
+        return hashString(JSON.stringify(makeCloneableData(item || {})));
+    } catch (error) {
+        Logger.warn(`Failed to hash ${target} batch source item:`, error);
+        return hashString(String(item || ''));
+    }
+}
+
+function buildKeroBatchResultsFromState(target, state = bulkEditState?.[target]) {
+    if (!state || !Array.isArray(state.result)) return null;
+    const originals = ensureArray(state.original);
+    const idxList = ensureArray(state.idxList).length
+        ? ensureArray(state.idxList)
+        : state.result.map((_, index) => index);
+    const sourceHashes = ensureArray(state.sourceHashes);
+    const improved = state.result.map((item, index) => {
+        const idx = Number.isInteger(idxList[index]) ? idxList[index] : index;
+        const original = originals[index];
+        const name = target === 'lorebook'
+            ? safeString(item?.comment || item?.key || original?.comment || original?.key || `Lorebook #${idx + 1}`)
+            : target === 'regex'
+                ? safeString(item?.comment || item?.name || original?.comment || original?.name || `Regex #${idx + 1}`)
+                : safeString(item?.comment || item?.name || original?.comment || original?.name || `Trigger #${idx + 1}`);
+        return {
+            idx,
+            name,
+            original,
+            improved: item,
+            type: target,
+            sourceHash: sourceHashes[index] || '',
+            charId: state.charId || ''
+        };
+    });
+    return { success: improved.map((item) => item.name), failed: [], improved };
+}
+
+function getKeroCurrentBatchItem(char, target, idx) {
+    if (!char || !Number.isInteger(idx)) return null;
+    return getKeroCharacterListItem(char, target, idx);
+}
+
+async function applyKeroBatchResults(results, target, options = {}) {
+    if (!results || !Array.isArray(results.improved) || results.improved.length === 0) {
+        throw new Error('적용할 결과가 없습니다.');
+    }
+
+    const char = await getCharacterData();
+    if (!char) {
+        throw new Error('캐릭터 데이터를 불러올 수 없습니다.');
+    }
+
+    const assertBatchApplyAllowed = () => {
+        if (!isKeroSaveAbortRequested(options)) return;
+        const error = new Error(options.abortMessage || `중단된 ${getTargetLabel(target)} 일괄 적용 저장을 차단했습니다.`);
+        error.code = 'KERO_SAVE_ABORTED';
+        throw error;
+    };
+    assertBatchApplyAllowed();
+
+    const expectedCharId = results.improved.find(item => item?.charId)?.charId;
+    if (expectedCharId && getCharacterId(char) !== expectedCharId) {
+        throw new Error('현재 캐릭터가 결과 생성 시점과 달라 적용을 중단했습니다.');
+    }
+
+    for (const item of results.improved) {
+        assertBatchApplyAllowed();
+        if (!Number.isInteger(item?.idx)) {
+            throw new Error('적용 항목의 idx가 올바르지 않습니다.');
+        }
+        const currentItem = getKeroCurrentBatchItem(char, target, item.idx);
+        if (!currentItem) {
+            throw new Error(`${getTargetLabel(target)} #${item.idx + 1} 항목을 찾을 수 없습니다.`);
+        }
+        if (item.sourceHash) {
+            const currentHash = getKeroBatchItemSourceHash(target, currentItem);
+            if (currentHash !== item.sourceHash) {
+                throw new Error(`${getTargetLabel(target)} #${item.idx + 1} 원본이 변경되어 적용을 중단했습니다. 다시 개선을 실행해 주세요.`);
+            }
+        }
+    }
+
+    const nextChar = makeCloneableData(char);
+    const targetList = cloneKeroCharacterList(nextChar, target);
+    for (const item of results.improved) {
+        assertBatchApplyAllowed();
+        if (target === 'lorebook') {
+            if (targetList[item.idx]) {
+                if (typeof item.improved === 'object' && item.improved !== null && 'content' in item.improved) {
+                    targetList[item.idx] = sanitizeLorebookEntry(item.improved, item.idx).entry;
+                } else {
+                    targetList[item.idx].content = safeString(item.improved);
+                }
+            }
+        } else if (target === 'regex' || target === 'trigger') {
+            if (targetList[item.idx]) {
+                targetList[item.idx] = deepMerge(targetList[item.idx], item.improved);
+            }
+        }
+    }
+    if (!setKeroCharacterList(nextChar, target, targetList)) {
+        throw new Error(`${getTargetLabel(target)} 필드를 저장 위치에서 찾지 못했습니다.`);
+    }
+
+    assertBatchApplyAllowed();
+    const success = await setCharacterData(nextChar, {
+        signal: options.signal,
+        abortCheck: options.abortCheck,
+        abortMessage: options.abortMessage || `중단된 ${getTargetLabel(target)} 일괄 적용 저장을 차단했습니다.`
+    });
+    if (!success) throw new Error('캐릭터 저장 실패');
+
+    clearKeroRuntimeStateForTarget(target);
+    try {
+        if (target === 'lorebook') await refreshLorebookList();
+        else if (target === 'regex') await refreshRegexView();
+        else if (target === 'trigger') await refreshTriggerView();
+    } catch (error) {
+        Logger.warn('Batch result view refresh failed after save:', error?.message || error);
+    }
+
+    return true;
+}
+
+function getKeroBulkRemainderCount(summary = {}) {
+    const remaining = Math.max(0, Math.floor(Number(summary?.remaining) || 0));
+    const failed = Math.max(0, Math.floor(Number(summary?.failed) || 0));
+    return remaining > 0 ? remaining : failed;
+}
+
+function hasKeroBulkNoProgressRetryBudget(jobs = []) {
+    return ensureArray(jobs).some((job) => {
+        const failedRanges = normalizeKeroBulkFailedRanges(job?.failedRanges, job?.completedRanges);
+        return failedRanges.some((range) =>
+            Math.max(0, Math.floor(Number(range.retryCount || 0))) < KERO_BULK_NO_PROGRESS_RETRY_LIMIT
+        );
+    });
+}
+
+function isKeroFullCharacterBuildRequest(input = '') {
+    if (typeof isKeroGatewayFullCharacterBuildRequest === 'function') {
+        return isKeroGatewayFullCharacterBuildRequest(input);
+    }
+    const text = safeString(input);
+    if (!text.trim()) return false;
+    const fullBuildWords = /(전체|처음부터|캐릭터\s*패키지|풀\s*빌드|풀빌드|리메이크|만들|제작|생성|worldbuild|full\s*build|make|build)/i;
+    const targetWords = /(봇|캐릭터|시뮬|sim|bot|character)/i;
+    const contentWords = /(디스크립션|description|desc|첫\s*메시지|first\s*message|로어북|lorebook|상태창|status|css|html|세계관|인물|관계)/i;
+    return fullBuildWords.test(text) && targetWords.test(text) && contentWords.test(text);
+}
+
 const keroPendingApply = {
     desc: false,
     globalNote: false,
@@ -37750,7 +38162,7 @@ function getBulkOutputHint(targetType) {
     return 'result는 항목 JSON 배열이어야 합니다.';
 }
 
-/* === RisuAI SuperVibeBot v1.4.11 Guide (Concise Version) === */
+/* === RisuAI SuperVibeBot v1.4.12 Guide (Concise Version) === */
 const RISUAI_GUIDE = {
     overview: `
 ## System Overview
@@ -48719,7 +49131,7 @@ async function loadInitialSettings() {
 async function registerUIElements() {
     // 채팅 화면 메뉴에 버튼 추가 (플로팅 버튼 대신)
     await risuai.registerButton({
-        name: "SuperVibeBot v1.4.11",
+        name: "SuperVibeBot v1.4.12",
         icon: "🐸",
         iconType: "html",
         location: "chat"  // 채팅 메뉴에 배치 (화면 가림 방지)
@@ -48728,7 +49140,7 @@ async function registerUIElements() {
     });
 
     await risuai.registerSetting(
-        "SuperVibeBot v1.4.11 Settings",
+        "SuperVibeBot v1.4.12 Settings",
         async () => {
             await openSettingsWindow();
         },
@@ -48771,7 +49183,7 @@ function cleanup() {
 (async () => {
     try {
         Logger.info("=".repeat(50));
-        Logger.info("SuperVibeBot v1.4.11");
+        Logger.info("SuperVibeBot v1.4.12");
         Logger.info("RisuAI Plugin API 3.0");
         Logger.info("=".repeat(50));
         await loadInitialSettings();
