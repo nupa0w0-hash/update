@@ -1,13 +1,13 @@
 //@name SuperVibeBot
-//@display-name 🐸 SuperVibeBot v1.5.24
-//@version 1.5.24
+//@display-name 🐸 SuperVibeBot v1.5.25
+//@version 1.5.25
 //@api 3.0
 //@update-url https://github.com/nupa0w0-hash/supervibebot-update/releases/latest/download/SuperVibeBot.update.js
 //@arg api_key string "" "Google AI Studio API 키를 입력하세요 (Vertex AI, API Hub 또는 GitHub Copilot 연동 시 불필요)."
 //@arg disable_safety int 0 "안전 필터 비활성화 (1=OFF, 0=ON)"
 
 if (typeof risuai === "undefined") {
-    alert("⚠️ SuperVibeBot v1.5.24는 RisuAI Plugin API 3.0이 필요합니다.");
+    alert("⚠️ SuperVibeBot v1.5.25는 RisuAI Plugin API 3.0이 필요합니다.");
     throw new Error("API 3.0 required");
 }
 
@@ -164,7 +164,7 @@ async function safeCopyText(text, options = {}) {
 }
 
 /**
- * SuperVibeBot v1.5.24 Release Notes
+ * SuperVibeBot v1.5.25 Release Notes
  *
  * 🎉 Major Changes
  * - Caps sub-agent consultation packets to 120k desktop, 80k constrained, and 60k background chars
@@ -191,6 +191,7 @@ async function safeCopyText(text, options = {}) {
  * - Plugin update-url guidance no longer uses source/raw-like Korean wording that can confuse authors
  * - Runtime diagnostics now verify full character context does not leak unused personality/scenario fields
  * - Runtime diagnostics now flush expired sub-agent consultation guards before judging stuck sub-agent state
+ * - Control-only resume/retry now stops empty interrupted missions instead of re-calling the original large prompt
  * - Sub-agent report calls now default to 4096 output tokens on desktop and 2048 on constrained/mobile/webview profiles
  * - Explicit sub-agent output overrides are clamped to a WebView-safe hard cap
  * - API responses that ignore max_tokens are shortened before entering Kero's parser/renderer
@@ -209,6 +210,7 @@ async function safeCopyText(text, options = {}) {
  * - Validation messages now say HTTPS .js file URL instead of raw/source-like JS URL wording
  * - Strengthened legacy character field self-checks so Kero keeps traits/setup inside desc instead of deprecated fields
  * - Improves recovery from backgrounded PocketRisu/WebView sessions where timer callbacks may have been delayed
+ * - Prevents “continue/retry” loops when a restored mission has no saved actions, bulk jobs, or queued work
  * - Prevents GLM/Kimi/API Hub sub-agents from returning or rendering oversized manager reports
  * - Runtime diagnostics now verify sub-agent hard caps, response truncation, and conservative large-payload parallel limits
  * - Safer selected-item expansion in both global and Kero chat execution paths
@@ -12508,7 +12510,7 @@ function addSvbRuntimePluginMetadataSelfTest(checks) {
         const superVibeMetadata = buildPluginMetadataSummary([
             '//@name SuperVibeBot',
             '//@display-name 🐸 SuperVibeBot diagnostic',
-            '//@version 1.5.24',
+            '//@version 1.5.25',
             '//@api 3.0',
             `//@update-url ${SUPER_VIBE_BOT_RELEASE_UPDATE_URL}`
         ].join('\n'));
@@ -31526,13 +31528,25 @@ ${steeringBlock ? `\n${steeringBlock}` : ''}`;
         const hasNormallyResumableMissionStatus = ['interrupted', 'error', 'blocked', 'running'].includes(currentMissionStatus);
         const hasWarningResumeWork = currentMissionStatus === 'warning'
             && (resumeAvailability?.hasResumableWork || (retryRequest && (resumeAvailability?.hasWarningWork || resumeAvailability?.hasRetryQueueWork)));
+        const hasStoredResumeWork = Boolean(
+            resumeAvailability?.hasResumableWork
+            || (retryRequest && (resumeAvailability?.hasWarningWork || resumeAvailability?.hasRetryQueueWork))
+        );
         const shouldResumeMission = Boolean(
             resumeRequest
             && currentKeroMission
             && !['done', 'cancelled'].includes(currentMissionStatus)
-            && (hasNormallyResumableMissionStatus || hasWarningResumeWork)
+            && ((hasNormallyResumableMissionStatus && hasStoredResumeWork) || hasWarningResumeWork)
         );
         const shouldRetryWarningJobs = shouldResumeMission && retryRequest;
+        const shouldReportActiveMissionNoStoredWork = Boolean(
+            resumeRequest
+            && currentKeroMission
+            && !shouldResumeMission
+            && !shouldRetryQueueForSettledMission
+            && hasNormallyResumableMissionStatus
+            && (!currentMissionStorageId || !resumeAvailability || !hasStoredResumeWork)
+        );
         const shouldReportSettledMissionNoWork = Boolean(
             resumeRequest
             && currentKeroMission
@@ -31603,7 +31617,7 @@ ${steeringBlock ? `\n${steeringBlock}` : ''}`;
                 addKeroWorkstreamEvent('대기 요청 재시도', retryFailedQueueNotice, 'queued', taskProgressOptions);
             }
         }
-        if (isWorkMode && !controlOnlyResumeRequest && !shouldResumeMission && !shouldRetryQueueForSettledMission && !shouldRetryFailedQueueWithoutMission && !shouldHandleQueueWithoutMission && !shouldReportSettledMissionNoWork && !shouldReportNoRetryableWorkWithoutMission) {
+        if (isWorkMode && !controlOnlyResumeRequest && !shouldResumeMission && !shouldRetryQueueForSettledMission && !shouldRetryFailedQueueWithoutMission && !shouldHandleQueueWithoutMission && !shouldReportActiveMissionNoStoredWork && !shouldReportSettledMissionNoWork && !shouldReportNoRetryableWorkWithoutMission) {
             try {
                 await startKeroMission(visibleUserInput, { ...options, keroMode: taskKeroMode, workTargetMode: taskWorkTargetMode });
             } catch (error) {
@@ -31688,6 +31702,30 @@ ${steeringBlock ? `\n${steeringBlock}` : ''}`;
                     ? '재시도할 확인필요/실패 작업이나 대기 요청이 없습니다.'
                     : '이어갈 작업이나 대기 요청이 없습니다. 새 작업을 원하면 구체적으로 요청해주세요.';
                 addKeroWorkstreamEvent('재개할 작업 없음', detail, 'warning', taskProgressOptions);
+                await addBotMessage(detail);
+                if (backgroundJobId) {
+                    finishKeroBackgroundJob(backgroundJobId, 'warning', detail);
+                }
+                backgroundJobClosed = true;
+                return {
+                    handled: true,
+                    success: true,
+                    status: 'done',
+                    queueDisposition: 'done',
+                    detail
+                };
+            }
+            if (shouldReportActiveMissionNoStoredWork) {
+                removeLoadingMessage();
+                const detail = retryRequest
+                    ? '이전 미션은 중단 상태지만 다시 실행할 저장된 액션, 대량 생성 job, 확인필요/실패 대기 요청이 없습니다. 같은 목표를 새로 시작하려면 작업 내용을 다시 구체적으로 요청해주세요.'
+                    : '이전 미션은 남아 있지만 이어갈 저장 작업이 없습니다. 원래 큰 요청을 그대로 다시 호출하면 같은 타임아웃이 반복될 수 있어 중단했습니다. 새 작업 내용을 구체적으로 요청해주세요.';
+                updateKeroMissionState({ status: 'interrupted', lastError: detail, resumedAt: new Date().toISOString() }, {
+                    title: '재개할 저장 작업 없음',
+                    detail,
+                    status: 'warning'
+                });
+                addKeroWorkstreamEvent('재개할 저장 작업 없음', detail, 'warning', taskProgressOptions);
                 await addBotMessage(detail);
                 if (backgroundJobId) {
                     finishKeroBackgroundJob(backgroundJobId, 'warning', detail);
@@ -39833,7 +39871,7 @@ function getBulkOutputHint(targetType) {
     return 'result는 항목 JSON 배열이어야 합니다.';
 }
 
-/* === RisuAI SuperVibeBot v1.5.24 Guide (Concise Version) === */
+/* === RisuAI SuperVibeBot v1.5.25 Guide (Concise Version) === */
 const RISUAI_GUIDE = {
     overview: `
 ## System Overview
@@ -50973,7 +51011,7 @@ async function loadInitialSettings() {
 async function registerUIElements() {
     // 채팅 화면 메뉴에 버튼 추가 (플로팅 버튼 대신)
     await risuai.registerButton({
-        name: "SuperVibeBot v1.5.24",
+        name: "SuperVibeBot v1.5.25",
         icon: "🐸",
         iconType: "html",
         location: "chat"  // 채팅 메뉴에 배치 (화면 가림 방지)
@@ -50982,7 +51020,7 @@ async function registerUIElements() {
     });
 
     await risuai.registerSetting(
-        "SuperVibeBot v1.5.24 Settings",
+        "SuperVibeBot v1.5.25 Settings",
         async () => {
             await openSettingsWindow();
         },
@@ -51025,7 +51063,7 @@ function cleanup() {
 (async () => {
     try {
         Logger.info("=".repeat(50));
-        Logger.info("SuperVibeBot v1.5.24");
+        Logger.info("SuperVibeBot v1.5.25");
         Logger.info("RisuAI Plugin API 3.0");
         Logger.info("=".repeat(50));
         await loadInitialSettings();
