@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.9
+//@display-name ☸Eros Tower 1.1.10
 //@api 3.0
-//@version 1.1.9
+//@version 1.1.10
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -33,18 +33,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.9
+ * Eros Tower 1.1.10
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.9 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.10 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.9';
+  const VERSION = '1.1.10';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.9`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.10`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -87,7 +87,7 @@
     'clue',
     'worldFront',
   ]);
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.9 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.10 analysis context';
   const GOOGLE_OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
   const GOOGLE_CLOUD_PLATFORM_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
   const PSYCHE_RECOMMENDED_MODELS = Object.freeze([
@@ -6096,6 +6096,7 @@
       'Do not write an English draft, translation draft, planning draft, or title before the final prose. Use one final language matching the current conversation.',
       'Source order: current user/recent chat > final output/canon > character card/author note/lore > stored state > agent inference.',
       'Pinned identity lore is current canon. Do not turn background tags such as orphan, unknown surname, past life, or origin into a new opening scene/status when affiliation/role is already specified.',
+      'Gender and sexual position are separate. If pinned lore says male/man and bottom/uke/受, keep the character male; bottom is not female gender or a reason to feminize unless canon explicitly says so.',
       'Older low-importance memories are intentionally faded unless repeated, important, or relevant now.',
       '',
       controlFloor,
@@ -6191,12 +6192,34 @@
       const plain = line.replace(/^[-*]\s*/, '');
       if (wanted.some(rx => rx.test(plain))) picked.push(plain.replace(/\s+/g, ' '));
     });
-    const currentRoleHints = [];
+    const currentRoleHints = normalizePinnedIdentityFacts(text);
     if (/清虚门|淸虛門|청허문/.test(text)) currentRoleHints.push('current affiliation=清虚门/청허문');
     if (/弟子|道士|도사|제자/.test(text)) currentRoleHints.push('current role=young Taoist disciple');
     if (/孤儿|孤兒|고아/.test(text)) currentRoleHints.push('orphan=background/surname context, not current scene location');
     if (/穿越者|현대\s*한국|现代韩国|past life|transmigrat/i.test(text)) currentRoleHints.push('past-life knowledge must not override current body/status');
     return uniqueStrings(currentRoleHints.concat(picked)).slice(0, 12).join('; ');
+  }
+
+  function normalizePinnedIdentityFacts(text) {
+    const raw = String(text || '');
+    const out = [];
+    const lineFor = pattern => raw.split(/\n+/).map(line => line.trim()).find(line => pattern.test(line)) || '';
+    const genderLine = lineFor(/(?:性别|性別|성별|gender|sex)\s*[:：]/i);
+    if (/(?:性别|性別|성별|gender|sex)\s*[:：]\s*(?:男|男性|male|man|남자|남성)/i.test(genderLine)) {
+      out.push('current gender=male/남성; do not write as female/woman');
+    } else if (/(?:性别|性別|성별|gender|sex)\s*[:：]\s*(?:女|女性|female|woman|여자|여성)/i.test(genderLine)) {
+      out.push('current gender=female/여성');
+    }
+    const sexualityLine = lineFor(/(?:性向|성향|sexuality|position)\s*[:：]/i);
+    if (/(?:同性恋|同性愛|gay|homosexual|동성애)/i.test(sexualityLine)) out.push('sexuality=gay/homosexual');
+    if (/(?:受|bottom|바텀|uke)/i.test(sexualityLine)) out.push('bottom/受=sexual position only, not gender');
+    if (/(?:攻|top|탑|seme)/i.test(sexualityLine)) out.push('top/攻=sexual position only, not gender');
+    const ageLine = lineFor(/(?:年龄|年齡|나이|age)\s*[:：]/i);
+    if (/15\s*(?:岁|세|살|yo|years?)/i.test(ageLine)) out.push('current body age=15');
+    if (/(?:20多岁|20대|modern korea|现代韩国|현대\s*한국)/i.test(ageLine) || /(?:20多岁|20대|modern korea|现代韩国|현대\s*한국)/i.test(raw)) {
+      out.push('inner/past-life memory may be older, but current body/status remains canon');
+    }
+    return out;
   }
 
   function recordRecallTrace(state, queryTerms, selected, profile, meta = {}) {
@@ -14192,7 +14215,7 @@
               ver: 1,
               data: [
                 { key: ['main'], content: 'Main character lore.' },
-                { comment: '연수', content: '# OC 角色设定集：渊水 (Yeon-su)\n### 身份\n- 姓名：渊水（姓氏未知/孤儿）\n- 年龄：15岁（外在肉体）/ 20多岁（内在心理，现代韩国）\n- 性别：男\n- 所属门派：清虚门\n- 身份/阶级：弟子（道士）\n### 核心行动准则\n渊水根据悲剧路线图采取预防性慈悲。', alwaysActive: true, insertorder: 100 },
+                { comment: '연수', content: '# OC 角色设定集：渊水 (Yeon-su)\n### 身份\n- 姓名：渊水（姓氏未知/孤儿）\n- 年龄：15岁（外在肉体）/ 20多岁（内在心理，现代韩国）\n- 性别：男\n- 性向：同性恋 (受 / Bottom)\n- 所属门派：清虚门\n- 身份/阶级：弟子（道士）\n### 核心行动准则\n渊水根据悲剧路线图采取预防性慈悲。', alwaysActive: true, insertorder: 100 },
               ],
             },
           };
