@@ -22,8 +22,8 @@ jobs:
           expected_regex="${EXPECTED_SUPERVIBEBOT_VERSION//./\\.}"
           current_commit_url="https://raw.githubusercontent.com/nupa0w0-hash/update/${GITHUB_SHA}/SuperVibeBot.update.js"
           body="$(curl -fsSL "${current_commit_url}")"
-          echo "${body}" | sed -n '1,8p'
-          echo "${body}" | grep -q "^//@version ${expected_regex}"
+          printf '%s\n' "${body}" | sed -n '1,8p' || true
+          grep -q "^//@version ${expected_regex}" <<< "${body}"
 
       - name: Purge legacy jsDelivr URLs
         shell: bash
@@ -76,9 +76,9 @@ jobs:
           for attempt in $(seq 1 30); do
             echo "verify attempt ${attempt}"
             body="$(curl -fsSL "${SUPERVIBEBOT_LEGACY_JSDELIVR_URL}" || true)"
-            echo "${body}" | sed -n '1,8p'
-            if echo "${body}" | grep -q "^//@version ${expected_regex}" \
-              && echo "${body}" | grep -q '^//@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/refs/heads/main/SuperVibeBot.update.js'; then
+            printf '%s\n' "${body}" | sed -n '1,8p' || true
+            if grep -q "^//@version ${expected_regex}" <<< "${body}" \
+              && grep -q '^//@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/refs/heads/main/SuperVibeBot.update.js' <<< "${body}"; then
               echo "SuperVibeBot legacy jsDelivr update URL is fresh."
               exit 0
             fi
