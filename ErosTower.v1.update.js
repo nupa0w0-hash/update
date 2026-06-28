@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.4
+//@display-name ☸Eros Tower 1.1.5
 //@api 3.0
-//@version 1.1.4
+//@version 1.1.5
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -33,18 +33,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.4
+ * Eros Tower 1.1.5
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.4 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.5 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.4';
+  const VERSION = '1.1.5';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.4`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.5`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -60,7 +60,7 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.4 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.5 analysis context';
   const GOOGLE_OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
   const GOOGLE_CLOUD_PLATFORM_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
   const PSYCHE_RECOMMENDED_MODELS = Object.freeze([
@@ -10458,7 +10458,8 @@
       .et-chip-label { color:#a06f72; font-size:11px; }
       .et-chip-value { margin-top:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; font-weight:650; }
       .et-menu-anchor { position:relative; min-width:0; }
-      .et-menu-toggle { width:100%; height:100%; min-height:52px; display:flex; align-items:center; justify-content:center; font-weight:850; background:#fffdfa; }
+      .et-menu-toggle { width:100%; height:100%; min-height:52px; display:flex; align-items:center; justify-content:center; font-weight:850; background:#fffdfa; background-image:none !important; appearance:none; -webkit-appearance:none; }
+      .et-menu-toggle:before, .et-menu-toggle:after { content:none !important; display:none !important; }
       .et-dashboard-menu { position:absolute; top:calc(100% + 8px); right:0; z-index:60; width:min(320px, calc(100vw - 40px)); display:none; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:8px; padding:10px; border:1px solid #ead4c5; border-radius:8px; background:#fffefa; box-shadow:0 18px 42px rgba(91,52,48,.18); }
       .et-dashboard-menu[data-open="true"] { display:grid; }
       .et-menu-button { width:100%; min-height:46px; display:flex; align-items:center; justify-content:center; text-align:center; font-weight:750; background:#fffdfa; }
