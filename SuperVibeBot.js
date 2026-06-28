@@ -1,4 +1,4 @@
-﻿//@name SuperVibeBot
+//@name SuperVibeBot
 //@display-name 🐸 SuperVibeBot v4.2
 //@version 4.2
 //@api 3.0
