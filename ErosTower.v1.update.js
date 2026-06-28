@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.7
+//@display-name ☸Eros Tower 1.1.8
 //@api 3.0
-//@version 1.1.7
+//@version 1.1.8
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -33,18 +33,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.7
+ * Eros Tower 1.1.8
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.7 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.8 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.7';
+  const VERSION = '1.1.8';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.7`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.8`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -61,7 +61,33 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.7 analysis context';
+  const CURRENT_SCENE_TAIL_MESSAGES = 6;
+  const CURRENT_SCENE_TAIL_CHARS = 1800;
+  const RECALL_KIND_SOFT_CAPS = Object.freeze({
+    sceneTail: 1,
+    scene: 1,
+    character: 4,
+    relationship: 4,
+    secret: 3,
+    lore: 5,
+    memory: 7,
+    event: 4,
+    foreshadowing: 3,
+    clue: 3,
+    worldFront: 3,
+    continuityRisk: 2,
+  });
+  const RECALL_PROTECTED_KINDS = Object.freeze([
+    'sceneTail',
+    'scene',
+    'character',
+    'relationship',
+    'secret',
+    'foreshadowing',
+    'clue',
+    'worldFront',
+  ]);
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.8 analysis context';
   const GOOGLE_OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
   const GOOGLE_CLOUD_PLATFORM_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
   const PSYCHE_RECOMMENDED_MODELS = Object.freeze([
@@ -5704,18 +5730,21 @@
     const budget = Math.max(1200, Number(budgetOverride || profile.budget || 4200));
     const controlFloor = buildMainControlFloorContext(context, Math.min(Math.max(900, Math.floor(budget * 0.35)), budget));
     const retrievalBudget = Math.max(700, budget - controlFloor.length - 80);
-    const staged = await stagedRetrieveCandidates(agentId, state, query, profile, conf);
+    const staged = await stagedRetrieveCandidates(agentId, state, query, profile, conf, context);
     const candidates = staged.candidates;
     const selected = selectCandidates(candidates, profile.limit, retrievalBudget);
     const pack = formatRetrievalPack(agentId, state, selected, query);
     return [controlFloor, staged.note, pack].filter(Boolean).join('\n\n').slice(0, budget);
   }
 
-  async function stagedRetrieveCandidates(agentId, state, queryTerms, profile, conf = null) {
-    let candidates = rankStateCandidates(state, queryTerms, profile);
+  async function stagedRetrieveCandidates(agentId, state, queryTerms, profile, conf = null, context = null) {
+    const signature = buildRecallQuerySignature(queryTerms, context, state);
+    const sceneTail = collectCurrentSceneTailCandidates(context, state, signature);
+    let candidates = mergeRecallCandidates(sceneTail.concat(rankStateCandidates(state, queryTerms, profile, signature)));
     const stats = {
       profile: agentId,
       lexical: candidates.length,
+      sceneTail: sceneTail.length,
       embedded: 0,
       spread: 0,
       blocked: 0,
@@ -5966,7 +5995,7 @@
     );
     const controlFloor = buildMainControlFloorContext(context, floorBudget);
     const remainingBudget = Math.max(700, totalBudget - controlFloor.length - 80);
-    const staged = await stagedRetrieveCandidates('main', state, query, AGENT_RETRIEVAL_PROFILE.main, conf);
+    const staged = await stagedRetrieveCandidates('main', state, query, AGENT_RETRIEVAL_PROFILE.main, conf, context);
     const candidates = staged.candidates;
     const selected = selectCandidates(candidates, AGENT_RETRIEVAL_PROFILE.main.limit, remainingBudget);
     const retrievalPack = formatRetrievalPack('main', state, selected, query);
@@ -6034,8 +6063,12 @@
       selected: (Array.isArray(selected) ? selected : []).slice(0, 10).map(item => ({
         kind: item.kind,
         path: item.path,
+        publicRef: item.publicRef || item.path,
+        axis: item.axis || recallAxisForKind(item.kind),
+        locator: item.locator || internalRecallLocator(item.kind, item.path, item.item, state),
         score: Math.round(item.score || 0),
         lineId: item.lineId || candidateTraceId(item),
+        entityAnchorHits: Array.isArray(item.entityAnchorHits) ? item.entityAnchorHits.slice(0, 6) : [],
         memoryTier: item.memoryTier || normalizeMemoryLifecycleTier(item.item?.memoryTier),
         heatScore: item.heatScore ?? item.item?.heatScore,
         sourceRank: item.sourceRank,
@@ -6072,10 +6105,170 @@
     return Array.from(new Set(tokens)).slice(0, 80);
   }
 
-  function rankStateCandidates(state, queryTerms, profile) {
+  function buildRecallQuerySignature(queryTerms, context, state) {
+    const recentText = (Array.isArray(context?.messages) ? context.messages : [])
+      .slice(-CURRENT_SCENE_TAIL_MESSAGES)
+      .map(message => `${message?.role || ''}: ${message?.content || message?.data || ''}`)
+      .join('\n');
+    const activeText = Object.values(state?.characters || {})
+      .filter(item => /active|present|current/i.test(String(item?.status || item?.state || 'active')))
+      .map(item => [item?.name, item?.id, item?.aliases].flat().join(' '))
+      .join('\n');
+    const text = [
+      (Array.isArray(queryTerms) ? queryTerms : []).join(' '),
+      getUserInput(context?.messages || []),
+      recentText,
+      activeText,
+    ].join('\n');
+    const lower = text.toLowerCase();
+    const currentHits = (lower.match(/\b(now|current|scene|present|today|immediate|latest|this)\b|지금|현재|이번|방금|직전|오늘/g) || []).length;
+    const pastHits = (lower.match(/\b(before|past|earlier|previous|old|remember|memory|backstory|history)\b|예전|과거|이전|전에|기억|옛날|지난/g) || []).length;
+    return {
+      tokens: recallTokens(text, 96),
+      entityAnchors: extractRecallEntityAnchors(text, 18),
+      currentWeight: clampFloat(0.48 + currentHits * 0.14 - pastHits * 0.06, 0.05, 0.95),
+      pastWeight: clampFloat(0.34 + pastHits * 0.16 - currentHits * 0.05, 0.05, 0.95),
+      turn: state?.turn || 0,
+    };
+  }
+
+  function recallTokens(value, limit = 80) {
+    const raw = String(value || '');
+    const tokens = raw.match(/[A-Za-z][A-Za-z0-9_-]{1,}|[가-힣][가-힣A-Za-z0-9_-]{1,}/g) || [];
+    const stop = new Set(['the', 'and', 'that', 'with', 'from', 'this', 'role', 'user', 'assistant', 'system']);
+    return uniqueStrings(tokens
+      .map(token => token.trim())
+      .filter(token => token.length >= 2 && !stop.has(token.toLowerCase())))
+      .slice(0, limit);
+  }
+
+  function extractRecallEntityAnchors(value, limit = 18) {
+    const text = String(value || '');
+    const candidates = text.match(/[A-Z][A-Za-z0-9_-]{2,}(?:\s+[A-Z][A-Za-z0-9_-]{2,}){0,2}|[가-힣]{2,8}/g) || [];
+    const stop = new Set(['User', 'Assistant', 'System', 'Role', 'Current', 'Previous']);
+    return uniqueStrings(candidates
+      .map(item => item.trim().replace(/\s+/g, ' '))
+      .filter(item => item.length >= 2 && item.length <= 32 && !stop.has(item)))
+      .slice(0, limit);
+  }
+
+  function collectCurrentSceneTailCandidates(context, state, signature) {
+    const messages = (Array.isArray(context?.messages) ? context.messages : [])
+      .filter(message => message?.role === 'user' || message?.role === 'assistant')
+      .slice(-CURRENT_SCENE_TAIL_MESSAGES);
+    if (!messages.length) return [];
+    const body = messages.map(message => {
+      const role = message.role === 'user' ? 'User' : 'Assistant';
+      return `[${role}] ${String(message.content || message.data || '').replace(/\s+/g, ' ').trim()}`;
+    }).join('\n').slice(-CURRENT_SCENE_TAIL_CHARS);
+    if (!body.trim()) return [];
+    const item = {
+      id: `current-scene-tail-${hashString(body).slice(0, 12)}`,
+      summary: body,
+      source: 'recent_chat',
+      sourceRank: SOURCE_RANK.recent_chat,
+      importance: 10,
+      confidence: 0.98,
+      canonLevel: 'current',
+      status: 'current',
+      createdTurn: state?.turn || 0,
+      lastSeenTurn: state?.turn || 0,
+      activationKeys: signature?.entityAnchors || [],
+      anchor: true,
+    };
+    return [{
+      kind: 'sceneTail',
+      path: 'current.sceneTail',
+      item,
+      text: body,
+      turn: state?.turn || 0,
+      sourceRank: SOURCE_RANK.recent_chat,
+      importance: 10,
+      confidence: 0.98,
+      tier: 5,
+      memoryTier: 'hot',
+      heatScore: 100,
+      status: 'current',
+      axis: 'current-scene',
+      publicRef: 'current.sceneTail',
+      locator: {
+        source: 'recent_chat',
+        tailHash: hashString(body),
+        messageCount: messages.length,
+        turn: state?.turn || 0,
+      },
+      score: 220 + Math.round((signature?.currentWeight || 0.5) * 40),
+    }];
+  }
+
+  function mergeRecallCandidates(candidates) {
+    const map = new Map();
+    (Array.isArray(candidates) ? candidates : []).forEach(candidate => {
+      if (!candidate) return;
+      const key = `${candidate.kind || ''}:${candidate.path || ''}:${candidate.item?.id || candidate.item?.sourceId || ''}`;
+      const previous = map.get(key);
+      if (!previous || Number(candidate.score || 0) > Number(previous.score || 0)) map.set(key, candidate);
+    });
+    return Array.from(map.values()).sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
+  }
+
+  function applyRecallSignatureBoost(candidate, signature, currentTurn) {
+    if (!signature) return candidate;
+    const anchors = Array.isArray(signature.entityAnchors) ? signature.entityAnchors : [];
+    if (!anchors.length) return candidate;
+    const haystack = String(candidate.text || '').toLowerCase();
+    const hits = anchors.filter(anchor => haystack.includes(String(anchor).toLowerCase())).slice(0, 8);
+    if (!hits.length) return candidate;
+    const age = Math.max(0, Number(currentTurn || 0) - Number(candidate.turn || 0));
+    const freshBoost = signature.currentWeight > signature.pastWeight && age <= 8 ? 6 : 0;
+    return {
+      ...candidate,
+      entityAnchorHits: hits,
+      score: Number(candidate.score || 0) + Math.min(34, hits.length * 9) + freshBoost,
+    };
+  }
+
+  function weightedRecallOverlap(candidate, queryTerms, signature) {
+    const haystack = String(candidate?.text || '').toLowerCase();
+    const baseTerms = Array.isArray(queryTerms) ? queryTerms : [];
+    const tokenTerms = Array.isArray(signature?.tokens) ? signature.tokens.map(item => String(item).toLowerCase()) : [];
+    const anchorTerms = Array.isArray(signature?.entityAnchors) ? signature.entityAnchors.map(item => String(item).toLowerCase()) : [];
+    let score = 0;
+    uniqueStrings(baseTerms.concat(tokenTerms)).slice(0, 120).forEach(term => {
+      const value = String(term || '').toLowerCase();
+      if (value.length >= 2 && haystack.includes(value)) score += 0.18;
+    });
+    anchorTerms.forEach(term => {
+      if (term.length >= 2 && haystack.includes(term)) score += 0.42;
+    });
+    return Math.min(3.2, score);
+  }
+
+  function recallIntentPenalty(candidate, signature, age) {
+    if (!signature) return 0;
+    const kind = candidate?.kind || '';
+    const status = String(candidate?.status || candidate?.item?.status || '').toLowerCase();
+    let score = 0;
+    if (signature.currentWeight >= signature.pastWeight) {
+      if (kind === 'sceneTail' || kind === 'scene') score += 30;
+      if (kind === 'character' || kind === 'relationship') score += 12;
+      if ((kind === 'memory' || kind === 'event') && age > 24) score -= Math.min(34, (age - 24) * 0.55);
+      if (/archived|superseded|resolved|faded|ended|closed/.test(status)) score -= 18;
+    }
+    if (signature.pastWeight > signature.currentWeight + 0.08) {
+      if (kind === 'memory' || kind === 'event' || kind === 'lore') score += 18;
+      if (kind === 'sceneTail' && age <= 2) score += 6;
+    }
+    return score;
+  }
+
+  function rankStateCandidates(state, queryTerms, profile, signature = null) {
     return collectStateCandidates(state)
       .filter(candidate => !profile?.kinds || profile.kinds.includes(candidate.kind))
-      .map(candidate => ({ ...candidate, score: scoreCandidate(candidate, queryTerms, state.turn, state) }))
+      .map(candidate => applyRecallSignatureBoost({
+        ...candidate,
+        score: scoreCandidate(candidate, queryTerms, state.turn, state, signature),
+      }, signature, state.turn))
       .sort((a, b) => b.score - a.score);
   }
 
@@ -6098,6 +6291,9 @@
         memoryTier: normalizeMemoryLifecycleTier(item?.memoryTier) || inferMemoryLifecycleTier(item, kind, state.turn),
         heatScore: parseNumber(item?.heatScore, memoryLifecycleHeat(item, kind, state.turn), 0, 100),
         status: String(item?.status || item?.maturity || item?.state || ''),
+        axis: recallAxisForKind(kind),
+        publicRef: publicRecallRef(kind, path, item),
+        locator: internalRecallLocator(kind, path, item, state),
       });
     };
 
@@ -6131,9 +6327,10 @@
     }
   }
 
-  function scoreCandidate(candidate, queryTerms, currentTurn, state = null) {
+  function scoreCandidate(candidate, queryTerms, currentTurn, state = null, signature = null) {
     const haystack = candidate.text.toLowerCase();
     const matchScore = queryTerms.reduce((sum, term) => sum + (haystack.includes(term) ? 8 : 0), 0);
+    const lexicalScore = weightedRecallOverlap(candidate, queryTerms, signature) * 34;
     const sourceScore = clampNumber(candidate.sourceRank, SOURCE_RANK.stored_state, 0, 100) * 0.18;
     const importanceScore = clampNumber(candidate.importance, 4, 0, 10) * 7;
     const confidenceScore = clampNumber(candidate.confidence, 0.6, 0, 1) * 18;
@@ -6150,7 +6347,8 @@
     const decay = parseNumber(candidate.item?.decay, candidate.kind === 'memory' ? calculateMemoryDecay(candidate.item, age) : 1, 0, 1);
     const decayScore = candidate.kind === 'memory' ? (decay - 1) * 34 : 0;
     const fadedPenalty = /faded/i.test(candidate.status) ? -22 : 0;
-    return matchScore + sourceScore + importanceScore + confidenceScore + recencyScore + tierScore + memoryTierScore + heatScore + lifecycleScore + activationScore + mustCarryScore + graphScore + boundaryPenalty + decayScore + fadedPenalty;
+    const intentScore = recallIntentPenalty(candidate, signature, age);
+    return matchScore + lexicalScore + sourceScore + importanceScore + confidenceScore + recencyScore + tierScore + memoryTierScore + heatScore + lifecycleScore + activationScore + mustCarryScore + graphScore + boundaryPenalty + decayScore + fadedPenalty + intentScore;
   }
 
   function associationActivationScore(candidate, state) {
@@ -6374,6 +6572,47 @@
     return `${pair[0]}=>${pair[1]}`;
   }
 
+  function recallAxisForKind(kind) {
+    const value = String(kind || '');
+    if (value === 'sceneTail' || value === 'scene') return 'current-scene';
+    if (value === 'character' || value === 'relationship' || value === 'socialGraph') return 'cast';
+    if (value === 'secret') return 'secret';
+    if (value === 'foreshadowing' || value === 'clue' || value === 'promiseDebtConsequence') return 'plot';
+    if (value === 'worldFront' || value === 'resourceChannel' || value === 'knowledge') return 'world';
+    if (value === 'lore') return 'canon-lore';
+    if (value === 'memory' || value === 'event') return 'memory';
+    return 'state';
+  }
+
+  function publicRecallRef(kind, path, item) {
+    const axis = recallAxisForKind(kind);
+    const rawLabel = firstNonEmpty(
+      item?.name,
+      item?.title,
+      item?.id,
+      item?.summary,
+      item?.quoteOrSummary,
+      item?.objective,
+      item?.seed,
+      path,
+    );
+    const label = String(rawLabel || kind || 'entry').replace(/\s+/g, ' ').trim().slice(0, 72);
+    return `${axis}:${label || kind || 'entry'}`;
+  }
+
+  function internalRecallLocator(kind, path, item, state) {
+    return {
+      kind,
+      path,
+      id: cleanString(item?.id, ''),
+      key: itemKey(item),
+      source: cleanString(item?.source, ''),
+      sourceId: cleanString(item?.sourceId, ''),
+      sourceHash: cleanString(item?.sourceHash || item?.hash || item?.canonicalSource?.hash, ''),
+      turn: inferItemTurn(item, state?.turn || 0),
+    };
+  }
+
   function candidateTerms(candidate) {
     const item = candidate.item || {};
     const source = [
@@ -6413,7 +6652,7 @@
 
   function isMustCarryCandidate(candidate) {
     const item = candidate?.item || {};
-    if (candidate?.kind === 'scene') return true;
+    if (candidate?.kind === 'scene' || candidate?.kind === 'sceneTail') return true;
     if (candidate?.kind === 'character' && /active|present|current/i.test(String(item.status || item.state || 'active'))) return true;
     if (candidate?.kind === 'lore') {
       const canonicalKind = String(item?.canonicalSource?.kind || '').toLowerCase();
@@ -6431,24 +6670,56 @@
   function selectCandidates(candidates, limit, budget) {
     const selected = [];
     const selectedIds = new Set();
+    const kindCounts = new Map();
+    const sourceCounts = new Map();
+    const turnCounts = new Map();
     let used = 0;
     const input = Array.isArray(candidates) ? candidates : [];
     const mustCarry = input
       .filter(isMustCarryCandidate)
       .sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
     const rest = input.filter(candidate => !isMustCarryCandidate(candidate));
+    const sourceBucketForCandidate = candidate => String(
+      candidate?.item?.sourceChunkHash
+      || candidate?.item?.sourceRangeHash
+      || candidate?.item?.canonicalSource?.hash
+      || candidate?.item?.sourceId
+      || candidate?.item?.source
+      || candidate?.path
+      || candidate?.kind
+      || 'unknown',
+    ).slice(0, 80);
+    const turnBucketForCandidate = candidate => Math.floor(Number(candidate?.turn || 0) / 12);
+    const protectedFloor = Math.min(Math.max(4, Math.floor(Number(limit || 0) * 0.36)), RECALL_PROTECTED_KINDS.length + 3);
+    const selectedProtectedCount = () => selected.filter(item => RECALL_PROTECTED_KINDS.includes(item.kind)).length;
+    const countCandidate = candidate => {
+      kindCounts.set(candidate.kind, (kindCounts.get(candidate.kind) || 0) + 1);
+      const sourceBucket = sourceBucketForCandidate(candidate);
+      sourceCounts.set(sourceBucket, (sourceCounts.get(sourceBucket) || 0) + 1);
+      const turnBucket = turnBucketForCandidate(candidate);
+      turnCounts.set(turnBucket, (turnCounts.get(turnBucket) || 0) + 1);
+    };
     const pushCandidate = (candidate, forceFloor = false) => {
       if (selected.length >= limit) return false;
       if (candidate.memoryTier === 'archived' && Number(candidate.score || 0) < 72) return false;
       if (candidate.memoryTier === 'disputed' && Number(candidate.score || 0) < 105) return false;
       const lineId = candidateTraceId(candidate);
       if (selectedIds.has(lineId)) return false;
+      const protectedKind = RECALL_PROTECTED_KINDS.includes(candidate.kind);
+      const diversityLocked = !forceFloor && selected.length >= Math.max(4, Math.floor(Number(limit || 0) * 0.28));
+      const softCap = RECALL_KIND_SOFT_CAPS[candidate.kind] || 9999;
+      if (diversityLocked && (kindCounts.get(candidate.kind) || 0) >= softCap && Number(candidate.score || 0) < 135) return false;
+      const sourceBucket = sourceBucketForCandidate(candidate);
+      if (diversityLocked && !protectedKind && (sourceCounts.get(sourceBucket) || 0) >= 3) return false;
+      const turnBucket = turnBucketForCandidate(candidate);
+      if (diversityLocked && candidate.kind === 'memory' && (turnCounts.get(turnBucket) || 0) >= 5 && Number(candidate.score || 0) < 128) return false;
       const line = formatCandidateLine({ ...candidate, lineId });
       const floorBudget = Math.max(1800, Math.floor(Number(budget || 0) * 0.38));
       if (used + line.length > budget && selected.length >= Math.max(4, Math.floor(limit / 3))) return false;
-      if (forceFloor && used + line.length > floorBudget && selected.length >= 4) return false;
+      if (forceFloor && used + line.length > floorBudget && selected.length >= 4 && selectedProtectedCount() >= protectedFloor) return false;
       selected.push({ ...candidate, line, lineId });
       selectedIds.add(lineId);
+      countCandidate(candidate);
       used += line.length;
       return true;
     };
@@ -6457,7 +6728,8 @@
     }
     for (const candidate of rest) {
       if (selected.length >= limit) break;
-      pushCandidate(candidate, false);
+      const needsProtectedFloor = RECALL_PROTECTED_KINDS.includes(candidate.kind) && selectedProtectedCount() < protectedFloor;
+      pushCandidate(candidate, needsProtectedFloor);
     }
     return selected;
   }
@@ -6490,10 +6762,12 @@
   function formatCandidateLine(candidate) {
     const summary = summarizeLedgerText(candidate.item, candidate.kind);
     const meta = [
+      candidate.axis ? `axis=${candidate.axis}` : '',
       `score=${Math.round(candidate.score || 0)}`,
       `importance=${candidate.importance}`,
       `confidence=${Number(candidate.confidence).toFixed(2)}`,
       `turn=${candidate.turn}`,
+      Array.isArray(candidate.entityAnchorHits) && candidate.entityAnchorHits.length ? `entityHits=${candidate.entityAnchorHits.slice(0, 4).join('/')}` : '',
       candidate.memoryTier ? `memoryTier=${candidate.memoryTier}` : '',
       candidate.kind === 'memory' ? `decay=${formatDecimal(candidate.item?.decay ?? 1)}` : '',
       candidate.kind === 'lore' && (candidate.item?.alwaysActive || candidate.item?.activationMode === 'always' || candidate.item?.canonicalSource?.meta?.alwaysActive) ? 'always' : '',
@@ -6501,7 +6775,7 @@
       candidate.tier ? `tier=${candidate.tier}` : '',
       candidate.status ? `status=${candidate.status}` : '',
     ].filter(Boolean).join(', ');
-    return `- ${candidate.path} (${meta}): ${summary}`;
+    return `- ${candidate.publicRef || candidate.path} (${meta}): ${summary}`;
   }
 
   function recordInjectionTrace(state, queryTerms, selected, injection, budget, staged = {}) {
@@ -6513,7 +6787,11 @@
         id: item.lineId || candidateTraceId(item),
         kind: item.kind,
         path: item.path,
+        publicRef: item.publicRef || item.path,
+        axis: item.axis || recallAxisForKind(item.kind),
+        locator: item.locator || internalRecallLocator(item.kind, item.path, item.item, state),
         score: Math.round(item.score || 0),
+        entityAnchorHits: Array.isArray(item.entityAnchorHits) ? item.entityAnchorHits.slice(0, 6) : [],
         memoryTier: item.memoryTier || normalizeMemoryLifecycleTier(item.item?.memoryTier),
         heatScore: item.heatScore ?? item.item?.heatScore,
         sourceRank: item.sourceRank,
@@ -10696,6 +10974,7 @@
       if (doc.documentElement?.style) {
         doc.documentElement.style.margin = '0';
         doc.documentElement.style.width = '100%';
+        doc.documentElement.style.height = '100%';
         doc.documentElement.style.minHeight = '100%';
         doc.documentElement.style.background = '#fff8f1';
         doc.documentElement.style.overflow = 'auto';
@@ -10703,6 +10982,7 @@
       if (doc.body?.style) {
         doc.body.style.margin = '0';
         doc.body.style.width = '100%';
+        doc.body.style.height = 'auto';
         doc.body.style.minHeight = '100%';
         doc.body.style.background = '#fff8f1';
         doc.body.style.overflow = 'auto';
