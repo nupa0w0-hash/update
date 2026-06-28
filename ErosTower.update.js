@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 4.0.4
+//@display-name ☸Eros Tower 1.0.4
 //@api 3.0
-//@version 4.0.4
+//@version 1.0.4
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -32,18 +32,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 4.0.4
+ * Eros Tower 1.0.4
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 4.0.4 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.0.4 requires the RisuAI API v3 global.');
 
-  const VERSION = '4.0.4';
+  const VERSION = '1.0.4';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 4.0.4`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.0.4`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -59,7 +59,7 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 4.0.4 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.0.4 analysis context';
   const GOOGLE_OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
   const GOOGLE_CLOUD_PLATFORM_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
   const PSYCHE_RECOMMENDED_MODELS = Object.freeze([
@@ -481,6 +481,7 @@
     lastEmbeddingCacheStats: null,
     lastAutoCap: null,
     lastRunHealth: null,
+    lastModeResolution: null,
     compressedStorageEnabled: DEFAULT_CONFIG.compressedStorageEnabled,
     googleAccessTokenCache: new Map(),
   };
@@ -3974,19 +3975,30 @@
 
   function resolveMode(configMode, character, messages, db = null, chat = null, conf = null) {
     const normalizedConfigMode = String(configMode || '').toLowerCase();
-    if (normalizedConfigMode === 'rp' || normalizedConfigMode === 'novel') return normalizedConfigMode;
+    if (normalizedConfigMode === 'rp' || normalizedConfigMode === 'novel') return rememberModeResolution(normalizedConfigMode, 'manual-config');
     const promptMessageMode = resolvePromptMessageMode(messages);
-    if (promptMessageMode) return promptMessageMode;
+    if (promptMessageMode) return rememberModeResolution(promptMessageMode, 'prompt-message');
     const promptToggleMode = resolvePromptToggleMode(character, db, chat, conf);
-    if (promptToggleMode) return promptToggleMode;
+    if (promptToggleMode) return rememberModeResolution(promptToggleMode, 'prompt-toggle');
     const text = [
       character?.name,
       character?.description,
       character?.desc,
       messages.slice(-4).map(m => m.content).join('\n'),
     ].join('\n').toLowerCase();
-    if (/(소설|장편|3인칭|삼인칭|novel|fiction|prose|chapter|third\s*person)/.test(text)) return 'novel';
-    return 'rp';
+    if (/(소설|장편|3인칭|삼인칭|novel|fiction|prose|chapter|third\s*person)/.test(text)) return rememberModeResolution('novel', 'heuristic');
+    return rememberModeResolution('rp', 'fallback');
+  }
+
+  function rememberModeResolution(mode, source, detail = '') {
+    const normalized = mode === 'novel' ? 'novel' : 'rp';
+    Runtime.lastModeResolution = {
+      mode: normalized,
+      source: source || 'unknown',
+      detail: String(detail || '').slice(0, 160),
+      at: nowIso(),
+    };
+    return normalized;
   }
 
   function resolvePromptToggleMode(character, db, chat, conf = null) {
@@ -4041,6 +4053,8 @@
       if (typeof value === 'string' && value.trim()) texts.push(value);
     };
     add(db?.customPromptTemplateToggle);
+    add(character?.customPromptTemplateToggle);
+    add(character?.data?.customPromptTemplateToggle);
     add(character?.customModuleToggle);
     add(character?.data?.customModuleToggle);
     (Array.isArray(db?.modules) ? db.modules : []).forEach(module => {
@@ -4090,9 +4104,18 @@
   function extractExplicitPromptMode(text) {
     const raw = normalizeModeTokenText(text);
     if (!raw) return '';
-    const lines = raw.split(/\n|[;|]/).map(line => line.trim()).filter(Boolean).slice(0, 240);
+    const lines = raw.split(/\n|[;|]/).map(line => line.trim()).filter(Boolean).slice(0, 320);
     for (const line of lines) {
-      if (!/(eros|psyche|에로스|사이키|mode|모드|이야기의\s*모드|출력\s*모드|writing\s*mode|rp|소설|novel)/.test(line)) continue;
+      if (!/(eros|psyche|에로스|사이키|mode|모드|이야기의\s*모드|writing\s*mode|rp|롤플|소설|novel|fiction|prose|toggle\s*모드|toggle\s*mode|mijeong)/.test(line)) continue;
+      if (/=select=/.test(line) && !/(toggle\s*모드|toggle\s*mode|getglobalvar::toggle\s*모드|선택|현재|활성|selected|active|current)/.test(line)) continue;
+      if (/(?:novel|fiction|prose)\s+(?:handling|mode|prompt)\s+is\s+active/.test(line)) return 'novel';
+      if (/(?:rp|role\s*play|roleplay|role-play)\s+(?:handling|mode|prompt)\s+is\s+active/.test(line)) return 'rp';
+      if (/(?:mijeong|eros|psyche|에로스|사이키).{0,48}(?:fiction|novel|소설)\s*(?:prompt|mode|프롬프트|모드)?/.test(line)) return 'novel';
+      if (/(?:mijeong|eros|psyche|에로스|사이키).{0,48}(?:rp|role\s*play|roleplay|롤플레잉|롤플레이)\s*(?:prompt|mode|프롬프트|모드)?/.test(line)) return 'rp';
+      if (/(?:소설|novel|fiction|prose)\s*(?:handling|mode|prompt|모드|프롬프트)\s*(?:is\s+active|활성|작동|적용)/.test(line)) return 'novel';
+      if (/(?:rp|롤플레잉|롤플레이|role\s*play|roleplay)\s*(?:handling|mode|prompt|모드|프롬프트)\s*(?:is\s+active|활성|작동|적용)/.test(line)) return 'rp';
+      if (/(?:toggle\s*모드|toggle\s*mode|getglobalvar::toggle\s*모드|getglobalvar::toggle\s*mode)[^0-9a-z가-힣]{0,12}2\b/.test(line)) return 'novel';
+      if (/(?:toggle\s*모드|toggle\s*mode|getglobalvar::toggle\s*모드|getglobalvar::toggle\s*mode)[^0-9a-z가-힣]{0,12}1\b/.test(line)) return 'rp';
       if (/(?:mode|모드|이야기의\s*모드|출력\s*모드|writing\s*mode)\s*[:：=]\s*(?:소설|novel|fiction|prose)\b/.test(line)) return 'novel';
       if (/(?:mode|모드|이야기의\s*모드|출력\s*모드|writing\s*mode)\s*[:：=]\s*(?:rp|롤플레잉|롤플레이|role\s*play|roleplay)\b/.test(line)) return 'rp';
       if (/(?:selected|active|current|선택|현재|활성).{0,48}(?:소설|novel|fiction|prose)/.test(line)) return 'novel';
@@ -5803,10 +5826,10 @@
       body: JSON.stringify({ model: conf.model, input: inputs }),
     }, conf.timeoutMs, 'embeddings');
     if (!res.ok) {
-      const text = await res.text().catch(() => '');
+      const text = await readResponseTextWithTimeout(res, conf.timeoutMs, 'embeddings').catch(() => '');
       throw new Error(`Embeddings ${res.status}: ${text.slice(0, 240)}`);
     }
-    const data = await res.json();
+    const data = await readResponseJsonWithTimeout(res, conf.timeoutMs, 'embeddings');
     if (Array.isArray(data?.data)) return data.data.map(item => item.embedding).filter(Array.isArray);
     if (Array.isArray(data?.embeddings)) return data.embeddings.filter(Array.isArray);
     if (Array.isArray(data?.embedding)) return [data.embedding];
@@ -8087,10 +8110,10 @@
       body: JSON.stringify(payload),
     }, conf.timeoutMs, 'chat/completions');
     if (!res.ok) {
-      const text = await res.text().catch(() => '');
+      const text = await readResponseTextWithTimeout(res, conf.timeoutMs, 'chat/completions').catch(() => '');
       throw new Error(`Agent API ${res.status}: ${text.slice(0, 300)}`);
     }
-    const data = await res.json();
+    const data = await readResponseJsonWithTimeout(res, conf.timeoutMs, 'chat/completions');
     return extractOpenAIText(data);
   }
 
@@ -8109,10 +8132,10 @@
       body: JSON.stringify(payload),
     }, conf.timeoutMs, 'anthropic messages');
     if (!res.ok) {
-      const text = await res.text().catch(() => '');
+      const text = await readResponseTextWithTimeout(res, conf.timeoutMs, 'anthropic messages').catch(() => '');
       throw new Error(`Anthropic API ${res.status}: ${text.slice(0, 300)}`);
     }
-    return extractAnthropicText(await res.json());
+    return extractAnthropicText(await readResponseJsonWithTimeout(res, conf.timeoutMs, 'anthropic messages'));
   }
 
   function normalizeVertexModelId(model) {
@@ -8206,10 +8229,10 @@
       body: JSON.stringify(body),
     }, conf.timeoutMs, 'vertex generateContent');
     if (!res.ok) {
-      const text = await res.text().catch(() => '');
+      const text = await readResponseTextWithTimeout(res, conf.timeoutMs, 'vertex generateContent').catch(() => '');
       throw new Error(`Vertex Gemini ${res.status}: ${text.slice(0, 300)}`);
     }
-    return extractGeminiNativeText(await res.json());
+    return extractGeminiNativeText(await readResponseJsonWithTimeout(res, conf.timeoutMs, 'vertex generateContent'));
   }
 
   async function callVertexClaudeNative(conf, messages, runtime, token) {
@@ -8227,10 +8250,10 @@
       body: JSON.stringify(body),
     }, conf.timeoutMs, 'vertex rawPredict');
     if (!res.ok) {
-      const text = await res.text().catch(() => '');
+      const text = await readResponseTextWithTimeout(res, conf.timeoutMs, 'vertex rawPredict').catch(() => '');
       throw new Error(`Vertex Claude ${res.status}: ${text.slice(0, 300)}`);
     }
-    return extractAnthropicText(await res.json());
+    return extractAnthropicText(await readResponseJsonWithTimeout(res, conf.timeoutMs, 'vertex rawPredict'));
   }
 
   function applyExtraBody(payload, conf) {
@@ -8434,10 +8457,10 @@
       }).toString(),
     }, conf.timeoutMs || DEFAULT_CONFIG.timeoutMs, 'google oauth token');
     if (!res.ok) {
-      const text = await res.text().catch(() => '');
+      const text = await readResponseTextWithTimeout(res, conf.timeoutMs || DEFAULT_CONFIG.timeoutMs, 'google oauth token').catch(() => '');
       throw new Error(`Google OAuth token ${res.status}: ${text.slice(0, 260)}`);
     }
-    const data = await res.json();
+    const data = await readResponseJsonWithTimeout(res, conf.timeoutMs || DEFAULT_CONFIG.timeoutMs, 'google oauth token');
     if (!data?.access_token) throw new Error('Google OAuth token 응답에 access_token이 없습니다.');
     const expiresIn = parseNumber(data.expires_in, 3600, 60, 43200);
     Runtime.googleAccessTokenCache.set(cacheKey, {
@@ -8481,24 +8504,52 @@
   async function fetchWithTimeout(url, options, timeoutMs, label) {
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
     let timeoutId = null;
+    const ms = normalizeTimeoutMs(timeoutMs);
     try {
       const requestOptions = controller ? { ...options, signal: controller.signal } : options;
-      if (controller) {
-        timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-        return await nativeFetch(url, requestOptions);
-      }
       return await Promise.race([
         nativeFetch(url, requestOptions),
         new Promise((_, reject) => {
-          timeoutId = setTimeout(() => reject(new Error(`${label} timed out after ${Math.round(timeoutMs / 1000)}s`)), timeoutMs);
+          timeoutId = setTimeout(() => {
+            try { controller?.abort?.(); } catch (_) {}
+            reject(new Error(`${label} timed out after ${Math.round(ms / 1000)}s`));
+          }, ms);
         }),
       ]);
     } catch (err) {
-      if (err?.name === 'AbortError') throw new Error(`${label} timed out after ${Math.round(timeoutMs / 1000)}s`);
+      if (err?.name === 'AbortError') throw new Error(`${label} timed out after ${Math.round(ms / 1000)}s`);
       throw err;
     } finally {
       if (timeoutId !== null) clearTimeout(timeoutId);
     }
+  }
+
+  function normalizeTimeoutMs(timeoutMs) {
+    const n = Number(timeoutMs);
+    return Number.isFinite(n) && n >= 1 ? n : DEFAULT_CONFIG.timeoutMs;
+  }
+
+  async function promiseWithTimeout(factory, timeoutMs, label) {
+    let timeoutId = null;
+    const ms = normalizeTimeoutMs(timeoutMs);
+    try {
+      return await Promise.race([
+        Promise.resolve().then(factory),
+        new Promise((_, reject) => {
+          timeoutId = setTimeout(() => reject(new Error(`${label} timed out after ${Math.round(ms / 1000)}s`)), ms);
+        }),
+      ]);
+    } finally {
+      if (timeoutId !== null) clearTimeout(timeoutId);
+    }
+  }
+
+  function readResponseTextWithTimeout(res, timeoutMs, label) {
+    return promiseWithTimeout(() => res.text(), timeoutMs, `${label} response body`);
+  }
+
+  function readResponseJsonWithTimeout(res, timeoutMs, label) {
+    return promiseWithTimeout(() => res.json(), timeoutMs, `${label} response json`);
   }
 
   function nativeFetch(url, options) {
@@ -9836,7 +9887,7 @@
       Runtime.runToastIframeActive = false;
       Runtime.runToastIframeOwned = false;
       if (shouldHideProgressContainer && typeof api.hideContainer === 'function') {
-        await Promise.resolve(api.hideContainer()).catch(err => {
+        await promiseWithTimeout(() => api.hideContainer(), 2500, 'run progress hideContainer').catch(err => {
           log('run progress hide before dashboard failed', err?.message || err);
         });
       }
@@ -9927,6 +9978,7 @@
         type,
         scope: context.scope,
         mode: context.mode,
+        modeResolution: Runtime.lastModeResolution,
         startedAt: nowIso(),
         status: 'guarded-session-read',
         provider: conf.provider,
@@ -9967,6 +10019,7 @@
       type,
       scope: context.scope,
       mode: context.mode,
+      modeResolution: Runtime.lastModeResolution,
       startedAt: nowIso(),
       status: 'pre-complete',
       provider: conf.provider,
@@ -10027,6 +10080,7 @@
         type,
         scope: context.scope,
         mode: context.mode,
+        modeResolution: Runtime.lastModeResolution,
         completedAt: nowIso(),
         status: 'guarded-no-state-commit',
         commitReason: 'session-guard',
@@ -10077,6 +10131,7 @@
       type,
       scope: context.scope,
       mode: context.mode,
+      modeResolution: Runtime.lastModeResolution,
       completedAt: nowIso(),
       status: commitResult.changed ? 'complete' : 'complete-no-state-commit',
       commitReason: commitResult.reason || '',
@@ -11239,6 +11294,7 @@
     const notes = Array.isArray(run.notes) ? run.notes : [];
     return `
       <div class="et-note">요청: ${escHtml(run.userInputPreview || '-')}</div>
+      ${run.modeResolution ? `<div class="et-note">Mode 판정: ${escHtml(run.modeResolution.mode || run.mode || '-')} / ${escHtml(run.modeResolution.source || '-')}</div>` : ''}
       <div class="et-note">출력 정리: ${run.outputSanitized ? '내부 태그 제거됨' : '변경 없음'} / 커밋: ${escHtml(run.commitReason || (run.commitCounts ? 'changed' : '-'))}</div>
       ${run.autoCap ? `<div class="et-note">Auto-cap: ${escHtml(run.autoCap.reason || '-')} / 주입 ${escHtml(run.autoCap.charBudget || 0)} chars / 요청 추정 ${escHtml(run.autoCap.promptTokens || 0)} tokens</div>` : ''}
       ${run.bootstrapSync ? `<div class="et-note">현재 관점 bootstrap: 등장/보호 이름 ${escHtml(run.bootstrapSync.presentCast || 0)}개${run.bootstrapSync.bootstrapped ? ' / 캐릭터 카드 동기화' : ''}</div>` : ''}
@@ -11679,10 +11735,10 @@
       headers: await buildApiHeaders(conf, false),
     }, conf.timeoutMs, 'models');
     if (!res.ok) {
-      const text = await res.text().catch(() => '');
+      const text = await readResponseTextWithTimeout(res, conf.timeoutMs, 'models').catch(() => '');
       throw new Error(`모델 목록 ${res.status}: ${text.slice(0, 240)}`);
     }
-    const data = await res.json();
+    const data = await readResponseJsonWithTimeout(res, conf.timeoutMs, 'models');
     const source = Array.isArray(data?.data)
       ? data.data
       : Array.isArray(data?.models) ? data.models : Array.isArray(data) ? data : [];
@@ -12769,12 +12825,70 @@
             role: 'system',
             content: 'Eros Tower bridge: 이야기의 모드: 소설',
           }], {}, {}, DEFAULT_CONFIG);
+          const bySaikiNovelHandling = resolveMode('auto', targetCharacter, [{
+            role: 'system',
+            content: 'Novel handling is active. Treat the latest user input as external direction.',
+          }], {}, {}, DEFAULT_CONFIG);
+          const bySaikiRpHandling = resolveMode('auto', targetCharacter, [{
+            role: 'system',
+            content: 'RP handling is active. With protected user control, {{user}} is not an interior focal character.',
+          }], {}, {}, DEFAULT_CONFIG);
+          const byToggleTextIndex = resolveMode('auto', targetCharacter, [{
+            role: 'system',
+            content: '{{getglobalvar::toggle_모드}}=2',
+          }], {}, {}, DEFAULT_CONFIG);
+          const byErosNovelName = resolveMode('auto', targetCharacter, [{
+            role: 'system',
+            content: 'agents-💘Eros(에로스)-소설.json name: 💘Eros(에로스) Novel / Mijeong fiction prompt',
+          }], {}, {}, DEFAULT_CONFIG);
+          const byFormatToggleIgnored = resolveMode('auto', targetCharacter, [{
+            role: 'system',
+            content: '출력=이야기의 형식=select=서사,OOC',
+          }], {}, {}, DEFAULT_CONFIG);
           const manualOverride = resolveMode('rp', targetCharacter, targetMessages, {
             pluginCustomStorage: {
               psyche: { mode: '소설' },
             },
           }, {}, DEFAULT_CONFIG);
-          return { byPluginStorage, byPluginRealArg, byGlobalSelect, byDefinitionIndexOne, byPromptInfo, byLatestPromptInfo, byRequestText, manualOverride };
+          return {
+            byPluginStorage,
+            byPluginRealArg,
+            byGlobalSelect,
+            byDefinitionIndexOne,
+            byPromptInfo,
+            byLatestPromptInfo,
+            byRequestText,
+            bySaikiNovelHandling,
+            bySaikiRpHandling,
+            byToggleTextIndex,
+            byErosNovelName,
+            byFormatToggleIgnored,
+            manualOverride,
+            lastModeResolution: Runtime.lastModeResolution,
+          };
+        },
+        testTimeoutGuards: async () => {
+          const result = { promiseTimedOut: false, textTimedOut: false, jsonTimedOut: false };
+          try {
+            await promiseWithTimeout(() => new Promise(() => {}), 20, 'debug never promise');
+          } catch (err) {
+            result.promiseTimedOut = /timed out/i.test(String(err?.message || err));
+          }
+          const stalledResponse = {
+            text: () => new Promise(() => {}),
+            json: () => new Promise(() => {}),
+          };
+          try {
+            await readResponseTextWithTimeout(stalledResponse, 20, 'debug text');
+          } catch (err) {
+            result.textTimedOut = /timed out/i.test(String(err?.message || err));
+          }
+          try {
+            await readResponseJsonWithTimeout(stalledResponse, 20, 'debug json');
+          } catch (err) {
+            result.jsonTimedOut = /timed out/i.test(String(err?.message || err));
+          }
+          return result;
         },
         testSessionRewind: async (beforeCount = 12, targetCount = 8) => {
           const scope = `${context?.scope || 'debug'}:rewind-test:${Date.now().toString(36)}`;
