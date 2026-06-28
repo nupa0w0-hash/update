@@ -1,13 +1,13 @@
 //@name SuperVibeBot
-//@display-name 🐸 SuperVibeBot v1.5.11
-//@version 1.5.11
+//@display-name 🐸 SuperVibeBot v1.5.12
+//@version 1.5.12
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/supervibebot-update/refs/heads/main/SuperVibeBot.update.js
 //@arg api_key string "" "Google AI Studio API 키를 입력하세요 (Vertex AI, API Hub 또는 GitHub Copilot 연동 시 불필요)."
 //@arg disable_safety int 0 "안전 필터 비활성화 (1=OFF, 0=ON)"
 
 if (typeof risuai === "undefined") {
-    alert("⚠️ SuperVibeBot v1.5.11는 RisuAI Plugin API 3.0이 필요합니다.");
+    alert("⚠️ SuperVibeBot v1.5.12는 RisuAI Plugin API 3.0이 필요합니다.");
     throw new Error("API 3.0 required");
 }
 
@@ -163,21 +163,24 @@ async function safeCopyText(text, options = {}) {
 }
 
 /**
- * SuperVibeBot v1.5.11 Release Notes
+ * SuperVibeBot v1.5.12 Release Notes
  *
  * 🎉 Major Changes
+ * - Added a separate output-token cap for sub-agent reports to reduce WebView/PocketRisu crash pressure
  * - Stabilized missing @action recovery for character and part editing jobs
  * - Prevented unqualified lorebook/regex/trigger improve fallback from expanding to all items
  * - Blocked malformed embedded @action text from being saved inside character fields
- * - Added runtime self-checks for lorebook fallback and selected-item safety
+ * - Added runtime self-checks for lorebook fallback, selected-item safety, and sub-agent output caps
  *
  * ✨ New Features
+ * - Sub-agent report calls now default to 4096 output tokens on desktop and 2048 on constrained/mobile/webview profiles
  * - Lorebook/regex/trigger improve requests can recover from model responses that forgot @action
  * - Unqualified part edits prefer checked items or the currently open item
  * - Explicit all/every/전체 requests still run as all-item jobs
  * - Malformed embedded action directives now fail before corrupting saved text
  *
  * 🔧 Improvements
+ * - Prevents GLM/Kimi/API Hub sub-agents from returning oversized manager reports unless explicitly overridden
  * - Safer selected-item expansion in both global and Kero chat execution paths
  * - Runtime diagnostics now catch missing lorebook fallback regressions
  * - Field-action recovery behavior is consistent between global save paths and Kero UI paths
@@ -12689,7 +12692,14 @@ function addSvbRuntimeSubAgentPayloadBudgetSelfTest(checks) {
             parallelNormal: resolveSvbSubAgentParallelLimit({ serializedChars: 100000 }, 8),
             expectedHuge: adaptiveLimits.subAgentHugeParallel,
             expectedLarge: adaptiveLimits.subAgentLargeParallel,
-            expectedNormal: adaptiveLimits.subAgentMaxParallel
+            expectedNormal: adaptiveLimits.subAgentMaxParallel,
+            desktopOutputCap: resolveSvbSubAgentMaxOutputTokens({
+                adaptiveLimits: computeSvbAdaptiveRuntimeLimits({ tier: 'desktop', constrained: false, lowMemory: false, backgrounded: false })
+            }, 65536),
+            constrainedOutputCap: resolveSvbSubAgentMaxOutputTokens({
+                adaptiveLimits: computeSvbAdaptiveRuntimeLimits({ tier: 'mobile', constrained: true, lowMemory: true, backgrounded: false, isMobile: true, isWebView: true })
+            }, 65536),
+            explicitOutputCap: resolveSvbSubAgentMaxOutputTokens({ subAgentMaxOutputTokens: 1234 }, 65536)
         };
     });
     if (!result.ok) {
@@ -12705,10 +12715,13 @@ function addSvbRuntimeSubAgentPayloadBudgetSelfTest(checks) {
     if (Number(value.parallelHuge || 0) !== Number(value.expectedHuge || 0)) problems.push('초대형 병렬 제한 실패');
     if (Number(value.parallelLarge || 0) !== Number(value.expectedLarge || 0)) problems.push('대형 병렬 제한 실패');
     if (Number(value.parallelNormal || 0) !== Number(value.expectedNormal || 0)) problems.push('일반 병렬 제한 실패');
+    if (Number(value.desktopOutputCap || 0) > 4096) problems.push('데스크톱 서브에이전트 출력 cap 과다');
+    if (Number(value.constrainedOutputCap || 0) > 2048) problems.push('웹뷰/모바일 서브에이전트 출력 cap 과다');
+    if (Number(value.explicitOutputCap || 0) !== 1234) problems.push('명시 출력 cap 반영 실패');
     checks.push(makeSvbRuntimeCheck(
         problems.length === 0,
         '서브에이전트 payload 예산 자체 테스트',
-        `원본 ${value.fullChars || 0}자 · packet ${value.packetChars || 0}자 · 병렬 ${value.parallelNormal || 0}/${value.parallelLarge || 0}/${value.parallelHuge || 0}${problems.length ? ` · 문제: ${problems.join(' / ')}` : ''}`,
+        `원본 ${value.fullChars || 0}자 · packet ${value.packetChars || 0}자 · 병렬 ${value.parallelNormal || 0}/${value.parallelLarge || 0}/${value.parallelHuge || 0} · 출력 cap ${value.desktopOutputCap || 0}/${value.constrainedOutputCap || 0}${problems.length ? ` · 문제: ${problems.join(' / ')}` : ''}`,
         problems.length ? 'error' : 'ok'
     ));
 }
@@ -39390,7 +39403,7 @@ function getBulkOutputHint(targetType) {
     return 'result는 항목 JSON 배열이어야 합니다.';
 }
 
-/* === RisuAI SuperVibeBot v1.5.11 Guide (Concise Version) === */
+/* === RisuAI SuperVibeBot v1.5.12 Guide (Concise Version) === */
 const RISUAI_GUIDE = {
     overview: `
 ## System Overview
@@ -41836,12 +41849,11 @@ async function callModelEndpoint(endpoint, systemPrompt, userText, options = {})
         }
         return getMaxOutputTokens();
     })();
-    const explicitEndpointMax = Number(options.subAgentMaxOutputTokens || options.endpointMaxOutputTokens);
+    const endpointOutputCap = resolveSvbSubAgentMaxOutputTokens(options, endpointMaxOutputTokens);
     const endpointOptions = {
         ...options,
-        maxOutputTokens: Number.isFinite(explicitEndpointMax) && explicitEndpointMax > 0
-            ? explicitEndpointMax
-            : endpointMaxOutputTokens
+        maxOutputTokens: endpointOutputCap,
+        subAgentMaxOutputTokens: endpointOutputCap
     };
     if (providerType === "api-hub") {
         const result = await callApiHubAPI(systemPrompt, userText, settings.apiHubSettings, endpointOptions);
@@ -43423,6 +43435,25 @@ function resolveKeroWorkModelCallTimeoutMs(options = {}, fallbackMs = KERO_WORK_
         return Math.max(30000, Math.min(24 * 60 * 60 * 1000, explicit));
     }
     return Math.max(30000, Number(fallbackMs) || KERO_WORK_MODEL_CALL_TIMEOUT_MS);
+}
+
+function resolveSvbSubAgentMaxOutputTokens(options = {}, endpointMaxOutputTokens = 8192) {
+    const endpointMax = Math.max(512, Math.floor(Number(endpointMaxOutputTokens) || 8192));
+    const explicit = Math.floor(Number(options.subAgentMaxOutputTokens || options.endpointMaxOutputTokens));
+    if (Number.isFinite(explicit) && explicit > 0) {
+        return Math.max(512, Math.min(endpointMax, explicit));
+    }
+    const adaptiveLimits = options.adaptiveLimits && typeof options.adaptiveLimits === 'object'
+        ? options.adaptiveLimits
+        : getSvbAdaptiveRuntimeLimits();
+    const constrained = adaptiveLimits.constrained === true
+        || adaptiveLimits.backgrounded === true
+        || adaptiveLimits.lowMemory === true
+        || adaptiveLimits.isMobile === true
+        || adaptiveLimits.isWebView === true
+        || adaptiveLimits.isPocketRisu === true;
+    const defaultCap = constrained ? 2048 : 4096;
+    return Math.max(512, Math.min(endpointMax, defaultCap));
 }
 
 const activeSubAgentConsultationGuards = new Map();
@@ -50443,7 +50474,7 @@ async function loadInitialSettings() {
 async function registerUIElements() {
     // 채팅 화면 메뉴에 버튼 추가 (플로팅 버튼 대신)
     await risuai.registerButton({
-        name: "SuperVibeBot v1.5.11",
+        name: "SuperVibeBot v1.5.12",
         icon: "🐸",
         iconType: "html",
         location: "chat"  // 채팅 메뉴에 배치 (화면 가림 방지)
@@ -50452,7 +50483,7 @@ async function registerUIElements() {
     });
 
     await risuai.registerSetting(
-        "SuperVibeBot v1.5.11 Settings",
+        "SuperVibeBot v1.5.12 Settings",
         async () => {
             await openSettingsWindow();
         },
@@ -50495,7 +50526,7 @@ function cleanup() {
 (async () => {
     try {
         Logger.info("=".repeat(50));
-        Logger.info("SuperVibeBot v1.5.11");
+        Logger.info("SuperVibeBot v1.5.12");
         Logger.info("RisuAI Plugin API 3.0");
         Logger.info("=".repeat(50));
         await loadInitialSettings();
