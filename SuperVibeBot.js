@@ -1,13 +1,13 @@
-//@name SuperVibeBot
-//@display-name 🐸 SuperVibeBot v1.5.0
-//@version 1.5.0
+﻿//@name SuperVibeBot
+//@display-name 🐸 SuperVibeBot v1.5.2
+//@version 1.5.2
 //@api 3.0
-//@update-url https://raw.githubusercontent.com/nupa0w0-hash/supervibebot-update/refs/heads/main/SuperVibeBot.update.js
+//@update-url https://raw.githubusercontent.com/nupa0w0-hash/supervibebot-update/main/SuperVibeBot.update.js
 //@arg api_key string "" "Google AI Studio API 키를 입력하세요 (Vertex AI, API Hub 또는 GitHub Copilot 연동 시 불필요)."
 //@arg disable_safety int 0 "안전 필터 비활성화 (1=OFF, 0=ON)"
 
 if (typeof risuai === "undefined") {
-    alert("⚠️ SuperVibeBot v1.5.0는 RisuAI Plugin API 3.0이 필요합니다.");
+    alert("⚠️ SuperVibeBot v1.5.2는 RisuAI Plugin API 3.0이 필요합니다.");
     throw new Error("API 3.0 required");
 }
 
@@ -163,7 +163,7 @@ async function safeCopyText(text, options = {}) {
 }
 
 /**
- * SuperVibeBot v1.5.0 Release Notes
+ * SuperVibeBot v1.5.2 Release Notes
  *
  * 🎉 Major Changes
  * - Migrated to RisuAI Plugin API 3.0
@@ -3001,6 +3001,7 @@ const WORK_TARGET_MODES = Object.freeze({
 });
 const KERO_KEYS = {
     CHAT: (charId) => `SuperVibe_KeroChat_${charId}`,
+    CHAT_GLOBAL: () => `SuperVibe_KeroChat_GlobalContinuity_v1`,
     MEMORY: (charId) => `SuperVibe_KeroMemory_${charId}`,
     MISSION: (charId) => `SuperVibe_KeroMission_${charId}`,
     ACTION_JOBS: (charId) => `SuperVibe_KeroActionJobs_${charId}`,
@@ -3324,18 +3325,126 @@ async function saveKeroChat(char, messages) {
     await risuai.pluginStorage.setItem(KERO_KEYS.CHAT(id), JSON.stringify(trimmed));
 }
 
+function normalizeKeroContinuityArtifacts(artifacts) {
+    const source = Array.isArray(artifacts) ? artifacts : (artifacts ? [artifacts] : []);
+    return source
+        .filter((artifact) => artifact && typeof artifact === 'object')
+        .slice(0, 6)
+        .map((artifact) => ({
+            type: safeString(artifact.type || 'text').trim() || 'text',
+            name: safeString(artifact.name || artifact.title || 'artifact').trim() || 'artifact',
+            language: safeString(artifact.language || '').trim(),
+            content: safeString(artifact.content ?? artifact.body ?? ''),
+            url: safeString(artifact.url || artifact.src || '').trim()
+        }));
+}
+
+function normalizeKeroChatEntryForContinuity(entry) {
+    if (!entry || typeof entry !== 'object') return null;
+    const role = safeString(entry.role || 'unknown').trim() || 'unknown';
+    const content = safeString(entry.content);
+    if (!content.trim()) return null;
+    return {
+        role,
+        content,
+        timestamp: safeString(entry.timestamp || '').trim(),
+        kind: safeString(entry.kind || 'dialogue').trim() || 'dialogue',
+        sourceInputId: safeString(entry.sourceInputId || entry.inputId || '').trim(),
+        artifacts: normalizeKeroContinuityArtifacts(entry.artifacts)
+    };
+}
+
+function getKeroChatEntryDedupeKey(entry) {
+    const normalized = normalizeKeroChatEntryForContinuity(entry);
+    if (!normalized) return '';
+    return [
+        normalized.role,
+        normalized.timestamp || 'no-time',
+        normalized.content
+    ].join('\u0001');
+}
+
+function mergeKeroChatHistories(...histories) {
+    const entries = [];
+    const seen = new Set();
+    ensureArray(histories).forEach((history) => {
+        ensureArray(history).forEach((entry) => {
+            const normalized = normalizeKeroChatEntryForContinuity(entry);
+            if (!normalized) return;
+            const key = getKeroChatEntryDedupeKey(normalized);
+            if (!key || seen.has(key)) return;
+            seen.add(key);
+            entries.push({ entry: normalized, order: entries.length });
+        });
+    });
+    return entries
+        .sort((a, b) => {
+            const at = Date.parse(a.entry.timestamp);
+            const bt = Date.parse(b.entry.timestamp);
+            const av = Number.isFinite(at) ? at : Number.MAX_SAFE_INTEGER;
+            const bv = Number.isFinite(bt) ? bt : Number.MAX_SAFE_INTEGER;
+            return av - bv || a.order - b.order;
+        })
+        .map((item) => item.entry)
+        .slice(-KERO_CHAT_STORAGE_LIMIT);
+}
+
+async function loadKeroGlobalChat() {
+    const stored = await risuai.pluginStorage.getItem(KERO_KEYS.CHAT_GLOBAL());
+    return safeParseJSON(stored, []);
+}
+
+async function saveKeroGlobalChat(messages) {
+    const trimmed = mergeKeroChatHistories(messages).slice(-KERO_CHAT_STORAGE_LIMIT);
+    await risuai.pluginStorage.setItem(KERO_KEYS.CHAT_GLOBAL(), JSON.stringify(trimmed));
+}
+
+async function appendKeroGlobalChatEntry(entry) {
+    const normalized = normalizeKeroChatEntryForContinuity(entry);
+    if (!normalized) return;
+    const globalHistory = await loadKeroGlobalChat();
+    await saveKeroGlobalChat(mergeKeroChatHistories(globalHistory, [normalized]));
+}
+
+async function loadKeroContinuityChat(char, fallbackMessages = []) {
+    let targetHistory = [];
+    let globalHistory = [];
+    try {
+        targetHistory = await loadKeroChat(char);
+    } catch (error) {
+        Logger.debug('Kero target chat continuity load failed:', error?.message || error);
+    }
+    try {
+        globalHistory = await loadKeroGlobalChat();
+    } catch (error) {
+        Logger.debug('Kero global chat continuity load failed:', error?.message || error);
+    }
+    return mergeKeroChatHistories(fallbackMessages, targetHistory, globalHistory);
+}
+
 function buildKeroRecentChatContinuityBlock(recentChat = [], currentInput = '', options = {}) {
     const limit = Math.max(1, Math.min(24, Number(options.limit || KERO_CHAT_LIMIT) || KERO_CHAT_LIMIT));
     const normalizeForCompare = (value) => safeString(value).replace(/\s+/g, ' ').trim();
     const current = normalizeForCompare(currentInput);
+    const currentInputId = safeString(options.currentInputId || options.sourceInputId || '').trim();
+    const operationalKinds = new Set(['queue', 'system', 'recovery', 'loading']);
+    const sourceWindow = Math.max(limit, limit * 4);
     const entries = ensureArray(recentChat)
-        .slice(-limit)
+        .slice(-sourceWindow)
         .filter((message, index, list) => {
             const isLast = index === list.length - 1;
-            return !(isLast && safeString(message?.role) === 'user' && normalizeForCompare(message?.content) === current);
+            const role = safeString(message?.role);
+            const kind = safeString(message?.kind || 'dialogue').trim() || 'dialogue';
+            if (operationalKinds.has(kind)) return false;
+            if (currentInputId && role === 'user' && safeString(message?.sourceInputId || message?.inputId).trim() === currentInputId) {
+                return false;
+            }
+            return !(isLast && role === 'user' && normalizeForCompare(message?.content) === current);
         })
+        .slice(-limit)
         .map((message) => ({
             role: safeString(message?.role || 'unknown'),
+            kind: safeString(message?.kind || 'dialogue').trim() || 'dialogue',
             content: safeString(message?.content).slice(0, 1200)
         }))
         .filter((message) => message.content);
@@ -3355,6 +3464,7 @@ async function clearKeroChat(char) {
     const id = await getKeroCharId(char);
     if (!id) return;
     await risuai.pluginStorage.removeItem(KERO_KEYS.CHAT(id));
+    await risuai.pluginStorage.removeItem(KERO_KEYS.CHAT_GLOBAL());
 }
 
 async function loadKeroMemory(char) {
@@ -11094,13 +11204,28 @@ function addSvbRuntimeKeroChatContinuitySelfTest(checks) {
             { role: 'bot', content: 'I found three issues in the description. @action {"type":"update"}' },
             { role: 'user', content: 'apply   that\nfix now' }
         ], currentInput, { memoryEnabled: false, limit: 12 });
+        const mergedContinuity = mergeKeroChatHistories(
+            [{ role: 'user', content: 'target scoped turn', timestamp: '2026-01-01T00:00:00.000Z' }],
+            [{ role: 'bot', content: 'global continuity turn', timestamp: '2026-01-01T00:00:01.000Z' }]
+        );
+        const queuedContinuity = buildKeroRecentChatContinuityBlock([
+            { role: 'user', content: 'make this fantasy bot', kind: 'queued-user', sourceInputId: 'queue-1' },
+            { role: 'bot', content: 'queued acknowledgement should not become memory', kind: 'queue', sourceInputId: 'queue-1' },
+            { role: 'bot', content: 'real previous answer remains visible', kind: 'dialogue' }
+        ], 'make this fantasy bot', { memoryEnabled: false, limit: 12, currentInputId: 'queue-1' });
+        const queuedText = queuedContinuity.block || '';
         const text = continuity.block || '';
         return {
             hasPreviousUser: text.includes('please inspect the description first'),
             hasPreviousBot: text.includes('I found three issues in the description.'),
             excludesCurrentDuplicate: !text.includes(currentInput),
             mentionsMemoryOffContinuity: /memory scope is OFF/i.test(text),
-            blocksHistoricalActions: /do not execute @action/i.test(text)
+            blocksHistoricalActions: /do not execute @action/i.test(text),
+            mergesTargetAndGlobalChat: mergedContinuity.some((entry) => entry.content === 'target scoped turn')
+                && mergedContinuity.some((entry) => entry.content === 'global continuity turn'),
+            filtersQueuedCurrentInput: !queuedText.includes('make this fantasy bot')
+                && !queuedText.includes('queued acknowledgement should not become memory')
+                && queuedText.includes('real previous answer remains visible')
         };
     });
     if (!result.ok) {
@@ -11114,6 +11239,8 @@ function addSvbRuntimeKeroChatContinuitySelfTest(checks) {
     if (!value.excludesCurrentDuplicate) problems.push('current user input duplicated');
     if (!value.mentionsMemoryOffContinuity) problems.push('memory-off continuity note missing');
     if (!value.blocksHistoricalActions) problems.push('historical @action safety note missing');
+    if (!value.mergesTargetAndGlobalChat) problems.push('target/global chat merge missing');
+    if (!value.filtersQueuedCurrentInput) problems.push('queued current input filtering missing');
     checks.push(makeSvbRuntimeCheck(
         problems.length === 0,
         'Kero recent chat continuity self test',
@@ -12123,25 +12250,37 @@ function countExpiredSvbSubAgentGuards(map) {
     return expired;
 }
 
+function resolveSvbRuntimeLocalFunction(localFunctions = {}, key, globalKey = key) {
+    const localValue = localFunctions && typeof localFunctions === 'object' ? localFunctions[key] : null;
+    if (typeof localValue === 'function') return localValue;
+    const runtimeValue = typeof keroRuntimeLocalOps !== 'undefined' && keroRuntimeLocalOps
+        ? keroRuntimeLocalOps[key]
+        : null;
+    if (typeof runtimeValue === 'function') return runtimeValue;
+    const globalValue = typeof globalThis !== 'undefined' ? globalThis?.[globalKey] : null;
+    return typeof globalValue === 'function' ? globalValue : null;
+}
+
 function runSvbRuntimeSelfCheck(options = {}) {
     const checks = [];
     const localFunctions = options.localFunctions || {};
+    const runtimeFunction = (key, globalKey = key) => resolveSvbRuntimeLocalFunction(localFunctions, key, globalKey);
     addSvbRuntimeFunctionCheck(checks, '작업 흐름 기록 함수 addKeroWorkstreamEvent', () => addKeroWorkstreamEvent);
-    addSvbRuntimeFunctionCheck(checks, '대화 출력 함수 addBotMessage', () => localFunctions.addBotMessage || globalThis?.addBotMessage);
-    addSvbRuntimeFunctionCheck(checks, '액션 처리 함수 handleKeroActionRequest', () => localFunctions.handleKeroActionRequest || globalThis?.handleKeroActionRequest);
+    addSvbRuntimeFunctionCheck(checks, '대화 출력 함수 addBotMessage', () => runtimeFunction('addBotMessage'));
+    addSvbRuntimeFunctionCheck(checks, '액션 처리 함수 handleKeroActionRequest', () => runtimeFunction('handleKeroActionRequest'));
     addSvbRuntimeFunctionCheck(checks, '모델 호출 함수 translateSingleChunk', () => translateSingleChunk);
     addSvbRuntimeFunctionCheck(checks, '작업 하트비트 withKeroActivityHeartbeat', () => withKeroActivityHeartbeat);
     addSvbRuntimeFunctionCheck(checks, '서브에이전트 호출 buildSubmodelConsultationBlock', () => buildSubmodelConsultationBlock);
     addSvbRuntimeFunctionCheck(checks, '캐릭터 패치 적용 applyKeroCharacterPatchAction', () => applyKeroCharacterPatchAction);
     addSvbRuntimeFunctionCheck(checks, '게이트웨이 복구 runKeroGatewayRecovery', () => runKeroGatewayRecovery);
     addSvbRuntimeFunctionCheck(checks, '로컬 복구 액션 buildKeroLocalGatewayFallbackResponse', () => buildKeroLocalGatewayFallbackResponse);
-    addSvbRuntimeFunctionCheck(checks, '대량 생성 실행 runKeroBulkCreate', () => localFunctions.runKeroBulkCreate || globalThis?.runKeroBulkCreate);
-    addSvbRuntimeFunctionCheck(checks, '대량 생성 자동 재개 autoResumeKeroBulkJobsUntilSettled', () => localFunctions.autoResumeKeroBulkJobsUntilSettled || globalThis?.autoResumeKeroBulkJobsUntilSettled);
+    addSvbRuntimeFunctionCheck(checks, '대량 생성 실행 runKeroBulkCreate', () => runtimeFunction('runKeroBulkCreate'));
+    addSvbRuntimeFunctionCheck(checks, '대량 생성 자동 재개 autoResumeKeroBulkJobsUntilSettled', () => runtimeFunction('autoResumeKeroBulkJobsUntilSettled'));
     addSvbRuntimeFunctionCheck(checks, '백그라운드 상태 renderKeroBackgroundStatus', () => renderKeroBackgroundStatus);
     addSvbRuntimeFunctionCheck(checks, '대기 요청 패널 renderKeroQueuePanel', () => renderKeroQueuePanel);
-    addSvbRuntimeFunctionCheck(checks, '작업 흐름 렌더 renderKeroWorkstream', () => localFunctions.renderKeroWorkstream || keroWorkstreamRenderer);
-    addSvbRuntimeFunctionCheck(checks, '도구 패널 열기 openKeroToolsPanel', () => localFunctions.openKeroToolsPanel || globalThis?.openKeroToolsPanel);
-    addSvbRuntimeFunctionCheck(checks, '도구 이벤트 바인딩 bindKeroToolsEvents', () => localFunctions.bindKeroToolsEvents || globalThis?.bindKeroToolsEvents);
+    addSvbRuntimeFunctionCheck(checks, '작업 흐름 렌더 renderKeroWorkstream', () => runtimeFunction('renderWorkstream') || keroWorkstreamRenderer);
+    addSvbRuntimeFunctionCheck(checks, '도구 패널 열기 openKeroToolsPanel', () => runtimeFunction('openKeroToolsPanel'));
+    addSvbRuntimeFunctionCheck(checks, '도구 이벤트 바인딩 bindKeroToolsEvents', () => runtimeFunction('bindKeroToolsEvents'));
     addSvbRuntimeActionParserSelfTest(checks);
     addSvbRuntimeSteeringQueueSelfTest(checks);
     addSvbRuntimeControlRoutingSelfTest(checks);
@@ -23443,12 +23582,17 @@ ${currentVars || '{}'}
         const timestamp = options.timestamp || new Date().toISOString();
         const artifacts = normalizeKeroArtifacts(options.artifacts);
         const entry = { role, content, timestamp, artifacts };
+        const kind = safeString(options.kind || 'dialogue').trim();
+        const sourceInputId = safeString(options.sourceInputId || options.inputId || '').trim();
+        if (kind) entry.kind = kind;
+        if (sourceInputId) entry.sourceInputId = sourceInputId;
 
         if (options.persist !== false) {
             chatHistory.push(entry);
             try {
                 const char = await getCharacterData();
                 await saveKeroChat(char, chatHistory);
+                await appendKeroGlobalChatEntry(entry);
             } catch (error) {
                 Logger.warn('Kero chat persist failed:', error?.message || error);
             }
@@ -23466,8 +23610,8 @@ ${currentVars || '{}'}
         }
     }
 
-    async function addUserMessage(content) {
-        await addChatMessage('user', content);
+    async function addUserMessage(content, options = {}) {
+        await addChatMessage('user', content, options);
     }
 
     async function addBotMessage(content, options = {}) {
@@ -25617,11 +25761,13 @@ ${currentVars || '{}'}
         historyDiv.appendChild(messageDiv);
         historyDiv.scrollTop = historyDiv.scrollHeight;
 
-        chatHistory.push({ role: 'bot', content: response, timestamp });
+        const designChatEntry = { role: 'bot', content: response, timestamp };
+        chatHistory.push(designChatEntry);
         const char = await getCharacterData();
         if (char) {
             await saveKeroChat(char, chatHistory);
         }
+        await appendKeroGlobalChatEntry(designChatEntry);
 
         previewButton.addEventListener('click', () => openLivePreviewWithCode(designPayload));
         applyButton.addEventListener('click', async () => {
@@ -29212,13 +29358,13 @@ ${steeringBlock ? `\n${steeringBlock}` : ''}`;
             inputEl.value = '';
             inputEl.style.height = 'auto';
         }
-        await addUserMessage(text);
+        await addUserMessage(text, { kind: shouldQueueFollowup ? 'queued-user' : 'steering', sourceInputId: inputId });
         if (!shouldQueueFollowup) {
             if (steeringNote) {
                 addKeroWorkstreamEvent('스티어링 메모 접수', text.slice(0, 220), 'queued');
             }
             updateKeroQueuedInputUi();
-            await addBotMessage('작업 중이라 이 내용은 현재 미션 스티어링으로 반영해둘게. 같은 요청을 완료 후 다시 실행하지는 않을게.');
+            await addBotMessage('작업 중이라 이 내용은 현재 미션 스티어링으로 반영해둘게. 같은 요청을 완료 후 다시 실행하지는 않을게.', { kind: 'queue', sourceInputId: inputId });
             return;
         }
         const baseQueue = currentKeroPersistentStorageId
@@ -29252,7 +29398,7 @@ ${steeringBlock ? `\n${steeringBlock}` : ''}`;
         }
         addKeroWorkstreamEvent(steeringNote ? '후속 작업 예약' : '대기 요청 예약', text.slice(0, 220), 'queued');
         updateKeroQueuedInputUi();
-        await addBotMessage(`작업 중이라 이 요청은 현재 미션 스티어링에 반영하고, 작업이 끝나면 후속 작업으로 이어서 처리할게. 대기 ${getKeroReadyQueuedInputCount()}개.`);
+        await addBotMessage(`작업 중이라 이 요청은 현재 미션 스티어링에 반영하고, 작업이 끝나면 후속 작업으로 이어서 처리할게. 대기 ${getKeroReadyQueuedInputCount()}개.`, { kind: 'queue', sourceInputId: inputId });
     }
 
     function startKeroInputQueueHeartbeat(storageId, inputId) {
@@ -29398,7 +29544,7 @@ ${steeringBlock ? `\n${steeringBlock}` : ''}`;
                     continue;
                 }
                 addKeroWorkstreamEvent('대기 요청 실행', text.slice(0, 220), 'queued');
-                await addBotMessage(`대기 중이던 요청을 이어서 진행할게: ${text.slice(0, 120)}${text.length > 120 ? '...' : ''}`);
+                await addBotMessage(`대기 중이던 요청을 이어서 진행할게: ${text.slice(0, 120)}${text.length > 120 ? '...' : ''}`, { kind: 'queue', sourceInputId: next.id });
                 const modelText = next.steeringApplied === true
                     ? buildKeroSteeringFollowupInput(text, next)
                     : text;
@@ -30642,7 +30788,7 @@ ${catchDetail}
         let recentChat = [];
         try {
             const char = await getCharacterData();
-            recentChat = char ? await loadKeroChat(char) : chatHistory;
+            recentChat = await loadKeroContinuityChat(char, chatHistory);
         } catch (error) {
             Logger.debug('Daily Kero chat context fallback:', error?.message || error);
             recentChat = chatHistory;
@@ -30780,14 +30926,15 @@ ${trimmedChat.length ? JSON.stringify(trimmedChat, null, 2) : '(최근 대화 �
         const noContextMode = meaningfulKeys.length === 0 && !scope.memory;
         let recentChat = [];
         try {
-            recentChat = char ? await loadKeroChat(char) : chatHistory;
+            recentChat = await loadKeroContinuityChat(char, chatHistory);
         } catch (error) {
             Logger.debug('Kero recent chat continuity fallback:', error?.message || error);
             recentChat = chatHistory;
         }
         const chatContinuity = buildKeroRecentChatContinuityBlock(recentChat, visibleUserInput, {
             limit: KERO_CHAT_LIMIT,
-            memoryEnabled: scope.memory
+            memoryEnabled: scope.memory,
+            currentInputId: options.queuedInput?.id || options.currentInputId || ''
         });
         const chatBlock = chatContinuity.block;
 
@@ -37563,7 +37710,7 @@ async function buildScopedCharacterContext(char, scope) {
 
     if (safeScope.memory) {
         scoped.memory = await getActiveKeroMemories(char);
-        const recentChat = await loadKeroChat(char);
+        const recentChat = await loadKeroContinuityChat(char);
         scoped.keroChat = Array.isArray(recentChat) ? recentChat.slice(-KERO_CHAT_LIMIT) : [];
     }
 
@@ -38162,7 +38309,7 @@ function getBulkOutputHint(targetType) {
     return 'result는 항목 JSON 배열이어야 합니다.';
 }
 
-/* === RisuAI SuperVibeBot v1.5.0 Guide (Concise Version) === */
+/* === RisuAI SuperVibeBot v1.5.2 Guide (Concise Version) === */
 const RISUAI_GUIDE = {
     overview: `
 ## System Overview
@@ -49131,7 +49278,7 @@ async function loadInitialSettings() {
 async function registerUIElements() {
     // 채팅 화면 메뉴에 버튼 추가 (플로팅 버튼 대신)
     await risuai.registerButton({
-        name: "SuperVibeBot v1.5.0",
+        name: "SuperVibeBot v1.5.2",
         icon: "🐸",
         iconType: "html",
         location: "chat"  // 채팅 메뉴에 배치 (화면 가림 방지)
@@ -49140,7 +49287,7 @@ async function registerUIElements() {
     });
 
     await risuai.registerSetting(
-        "SuperVibeBot v1.5.0 Settings",
+        "SuperVibeBot v1.5.2 Settings",
         async () => {
             await openSettingsWindow();
         },
@@ -49183,7 +49330,7 @@ function cleanup() {
 (async () => {
     try {
         Logger.info("=".repeat(50));
-        Logger.info("SuperVibeBot v1.5.0");
+        Logger.info("SuperVibeBot v1.5.2");
         Logger.info("RisuAI Plugin API 3.0");
         Logger.info("=".repeat(50));
         await loadInitialSettings();
@@ -49300,4 +49447,5 @@ function bindAllResultApplyButtons() {
         });
     }
 }
+
 
