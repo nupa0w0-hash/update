@@ -4,7 +4,7 @@ This repository is no longer the main SuperVibeBot update channel.
 
 ## SuperVibeBot
 
-- Latest bridged version: `1.5.3`
+- Latest bridged version: `1.5.4`
 - Dedicated update repository:
 
 ```text
