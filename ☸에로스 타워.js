@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.0.6
+//@display-name ☸Eros Tower 1.0.7
 //@api 3.0
-//@version 1.0.6
+//@version 1.0.7
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -32,18 +32,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.0.6
+ * Eros Tower 1.0.7
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.0.6 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.0.7 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.0.6';
+  const VERSION = '1.0.7';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.0.6`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.0.7`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -59,7 +59,7 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.0.6 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.0.7 analysis context';
   const GOOGLE_OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
   const GOOGLE_CLOUD_PLATFORM_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
   const PSYCHE_RECOMMENDED_MODELS = Object.freeze([
@@ -10222,49 +10222,125 @@
     }
   }
 
+  async function waitForDashboardDocumentReady() {
+    for (let i = 0; i < 6; i += 1) {
+      const doc = getPluginDocument();
+      if (doc?.body) return doc;
+      await yieldRunProgressPaint();
+    }
+    return getPluginDocument();
+  }
+
+  async function paintDashboardHtml(html) {
+    const doc = await waitForDashboardDocumentReady();
+    if (!doc?.body) return false;
+    doc.body.innerHTML = String(html || '');
+    return true;
+  }
+
+  function setupDashboardCloseHandler() {
+    try {
+      const button = document.getElementById?.('et-close');
+      if (!button || button.__erosTowerCloseBound) return;
+      button.__erosTowerCloseBound = true;
+      button.addEventListener('click', async () => {
+        Runtime.dashboardVisible = false;
+        Runtime.runProgressHiddenByUser = false;
+        await api.hideContainer?.();
+      });
+    } catch (_) {}
+  }
+
+  function buildDashboardLoadingHtml() {
+    return buildDashboardShellHtml('에로스 타워를 여는 중', [
+      '설정과 현재 채팅 정보를 확인하고 있습니다.',
+      '첫 설치 직후에도 이 화면이 보이면 대시보드가 정상적으로 준비 중입니다.',
+    ], 'loading');
+  }
+
+  function buildDashboardErrorHtml(error) {
+    return buildDashboardShellHtml('에로스 타워를 열지 못했습니다', [
+      shortAlertText(error?.message || error || '알 수 없는 초기화 오류', 180),
+      '새로고침 없이 다시 열 수 있도록 오류 화면을 남겨 둡니다.',
+    ], 'error');
+  }
+
+  function buildDashboardShellHtml(title, lines = [], kind = 'loading') {
+    return `
+      <style>${dashboardStyles()}</style>
+      <div class="et-wrap et-dashboard-shell" data-kind="${escHtml(kind)}">
+        <header class="et-head">
+          <div>
+            <div class="et-title">${escHtml(PLUGIN_LABEL)}</div>
+            <div class="et-sub">${escHtml(title)}</div>
+          </div>
+          <button id="et-close" class="et-close" title="닫기">닫기</button>
+        </header>
+        <main class="et-shell-main">
+          <section class="et-panel et-shell-card" data-kind="${escHtml(kind)}">
+            <div class="et-shell-mark">${kind === 'error' ? '!' : '☸'}</div>
+            <h2>${escHtml(title)}</h2>
+            ${(Array.isArray(lines) ? lines : []).map(line => `<div class="et-note">${escHtml(line)}</div>`).join('')}
+          </section>
+        </main>
+      </div>`;
+  }
+
   async function openDashboard() {
     await closeRunProgressBeforeDashboard();
     Runtime.dashboardVisible = true;
-    resetDashboardDocumentSurface();
-    const conf = await getConfig();
-    const context = await loadScopeAndContext([], conf);
-    let state = context.noSession ? createDefaultState(context.mode) : await loadState(context.scope, context.mode, conf);
-    let sessionSync = context.noSession ? { changed: false, verdict: 'settings-only-no-session' } : syncSessionDiagnostics(state, context, conf);
-    const sessionRewindSync = context.noSession
-      ? { changed: false, skipped: true, reason: 'settings-only-no-session' }
-      : await maybeRewindStateAfterConfirmedDelete(context.scope, state, context.mode, sessionSync, conf);
-    if (!context.noSession && sessionRewindSync.changed && sessionRewindSync.state) {
-      state = sessionRewindSync.state;
-      sessionSync = { ...sessionSync, rewindApplied: true, rewind: { ...sessionRewindSync, state: undefined } };
-    }
-    let dashboardStateChanged = !context.noSession && Boolean(sessionSync.changed);
-    dashboardStateChanged = dashboardStateChanged || (!context.noSession && Boolean(sessionRewindSync.changed));
-    if (!context.noSession) {
-      if (!shouldBlockMemoryMutation(sessionSync)) {
-        syncChatLongMemoryLedger(state, context.messages, conf.contextWindow, conf.coldStartChunkSize);
-        const memoryRecoverySync = runMemoryGardenRecovery(state, context.messages, conf, sessionSync);
-        dashboardStateChanged = dashboardStateChanged || Boolean(memoryRecoverySync.changed);
-      } else {
-        const memoryRecoverySync = runMemoryGardenRecovery(state, context.messages, conf, sessionSync);
-        dashboardStateChanged = dashboardStateChanged || Boolean(memoryRecoverySync.changed);
+    try {
+      resetDashboardDocumentSurface();
+      await paintDashboardHtml(buildDashboardLoadingHtml());
+      setupDashboardCloseHandler();
+      await api.showContainer('fullscreen');
+      await yieldRunProgressPaint();
+      const conf = await getConfig();
+      const context = await loadScopeAndContext([], conf);
+      let state = context.noSession ? createDefaultState(context.mode) : await loadState(context.scope, context.mode, conf);
+      let sessionSync = context.noSession ? { changed: false, verdict: 'settings-only-no-session' } : syncSessionDiagnostics(state, context, conf);
+      const sessionRewindSync = context.noSession
+        ? { changed: false, skipped: true, reason: 'settings-only-no-session' }
+        : await maybeRewindStateAfterConfirmedDelete(context.scope, state, context.mode, sessionSync, conf);
+      if (!context.noSession && sessionRewindSync.changed && sessionRewindSync.state) {
+        state = sessionRewindSync.state;
+        sessionSync = { ...sessionSync, rewindApplied: true, rewind: { ...sessionRewindSync, state: undefined } };
       }
-      syncCbsDiagnostics(state, context, conf);
-    } else {
-      state.sessionDiagnostics = normalizeSessionDiagnostics({
-        ...state.sessionDiagnostics,
-        status: 'settings-only',
-        lastVerdict: 'no-chat-session',
-      });
+      let dashboardStateChanged = !context.noSession && Boolean(sessionSync.changed);
+      dashboardStateChanged = dashboardStateChanged || (!context.noSession && Boolean(sessionRewindSync.changed));
+      if (!context.noSession) {
+        if (!shouldBlockMemoryMutation(sessionSync)) {
+          syncChatLongMemoryLedger(state, context.messages, conf.contextWindow, conf.coldStartChunkSize);
+          const memoryRecoverySync = runMemoryGardenRecovery(state, context.messages, conf, sessionSync);
+          dashboardStateChanged = dashboardStateChanged || Boolean(memoryRecoverySync.changed);
+        } else {
+          const memoryRecoverySync = runMemoryGardenRecovery(state, context.messages, conf, sessionSync);
+          dashboardStateChanged = dashboardStateChanged || Boolean(memoryRecoverySync.changed);
+        }
+        syncCbsDiagnostics(state, context, conf);
+      } else {
+        state.sessionDiagnostics = normalizeSessionDiagnostics({
+          ...state.sessionDiagnostics,
+          status: 'settings-only',
+          lastVerdict: 'no-chat-session',
+        });
+      }
+      refreshMemoryTiers(state, 'dashboard');
+      if (dashboardStateChanged && !context.noSession) await saveState(context.scope, state, conf);
+      const runLogs = context.noSession ? [] : await Storage.get(STORAGE.runLog(context.scope), []);
+      const snapshots = context.noSession ? [] : await loadStateSnapshots(context.scope);
+      const backup = context.noSession ? null : await Storage.get(STORAGE.backup(context.scope), null);
+      installDebugApi(conf, context, state, snapshots, backup);
+      await paintDashboardHtml(buildDashboardHtml(conf, context, state, runLogs, snapshots, backup));
+      setupDashboardHandlers(conf, context, state);
+    } catch (err) {
+      Runtime.lastError = err?.message || String(err || 'dashboard open failed');
+      log('dashboard open failed', Runtime.lastError);
+      resetDashboardDocumentSurface();
+      await paintDashboardHtml(buildDashboardErrorHtml(err));
+      setupDashboardCloseHandler();
+      await api.showContainer('fullscreen');
     }
-    refreshMemoryTiers(state, 'dashboard');
-    if (dashboardStateChanged && !context.noSession) await saveState(context.scope, state, conf);
-    const runLogs = context.noSession ? [] : await Storage.get(STORAGE.runLog(context.scope), []);
-    const snapshots = context.noSession ? [] : await loadStateSnapshots(context.scope);
-    const backup = context.noSession ? null : await Storage.get(STORAGE.backup(context.scope), null);
-    installDebugApi(conf, context, state, snapshots, backup);
-    document.body.innerHTML = buildDashboardHtml(conf, context, state, runLogs, snapshots, backup);
-    setupDashboardHandlers(conf, context, state);
-    await api.showContainer('fullscreen');
   }
 
   function buildDashboardHtml(conf, context, state, runLogs, snapshots = [], backup = null) {
@@ -10356,6 +10432,13 @@
       html, body { margin:0 !important; width:100% !important; min-height:100% !important; background:#fff8f1 !important; color:#34272a !important; overflow:auto !important; }
       body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing:0; }
       .et-wrap { min-height:100vh; box-sizing:border-box; width:100%; background:linear-gradient(180deg, #fff8f1 0%, #fffdf9 46%, #fff8f1 100%); }
+      .et-dashboard-shell { display:flex; flex-direction:column; }
+      .et-shell-main { width:min(720px, calc(100vw - 32px)); margin:0 auto; flex:1; display:flex; align-items:center; justify-content:center; padding:36px 0; box-sizing:border-box; }
+      .et-shell-card { text-align:center; max-width:620px; }
+      .et-shell-card h2 { margin:0 0 10px; color:#6f3444; font-size:20px; }
+      .et-shell-mark { width:42px; height:42px; margin:0 auto 12px; display:grid; place-items:center; border-radius:50%; color:#fffdfa; background:#b88173; font-weight:900; box-shadow:0 8px 24px rgba(111,52,68,.22); }
+      .et-shell-card[data-kind="loading"] .et-shell-mark { animation:et-shell-pulse 1.2s ease-in-out infinite; }
+      .et-shell-card[data-kind="error"] .et-shell-mark { background:#b94a45; }
       .et-wrap > header, .et-wrap > section, .et-wrap > nav, .et-wrap > main { width:min(1240px, calc(100vw - 32px)); margin-left:auto; margin-right:auto; }
       .et-head { display:flex; justify-content:space-between; align-items:center; gap:16px; padding:12px 0 16px; border-bottom:1px solid #efd8c9; }
       .et-title { font-size:25px; font-weight:850; line-height:1.2; color:#6f3444; }
@@ -10448,6 +10531,7 @@
       .et-full summary { display:inline-flex; width:max-content; border:1px solid #dcb7ad; border-radius:6px; background:#fff1ed; color:#6f3444; padding:5px 8px; font-size:12px; }
       .et-full pre { margin-top:8px; max-height:65vh; }
       pre { white-space:pre-wrap; word-break:break-word; margin:0; background:#fff8f1; border:1px solid #ead2c3; border-radius:8px; padding:12px; max-height:360px; overflow:auto; font-size:12px; }
+      @keyframes et-shell-pulse { 0%, 100% { transform:scale(1); opacity:.82; } 50% { transform:scale(1.06); opacity:1; } }
       @media (max-width: 980px) {
         .et-context-bar { grid-template-columns:repeat(2, minmax(0, 1fr)); }
         .et-grid, .et-grid-3, .et-row-4 { grid-template-columns:1fr; }
