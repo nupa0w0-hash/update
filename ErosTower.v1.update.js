@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.0.8
+//@display-name ☸Eros Tower 1.0.9
 //@api 3.0
-//@version 1.0.8
+//@version 1.0.9
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -33,18 +33,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.0.8
+ * Eros Tower 1.0.9
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.0.8 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.0.9 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.0.8';
+  const VERSION = '1.0.9';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.0.8`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.0.9`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -60,7 +60,7 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.0.8 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.0.9 analysis context';
   const GOOGLE_OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
   const GOOGLE_CLOUD_PLATFORM_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
   const PSYCHE_RECOMMENDED_MODELS = Object.freeze([
@@ -642,7 +642,7 @@
 
   function normalizeTimeoutMsSetting(value, fallback = DEFAULT_CONFIG.timeoutMs) {
     const ms = parseNumber(value, fallback, 15000, 600000);
-    return ms === LEGACY_DEFAULT_TIMEOUT_MS ? DEFAULT_CONFIG.timeoutMs : ms;
+    return ms === LEGACY_DEFAULT_TIMEOUT_MS || ms === 15000 ? DEFAULT_CONFIG.timeoutMs : ms;
   }
 
   function timeoutSecondsToMs(value, fallback = DEFAULT_CONFIG.timeoutMs) {
@@ -10378,12 +10378,6 @@
 
         <section class="et-context-bar">
           ${contextChip('캐릭터', displayCharacterName(context))}
-          ${contextChip('채팅방', displayChatName(context))}
-          ${contextChip('채팅방 키', shortKey(context.chatId || context.scope))}
-          ${contextChip('Run Log', boolKo(conf.runLogEnabled))}
-          ${contextChip('Provider', `${(conf.providerRegistry || []).length}개 기본 등록`)}
-          ${contextChip('임베딩', conf.embeddingEnabled ? `${conf.embeddingProviderId}/${conf.embeddingModel || '-'}` : '꺼짐')}
-          ${contextChip('참고 자료', formatReferenceConfigSummary(conf))}
         </section>
         ${context.noSession ? `
           <section class="et-panel et-session-banner">
@@ -12605,10 +12599,6 @@
 
   function boolString(value) {
     return value ? 'true' : 'false';
-  }
-
-  function boolKo(value) {
-    return value ? '켜짐' : '꺼짐';
   }
 
   function phaseLabel(phase) {
