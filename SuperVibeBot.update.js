@@ -1,13 +1,13 @@
 //@name SuperVibeBot
-//@display-name 🐸 SuperVibeBot v1.4.9
-//@version 1.4.9
+//@display-name 🐸 SuperVibeBot v1.4.10
+//@version 1.4.10
 //@api 3.0
-//@update-url https://cdn.jsdelivr.net/gh/nupa0w0-hash/update@main/SuperVibeBot.update.js
+//@update-url https://cdn.jsdelivr.net/gh/nupa0w0-hash/update/SuperVibeBot.update.js
 //@arg api_key string "" "Google AI Studio API 키를 입력하세요 (Vertex AI, API Hub 또는 GitHub Copilot 연동 시 불필요)."
 //@arg disable_safety int 0 "안전 필터 비활성화 (1=OFF, 0=ON)"
 
 if (typeof risuai === "undefined") {
-    alert("⚠️ SuperVibeBot v1.4.9는 RisuAI Plugin API 3.0이 필요합니다.");
+    alert("⚠️ SuperVibeBot v1.4.10는 RisuAI Plugin API 3.0이 필요합니다.");
     throw new Error("API 3.0 required");
 }
 
@@ -163,7 +163,7 @@ async function safeCopyText(text, options = {}) {
 }
 
 /**
- * SuperVibeBot v1.4.9 Release Notes
+ * SuperVibeBot v1.4.10 Release Notes
  *
  * 🎉 Major Changes
  * - Migrated to RisuAI Plugin API 3.0
@@ -34956,7 +34956,7 @@ function validatePluginScriptMetadata(script, expectedName, options = {}) {
         throw new Error(`${label} script는 //@api 3.0 메타데이터가 필요합니다.`);
     }
     if (api && api !== '3.0') {
-        throw new Error(`${label} script의 //@api ${api}는 v1.4.9 기준 권장 API 3.0이 아니어서 저장을 중단했습니다.`);
+        throw new Error(`${label} script의 //@api ${api}는 v1.4.10 기준 권장 API 3.0이 아니어서 저장을 중단했습니다.`);
     }
     if (metadata.updateURL) {
         if (!metadata.updateUrlValid) {
@@ -37750,7 +37750,7 @@ function getBulkOutputHint(targetType) {
     return 'result는 항목 JSON 배열이어야 합니다.';
 }
 
-/* === RisuAI SuperVibeBot v1.4.9 Guide (Concise Version) === */
+/* === RisuAI SuperVibeBot v1.4.10 Guide (Concise Version) === */
 const RISUAI_GUIDE = {
     overview: `
 ## System Overview
@@ -48719,7 +48719,7 @@ async function loadInitialSettings() {
 async function registerUIElements() {
     // 채팅 화면 메뉴에 버튼 추가 (플로팅 버튼 대신)
     await risuai.registerButton({
-        name: "SuperVibeBot v1.4.9",
+        name: "SuperVibeBot v1.4.10",
         icon: "🐸",
         iconType: "html",
         location: "chat"  // 채팅 메뉴에 배치 (화면 가림 방지)
@@ -48728,7 +48728,7 @@ async function registerUIElements() {
     });
 
     await risuai.registerSetting(
-        "SuperVibeBot v1.4.9 Settings",
+        "SuperVibeBot v1.4.10 Settings",
         async () => {
             await openSettingsWindow();
         },
@@ -48771,7 +48771,7 @@ function cleanup() {
 (async () => {
     try {
         Logger.info("=".repeat(50));
-        Logger.info("SuperVibeBot v1.4.9");
+        Logger.info("SuperVibeBot v1.4.10");
         Logger.info("RisuAI Plugin API 3.0");
         Logger.info("=".repeat(50));
         await loadInitialSettings();
