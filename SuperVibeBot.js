@@ -1,13 +1,13 @@
 //@name SuperVibeBot
-//@display-name 🐸 SuperVibeBot v1.5.18
-//@version 1.5.18
+//@display-name 🐸 SuperVibeBot v1.5.19
+//@version 1.5.19
 //@api 3.0
 //@update-url https://github.com/nupa0w0-hash/supervibebot-update/releases/latest/download/SuperVibeBot.update.js
 //@arg api_key string "" "Google AI Studio API 키를 입력하세요 (Vertex AI, API Hub 또는 GitHub Copilot 연동 시 불필요)."
 //@arg disable_safety int 0 "안전 필터 비활성화 (1=OFF, 0=ON)"
 
 if (typeof risuai === "undefined") {
-    alert("⚠️ SuperVibeBot v1.5.18는 RisuAI Plugin API 3.0이 필요합니다.");
+    alert("⚠️ SuperVibeBot v1.5.19는 RisuAI Plugin API 3.0이 필요합니다.");
     throw new Error("API 3.0 required");
 }
 
@@ -163,7 +163,7 @@ async function safeCopyText(text, options = {}) {
 }
 
 /**
- * SuperVibeBot v1.5.18 Release Notes
+ * SuperVibeBot v1.5.19 Release Notes
  *
  * 🎉 Major Changes
  * - Caps sub-agent consultation packets to 120k desktop, 80k constrained, and 60k background chars
@@ -184,6 +184,7 @@ async function safeCopyText(text, options = {}) {
  * - Lorebook Builder now treats multiple keys and secondkey as explicit advanced options, not defaults
  * - AI-generated lorebook writes now remove secondkey/multiple mode unless explicitly requested
  * - Model context hides legacy lorebook activation details and character personality/scenario aliases by default
+ * - Runtime diagnostics now verify the legacy field policy for lorebook writes and model context
  * - Sub-agent report calls now default to 4096 output tokens on desktop and 2048 on constrained/mobile/webview profiles
  * - Explicit sub-agent output overrides are clamped to a WebView-safe hard cap
  * - API responses that ignore max_tokens are shortened before entering Kero's parser/renderer
@@ -196,6 +197,7 @@ async function safeCopyText(text, options = {}) {
  * 🔧 Improvements
  * - Runtime diagnostics now verify packet hard caps for desktop, PocketRisu, and background profiles
  * - Runtime diagnostics now verify bulk apply idx filtering
+ * - Runtime diagnostics now verify secondkey/multiple mode suppression and personality/scenario alias filtering
  * - Prevents GLM/Kimi/API Hub sub-agents from returning or rendering oversized manager reports
  * - Runtime diagnostics now verify sub-agent hard caps, response truncation, and conservative large-payload parallel limits
  * - Safer selected-item expansion in both global and Kero chat execution paths
@@ -12077,6 +12079,72 @@ function addSvbRuntimeIndexFallbackSelfTest(checks) {
     ));
 }
 
+function addSvbRuntimeLegacyFieldPolicySelfTest(checks) {
+    const result = readSvbRuntimeValue('legacy 필드 정책 자체 테스트', () => {
+        const defaultWrite = sanitizeLorebookEntryForAiWrite({
+            key: '진단',
+            secondkey: '숨겨야 하는 보조 키',
+            mode: 'multiple',
+            content: '진단 본문'
+        }, 0, {}).entry;
+        const explicitWrite = sanitizeLorebookEntryForAiWrite({
+            key: '진단',
+            secondkey: '명시 요청 보조 키',
+            mode: 'multiple',
+            content: '진단 본문'
+        }, 1, { userRequest: '보조 키와 multiple key를 명시적으로 사용해' }).entry;
+        const contextEntry = makeLorebookEntryForModelContext({
+            key: '진단',
+            secondkey: '컨텍스트에 노출되면 안 되는 값',
+            mode: 'multiple',
+            content: '진단 본문'
+        }, 2);
+        const extraFields = getCharacterExtraCloneFields({
+            name: '진단 캐릭터',
+            personalityText: '숨겨야 하는 성격 별칭',
+            scenario_prompt: '숨겨야 하는 시나리오 별칭',
+            customField: '보존해야 하는 커스텀 필드'
+        }, ['name']);
+        const pipelineEntry = makeLorebookEntryForModelContext(defaultWrite, 3);
+        return {
+            defaultHasSecondkey: Object.prototype.hasOwnProperty.call(defaultWrite, 'secondkey'),
+            defaultMode: safeString(defaultWrite.mode),
+            explicitSecondkey: safeString(explicitWrite.secondkey),
+            explicitMode: safeString(explicitWrite.mode),
+            contextHasSecondkey: Object.prototype.hasOwnProperty.call(contextEntry, 'secondkey'),
+            contextText: JSON.stringify(contextEntry),
+            contextMode: safeString(contextEntry.mode),
+            contextLegacySecondkeyPresent: contextEntry.legacySecondkeyPresent === true,
+            contextLegacyModeWasMultiple: contextEntry.legacyModeWasMultiple === true,
+            extraHasPersonalityAlias: Object.keys(extraFields).some((key) => /personality|scenario|성격|시나리오/i.test(key)),
+            customField: extraFields.customField,
+            pipelineHasSecondkey: Object.prototype.hasOwnProperty.call(pipelineEntry, 'secondkey'),
+            pipelineMode: safeString(pipelineEntry.mode)
+        };
+    });
+    if (!result.ok) {
+        checks.push(makeSvbRuntimeCheck(false, 'legacy 필드 정책 자체 테스트', result.error, 'error'));
+        return;
+    }
+    const value = result.value || {};
+    const problems = [];
+    if (value.defaultHasSecondkey) problems.push('AI 기본 저장에서 secondkey 제거 실패');
+    if (value.defaultMode !== 'normal') problems.push('AI 기본 저장에서 multiple mode 보정 실패');
+    if (value.explicitSecondkey !== '명시 요청 보조 키') problems.push('명시 요청 secondkey 보존 실패');
+    if (value.explicitMode !== 'multiple') problems.push('명시 요청 multiple mode 보존 실패');
+    if (value.contextHasSecondkey || safeString(value.contextText).includes('컨텍스트에 노출되면 안 되는 값')) problems.push('모델 컨텍스트 secondkey 값 숨김 실패');
+    if (value.contextMode !== 'normal' || !value.contextLegacySecondkeyPresent || !value.contextLegacyModeWasMultiple) problems.push('모델 컨텍스트 legacy 표시/보정 실패');
+    if (value.extraHasPersonalityAlias) problems.push('personality/scenario alias extra 필터 실패');
+    if (value.customField !== '보존해야 하는 커스텀 필드') problems.push('비 legacy extra 필드 보존 실패');
+    if (value.pipelineHasSecondkey || value.pipelineMode !== 'normal') problems.push('AI-write to context pipeline legacy 차단 실패');
+    checks.push(makeSvbRuntimeCheck(
+        problems.length === 0,
+        'legacy 필드 정책 자체 테스트',
+        problems.length ? `문제: ${problems.join(' / ')}` : 'secondkey/multiple/personality/scenario alias 기본 경로 차단 및 명시 요청 보존 확인',
+        problems.length ? 'error' : 'ok'
+    ));
+}
+
 function addSvbRuntimeKeroChatContinuitySelfTest(checks) {
     const result = readSvbRuntimeValue('Kero recent chat continuity self test', () => {
         const currentInput = 'apply that fix now';
@@ -13469,6 +13537,7 @@ function runSvbRuntimeSelfCheck(options = {}) {
     addSvbRuntimeGatewayFallbackSelfTest(checks);
     addSvbRuntimeOutputLimitRecoverySelfTest(checks);
     addSvbRuntimeOutputLimitDecisionSelfTest(checks);
+    addSvbRuntimeLegacyFieldPolicySelfTest(checks);
     addSvbRuntimeContextPayloadSelfTest(checks);
     addSvbRuntimeSubAgentPayloadBudgetSelfTest(checks);
     addSvbRuntimeAdaptiveLimitsSelfTest(checks);
@@ -39703,7 +39772,7 @@ function getBulkOutputHint(targetType) {
     return 'result는 항목 JSON 배열이어야 합니다.';
 }
 
-/* === RisuAI SuperVibeBot v1.5.18 Guide (Concise Version) === */
+/* === RisuAI SuperVibeBot v1.5.19 Guide (Concise Version) === */
 const RISUAI_GUIDE = {
     overview: `
 ## System Overview
@@ -50842,7 +50911,7 @@ async function loadInitialSettings() {
 async function registerUIElements() {
     // 채팅 화면 메뉴에 버튼 추가 (플로팅 버튼 대신)
     await risuai.registerButton({
-        name: "SuperVibeBot v1.5.18",
+        name: "SuperVibeBot v1.5.19",
         icon: "🐸",
         iconType: "html",
         location: "chat"  // 채팅 메뉴에 배치 (화면 가림 방지)
@@ -50851,7 +50920,7 @@ async function registerUIElements() {
     });
 
     await risuai.registerSetting(
-        "SuperVibeBot v1.5.18 Settings",
+        "SuperVibeBot v1.5.19 Settings",
         async () => {
             await openSettingsWindow();
         },
@@ -50894,7 +50963,7 @@ function cleanup() {
 (async () => {
     try {
         Logger.info("=".repeat(50));
-        Logger.info("SuperVibeBot v1.5.18");
+        Logger.info("SuperVibeBot v1.5.19");
         Logger.info("RisuAI Plugin API 3.0");
         Logger.info("=".repeat(50));
         await loadInitialSettings();
