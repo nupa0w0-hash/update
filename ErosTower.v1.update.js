@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.8
+//@display-name ☸Eros Tower 1.1.9
 //@api 3.0
-//@version 1.1.8
+//@version 1.1.9
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -33,18 +33,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.8
+ * Eros Tower 1.1.9
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.8 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.9 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.8';
+  const VERSION = '1.1.9';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.8`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.9`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -87,7 +87,7 @@
     'clue',
     'worldFront',
   ]);
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.8 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.9 analysis context';
   const GOOGLE_OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
   const GOOGLE_CLOUD_PLATFORM_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
   const PSYCHE_RECOMMENDED_MODELS = Object.freeze([
@@ -2706,18 +2706,13 @@
     const registeredFirstMessage = context?.firstMessageInfo?.message !== undefined
       ? context.firstMessageInfo
       : resolveRegisteredFirstMessage(character, context?.currentChat);
-    const globalLore = []
-      .concat(Array.isArray(character?.globalLore) ? character.globalLore : [])
-      .concat(Array.isArray(character?.lorebook) ? character.lorebook : [])
-      .concat(Array.isArray(character?.data?.globalLore) ? character.data.globalLore : []);
-    const localLore = []
-      .concat(Array.isArray(context?.currentChat?.localLore) ? context.currentChat.localLore : [])
-      .concat(Array.isArray(context?.currentChat?.lorebook) ? context.currentChat.lorebook : []);
+    const globalLore = collectCharacterLoreEntries(character);
+    const localLore = collectChatLoreEntries(context?.currentChat);
     const modules = getDatabaseModules(db);
-    const enabled = new Set((Array.isArray(db?.enabledModules) ? db.enabledModules : []).map(String));
+    const enabled = collectEnabledModuleKeys(db, context?.currentChat);
     const enabledModuleLore = modules
-      .filter(mod => enabled.has(String(mod?.id)) || enabled.has(String(mod?.name)) || enabled.has(String(mod?.namespace)))
-      .map(mod => ({ id: mod?.id || mod?.name || '', lorebook: Array.isArray(mod?.lorebook) ? mod.lorebook : [] }));
+      .filter((mod, modIdx) => moduleMatchesEnabledKey(mod, referenceModuleId(mod, modIdx), enabled))
+      .map((mod, modIdx) => ({ id: mod?.id || mod?.name || referenceModuleId(mod, modIdx) || '', lorebook: collectModuleLoreEntries(mod) }));
     const fp = {
       at: nowIso(),
       scope: String(context?.scope || ''),
@@ -4513,71 +4508,161 @@
     ), referencePluginKey).filter(plugin => !isErosTowerPluginRecord(plugin));
   }
 
+  function unwrapRisuObjectData(value) {
+    if (!value || typeof value !== 'object') return value;
+    if (String(value.type || '').toLowerCase() === 'risu' && value.data && typeof value.data === 'object' && !Array.isArray(value.data)) return value.data;
+    return value;
+  }
+
+  function unwrapRisuLoreData(value) {
+    if (!value || typeof value !== 'object') return value;
+    if (String(value.type || '').toLowerCase() === 'risu' && value.data !== undefined) return value.data;
+    return value;
+  }
+
+  function looksLikeLoreEntry(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    const hasText = firstNonEmpty(value.content, value.prompt, value.text, value.entry, value.description, value.desc, value.data);
+    if (!hasText) return false;
+    return value.comment !== undefined
+      || value.key !== undefined
+      || value.secondkey !== undefined
+      || value.alwaysActive !== undefined
+      || value.selective !== undefined
+      || value.bookVersion !== undefined
+      || value.insertorder !== undefined
+      || value.mode !== undefined;
+  }
+
   function collectLoreArrays(...values) {
-    return values.flatMap(value => Array.isArray(value) ? value : []).filter(Boolean);
+    const out = [];
+    const visit = (value, depth = 0) => {
+      if (value === undefined || value === null || depth > 4) return;
+      const raw = unwrapRisuLoreData(value);
+      if (Array.isArray(raw)) {
+        raw.forEach(item => visit(item, depth + 1));
+        return;
+      }
+      if (!raw || typeof raw !== 'object') return;
+      if (looksLikeLoreEntry(raw)) {
+        out.push(raw);
+        return;
+      }
+      const nestedKeys = [
+        'entries',
+        'items',
+        'lorebook',
+        'globalLore',
+        'localLore',
+        'chatLore',
+        'chatLorebook',
+        'chatLoreBook',
+        'chat_lorebook',
+        'characterBook',
+        'data',
+      ];
+      nestedKeys.forEach(key => {
+        if (raw[key] !== undefined) visit(raw[key], depth + 1);
+      });
+      const values = Object.values(raw);
+      if (values.length && values.length <= 400 && values.every(looksLikeLoreEntry)) values.forEach(item => visit(item, depth + 1));
+    };
+    values.forEach(value => visit(value, 0));
+    return out.filter(Boolean);
   }
 
   function collectCharacterLoreEntries(character) {
+    const source = unwrapRisuObjectData(character) || {};
     return collectLoreArrays(
-      character?.globalLore,
-      character?.lorebook,
-      character?.characterBook,
-      character?.data?.globalLore,
-      character?.data?.lorebook,
-      character?.data?.characterBook
+      source?.globalLore,
+      source?.lorebook,
+      source?.characterBook,
+      source?.data?.globalLore,
+      source?.data?.lorebook,
+      source?.data?.characterBook
     );
   }
 
   function collectChatLoreEntries(chat) {
+    const source = unwrapRisuObjectData(chat) || {};
     return collectLoreArrays(
-      chat?.localLore,
-      chat?.lorebook,
-      chat?.chatLore,
-      chat?.chatLorebook,
-      chat?.chatLoreBook,
-      chat?.chat_lorebook,
-      chat?.chat_lore_book,
-      chat?.chatLorebooks,
-      chat?.chat_lorebooks,
-      chat?.data?.localLore,
-      chat?.data?.lorebook,
-      chat?.data?.chatLore,
-      chat?.data?.chatLorebook,
-      chat?.data?.chatLoreBook,
-      chat?.data?.chat_lorebook,
-      chat?.data?.chat_lore_book,
-      chat?.data?.chatLorebooks,
-      chat?.data?.chat_lorebooks
+      source?.localLore,
+      source?.lorebook,
+      source?.chatLore,
+      source?.chatLorebook,
+      source?.chatLoreBook,
+      source?.chat_lorebook,
+      source?.chat_lore_book,
+      source?.chatLorebooks,
+      source?.chat_lorebooks,
+      source?.data?.localLore,
+      source?.data?.lorebook,
+      source?.data?.chatLore,
+      source?.data?.chatLorebook,
+      source?.data?.chatLoreBook,
+      source?.data?.chat_lorebook,
+      source?.data?.chat_lore_book,
+      source?.data?.chatLorebooks,
+      source?.data?.chat_lorebooks
     );
   }
 
   function collectModuleLoreEntries(module) {
+    const source = unwrapRisuObjectData(module) || {};
     return collectLoreArrays(
-      module?.lorebook,
-      module?.globalLore,
-      module?.data?.lorebook,
-      module?.data?.globalLore
+      source?.lorebook,
+      source?.globalLore,
+      source?.data?.lorebook,
+      source?.data?.globalLore
     );
   }
 
+  function collectEnabledModuleKeys(db, chat = null) {
+    const sourceChat = unwrapRisuObjectData(chat) || {};
+    const sourceDb = unwrapRisuObjectData(db) || {};
+    return new Set(uniqueStrings([])
+      .concat(normalizeStringArray(sourceDb?.enabledModules))
+      .concat(normalizeStringArray(sourceDb?.data?.enabledModules))
+      .concat(normalizeStringArray(sourceChat?.modules))
+      .concat(normalizeStringArray(sourceChat?.enabledModules))
+      .concat(normalizeStringArray(sourceChat?.data?.modules))
+      .concat(normalizeStringArray(sourceChat?.data?.enabledModules))
+      .map(String));
+  }
+
+  function moduleMatchesEnabledKey(mod, modId, enabled) {
+    if (!enabled || !enabled.size) return false;
+    return [
+      modId,
+      mod?.id,
+      mod?.name,
+      mod?.namespace,
+      mod?.key,
+      mod?.data?.id,
+      mod?.data?.name,
+      mod?.data?.namespace,
+    ].some(value => value !== undefined && value !== null && enabled.has(String(value)));
+  }
+
   function collectGlobalNoteTexts(target) {
+    const source = unwrapRisuObjectData(target) || {};
     const raw = [
-      target?.post_history_instructions,
-      target?.postHistoryInstructions,
-      target?.posthistoryinstructions,
-      target?.replaceGlobalNote,
-      target?.globalNote,
-      target?.global_note,
-      target?.authorNote,
-      target?.note,
-      target?.data?.post_history_instructions,
-      target?.data?.postHistoryInstructions,
-      target?.data?.posthistoryinstructions,
-      target?.data?.replaceGlobalNote,
-      target?.data?.globalNote,
-      target?.data?.global_note,
-      target?.data?.authorNote,
-      target?.data?.note,
+      source?.post_history_instructions,
+      source?.postHistoryInstructions,
+      source?.posthistoryinstructions,
+      source?.replaceGlobalNote,
+      source?.globalNote,
+      source?.global_note,
+      source?.authorNote,
+      source?.note,
+      source?.data?.post_history_instructions,
+      source?.data?.postHistoryInstructions,
+      source?.data?.posthistoryinstructions,
+      source?.data?.replaceGlobalNote,
+      source?.data?.globalNote,
+      source?.data?.global_note,
+      source?.data?.authorNote,
+      source?.data?.note,
     ];
     return uniqueStrings(raw.map(value => String(value || '').trim()).filter(Boolean)).slice(0, 8);
   }
@@ -4698,10 +4783,10 @@
     const localLore = collectChatLoreEntries(chat);
     localLore.slice(0, 48).forEach((entry, idx) => add(entry, 'localLore', 'chat lore', `chat:localLore:${idx}`, { owner: 'chat' }));
     const modules = Array.isArray(db?.modules) ? db.modules : [];
-    const enabled = new Set((Array.isArray(db?.enabledModules) ? db.enabledModules : []).map(String));
+    const enabled = collectEnabledModuleKeys(db, chat);
     modules.forEach((mod, modIdx) => {
       const modId = referenceModuleId(mod, modIdx);
-      const isEnabled = enabled.has(String(mod?.id)) || enabled.has(String(mod?.name)) || enabled.has(String(mod?.namespace)) || enabled.has(modId);
+      const isEnabled = moduleMatchesEnabledKey(mod, modId, enabled);
       if (!isEnabled) return;
       collectModuleLoreEntries(mod).slice(0, 48).forEach((entry, idx) => add(entry, 'moduleLore', `module: ${mod?.name || mod?.id || 'unknown'}`, `module:${modId || 'unknown'}:lore:${idx}`, { owner: 'module', moduleId: modId || '', moduleName: mod?.name || '' }));
     });
@@ -6010,6 +6095,7 @@
       'Never output <Thoughts>, <think>, reasoning, analysis headings, run logs, or agent labels. Final response must be only the in-world reply.',
       'Do not write an English draft, translation draft, planning draft, or title before the final prose. Use one final language matching the current conversation.',
       'Source order: current user/recent chat > final output/canon > character card/author note/lore > stored state > agent inference.',
+      'Pinned identity lore is current canon. Do not turn background tags such as orphan, unknown surname, past life, or origin into a new opening scene/status when affiliation/role is already specified.',
       'Older low-importance memories are intentionally faded unless repeated, important, or relevant now.',
       '',
       controlFloor,
@@ -6034,13 +6120,29 @@
       lines.push(`[Registered First Message]\n${firstMessage.slice(0, firstCap)}`);
     }
     const alwaysLore = (Array.isArray(context?.canonicalSources) ? context.canonicalSources : [])
-      .filter(source => source?.meta?.alwaysActive);
+      .filter(source => source?.meta?.alwaysActive)
+      .sort(compareCanonicalControlFloorSource);
+    const pinnedLore = alwaysLore.filter(isPinnedIdentityLoreSource).slice(0, 4);
+    if (pinnedLore.length) {
+      lines.push('[Pinned Identity Lore]');
+      const used = lines.join('\n').length;
+      const available = Math.max(720, Number(budget || 0) - used - 220);
+      const perItemCap = Math.max(260, Math.min(1400, Math.floor(available / Math.max(1, pinnedLore.length))));
+      pinnedLore.forEach(source => {
+        const label = source.label || source.kind || source.path;
+        const facts = extractPinnedIdentityFacts(source.content);
+        const summary = String(source.content || '').replace(/\s+/g, ' ').trim().slice(0, perItemCap);
+        lines.push(`- ${label}: ${facts ? `${facts} | ` : ''}${summary}`);
+      });
+      lines.push('- Identity guard: treat current affiliation/status/role in pinned lore as present canon. Background labels such as orphan, unknown surname, past life, or origin do not replace the current scene role unless the registered first message explicitly says so.');
+    }
     if (alwaysLore.length) {
       lines.push('[Always-Active Lore Floor]');
       const used = lines.join('\n').length;
       const available = Math.max(480, Number(budget || 0) - used - (alwaysLore.length * 36));
-      const perItemCap = Math.max(120, Math.min(900, Math.floor(available / Math.max(1, alwaysLore.length))));
-      alwaysLore.forEach(source => {
+      const restLore = alwaysLore.filter(source => !pinnedLore.some(pinned => pinned.id === source.id || pinned.hash === source.hash));
+      const perItemCap = Math.max(140, Math.min(900, Math.floor(available / Math.max(1, restLore.length || 1))));
+      restLore.forEach(source => {
         const label = source.label || source.kind || source.path;
         const summary = String(source.content || '').replace(/\s+/g, ' ').trim().slice(0, perItemCap);
         lines.push(`- ${label}: ${summary}`);
@@ -6048,6 +6150,53 @@
     }
     const text = lines.length ? `[Eros Tower Control Floor]\n${lines.join('\n')}` : '';
     return text.length > budget ? `${text.slice(0, Math.max(0, budget - 80))}\n[Control Floor truncated by budget]` : text;
+  }
+
+  function compareCanonicalControlFloorSource(a, b) {
+    const ap = Number(a?.priority || 0);
+    const bp = Number(b?.priority || 0);
+    if (bp !== ap) return bp - ap;
+    const ai = Number(a?.meta?.insertOrder || 0);
+    const bi = Number(b?.meta?.insertOrder || 0);
+    if (bi !== ai) return bi - ai;
+    return String(a?.path || '').localeCompare(String(b?.path || ''));
+  }
+
+  function isPinnedIdentityLoreSource(source) {
+    if (!source) return false;
+    if (source.kind === 'desc' || source.kind === 'firstMessage') return true;
+    const label = `${source.label || ''}\n${source.path || ''}`.toLowerCase();
+    const contentHead = String(source.content || '').slice(0, 1600);
+    return /연수|渊水|淵水|yeon[-\s]?su|主角|主人公|주인공|인물|人物|角色|设定|設定|프로필|profile|identity|身份|oc/.test(label)
+      || /#\s*OC|###\s*身份|姓名[:：]|性别[:：]|所属门派[:：]|核心行动准则|핵심|신원|정체성/.test(contentHead);
+  }
+
+  function extractPinnedIdentityFacts(content) {
+    const text = String(content || '').replace(/\r\n/g, '\n');
+    if (!text.trim()) return '';
+    const lines = text.split('\n').map(line => line.trim()).filter(Boolean);
+    const wanted = [
+      /^(?:[-*]\s*)?(?:姓名|名前|이름|성명|name)\s*[:：]/i,
+      /^(?:[-*]\s*)?(?:年龄|年齡|나이|age)\s*[:：]/i,
+      /^(?:[-*]\s*)?(?:性别|性別|성별|gender|sex)\s*[:：]/i,
+      /^(?:[-*]\s*)?(?:性向|성향|sexuality|position)\s*[:：]/i,
+      /^(?:[-*]\s*)?(?:种族|種族|종족|race)\s*[:：]/i,
+      /^(?:[-*]\s*)?(?:所属门派|所屬門派|소속|所属|affiliation)\s*[:：]/i,
+      /^(?:[-*]\s*)?(?:身份\/阶级|身份|身分|신분|역할|role|status)\s*[:：]/i,
+      /^(?:[-*]\s*)?(?:核心行动准则|核心行動準則|핵심 행동|행동 원칙|core rule)\s*[:：]?/i,
+    ];
+    const picked = [];
+    lines.forEach(line => {
+      if (picked.length >= 10) return;
+      const plain = line.replace(/^[-*]\s*/, '');
+      if (wanted.some(rx => rx.test(plain))) picked.push(plain.replace(/\s+/g, ' '));
+    });
+    const currentRoleHints = [];
+    if (/清虚门|淸虛門|청허문/.test(text)) currentRoleHints.push('current affiliation=清虚门/청허문');
+    if (/弟子|道士|도사|제자/.test(text)) currentRoleHints.push('current role=young Taoist disciple');
+    if (/孤儿|孤兒|고아/.test(text)) currentRoleHints.push('orphan=background/surname context, not current scene location');
+    if (/穿越者|현대\s*한국|现代韩国|past life|transmigrat/i.test(text)) currentRoleHints.push('past-life knowledge must not override current body/status');
+    return uniqueStrings(currentRoleHints.concat(picked)).slice(0, 12).join('; ');
   }
 
   function recordRecallTrace(state, queryTerms, selected, profile, meta = {}) {
@@ -14038,14 +14187,22 @@
             id: 'main-char',
             name: 'Main Character',
             description: 'Main character description.',
-            lorebook: [{ key: ['main'], content: 'Main character lore.' }],
+            lorebook: {
+              type: 'risu',
+              ver: 1,
+              data: [
+                { key: ['main'], content: 'Main character lore.' },
+                { comment: '연수', content: '# OC 角色设定集：渊水 (Yeon-su)\n### 身份\n- 姓名：渊水（姓氏未知/孤儿）\n- 年龄：15岁（外在肉体）/ 20多岁（内在心理，现代韩国）\n- 性别：男\n- 所属门派：清虚门\n- 身份/阶级：弟子（道士）\n### 核心行动准则\n渊水根据悲剧路线图采取预防性慈悲。', alwaysActive: true, insertorder: 100 },
+              ],
+            },
           };
           const targetChat = {
             id: 'chat-ref',
             name: 'Reference Test Chat',
-            localLore: [{ key: ['chat'], content: 'Chat lore entry.' }],
+            localLore: { type: 'risu', ver: 1, data: [{ key: ['chat'], content: 'Chat lore entry.' }] },
             chatLorebook: [{ key: ['chat-extra'], content: 'Chat lorebook alias entry.' }],
             postHistoryInstructions: 'Chat global note should be canonical.',
+            modules: ['chat-module'],
           };
           const targetDb = {
             characters: [{
@@ -14060,6 +14217,10 @@
               name: 'Reference Module',
               description: 'Reference module description.',
               lorebook: [{ key: ['module'], content: 'Reference module lore.' }],
+            }, {
+              id: 'chat-module',
+              name: 'Chat Attached Module',
+              lorebook: { type: 'risu', ver: 1, data: [{ comment: 'module-risu', content: 'Chat-attached module Risu export lore should be canonical.', alwaysActive: true }] },
             }],
             pluginV2: [{
               name: 'ref-plugin',
@@ -14086,6 +14247,8 @@
             }, {}),
             pluginContent: sources.find(source => source.kind === 'referencePlugin')?.content || '',
             paths: sources.map(source => source.path),
+            labels: sources.map(source => source.label),
+            pinnedControlFloor: buildMainControlFloorContext({ canonicalSources: sources }, 1800),
           };
         },
         testPromptToggleMode: () => {
