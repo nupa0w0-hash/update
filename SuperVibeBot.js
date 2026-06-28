@@ -1,13 +1,13 @@
 //@name SuperVibeBot
-//@display-name 🐸 SuperVibeBot v1.5.25
-//@version 1.5.25
+//@display-name 🐸 SuperVibeBot v1.5.26
+//@version 1.5.26
 //@api 3.0
 //@update-url https://github.com/nupa0w0-hash/supervibebot-update/releases/latest/download/SuperVibeBot.update.js
 //@arg api_key string "" "Google AI Studio API 키를 입력하세요 (Vertex AI, API Hub 또는 GitHub Copilot 연동 시 불필요)."
 //@arg disable_safety int 0 "안전 필터 비활성화 (1=OFF, 0=ON)"
 
 if (typeof risuai === "undefined") {
-    alert("⚠️ SuperVibeBot v1.5.25는 RisuAI Plugin API 3.0이 필요합니다.");
+    alert("⚠️ SuperVibeBot v1.5.26는 RisuAI Plugin API 3.0이 필요합니다.");
     throw new Error("API 3.0 required");
 }
 
@@ -164,7 +164,7 @@ async function safeCopyText(text, options = {}) {
 }
 
 /**
- * SuperVibeBot v1.5.25 Release Notes
+ * SuperVibeBot v1.5.26 Release Notes
  *
  * 🎉 Major Changes
  * - Caps sub-agent consultation packets to 120k desktop, 80k constrained, and 60k background chars
@@ -192,6 +192,7 @@ async function safeCopyText(text, options = {}) {
  * - Runtime diagnostics now verify full character context does not leak unused personality/scenario fields
  * - Runtime diagnostics now flush expired sub-agent consultation guards before judging stuck sub-agent state
  * - Control-only resume/retry now stops empty interrupted missions instead of re-calling the original large prompt
+ * - Lorebook AI writes now normalize model-only key arrays to one practical primary key and strip legacy key variant fields
  * - Sub-agent report calls now default to 4096 output tokens on desktop and 2048 on constrained/mobile/webview profiles
  * - Explicit sub-agent output overrides are clamped to a WebView-safe hard cap
  * - API responses that ignore max_tokens are shortened before entering Kero's parser/renderer
@@ -209,6 +210,7 @@ async function safeCopyText(text, options = {}) {
  * - RisuAI plugin metadata guide now warns against raw.githubusercontent branch URLs as default update channels
  * - Validation messages now say HTTPS .js file URL instead of raw/source-like JS URL wording
  * - Strengthened legacy character field self-checks so Kero keeps traits/setup inside desc instead of deprecated fields
+ * - Removes confusing key(s), bilingual-key, position, and recursive-scan guidance from Lorebook Builder defaults
  * - Improves recovery from backgrounded PocketRisu/WebView sessions where timer callbacks may have been delayed
  * - Prevents “continue/retry” loops when a restored mission has no saved actions, bulk jobs, or queued work
  * - Prevents GLM/Kimi/API Hub sub-agents from returning or rendering oversized manager reports
@@ -443,12 +445,106 @@ function normalizeLorebookModeForWrite(value, options = {}, source = {}) {
     return mode;
 }
 
+const AI_LOREBOOK_KEY_VARIANT_FIELDS = [
+    'keys',
+    'keyList',
+    'keyVariants',
+    'key_variants',
+    'primaryKey',
+    'primaryKeys',
+    'triggerKeys',
+    'trigger_keys'
+];
+
+const AI_LOREBOOK_SECONDARY_KEY_VARIANT_FIELDS = [
+    'secondKey',
+    'secondaryKey',
+    'secondaryKeys',
+    'secondary_key',
+    'secondary_keys',
+    'andKey',
+    'andKeys',
+    'and_key',
+    'and_keys'
+];
+
+function getFirstLorebookKeyCandidate(...values) {
+    const queue = [...values];
+    while (queue.length) {
+        const value = queue.shift();
+        if (Array.isArray(value)) {
+            queue.unshift(...value);
+            continue;
+        }
+        if (value && typeof value === 'object') {
+            queue.unshift(value.key, value.name, value.value, value.text, value.label);
+            continue;
+        }
+        const text = safeString(value).trim();
+        if (text) return text;
+    }
+    return '';
+}
+
+function normalizeLorebookPrimaryKeyForAiWrite(next, source) {
+    let changed = false;
+    const candidates = [source?.key, next?.key];
+    AI_LOREBOOK_KEY_VARIANT_FIELDS.forEach((field) => {
+        candidates.push(source?.[field], next?.[field]);
+    });
+    const primaryKey = getFirstLorebookKeyCandidate(...candidates);
+    if (primaryKey && safeString(next.key).trim() !== primaryKey) {
+        next.key = primaryKey;
+        changed = true;
+    }
+    AI_LOREBOOK_KEY_VARIANT_FIELDS.forEach((field) => {
+        if (Object.prototype.hasOwnProperty.call(next, field)) {
+            delete next[field];
+            changed = true;
+        }
+    });
+    return changed;
+}
+
+function normalizeLorebookSecondaryKeyVariantsForAiWrite(next, source, options, index) {
+    let changed = false;
+    const explicit = isExplicitLorebookSecondKeyRequest(options, source);
+    if (explicit && !safeString(next.secondkey).trim()) {
+        const secondaryCandidates = [];
+        AI_LOREBOOK_SECONDARY_KEY_VARIANT_FIELDS.forEach((field) => {
+            secondaryCandidates.push(source?.[field], next?.[field]);
+        });
+        const secondaryKey = getFirstLorebookKeyCandidate(...secondaryCandidates);
+        if (secondaryKey) {
+            next.secondkey = normalizeLorebookSecondKeyForWrite(secondaryKey, options, source, `로어북 #${index + 1} 보조 키`);
+            changed = true;
+        }
+    }
+    AI_LOREBOOK_SECONDARY_KEY_VARIANT_FIELDS.forEach((field) => {
+        if (Object.prototype.hasOwnProperty.call(next, field)) {
+            delete next[field];
+            changed = true;
+        }
+    });
+    return changed;
+}
+
 function sanitizeLorebookEntryForAiWrite(entry, index, options = {}) {
     const result = sanitizeLorebookEntry(entry, index);
     const next = { ...result.entry };
     const source = entry && typeof entry === 'object' ? entry : {};
     const warnings = [];
     let changed = result.changed;
+
+    if (normalizeLorebookPrimaryKeyForAiWrite(next, source)) {
+        changed = true;
+        warnings.push(`#${index + 1} 모델용 키 변형 필드는 단일 key로 정리했습니다.`);
+    }
+
+    if (normalizeLorebookSecondaryKeyVariantsForAiWrite(next, source, options, index)) {
+        changed = true;
+        warnings.push(`#${index + 1} 보조/AND 키 변형 필드는 legacy 필드로 판단해 정리했습니다.`);
+    }
 
     if (Object.prototype.hasOwnProperty.call(next, 'secondkey') && !isExplicitLorebookSecondKeyRequest(options, source)) {
         delete next.secondkey;
@@ -1907,7 +2003,7 @@ Help users design, organize, and optimize lorebook entries that maximize the AI'
 
 ### Entry Structure
 Each lorebook entry has:
-- **key** (string) — Unique identifier
+- **key** (string) — Single practical primary activation key
 - **comment** (string) — Display name in the editor
 - **content** (string) — The actual lore text injected into context
 - **mode** (string) — \`normal\`, \`constant\`, \`child\`, or \`folder\`. \`multiple\` is legacy/advanced and should not be used unless explicitly requested.
@@ -1921,9 +2017,9 @@ Each lorebook entry has:
 Do not output legacy fields such as **position**, **disable**, **insertonce**, **constant**, or **order**. Preserve unknown existing fields if editing an existing entry.
 
 ### Key Strategy
-- Use specific character names, location names, and concept terms as keys
+- Use one specific character name, location name, or concept term as the primary key.
 - Prefer one practical primary key per entry. Do not use multiple-key mode by default.
-- Include both English and Korean variants only when the character/material actually uses both names.
+- Do not pad keys with bilingual variants or aliases. Put aliases in content unless the user explicitly asks for them as activation terms.
 - Omit secondkey in new entries by default. Use secondary keys only when the user explicitly asks for strict AND-trigger lore.
 
 ### Content Writing Best Practices
@@ -1974,18 +2070,18 @@ Group related entries into folders:
 
 ## Output Format
 Respond with structured lorebook entries. For each entry provide:
-- Suggested key(s)
+- Suggested key
 - Comment (display name)
 - Content (the lore text)
-- Recommended settings (selective, order, position, recursive scanning)
+- Recommended settings (selective, alwaysActive, insertorder, useRegex only when needed)
 
 Format your response clearly so the user can copy-paste directly into RisuAI.
 
 ## Constraints
 - Do not impose tiny token caps. Size entries to the user's request; split long material into multiple entries when needed.
-- Always suggest both English and Korean key variants.
+- Do not suggest bilingual key variants by default.
 - Prioritize useful density and immediate playability over bare summaries.
-- Consider recursive scanning implications (avoid infinite loops).`,
+- Avoid advanced activation options unless the user explicitly requests them.`,
         insert: 'e.g. Create a lorebook structure for a fantasy kingdom with 5 NPCs, 3 locations, and a magic system.'
     },
     'animation-fx': {
@@ -5734,7 +5830,7 @@ function buildNpcLorebookKey(name, jobTokens) {
         : extractMultiLangFieldTokens(jobTokens);
     jobList.forEach(token => pushToken(token));
 
-    let key = tokens.join(',').trim();
+    let key = (tokens[0] || '').trim();
     if (key.length > 200) {
         key = key.slice(0, 200).replace(/,+$/, '').trim();
     }
@@ -12129,6 +12225,12 @@ function addSvbRuntimeLegacyFieldPolicySelfTest(checks) {
         }) || {};
         const fullContextText = JSON.stringify(fullContext);
         const pipelineEntry = makeLorebookEntryForModelContext(defaultWrite, 3);
+        const keyVariantWrite = sanitizeLorebookEntryForAiWrite({
+            keys: ['대표 키', '별칭 키'],
+            keyVariants: ['추가 별칭'],
+            secondaryKey: '숨겨야 하는 secondaryKey',
+            content: '키 변형 진단 본문'
+        }, 4, {}).entry;
         return {
             defaultHasSecondkey: Object.prototype.hasOwnProperty.call(defaultWrite, 'secondkey'),
             defaultMode: safeString(defaultWrite.mode),
@@ -12146,7 +12248,12 @@ function addSvbRuntimeLegacyFieldPolicySelfTest(checks) {
             fullContextKeepsDesc: fullContext?.descriptions?.desc === '디스크립션 본문',
             fullContextKeepsCustomExtra: fullContext?.rawCharacterExtraFields?.customField === '보존 가능한 기타 필드',
             pipelineHasSecondkey: Object.prototype.hasOwnProperty.call(pipelineEntry, 'secondkey'),
-            pipelineMode: safeString(pipelineEntry.mode)
+            pipelineMode: safeString(pipelineEntry.mode),
+            keyVariantKey: safeString(keyVariantWrite.key),
+            keyVariantHasKeys: Object.prototype.hasOwnProperty.call(keyVariantWrite, 'keys')
+                || Object.prototype.hasOwnProperty.call(keyVariantWrite, 'keyVariants'),
+            keyVariantHasSecondary: Object.prototype.hasOwnProperty.call(keyVariantWrite, 'secondaryKey')
+                || Object.prototype.hasOwnProperty.call(keyVariantWrite, 'secondkey')
         };
     });
     if (!result.ok) {
@@ -12167,6 +12274,9 @@ function addSvbRuntimeLegacyFieldPolicySelfTest(checks) {
     if (!value.fullContextKeepsDesc) problems.push('full character context desc 보존 실패');
     if (!value.fullContextKeepsCustomExtra) problems.push('full character context custom extra 보존 실패');
     if (value.pipelineHasSecondkey || value.pipelineMode !== 'normal') problems.push('AI-write to context pipeline legacy 차단 실패');
+    if (value.keyVariantKey !== '대표 키') problems.push('AI keys 배열 단일 key 정규화 실패');
+    if (value.keyVariantHasKeys) problems.push('AI keyVariants/keys 필드 제거 실패');
+    if (value.keyVariantHasSecondary) problems.push('AI secondaryKey/secondkey 변형 제거 실패');
     checks.push(makeSvbRuntimeCheck(
         problems.length === 0,
         'legacy 필드 정책 자체 테스트',
@@ -12510,7 +12620,7 @@ function addSvbRuntimePluginMetadataSelfTest(checks) {
         const superVibeMetadata = buildPluginMetadataSummary([
             '//@name SuperVibeBot',
             '//@display-name 🐸 SuperVibeBot diagnostic',
-            '//@version 1.5.25',
+            '//@version 1.5.26',
             '//@api 3.0',
             `//@update-url ${SUPER_VIBE_BOT_RELEASE_UPDATE_URL}`
         ].join('\n'));
@@ -27885,9 +27995,8 @@ ${currentVars || '{}'}
         if (target === 'lorebook') {
             const comment = safeString(item?.comment || item?.name || fallbackName).trim();
             const key = safeString(item?.key || '').trim();
-            const secondkey = safeString(item?.secondkey || '').trim();
             const content = safeString(item?.content || '').replace(/\s+/g, ' ').trim().slice(0, 160);
-            return `${comment}${key ? ` / key:${key}` : ''}${secondkey ? ` / second:${secondkey}` : ''}${content ? ` / hint:${content}` : ''}`;
+            return `${comment}${key ? ` / key:${key}` : ''}${content ? ` / hint:${content}` : ''}`;
         }
         if (target === 'regex') {
             const name = safeString(item?.comment || item?.name || fallbackName).trim();
@@ -27935,12 +28044,12 @@ ${currentVars || '{}'}
             '[로어북 완성도 기준]',
             '- 별도 요청이 없는 한 각 로어북 content는 한두 문장 요약으로 끝내지 말고, 실제 플레이에 바로 쓰일 만큼 구체적으로 작성한다.',
             '- 각 항목에는 고유명, 역할/기능, 갈등, 말투/행동 단서, 등장하거나 트리거될 상황을 포함한다.',
-            '- key는 너무 넓은 일반어만 쓰지 말고 고유명/별칭/세력명/장소명을 함께 넣어 검색성을 확보한다.',
+            '- key는 대표 고유명 1개만 쓴다. 별칭/세력명/장소명은 key에 줄줄이 넣지 말고 content 안에 정리한다.',
             '- 기존 캐릭터 기준과 모순되는 새 세계관 규칙을 임의로 만들지 말고, 빈 부분을 확장한다.'
         ];
         if (wantsCharacters) {
             lines.push('- 인물형 로어북은 서로 다른 이름, 소속, 욕망, 비밀, 사용자/주요 세력과의 관계를 가져야 하며, 50명 이상 요청에서는 번호만 다른 복제품처럼 만들지 않는다.');
-            lines.push('- 이번 요청이 "각각의 로어북"이면 각 항목은 서로 다른 등장인물 1명의 개인 로어북이다. comment는 인물명 중심, key는 이름/별칭/소속을 포함하고, content에는 역할, 소속, 목표, 비밀, 관계 훅, 말투/행동 단서, 충돌 트리거를 넣는다.');
+            lines.push('- 이번 요청이 "각각의 로어북"이면 각 항목은 서로 다른 등장인물 1명의 개인 로어북이다. comment는 인물명 중심, key는 대표 이름 1개만 쓰고, 별칭/소속은 content에 넣는다. content에는 역할, 소속, 목표, 비밀, 관계 훅, 말투/행동 단서, 충돌 트리거를 넣는다.');
             lines.push('- 인물형 content는 최소 320자 이상을 목표로 하고, 안정적인 저장을 위해 보통 900~1400자 안에서 완성 설정으로 작성한다.');
         }
         if (wantsWorld) {
@@ -32722,7 +32831,7 @@ ${metaBlock}
 - CBS 문법: Curly Braced Syntax (변수, 조건문, 반복문). Lua 로직 내부에 CBS를 직접 넣지 말고 ChatVar/State API를 사용한다.
 - Lua 5.4: 트리거 스크립트, 비동기 함수, print/log, setState/getState, listenEdit를 우선한다.
 - Regex: editinput/editoutput/editprocess/editdisplay 계열. editdisplay는 최종 표시 레이어다.
-- Lorebook 현재 필드: key, secondkey, comment, content, mode, insertorder, alwaysActive, selective, useRegex, folder. 실사용 기본은 단일 key이며 secondkey/multiple key는 명시 요청이 있을 때만 쓴다.
+- Lorebook 실사용 필드: key, comment, content, mode, insertorder, alwaysActive, selective, useRegex, folder. secondkey/multiple key는 SillyTavern/Card V1 계열 호환용 legacy/고급 기능이므로 작업/추천/생성 기본 경로에서 제외하고, 사용자가 AND 키를 명시 요청할 때만 쓴다.
 - ChatVar: 변수 네이밍 규칙 (cv 프리픽스 권장)
 
 ## 📝 응답 형식
@@ -39871,7 +39980,7 @@ function getBulkOutputHint(targetType) {
     return 'result는 항목 JSON 배열이어야 합니다.';
 }
 
-/* === RisuAI SuperVibeBot v1.5.25 Guide (Concise Version) === */
+/* === RisuAI SuperVibeBot v1.5.26 Guide (Concise Version) === */
 const RISUAI_GUIDE = {
     overview: `
 ## System Overview
@@ -40016,18 +40125,22 @@ Modify text or generate UI.
 ## Lorebook
 Dynamic context injection.
 
-### Current RisuAI Entry Shape
-- \`key\`: primary activation keywords or folder id.
-- \`secondkey\`: legacy/advanced secondary activation keywords. Do not output it for new entries unless the user explicitly asks for AND-key behavior.
+### Practical RisuAI Entry Shape
+- \`key\`: one practical primary activation key or folder id.
 - \`comment\`: display name / memo.
 - \`content\`: injected lore text.
-- \`mode\`: \`normal\`, \`constant\`, \`child\`, or \`folder\`. \`multiple\` is legacy/advanced and should not be generated unless explicitly requested.
+- \`mode\`: \`normal\`, \`constant\`, \`child\`, or \`folder\`.
 - \`insertorder\`: insertion priority/order number.
 - \`alwaysActive\`: constant activation flag.
 - \`selective\`: require matching keys.
 - \`useRegex\`: treat keys as regex.
 - \`folder\`: parent folder key/id.
 - Optional: \`activationPercent\`, \`loreCache\`, \`bookVersion\`, \`id\`, \`extentions\`.
+
+### Legacy/Advanced Fields
+- \`secondkey\` and \`mode:"multiple"\` are compatibility/advanced AND-key features, not normal RisuAI production defaults.
+- Do not suggest, generate, or preserve model-only fields such as \`keys\`, \`keyVariants\`, \`secondaryKey\`, or bilingual key arrays in AI output.
+- Use those legacy activation fields only when the user explicitly asks for AND-key/multiple-key behavior.
 
 ### Safety Rules
 - Preserve unknown fields. Never drop fields just because SuperVibeBot does not use them.
@@ -43034,7 +43147,7 @@ function buildKeroGatewayFallbackLorebooks(concept) {
             },
             {
                 comment: '진행 규칙: 선택형 시뮬레이션',
-                key: '선택,시뮬레이션,관계,소문,긴장도',
+                key: '선택형 시뮬레이션',
                 content: `장면마다 탐문, 협상, 전투, 은폐, 휴식 같은 선택지를 자연스럽게 제시한다. 사용자의 선택은 인물 호감, 세력 신뢰, 지역 긴장도, 공개된 단서에 반영된다. 결과는 즉시 설명하기보다 다음 장면의 반응과 정보 차이로 보여준다.`,
                 insertorder: 130,
                 alwaysActive: false,
@@ -43043,7 +43156,7 @@ function buildKeroGatewayFallbackLorebooks(concept) {
             },
             {
                 comment: '분위기와 문체',
-                key: '문체,분위기,정통 판타지,서사',
+                key: '정통 판타지 문체',
                 content: `문체는 정통 판타지 소설처럼 감각적이고 장면 중심으로 쓴다. 지명과 인물은 흔한 단어 조합을 피하고, 대사는 목적과 속내가 드러나게 한다. 정보 덤프 대신 냄새, 빛, 침묵, 몸짓, 소문을 통해 세계를 보여준다. ${concept.namingPrinciple}`,
                 insertorder: 140,
                 alwaysActive: false,
@@ -43052,7 +43165,7 @@ function buildKeroGatewayFallbackLorebooks(concept) {
             },
             {
                 comment: '주요 갈등 축',
-                key: '갈등,배신,동맹,관문 기록,비밀',
+                key: '주요 갈등',
                 content: `핵심 갈등은 ${concept.conflict}이다. 누군가는 관문을 열어 권력을 얻으려 하고, 누군가는 봉인을 지켜야 한다고 믿으며, 누군가는 기록 자체가 거짓이라고 주장한다. 사용자는 이 사이에서 정보와 관계를 선택한다.`,
                 insertorder: 150,
                 alwaysActive: false,
@@ -43061,7 +43174,7 @@ function buildKeroGatewayFallbackLorebooks(concept) {
             },
             {
                 comment: '등장인물 로어북 제작 기준',
-                key: '등장인물,인물 로어북,관계,비밀,말투',
+                key: '등장인물 로어북',
                 content: `추가로 생성되는 인물 로어북은 각 인물 1명당 하나의 독립 항목으로 작성한다. 각 인물은 이름, 별칭, 소속, 역할, 욕망, 약점, 비밀, 사용자와의 관계 훅, 말투/행동 단서, 갈등 트리거를 가져야 한다. 이름은 ${concept.worldName}과 ${concept.corePlace}의 명명 규칙을 따르되 반복 패턴을 피한다.`,
                 insertorder: 160,
                 alwaysActive: false,
@@ -43073,7 +43186,7 @@ function buildKeroGatewayFallbackLorebooks(concept) {
     return [
         {
             comment: '작품 핵심 구조',
-            key: '세계관,핵심 설정,진행 규칙',
+            key: '작품 핵심 구조',
             content: `${concept.mood} 구조의 장기 시뮬레이션 봇이다. 중심 무대는 ${concept.corePlace}이며, 갈등은 ${concept.conflict}에서 출발한다. 사용자의 선택과 대화가 단서, 관계, 장면의 방향을 바꾼다.`,
             insertorder: 100,
             alwaysActive: false,
@@ -51011,7 +51124,7 @@ async function loadInitialSettings() {
 async function registerUIElements() {
     // 채팅 화면 메뉴에 버튼 추가 (플로팅 버튼 대신)
     await risuai.registerButton({
-        name: "SuperVibeBot v1.5.25",
+        name: "SuperVibeBot v1.5.26",
         icon: "🐸",
         iconType: "html",
         location: "chat"  // 채팅 메뉴에 배치 (화면 가림 방지)
@@ -51020,7 +51133,7 @@ async function registerUIElements() {
     });
 
     await risuai.registerSetting(
-        "SuperVibeBot v1.5.25 Settings",
+        "SuperVibeBot v1.5.26 Settings",
         async () => {
             await openSettingsWindow();
         },
@@ -51063,7 +51176,7 @@ function cleanup() {
 (async () => {
     try {
         Logger.info("=".repeat(50));
-        Logger.info("SuperVibeBot v1.5.25");
+        Logger.info("SuperVibeBot v1.5.26");
         Logger.info("RisuAI Plugin API 3.0");
         Logger.info("=".repeat(50));
         await loadInitialSettings();
@@ -51180,4 +51293,5 @@ function bindAllResultApplyButtons() {
         });
     }
 }
+
 
