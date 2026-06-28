@@ -898,10 +898,17 @@ function isKeroModelHardTimeoutError(error) {
         || /모델 호출 hard timeout|응답 완료 신호가 없어|제한 시간을 지난 대기 상태|작업 흐름을 복구|hard timeout/i.test(message);
 }
 
+function isProviderOutputLimitError(error) {
+    const message = String(error?.message || error || "");
+    return error?.code === 'KERO_MODEL_OUTPUT_LIMIT'
+        || /출력\s*한도에서\s*잘렸|응답이\s*출력\s*한도|finish[_ -]?reason[^a-z0-9]{0,12}length|finish reason[^a-z0-9]{0,12}length|\blength\b.*(?:max[_ -]?tokens?|token[_ -]?limit|output[_ -]?limit)|max[_ -]?tokens?|token[_ -]?limit|output[_ -]?limit/i.test(message);
+}
+
 function isRetryableModelTransportError(error) {
     const message = String(error?.message || error || "");
     return isProviderGatewayTimeoutError(error)
         || isKeroModelHardTimeoutError(error)
+        || isProviderOutputLimitError(error)
         || /failed to fetch|network\s*error|request\s*time(?:d)?\s*out|요청 시간이 초과|abort|aborted|econnreset|etimedout|temporarily unavailable|bad gateway|service unavailable|(?:^|[^\d])(?:429|502|503)(?:[^\d]|$)/i.test(message);
 }
 
@@ -951,6 +958,9 @@ function getFriendlyModelErrorMessage(error) {
     }
     if (isKeroModelHardTimeoutError(error)) {
         return `${compactHttpErrorPreview(message, 220) || "모델 응답 장시간 대기"}\n\n모델 응답이 너무 오래 걸려 슈바봇이 큰 요청을 작은 실행 단위로 전환합니다. 같은 요청을 처음부터 반복하지 않고 저장 가능한 작업부터 이어갑니다.`;
+    }
+    if (isProviderOutputLimitError(error)) {
+        return `${compactHttpErrorPreview(message, 220) || "모델 출력 한도 초과"}\n\n모델 응답이 출력 한도에서 잘렸습니다. 같은 대형 요청을 반복하지 않고 저장 가능한 작은 작업 단위로 전환합니다.`;
     }
     return compactHttpErrorPreview(message, 500) || message;
 }
@@ -8853,6 +8863,18 @@ function isKeroExplicitRetryRequest(input) {
     return /재시도|재실행|재적용|재작업|retry|rerun|try\s*again|실패\s*(작업|액션)?\s*다시|액션\s*다시|저장\s*재시도|다시\s*(해봐|해줘|해|시도|실행|적용|저장|처리|진행|작업)/.test(text);
 }
 
+function isKeroControlOnlyResumeRequest(input) {
+    const text = safeString(input).trim().toLowerCase();
+    if (!text || text.length > 40) return false;
+    if (!isKeroMissionResumeRequest(text) && !isKeroExplicitRetryRequest(text)) return false;
+    const compact = text.replace(/[\s.!?？。…~`'"“”‘’()\[\]{}<>:：,，\/\\_-]+/g, '');
+    return /^(계속|계속진행|계속해|계속해줘|계속하자|이어|이어가|이어가줘|이어줘|이어해줘|재개|다음|다음작업|다음작업진행|남은작업|진행해|진행해줘|재시도|재실행|재적용|재작업|다시|다시해|다시해봐|다시해줘|다시진행|다시진행해줘|retry|rerun|resume|continue|tryagain)$/.test(compact);
+}
+
+function getKeroMissionObjectiveText(mission = currentKeroMission) {
+    return safeString(mission?.objective || '').trim();
+}
+
 function isKeroRecoverableTimeoutText(value = '') {
     const text = safeString(value);
     return /gateway[-_ ]?timeout|게이트웨이\s*타임아웃|cloudflare|trycloudflare|(?:^|[^\d])(?:524|504)(?:[^\d]|$)|hard[-_ ]?timeout|하드\s*타임아웃|장시간\s*작업\s*복구|로컬\s*복구\s*액션|작은\s*실행\s*단위|대형\s*요청.*전환|bulk[-_ ]?create|대량\s*(생성|작업)\s*(자동\s*)?(이어가기|복구|전환)/i.test(text);
@@ -9840,6 +9862,9 @@ function addSvbRuntimeSteeringQueueSelfTest(checks) {
                 finishFollowupQueued: shouldQueueKeroFollowupDuringTask('작업 끝나면 로어북도 추가해줘', {}),
                 continueQueued: shouldQueueKeroFollowupDuringTask('계속 진행', {}),
                 retryQueued: shouldQueueKeroFollowupDuringTask('재시도', {}),
+                continueControlOnly: isKeroControlOnlyResumeRequest('계속 진행'),
+                retryControlOnly: isKeroControlOnlyResumeRequest('재시도'),
+                longRetryTextNotControlOnly: isKeroControlOnlyResumeRequest('이 로어북을 다시 시도해서 더 자세히 작성해줘'),
                 forcedQueued: shouldQueueKeroFollowupDuringTask('이건 그냥 참고해줘', { queueAfterTask: true }),
                 steeringOnlyBlocksQueue: shouldQueueKeroFollowupDuringTask('계속 진행', { steeringOnly: true }),
                 noMissionQueues: (() => {
@@ -9861,6 +9886,9 @@ function addSvbRuntimeSteeringQueueSelfTest(checks) {
     if (!value.finishFollowupQueued) problems.push('완료 후 요청 감지 실패');
     if (!value.continueQueued) problems.push('계속 진행 큐 감지 실패');
     if (!value.retryQueued) problems.push('재시도 큐 감지 실패');
+    if (!value.continueControlOnly) problems.push('계속 진행 제어어 단독 판정 실패');
+    if (!value.retryControlOnly) problems.push('재시도 제어어 단독 판정 실패');
+    if (value.longRetryTextNotControlOnly) problems.push('긴 재작업 요청을 제어어 단독으로 오판');
     if (!value.forcedQueued) problems.push('강제 후속 큐 옵션 실패');
     if (value.steeringOnlyBlocksQueue) problems.push('steeringOnly 옵션 무시');
     if (!value.noMissionQueues) problems.push('미션 없는 작업 중 입력 보존 실패');
@@ -27235,6 +27263,7 @@ ${steeringBlock ? `\n${steeringBlock}` : ''}`;
             if (keroChatTaskRunning || keroProcessingQueuedInput) {
                 await queueKeroInputDuringTask('계속 진행', {
                     queueAfterTask: true,
+                    resumeOnly: true,
                     keroMode: 'work',
                     workTargetMode: currentWorkTargetMode
                 });
@@ -27245,6 +27274,7 @@ ${steeringBlock ? `\n${steeringBlock}` : ''}`;
             await runKeroChatTask('계속 진행', {
                 skipUserEcho: true,
                 visibleUserInput: '계속 진행',
+                resumeOnly: true,
                 keroMode: 'work',
                 workTargetMode: currentWorkTargetMode
             });
@@ -27255,6 +27285,7 @@ ${steeringBlock ? `\n${steeringBlock}` : ''}`;
             if (keroChatTaskRunning || keroProcessingQueuedInput) {
                 await queueKeroInputDuringTask('재시도', {
                     queueAfterTask: true,
+                    retryOnly: true,
                     keroMode: 'work',
                     workTargetMode: currentWorkTargetMode
                 });
@@ -27268,11 +27299,17 @@ ${steeringBlock ? `\n${steeringBlock}` : ''}`;
             const hasRetryableQueue = getKeroReadyQueuedInputCount(keroQueuedUserInputs, retryMissionId || '') > 0
                 || getKeroFailedInputCount(keroQueuedUserInputs, retryMissionId || '') > 0
                 || (!currentKeroMission && (getKeroReadyQueuedInputCount(keroQueuedUserInputs, '') > 0 || getKeroFailedInputCount(keroQueuedUserInputs, '') > 0));
+            const hasRecoverableMissionObjective = Boolean(
+                currentKeroMission
+                && !['done', 'cancelled'].includes(safeString(currentKeroMission.status || ''))
+                && getKeroMissionObjectiveText(currentKeroMission)
+            );
             const hasRetryableWork = Boolean(
                 retryAvailability?.hasResumableWork
                 || retryAvailability?.hasWarningWork
                 || retryAvailability?.hasRetryQueueWork
                 || hasRetryableQueue
+                || hasRecoverableMissionObjective
             );
             if (!hasRetryableWork) {
                 const detail = '재시도할 확인필요/실패 작업이나 대기 요청이 없습니다.';
@@ -27286,6 +27323,7 @@ ${steeringBlock ? `\n${steeringBlock}` : ''}`;
             await runKeroChatTask('재시도', {
                 skipUserEcho: true,
                 visibleUserInput: '재시도',
+                retryOnly: true,
                 keroMode: 'work',
                 workTargetMode: currentWorkTargetMode
             });
@@ -27898,6 +27936,8 @@ ${steeringBlock ? `\n${steeringBlock}` : ''}`;
                 storageId: currentKeroPersistentStorageId || '',
                 keroMode: safeString(options.keroMode || currentKeroMode),
                 workTargetMode: normalizeWorkTargetMode(options.workTargetMode || currentWorkTargetMode),
+                resumeOnly: options.resumeOnly === true,
+                retryOnly: options.retryOnly === true,
                 queueKind: 'followup_action',
                 followupAction: true,
                 steeringApplied: Boolean(steeringNote),
@@ -28067,6 +28107,8 @@ ${steeringBlock ? `\n${steeringBlock}` : ''}`;
                         fromQueue: true,
                         queuedInput: next,
                         visibleUserInput: text,
+                        resumeOnly: next.resumeOnly === true,
+                        retryOnly: next.retryOnly === true,
                         keroMode: next.keroMode || currentKeroMode,
                         workTargetMode: next.workTargetMode || currentWorkTargetMode
                     });
@@ -28528,6 +28570,12 @@ ${steeringBlock ? `\n${steeringBlock}` : ''}`;
         const currentMissionStatus = safeString(currentKeroMission?.status || '');
         const currentMissionId = safeString(currentKeroMission?.id || '');
         const currentMissionStorageId = safeString(currentKeroPersistentStorageId || currentKeroMission?.storageId || '');
+        const controlOnlyResumeRequest = isWorkMode && resumeRequest && (
+            isKeroControlOnlyResumeRequest(visibleUserInput)
+            || options.resumeOnly === true
+            || options.retryOnly === true
+        );
+        const currentMissionObjective = getKeroMissionObjectiveText(currentKeroMission);
         const currentMissionSettled = ['done', 'cancelled'].includes(currentMissionStatus);
         const settledMissionRetryQueueCount = retryRequest && currentKeroMission && currentMissionSettled
             ? getKeroFailedInputCount(keroQueuedUserInputs, currentMissionId)
@@ -28618,7 +28666,7 @@ ${steeringBlock ? `\n${steeringBlock}` : ''}`;
                 addKeroWorkstreamEvent('대기 요청 재시도', retryFailedQueueNotice, 'queued', taskProgressOptions);
             }
         }
-        if (isWorkMode && !shouldResumeMission && !shouldRetryQueueForSettledMission && !shouldRetryFailedQueueWithoutMission && !shouldHandleQueueWithoutMission && !shouldReportSettledMissionNoWork && !shouldReportNoRetryableWorkWithoutMission) {
+        if (isWorkMode && !controlOnlyResumeRequest && !shouldResumeMission && !shouldRetryQueueForSettledMission && !shouldRetryFailedQueueWithoutMission && !shouldHandleQueueWithoutMission && !shouldReportSettledMissionNoWork && !shouldReportNoRetryableWorkWithoutMission) {
             try {
                 await startKeroMission(visibleUserInput, { ...options, keroMode: taskKeroMode, workTargetMode: taskWorkTargetMode });
             } catch (error) {
@@ -28867,7 +28915,35 @@ ${steeringBlock ? `\n${steeringBlock}` : ''}`;
                     };
                 }
             }
-            const response = await processUserRequest(userInput, { ...options, keroMode: taskKeroMode, workTargetMode: taskWorkTargetMode, ...(backgroundJobId ? { jobId: backgroundJobId } : {}) });
+            let modelUserInput = userInput;
+            let modelVisibleUserInput = visibleUserInput;
+            if (controlOnlyResumeRequest && currentKeroMission && currentMissionObjective) {
+                modelUserInput = currentMissionObjective;
+                modelVisibleUserInput = currentMissionObjective;
+                addKeroWorkstreamEvent(
+                    '제어어 라우팅',
+                    `"${visibleUserInput.slice(0, 40)}" 입력을 새 작업으로 보내지 않고 이전 미션 목표로 이어갑니다.`,
+                    'context',
+                    taskProgressOptions
+                );
+            } else if (controlOnlyResumeRequest && currentKeroMission && !currentMissionObjective) {
+                removeLoadingMessage();
+                const detail = '이전 미션 목표를 찾지 못해 재시도할 수 없습니다. 새 작업 내용을 다시 입력해주세요.';
+                addKeroWorkstreamEvent('재개 목표 없음', detail, 'warning', taskProgressOptions);
+                await addBotMessage(detail);
+                if (backgroundJobId) {
+                    finishKeroBackgroundJob(backgroundJobId, 'warning', detail);
+                }
+                backgroundJobClosed = true;
+                return {
+                    handled: true,
+                    success: false,
+                    status: 'warning',
+                    queueDisposition: 'attention',
+                    detail
+                };
+            }
+            const response = await processUserRequest(modelUserInput, { ...options, keroMode: taskKeroMode, workTargetMode: taskWorkTargetMode, ...(backgroundJobId ? { jobId: backgroundJobId } : {}) });
             if (!isTaskMissionStillCurrent()) {
                 removeLoadingMessage();
                 return stopStaleTaskFinalization('모델 응답이 도착했지만 현재 미션이 바뀌어 이전 요청의 응답 적용을 중단했습니다.');
@@ -28879,13 +28955,13 @@ ${steeringBlock ? `\n${steeringBlock}` : ''}`;
             const parsed = parseKeroAction(response || '');
             if (isWorkMode && (!parsed.actions || parsed.actions.length === 0)) {
                 const fallbackOptions = {
-                    userRequest: visibleUserInput,
+                    userRequest: modelVisibleUserInput,
                     workTargetMode: taskWorkTargetMode,
                     progressOptions: taskProgressOptions
                 };
-                const fallbackResponse = buildKeroMissingActionFallbackResponse(userInput, parsed.text, fallbackOptions)
-                    || buildKeroMissingImproveFallbackResponse(userInput, parsed.text, fallbackOptions)
-                    || await buildKeroMissingWorkTargetActionRecoveryResponse(userInput, parsed.text, fallbackOptions);
+                const fallbackResponse = buildKeroMissingActionFallbackResponse(modelUserInput, parsed.text, fallbackOptions)
+                    || buildKeroMissingImproveFallbackResponse(modelUserInput, parsed.text, fallbackOptions)
+                    || await buildKeroMissingWorkTargetActionRecoveryResponse(modelUserInput, parsed.text, fallbackOptions);
                 if (fallbackResponse) {
                     const fallbackParsed = parseKeroAction(fallbackResponse);
                     if (fallbackParsed.actions?.length) {
@@ -28901,7 +28977,7 @@ ${steeringBlock ? `\n${steeringBlock}` : ''}`;
                 }
             }
             const coverage = isWorkMode
-                ? augmentKeroActionsForCoverage(userInput, parsed.actions, taskWorkTargetMode, parsed.text)
+                ? augmentKeroActionsForCoverage(modelUserInput, parsed.actions, taskWorkTargetMode, parsed.text)
                 : { actions: parsed.actions || [], added: [] };
             parsed.actions = coverage.actions;
             if (coverage.added.length) {
@@ -29085,13 +29161,14 @@ ${steeringBlock ? `\n${steeringBlock}` : ''}`;
                 : friendlyMessage;
             const shouldAttemptFinalLocalRecovery = isWorkMode
                 && !hasActionSummary
-                && (isProviderGatewayTimeoutError(error) || isKeroModelHardTimeoutError(error));
+                && (isProviderGatewayTimeoutError(error) || isKeroModelHardTimeoutError(error) || isProviderOutputLimitError(error));
             if (shouldAttemptFinalLocalRecovery) {
                 try {
-                    const fallbackResponse = buildKeroLocalGatewayFallbackResponse(visibleUserInput, {
-                        userRequest: visibleUserInput,
+                    const fallbackSource = (controlOnlyResumeRequest && currentMissionObjective) ? currentMissionObjective : visibleUserInput;
+                    const fallbackResponse = buildKeroLocalGatewayFallbackResponse(fallbackSource, {
+                        userRequest: fallbackSource,
                         allowSmallCreate: true,
-                        actionReason: 'outer_catch_gateway_recovery',
+                        actionReason: isProviderOutputLimitError(error) ? 'outer_catch_output_limit_recovery' : 'outer_catch_gateway_recovery',
                         reasonText: '메인 모델 복구 응답까지 실패했지만 작업을 포기하지 않고'
                     });
                     const fallbackParsed = parseKeroAction(fallbackResponse || '');
@@ -29169,7 +29246,7 @@ ${steeringBlock ? `\n${steeringBlock}` : ''}`;
                 finishKeroBackgroundJob(backgroundJobId, catchStatus, catchDetail.replace(/\s+/g, ' ').slice(0, 220) || '알 수 없는 오류');
             }
             if (isWorkMode) {
-                await finishKeroMission(shouldPreserveAppliedActions ? catchStatus : ((isProviderGatewayTimeoutError(error) || isKeroModelHardTimeoutError(error)) ? 'blocked' : 'error'), catchDetail);
+                await finishKeroMission(shouldPreserveAppliedActions ? catchStatus : ((isProviderGatewayTimeoutError(error) || isKeroModelHardTimeoutError(error) || isProviderOutputLimitError(error)) ? 'blocked' : 'error'), catchDetail);
             }
             backgroundJobClosed = true;
             const errorText = shouldPreserveAppliedActions
@@ -29191,7 +29268,7 @@ ${catchDetail}
             }
             const finalCatchStatus = shouldPreserveAppliedActions
                 ? catchStatus
-                : ((isProviderGatewayTimeoutError(error) || isKeroModelHardTimeoutError(error)) ? 'blocked' : 'error');
+                : ((isProviderGatewayTimeoutError(error) || isKeroModelHardTimeoutError(error) || isProviderOutputLimitError(error)) ? 'blocked' : 'error');
             return {
                 handled: false,
                 success: false,
@@ -32069,7 +32146,9 @@ function assertModelResponseNotTruncated(data, label = "모델") {
     const reason = getModelFinishReasons(data)
         .find((item) => /length|max[_-]?tokens?|token[_-]?limit|output[_-]?limit/i.test(item));
     if (reason) {
-        throw new Error(`${label} 응답이 출력 한도에서 잘렸습니다 (${reason}). 더 작은 단계로 나눠 다시 시도합니다.`);
+        const error = new Error(`${label} 응답이 출력 한도에서 잘렸습니다 (${reason}). 더 작은 단계로 나눠 다시 시도합니다.`);
+        error.code = 'KERO_MODEL_OUTPUT_LIMIT';
+        throw error;
     }
 }
 
@@ -41406,6 +41485,22 @@ async function translateSingleChunk(systemPrompt, userText, retries = 3, options
             const friendlyMessage = getFriendlyModelErrorMessage(error);
             const eventMessage = friendlyMessage.replace(/\s+/g, ' ').slice(0, 600);
             Logger.error(`[translateSingleChunk] Attempt ${attempt}/${retries} failed:`, error.message);
+
+            if (isProviderOutputLimitError(error)) {
+                updateKeroProgress(attempt, retries, '메인 모델 출력 한도 초과', attemptProgressOptions);
+                const canRecoverOutputLimit = shouldAttemptKeroGatewayRecovery(effectiveOptions);
+                addKeroWorkstreamEvent('모델 출력 한도 초과', eventMessage, canRecoverOutputLimit ? 'retry' : 'error', attemptProgressOptions);
+                if (canRecoverOutputLimit) {
+                    try {
+                        return await runKeroGatewayRecovery(userText, effectiveOptions, error);
+                    } catch (recoveryError) {
+                        const recoveryMessage = getFriendlyModelErrorMessage(recoveryError);
+                        addKeroWorkstreamEvent('출력 한도 복구 실패', recoveryMessage.replace(/\s+/g, ' ').slice(0, 600), 'error', attemptProgressOptions);
+                        throw new Error(recoveryMessage);
+                    }
+                }
+                throw new Error(friendlyMessage);
+            }
 
             if (isProviderGatewayTimeoutError(error) || isKeroModelHardTimeoutError(error)) {
                 const timeoutKind = isKeroModelHardTimeoutError(error) ? 'hard timeout' : '게이트웨이 타임아웃';
