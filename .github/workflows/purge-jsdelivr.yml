@@ -5,15 +5,34 @@ on:
     branches:
       - main
     paths:
-      - "SuperVibeBot*.js"
-      - "ErosTower*.js"
-      - "☸에로스 타워.js"
+      - "*.js"
   workflow_dispatch:
 
 jobs:
   purge:
     runs-on: ubuntu-latest
+    env:
+      EXPECTED_SUPERVIBEBOT_VERSION: "1.5.0"
+      SUPERVIBEBOT_RAW_URL: "https://raw.githubusercontent.com/nupa0w0-hash/update/refs/heads/main/SuperVibeBot.update.js"
+      SUPERVIBEBOT_LEGACY_JSDELIVR_URL: "https://cdn.jsdelivr.net/gh/nupa0w0-hash/update@main/SuperVibeBot.update.js"
     steps:
+      - name: Wait for GitHub raw branch cache
+        shell: bash
+        run: |
+          set -u
+          expected_regex="${EXPECTED_SUPERVIBEBOT_VERSION//./\\.}"
+          for attempt in $(seq 1 40); do
+            echo "raw cache attempt ${attempt}"
+            body="$(curl -fsSL "${SUPERVIBEBOT_RAW_URL}" || true)"
+            echo "${body}" | sed -n '1,8p'
+            if echo "${body}" | grep -q "^//@version ${expected_regex}"; then
+              echo "GitHub raw branch cache is fresh."
+              exit 0
+            fi
+            sleep 30
+          done
+          echo "GitHub raw branch cache is still stale; continuing purge attempts anyway." >&2
+
       - name: Purge known update URLs
         shell: bash
         run: |
@@ -42,12 +61,12 @@ jobs:
         shell: bash
         run: |
           set -u
-          target="https://cdn.jsdelivr.net/gh/nupa0w0-hash/update@main/SuperVibeBot.update.js"
+          expected_regex="${EXPECTED_SUPERVIBEBOT_VERSION//./\\.}"
           for attempt in $(seq 1 20); do
             echo "verify attempt ${attempt}"
-            body="$(curl -fsSL "${target}" || true)"
+            body="$(curl -fsSL "${SUPERVIBEBOT_LEGACY_JSDELIVR_URL}" || true)"
             echo "${body}" | sed -n '1,8p'
-            if echo "${body}" | grep -q '^//@version 1\.5\.0' \
+            if echo "${body}" | grep -q "^//@version ${expected_regex}" \
               && echo "${body}" | grep -q '^//@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/refs/heads/main/SuperVibeBot.update.js'; then
               echo "SuperVibeBot legacy jsDelivr update URL is fresh."
               exit 0
