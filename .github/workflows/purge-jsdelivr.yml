@@ -1,0 +1,58 @@
+name: Purge jsDelivr cache
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "SuperVibeBot*.js"
+      - "ErosTower*.js"
+      - "☸에로스 타워.js"
+  workflow_dispatch:
+
+jobs:
+  purge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Purge known update URLs
+        shell: bash
+        run: |
+          set -u
+          paths=(
+            "SuperVibeBot.update.js"
+            "SuperVibeBot.js"
+            "SuperVibeBot.auto.js"
+            "ErosTower.update.js"
+            "ErosTower.v1.update.js"
+            "%E2%98%B8%EC%97%90%EB%A1%9C%EC%8A%A4%20%ED%83%80%EC%9B%8C.js"
+          )
+
+          for round in 1 2 3 4 5 6; do
+            echo "purge round ${round}"
+            curl -fsSL "https://purge.jsdelivr.net/gh/nupa0w0-hash/update@main" || true
+            curl -fsSL "https://purge.jsdelivr.net/gh/nupa0w0-hash/update" || true
+            for path in "${paths[@]}"; do
+              curl -fsSL "https://purge.jsdelivr.net/gh/nupa0w0-hash/update@main/${path}" || true
+              curl -fsSL "https://purge.jsdelivr.net/gh/nupa0w0-hash/update/${path}" || true
+            done
+            sleep 30
+          done
+
+      - name: Verify SuperVibeBot legacy update URL
+        shell: bash
+        run: |
+          set -u
+          target="https://cdn.jsdelivr.net/gh/nupa0w0-hash/update@main/SuperVibeBot.update.js"
+          for attempt in $(seq 1 20); do
+            echo "verify attempt ${attempt}"
+            body="$(curl -fsSL "${target}" || true)"
+            echo "${body}" | sed -n '1,8p'
+            if echo "${body}" | grep -q '^//@version 1\.4\.12' \
+              && echo "${body}" | grep -q '^//@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/refs/heads/main/SuperVibeBot.update.js'; then
+              echo "SuperVibeBot legacy jsDelivr update URL is fresh."
+              exit 0
+            fi
+            sleep 30
+          done
+          echo "SuperVibeBot legacy jsDelivr update URL is still stale after retries." >&2
+          exit 1
