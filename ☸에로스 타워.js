@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 4.0.2
+//@display-name ☸Eros Tower 4.0.3
 //@api 3.0
-//@version 4.0.2
+//@version 4.0.3
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -32,18 +32,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 4.0.2
+ * Eros Tower 4.0.3
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 4.0.2 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 4.0.3 requires the RisuAI API v3 global.');
 
-  const VERSION = '4.0.2';
+  const VERSION = '4.0.3';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 4.0.2`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 4.0.3`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -59,7 +59,7 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 4.0.2 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 4.0.3 analysis context';
   const GOOGLE_OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
   const GOOGLE_CLOUD_PLATFORM_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
   const PSYCHE_RECOMMENDED_MODELS = Object.freeze([
@@ -4136,6 +4136,7 @@
     return String(firstNonEmpty(
       plugin?.name,
       plugin?.displayName,
+      parsePluginHeaderMetadata(plugin?.script).name,
       plugin?.id,
       plugin?.key,
       Number.isFinite(Number(index)) && index >= 0 ? `index:${index}` : ''
@@ -4148,7 +4149,52 @@
   }
 
   function referenceLabel(entity, fallback = 'reference') {
-    return firstNonEmpty(entity?.name, entity?.displayName, entity?.data?.name, entity?.title, fallback);
+    const header = entity?.script ? parsePluginHeaderMetadata(entity.script) : {};
+    return firstNonEmpty(header.displayName, header.name, entity?.name, entity?.displayName, entity?.data?.name, entity?.title, fallback);
+  }
+
+  function parsePluginHeaderMetadata(script) {
+    const text = String(script || '').slice(0, 2048);
+    const read = name => {
+      const match = text.match(new RegExp(`^\\s*//\\s*@${name}\\s+(.+)$`, 'mi'));
+      return match ? String(match[1] || '').trim() : '';
+    };
+    return {
+      name: read('name'),
+      displayName: read('display-name'),
+      version: read('version'),
+      updateUrl: read('update-url'),
+      api: read('api'),
+    };
+  }
+
+  function normalizePluginIdentityText(value) {
+    return String(value || '').toLowerCase().replace(/\s+/g, '').replace(/[._-]+/g, '');
+  }
+
+  function isErosTowerPluginKey(value) {
+    const text = normalizePluginIdentityText(value);
+    return text.includes('☸에로스타워')
+      || text.includes('에로스타워')
+      || text.includes('erostower');
+  }
+
+  function isErosTowerPluginRecord(plugin) {
+    if (!plugin) return false;
+    const header = parsePluginHeaderMetadata(plugin?.script);
+    const identities = [
+      plugin?.name,
+      plugin?.displayName,
+      plugin?.id,
+      plugin?.key,
+      plugin?.updateURL,
+      plugin?.updateUrl,
+      header.name,
+      header.displayName,
+      header.updateUrl,
+    ];
+    return identities.some(isErosTowerPluginKey)
+      || String(plugin?.script || '').slice(0, 4096).includes('ErosTower.update.js');
   }
 
   function collectDatabaseArray(...values) {
@@ -4202,7 +4248,7 @@
       db?.data?.plugins,
       db?.data?.pluginV2,
       db?.data?.pluginV3,
-    ), referencePluginKey);
+    ), referencePluginKey).filter(plugin => !isErosTowerPluginRecord(plugin));
   }
 
   function collectLoreArrays(...values) {
@@ -4291,12 +4337,15 @@
 
   function buildReferencePluginSummary(plugin) {
     const script = String(plugin?.script || '');
+    const header = parsePluginHeaderMetadata(script);
     const symbols = extractReferenceScriptSymbols(script);
     const args = plugin?.arguments && typeof plugin.arguments === 'object' ? Object.keys(plugin.arguments) : [];
     const customLinks = Array.isArray(plugin?.customLink) ? plugin.customLink.length : 0;
     return [
       `Plugin: ${referenceLabel(plugin, 'plugin')}`,
-      plugin?.version || plugin?.versionOfPlugin ? `Version: ${firstNonEmpty(plugin.version, plugin.versionOfPlugin)}` : '',
+      firstNonEmpty(header.version, plugin?.version, plugin?.versionOfPlugin) ? `Version: ${firstNonEmpty(header.version, plugin.version, plugin.versionOfPlugin)}` : '',
+      firstNonEmpty(header.name, header.displayName) ? `Header: ${firstNonEmpty(header.displayName, header.name)}` : '',
+      header.updateUrl ? `Update URL: ${header.updateUrl}` : '',
       plugin?.enabled !== undefined ? `Enabled: ${plugin.enabled === true ? 'true' : 'false'}` : '',
       firstNonEmpty(plugin?.description, plugin?.desc, plugin?.summary) ? `Description: ${firstNonEmpty(plugin.description, plugin.desc, plugin.summary)}` : '',
       args.length ? `Argument keys: ${args.slice(0, 32).join(', ')}` : '',
@@ -4396,7 +4445,7 @@
     });
     const selectedCharacters = new Set(normalizeStringArray(conf?.referenceCharacterIds));
     const selectedModules = new Set(normalizeStringArray(conf?.referenceModuleIds));
-    const selectedPlugins = new Set(normalizeStringArray(conf?.referencePluginKeys));
+    const selectedPlugins = new Set(normalizeStringArray(conf?.referencePluginKeys).filter(key => !isErosTowerPluginKey(key)));
     const currentCharacterId = referenceCharacterId(character);
     getDatabaseCharacters(db).forEach((ref, idx) => {
       const refId = referenceCharacterId(ref, idx);
@@ -10351,7 +10400,7 @@
   function formatReferenceConfigSummary(conf) {
     const chars = normalizeStringArray(conf?.referenceCharacterIds).length;
     const modules = normalizeStringArray(conf?.referenceModuleIds).length;
-    const plugins = normalizeStringArray(conf?.referencePluginKeys).length;
+    const plugins = normalizeStringArray(conf?.referencePluginKeys).filter(key => !isErosTowerPluginKey(key)).length;
     const total = chars + modules + plugins;
     if (!total) return '0개';
     return `${total}개 · 캐릭터 ${chars} / 모듈 ${modules} / 플러그인 ${plugins}`;
@@ -10361,7 +10410,7 @@
     const db = context?.db || {};
     const selectedCharacters = new Set(normalizeStringArray(conf.referenceCharacterIds));
     const selectedModules = new Set(normalizeStringArray(conf.referenceModuleIds));
-    const selectedPlugins = new Set(normalizeStringArray(conf.referencePluginKeys));
+    const selectedPlugins = new Set(normalizeStringArray(conf.referencePluginKeys).filter(key => !isErosTowerPluginKey(key)));
     const currentCharacterId = referenceCharacterId(context?.character);
     const characters = getDatabaseCharacters(db)
       .map((item, index) => ({ item, index, id: referenceCharacterId(item, index) }))
@@ -10441,10 +10490,12 @@
       ].filter(Boolean).join(' · ') || '설명 없음';
     }
     if (type === 'plugin') {
+      const header = parsePluginHeaderMetadata(item?.script || '');
       const symbols = extractReferenceScriptSymbols(item?.script || '');
       return [
-        firstNonEmpty(item?.version, item?.versionOfPlugin, ''),
+        firstNonEmpty(header.version, item?.version, item?.versionOfPlugin, ''),
         item?.enabled === true ? '켜짐' : item?.enabled === false ? '꺼짐' : '',
+        header.updateUrl ? 'update-url' : '',
         symbols.length ? `symbols ${symbols.slice(0, 6).join(', ')}` : '',
         item?.script ? `script ${String(item.script).length} chars` : '',
       ].filter(Boolean).join(' · ') || '메타 정보 없음';
@@ -12057,11 +12108,15 @@
   function readReferenceSelectionFromUI(type, fallback = []) {
     const selector = `.et-reference-${type}`;
     const nodes = Array.from(document.querySelectorAll(selector));
-    if (!nodes.length) return normalizeStringArray(fallback);
+    if (!nodes.length) {
+      const values = normalizeStringArray(fallback);
+      return type === 'plugin' ? values.filter(key => !isErosTowerPluginKey(key)) : values;
+    }
     return uniqueStrings(nodes
       .filter(node => node.checked)
       .map(node => String(node.value || '').trim())
-      .filter(Boolean))
+      .filter(Boolean)
+      .filter(key => type !== 'plugin' || !isErosTowerPluginKey(key)))
       .slice(0, 48);
   }
 
@@ -12461,7 +12516,7 @@
             ...DEFAULT_CONFIG,
             referenceCharacterIds: ['ref-char'],
             referenceModuleIds: ['ref-module'],
-            referencePluginKeys: ['ref-plugin'],
+            referencePluginKeys: ['ref-plugin', '☸에로스 타워 3.0'],
           };
           const targetCharacter = {
             id: 'main-char',
@@ -12496,7 +12551,13 @@
               version: '1.0.0',
               enabled: true,
               arguments: { foo: 'bar' },
-              script: 'raw plugin source marker: raw source must not be injected',
+              script: '//@name ref-plugin\n//@display-name Reference Plugin\n//@version 9.9.9\n//@update-url https://example.invalid/ref-plugin.update.js\nfunction refPluginSymbol() {}\nraw plugin source marker: raw source must not be injected',
+            }, {
+              name: '☸에로스 타워 3.0',
+              displayName: '☸에로스 타워 3.0',
+              version: '3.0',
+              enabled: true,
+              script: '//@name ☸에로스 타워\n//@display-name ☸Eros Tower 3.0\n//@version 3.0\n//@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.update.js\nfunction shouldNotAppear() {}',
             }],
             enabledModules: [],
           };
