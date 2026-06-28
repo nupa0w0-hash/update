@@ -1,13 +1,13 @@
 //@name SuperVibeBot
-//@display-name 🐸 SuperVibeBot v1.5.23
-//@version 1.5.23
+//@display-name 🐸 SuperVibeBot v1.5.24
+//@version 1.5.24
 //@api 3.0
 //@update-url https://github.com/nupa0w0-hash/supervibebot-update/releases/latest/download/SuperVibeBot.update.js
 //@arg api_key string "" "Google AI Studio API 키를 입력하세요 (Vertex AI, API Hub 또는 GitHub Copilot 연동 시 불필요)."
 //@arg disable_safety int 0 "안전 필터 비활성화 (1=OFF, 0=ON)"
 
 if (typeof risuai === "undefined") {
-    alert("⚠️ SuperVibeBot v1.5.23는 RisuAI Plugin API 3.0이 필요합니다.");
+    alert("⚠️ SuperVibeBot v1.5.24는 RisuAI Plugin API 3.0이 필요합니다.");
     throw new Error("API 3.0 required");
 }
 
@@ -164,7 +164,7 @@ async function safeCopyText(text, options = {}) {
 }
 
 /**
- * SuperVibeBot v1.5.23 Release Notes
+ * SuperVibeBot v1.5.24 Release Notes
  *
  * 🎉 Major Changes
  * - Caps sub-agent consultation packets to 120k desktop, 80k constrained, and 60k background chars
@@ -190,6 +190,7 @@ async function safeCopyText(text, options = {}) {
  * - Plugin creation guidance now recommends GitHub Releases latest/download over raw branch URLs
  * - Plugin update-url guidance no longer uses source/raw-like Korean wording that can confuse authors
  * - Runtime diagnostics now verify full character context does not leak unused personality/scenario fields
+ * - Runtime diagnostics now flush expired sub-agent consultation guards before judging stuck sub-agent state
  * - Sub-agent report calls now default to 4096 output tokens on desktop and 2048 on constrained/mobile/webview profiles
  * - Explicit sub-agent output overrides are clamped to a WebView-safe hard cap
  * - API responses that ignore max_tokens are shortened before entering Kero's parser/renderer
@@ -207,6 +208,7 @@ async function safeCopyText(text, options = {}) {
  * - RisuAI plugin metadata guide now warns against raw.githubusercontent branch URLs as default update channels
  * - Validation messages now say HTTPS .js file URL instead of raw/source-like JS URL wording
  * - Strengthened legacy character field self-checks so Kero keeps traits/setup inside desc instead of deprecated fields
+ * - Improves recovery from backgrounded PocketRisu/WebView sessions where timer callbacks may have been delayed
  * - Prevents GLM/Kimi/API Hub sub-agents from returning or rendering oversized manager reports
  * - Runtime diagnostics now verify sub-agent hard caps, response truncation, and conservative large-payload parallel limits
  * - Safer selected-item expansion in both global and Kero chat execution paths
@@ -12506,7 +12508,7 @@ function addSvbRuntimePluginMetadataSelfTest(checks) {
         const superVibeMetadata = buildPluginMetadataSummary([
             '//@name SuperVibeBot',
             '//@display-name 🐸 SuperVibeBot diagnostic',
-            '//@version 1.5.23',
+            '//@version 1.5.24',
             '//@api 3.0',
             `//@update-url ${SUPER_VIBE_BOT_RELEASE_UPDATE_URL}`
         ].join('\n'));
@@ -13535,6 +13537,27 @@ function countExpiredSvbSubAgentGuards(map) {
     return expired;
 }
 
+function getSvbSubAgentGuardDiagnosticSnapshot(options = {}) {
+    const snapshot = () => ({
+        guards: activeSubAgentConsultationGuards.size,
+        hardCaps: activeSubAgentConsultationHardCaps.size,
+        expiredGuards: countExpiredSvbSubAgentGuards(activeSubAgentConsultationGuards),
+        expiredHardCaps: countExpiredSvbSubAgentGuards(activeSubAgentConsultationHardCaps)
+    });
+    const before = snapshot();
+    const hadExpired = (before.expiredGuards || 0) + (before.expiredHardCaps || 0) > 0;
+    if (hadExpired && options.flush !== false && typeof flushExpiredSubAgentConsultationGuards === 'function') {
+        flushExpiredSubAgentConsultationGuards('runtime_diagnostic_flush');
+    }
+    const after = snapshot();
+    return {
+        ...after,
+        flushedExpiredGuards: before.expiredGuards || 0,
+        flushedExpiredHardCaps: before.expiredHardCaps || 0,
+        flushed: hadExpired
+    };
+}
+
 function resolveSvbRuntimeLocalFunction(localFunctions = {}, key, globalKey = key) {
     const localValue = localFunctions && typeof localFunctions === 'object' ? localFunctions[key] : null;
     if (typeof localValue === 'function') return localValue;
@@ -13619,12 +13642,7 @@ function runSvbRuntimeSelfCheck(options = {}) {
         checks.push(makeSvbRuntimeCheck(false, '작업 잠금 상태', runningResult.error, 'error'));
     }
 
-    const guardResult = readSvbRuntimeValue('서브에이전트 guard 상태', () => ({
-        guards: activeSubAgentConsultationGuards.size,
-        hardCaps: activeSubAgentConsultationHardCaps.size,
-        expiredGuards: countExpiredSvbSubAgentGuards(activeSubAgentConsultationGuards),
-        expiredHardCaps: countExpiredSvbSubAgentGuards(activeSubAgentConsultationHardCaps)
-    }));
+    const guardResult = readSvbRuntimeValue('서브에이전트 guard 상태', () => getSvbSubAgentGuardDiagnosticSnapshot({ flush: true }));
     if (guardResult.ok) {
         const guard = guardResult.value || {};
         const hasExpired = (guard.expiredGuards || 0) + (guard.expiredHardCaps || 0) > 0;
@@ -39815,7 +39833,7 @@ function getBulkOutputHint(targetType) {
     return 'result는 항목 JSON 배열이어야 합니다.';
 }
 
-/* === RisuAI SuperVibeBot v1.5.23 Guide (Concise Version) === */
+/* === RisuAI SuperVibeBot v1.5.24 Guide (Concise Version) === */
 const RISUAI_GUIDE = {
     overview: `
 ## System Overview
@@ -50955,7 +50973,7 @@ async function loadInitialSettings() {
 async function registerUIElements() {
     // 채팅 화면 메뉴에 버튼 추가 (플로팅 버튼 대신)
     await risuai.registerButton({
-        name: "SuperVibeBot v1.5.23",
+        name: "SuperVibeBot v1.5.24",
         icon: "🐸",
         iconType: "html",
         location: "chat"  // 채팅 메뉴에 배치 (화면 가림 방지)
@@ -50964,7 +50982,7 @@ async function registerUIElements() {
     });
 
     await risuai.registerSetting(
-        "SuperVibeBot v1.5.23 Settings",
+        "SuperVibeBot v1.5.24 Settings",
         async () => {
             await openSettingsWindow();
         },
@@ -51007,7 +51025,7 @@ function cleanup() {
 (async () => {
     try {
         Logger.info("=".repeat(50));
-        Logger.info("SuperVibeBot v1.5.23");
+        Logger.info("SuperVibeBot v1.5.24");
         Logger.info("RisuAI Plugin API 3.0");
         Logger.info("=".repeat(50));
         await loadInitialSettings();
