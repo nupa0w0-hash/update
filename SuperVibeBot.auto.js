@@ -1,13 +1,13 @@
 //@name SuperVibeBot
-//@display-name 🐸 SuperVibeBot v1.5.7
-//@version 1.5.7
+//@display-name 🐸 SuperVibeBot v1.5.8
+//@version 1.5.8
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/supervibebot-update/main/SuperVibeBot.update.js
 //@arg api_key string "" "Google AI Studio API 키를 입력하세요 (Vertex AI, API Hub 또는 GitHub Copilot 연동 시 불필요)."
 //@arg disable_safety int 0 "안전 필터 비활성화 (1=OFF, 0=ON)"
 
 if (typeof risuai === "undefined") {
-    alert("⚠️ SuperVibeBot v1.5.7는 RisuAI Plugin API 3.0이 필요합니다.");
+    alert("⚠️ SuperVibeBot v1.5.8는 RisuAI Plugin API 3.0이 필요합니다.");
     throw new Error("API 3.0 required");
 }
 
@@ -163,7 +163,7 @@ async function safeCopyText(text, options = {}) {
 }
 
 /**
- * SuperVibeBot v1.5.7 Release Notes
+ * SuperVibeBot v1.5.8 Release Notes
  *
  * 🎉 Major Changes
  * - Migrated to RisuAI Plugin API 3.0
@@ -1021,11 +1021,15 @@ function getNativeFetch() {
     return null;
 }
 
+function canPassPluginFetchAbortSignal(nativeFetch, risuFetch, fetchFn) {
+    return !!nativeFetch || !!risuFetch || (typeof fetch !== 'undefined' && fetchFn === fetch);
+}
+
 async function pluginFetchJson(url, options = {}, label = "API", timeoutMs = 30000) {
     const nativeFetch = getNativeFetch();
     const risuFetch = getRisuFetch();
     const fetchFn = nativeFetch || risuFetch || fetch;
-    const canPassAbortSignal = !!nativeFetch || fetchFn === fetch;
+    const canPassAbortSignal = canPassPluginFetchAbortSignal(nativeFetch, risuFetch, fetchFn);
     const parentSignal = options?.signal || null;
     const abortLink = createSvbAbortLink(parentSignal, `${label} 요청`);
     const controller = abortLink.controller;
@@ -8807,6 +8811,12 @@ function addKeroMissionSteeringNote(text, sourceInputId = '') {
     return note;
 }
 
+function markKeroQueueDrainAgainIfProcessing(reason = '') {
+    if (!keroProcessingQueuedInput) return false;
+    keroQueueDrainAgainRequested = true;
+    return true;
+}
+
 function renderKeroSteeringNotesBlock(notesSource = [], maxItems = 6) {
     const notes = normalizeKeroSteeringNotes(notesSource)
         .slice(-Math.max(1, Number(maxItems) || 6));
@@ -11499,12 +11509,22 @@ function addSvbRuntimeActionParserSelfTest(checks) {
 function addSvbRuntimeSteeringQueueSelfTest(checks) {
     const result = readSvbRuntimeValue('작업 중 스티어링/후속 큐 자체 테스트', () => {
         const previousMission = currentKeroMission;
+        const previousProcessingQueuedInput = keroProcessingQueuedInput;
+        const previousDrainAgainRequested = keroQueueDrainAgainRequested;
         try {
             currentKeroMission = {
                 id: 'diagnostic-mission',
                 status: 'running',
                 objective: 'diagnostic'
             };
+            keroProcessingQueuedInput = false;
+            keroQueueDrainAgainRequested = false;
+            const idleDrainRequested = markKeroQueueDrainAgainIfProcessing('diagnostic_idle');
+            const idleDrainFlag = keroQueueDrainAgainRequested;
+            keroProcessingQueuedInput = true;
+            keroQueueDrainAgainRequested = false;
+            const processingDrainRequested = markKeroQueueDrainAgainIfProcessing('diagnostic_processing');
+            const processingDrainFlag = keroQueueDrainAgainRequested;
             return {
                 plainSteeringQueued: shouldQueueKeroFollowupDuringTask('색감은 조금 더 따뜻하게 해줘', {}),
                 finishFollowupQueued: shouldQueueKeroFollowupDuringTask('작업 끝나면 로어북도 추가해줘', {}),
@@ -11518,10 +11538,16 @@ function addSvbRuntimeSteeringQueueSelfTest(checks) {
                 noMissionQueues: (() => {
                     currentKeroMission = null;
                     return shouldQueueKeroFollowupDuringTask('색감은 조금 더 따뜻하게 해줘', {});
-                })()
+                })(),
+                idleDrainRequested,
+                idleDrainFlag,
+                processingDrainRequested,
+                processingDrainFlag
             };
         } finally {
             currentKeroMission = previousMission;
+            keroProcessingQueuedInput = previousProcessingQueuedInput;
+            keroQueueDrainAgainRequested = previousDrainAgainRequested;
         }
     });
     if (!result.ok) {
@@ -11540,6 +11566,8 @@ function addSvbRuntimeSteeringQueueSelfTest(checks) {
     if (!value.forcedQueued) problems.push('강제 후속 큐 옵션 실패');
     if (value.steeringOnlyBlocksQueue) problems.push('steeringOnly 옵션 무시');
     if (!value.noMissionQueues) problems.push('미션 없는 작업 중 입력 보존 실패');
+    if (value.idleDrainRequested || value.idleDrainFlag) problems.push('idle 상태에서 재-drain 플래그 오작동');
+    if (!value.processingDrainRequested || !value.processingDrainFlag) problems.push('큐 처리 중 새 요청 재-drain 예약 실패');
     checks.push(makeSvbRuntimeCheck(
         problems.length === 0,
         '작업 중 스티어링/후속 큐 자체 테스트',
@@ -12924,6 +12952,44 @@ function addSvbRuntimeAbortPropagationSelfTest(checks) {
     ));
 }
 
+function addSvbRuntimePluginFetchAbortSignalSelfTest(checks) {
+    const result = readSvbRuntimeValue('pluginFetchJson abort signal 전달 자체 테스트', () => {
+        const fakeNativeFetch = () => {};
+        const fakeRisuFetch = () => {};
+        const fakeOtherFetch = () => {};
+        const nativePath = canPassPluginFetchAbortSignal(fakeNativeFetch, null, fakeNativeFetch);
+        const risuPath = canPassPluginFetchAbortSignal(null, fakeRisuFetch, fakeRisuFetch);
+        const browserPath = typeof fetch !== 'undefined'
+            ? canPassPluginFetchAbortSignal(null, null, fetch)
+            : true;
+        const unknownPath = canPassPluginFetchAbortSignal(null, null, fakeOtherFetch);
+        return {
+            nativePath,
+            risuPath,
+            browserPath,
+            unknownPath,
+            helperExists: typeof canPassPluginFetchAbortSignal === 'function'
+        };
+    });
+    if (!result.ok) {
+        checks.push(makeSvbRuntimeCheck(false, 'pluginFetchJson abort signal 전달 자체 테스트', result.error, 'error'));
+        return;
+    }
+    const value = result.value || {};
+    const problems = [];
+    if (!value.helperExists) problems.push('signal 판단 helper 없음');
+    if (!value.nativePath) problems.push('nativeFetch signal 전달 차단');
+    if (!value.risuPath) problems.push('risuFetch signal 전달 차단');
+    if (!value.browserPath) problems.push('browser fetch signal 전달 차단');
+    if (value.unknownPath) problems.push('알 수 없는 fetch 함수에 signal 전달 허용');
+    checks.push(makeSvbRuntimeCheck(
+        problems.length === 0,
+        'pluginFetchJson abort signal 전달 자체 테스트',
+        problems.length ? `문제: ${problems.join(' / ')}` : 'nativeFetch · risuFetch · browser fetch abort signal 전달 판단 정상',
+        problems.length ? 'error' : 'ok'
+    ));
+}
+
 function countExpiredSvbSubAgentGuards(map) {
     const now = Date.now();
     let expired = 0;
@@ -12988,6 +13054,7 @@ function runSvbRuntimeSelfCheck(options = {}) {
     addSvbRuntimeHeartbeatTimeoutSelfTest(checks);
     addSvbRuntimeHeartbeatSuppressionBypassSelfTest(checks);
     addSvbRuntimeAbortPropagationSelfTest(checks);
+    addSvbRuntimePluginFetchAbortSignalSelfTest(checks);
 
     const risuResult = readSvbRuntimeValue('RisuAI API', () => risuai);
     checks.push(makeSvbRuntimeCheck(!!risuResult.value, 'RisuAI API 객체', risuResult.ok && risuResult.value ? '사용 가능' : (risuResult.error || '없음'), risuResult.value ? 'ok' : 'error'));
@@ -30123,6 +30190,9 @@ ${steeringBlock ? `\n${steeringBlock}` : ''}`;
         if (currentKeroPersistentStorageId) {
             await saveKeroInputQueue(currentKeroPersistentStorageId, keroQueuedUserInputs);
         }
+        if (markKeroQueueDrainAgainIfProcessing('queued_input_append')) {
+            addKeroWorkstreamEvent('대기열 추가 처리 예약', '현재 대기열 처리 중 새 후속 요청이 들어와 이번 처리 뒤 한 번 더 이어갑니다.', 'queued');
+        }
         addKeroWorkstreamEvent(steeringNote ? '후속 작업 예약' : '대기 요청 예약', text.slice(0, 220), 'queued');
         updateKeroQueuedInputUi();
         await addBotMessage(`작업 중이라 이 요청은 현재 미션 스티어링에 반영하고, 작업이 끝나면 후속 작업으로 이어서 처리할게. 대기 ${getKeroReadyQueuedInputCount()}개.`, { kind: 'queue', sourceInputId: inputId });
@@ -39041,7 +39111,7 @@ function getBulkOutputHint(targetType) {
     return 'result는 항목 JSON 배열이어야 합니다.';
 }
 
-/* === RisuAI SuperVibeBot v1.5.7 Guide (Concise Version) === */
+/* === RisuAI SuperVibeBot v1.5.8 Guide (Concise Version) === */
 const RISUAI_GUIDE = {
     overview: `
 ## System Overview
@@ -50051,7 +50121,7 @@ async function loadInitialSettings() {
 async function registerUIElements() {
     // 채팅 화면 메뉴에 버튼 추가 (플로팅 버튼 대신)
     await risuai.registerButton({
-        name: "SuperVibeBot v1.5.7",
+        name: "SuperVibeBot v1.5.8",
         icon: "🐸",
         iconType: "html",
         location: "chat"  // 채팅 메뉴에 배치 (화면 가림 방지)
@@ -50060,7 +50130,7 @@ async function registerUIElements() {
     });
 
     await risuai.registerSetting(
-        "SuperVibeBot v1.5.7 Settings",
+        "SuperVibeBot v1.5.8 Settings",
         async () => {
             await openSettingsWindow();
         },
@@ -50103,7 +50173,7 @@ function cleanup() {
 (async () => {
     try {
         Logger.info("=".repeat(50));
-        Logger.info("SuperVibeBot v1.5.7");
+        Logger.info("SuperVibeBot v1.5.8");
         Logger.info("RisuAI Plugin API 3.0");
         Logger.info("=".repeat(50));
         await loadInitialSettings();
