@@ -1,13 +1,13 @@
 //@name SuperVibeBot
-//@display-name 🐸 SuperVibeBot v1.4.2
-//@version 1.4.2
+//@display-name 🐸 SuperVibeBot v1.4.3
+//@version 1.4.3
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/SuperVibeBot.auto.js
 //@arg api_key string "" "Google AI Studio API 키를 입력하세요 (Vertex AI, API Hub 또는 GitHub Copilot 연동 시 불필요)."
 //@arg disable_safety int 0 "안전 필터 비활성화 (1=OFF, 0=ON)"
 
 if (typeof risuai === "undefined") {
-    alert("⚠️ SuperVibeBot v1.4.2는 RisuAI Plugin API 3.0이 필요합니다.");
+    alert("⚠️ SuperVibeBot v1.4.3는 RisuAI Plugin API 3.0이 필요합니다.");
     throw new Error("API 3.0 required");
 }
 
@@ -163,7 +163,7 @@ async function safeCopyText(text, options = {}) {
 }
 
 /**
- * SuperVibeBot v1.4.2 Release Notes
+ * SuperVibeBot v1.4.3 Release Notes
  *
  * 🎉 Major Changes
  * - Migrated to RisuAI Plugin API 3.0
@@ -8875,6 +8875,52 @@ function getKeroMissionObjectiveText(mission = currentKeroMission) {
     return safeString(mission?.objective || '').trim();
 }
 
+function resolveKeroControlOnlyResumeRouting(input, mission = currentKeroMission, options = {}) {
+    const text = safeString(input).trim();
+    const resumeRequest = options.resumeRequest === true
+        || isKeroMissionResumeRequest(text)
+        || isKeroExplicitRetryRequest(text)
+        || options.resumeOnly === true
+        || options.retryOnly === true;
+    const controlOnly = resumeRequest && (
+        isKeroControlOnlyResumeRequest(text)
+        || options.resumeOnly === true
+        || options.retryOnly === true
+    );
+    const objective = getKeroMissionObjectiveText(mission);
+    if (!controlOnly) {
+        return {
+            controlOnly: false,
+            blocked: false,
+            input: text,
+            modelUserInput: text,
+            visibleUserInput: text,
+            objective
+        };
+    }
+    if (mission && objective) {
+        return {
+            controlOnly: true,
+            blocked: false,
+            input: text,
+            modelUserInput: objective,
+            visibleUserInput: objective,
+            objective
+        };
+    }
+    return {
+        controlOnly: true,
+        blocked: true,
+        input: text,
+        modelUserInput: '',
+        visibleUserInput: '',
+        objective,
+        detail: mission
+            ? '이전 미션 목표를 찾지 못해 재시도할 수 없습니다. 새 작업 내용을 다시 입력해주세요.'
+            : '이어갈 미션을 찾지 못했습니다. 새 작업 내용을 다시 입력해주세요.'
+    };
+}
+
 function isKeroRecoverableTimeoutText(value = '') {
     const text = safeString(value);
     return /gateway[-_ ]?timeout|게이트웨이\s*타임아웃|cloudflare|trycloudflare|(?:^|[^\d])(?:524|504)(?:[^\d]|$)|hard[-_ ]?timeout|하드\s*타임아웃|장시간\s*작업\s*복구|로컬\s*복구\s*액션|작은\s*실행\s*단위|대형\s*요청.*전환|bulk[-_ ]?create|대량\s*(생성|작업)\s*(자동\s*)?(이어가기|복구|전환)/i.test(text);
@@ -9900,6 +9946,85 @@ function addSvbRuntimeSteeringQueueSelfTest(checks) {
     ));
 }
 
+function addSvbRuntimeControlRoutingSelfTest(checks) {
+    const result = readSvbRuntimeValue('제어어 라우팅 자체 테스트', () => {
+        const mission = {
+            id: 'diagnostic-mission',
+            status: 'interrupted',
+            objective: '진단용 이전 미션 목표'
+        };
+        const emptyMission = {
+            id: 'diagnostic-empty-mission',
+            status: 'interrupted',
+            objective: ''
+        };
+        const continueRoute = resolveKeroControlOnlyResumeRouting('계속 진행', mission, { resumeOnly: true });
+        const retryRoute = resolveKeroControlOnlyResumeRouting('재시도', mission, { retryOnly: true });
+        const emptyRoute = resolveKeroControlOnlyResumeRouting('계속 진행', emptyMission, { resumeOnly: true });
+        const normalRoute = resolveKeroControlOnlyResumeRouting('이 로어북을 다시 시도해서 더 자세히 작성해줘', mission, {});
+        return {
+            continueControl: continueRoute.controlOnly === true,
+            continueUsesObjective: continueRoute.modelUserInput === mission.objective,
+            retryControl: retryRoute.controlOnly === true,
+            retryUsesObjective: retryRoute.modelUserInput === mission.objective,
+            emptyBlocked: emptyRoute.blocked === true && !safeString(emptyRoute.modelUserInput).trim(),
+            normalNotControl: normalRoute.controlOnly === false && normalRoute.modelUserInput === '이 로어북을 다시 시도해서 더 자세히 작성해줘'
+        };
+    });
+    if (!result.ok) {
+        checks.push(makeSvbRuntimeCheck(false, '제어어 라우팅 자체 테스트', result.error, 'error'));
+        return;
+    }
+    const value = result.value || {};
+    const problems = [];
+    if (!value.continueControl || !value.continueUsesObjective) problems.push('계속 진행 objective 라우팅 실패');
+    if (!value.retryControl || !value.retryUsesObjective) problems.push('재시도 objective 라우팅 실패');
+    if (!value.emptyBlocked) problems.push('objective 없음 차단 실패');
+    if (!value.normalNotControl) problems.push('일반 재작업 요청을 제어어로 오판');
+    checks.push(makeSvbRuntimeCheck(
+        problems.length === 0,
+        '제어어 라우팅 자체 테스트',
+        problems.length ? `문제: ${problems.join(' / ')}` : '계속 진행/재시도 단독 입력은 이전 objective로 라우팅 · objective 없으면 새 작업으로 새지 않음',
+        problems.length ? 'error' : 'ok'
+    ));
+}
+
+function addSvbRuntimeMissingImproveFallbackSelfTest(checks) {
+    const result = readSvbRuntimeValue('missing improve fallback no ReferenceError self test', () => {
+        const request = 'improve description after review';
+        const response = buildKeroMissingImproveFallbackResponse(
+            request,
+            'The description needs tighter focus.',
+            { userRequest: request }
+        );
+        const fullBuildProbe = isKeroGatewayFullCharacterBuildRequest('make this bot fantasy lorebook');
+        return {
+            generated: typeof response === 'string',
+            hasAction: /@action/.test(response),
+            hasDescTarget: /"target"\s*:\s*"desc"/.test(response),
+            gatewayGenreHelper: typeof hasKeroGatewayGenreBuildSignal === 'function',
+            fullBuildProbeType: typeof fullBuildProbe === 'boolean'
+        };
+    });
+    if (!result.ok) {
+        checks.push(makeSvbRuntimeCheck(false, 'missing improve fallback no ReferenceError self test', result.error, 'error'));
+        return;
+    }
+    const value = result.value || {};
+    const problems = [];
+    if (!value.generated) problems.push('fallback did not return a string');
+    if (!value.hasAction) problems.push('fallback did not create @action');
+    if (!value.hasDescTarget) problems.push('fallback did not target desc');
+    if (!value.gatewayGenreHelper) problems.push('gateway genre helper is missing');
+    if (!value.fullBuildProbeType) problems.push('gateway full-build probe did not return boolean');
+    checks.push(makeSvbRuntimeCheck(
+        problems.length === 0,
+        'missing improve fallback no ReferenceError self test',
+        problems.length ? `Problems: ${problems.join(' / ')}` : 'description improve fallback can create an action without hidden-scope helpers',
+        problems.length ? 'error' : 'ok'
+    ));
+}
+
 function addSvbRuntimeInputQueueRecoverySelfTest(checks) {
     const result = readSvbRuntimeValue('대기 요청 processing 복구 자체 테스트', () => {
         const now = Date.now();
@@ -10296,7 +10421,9 @@ function addSvbRuntimeOutputLimitRecoverySelfTest(checks) {
             retryableDetected: isRetryableModelTransportError(messageError),
             friendlyMentionsSplit: /작은\s*작업\s*단위|작은\s*실행\s*단위/.test(getFriendlyModelErrorMessage(messageError)),
             recoveryAllowed: shouldAttemptKeroGatewayRecovery({ keroMode: 'work', fromKero: true, allowGatewayRecovery: true }),
-            recoveryBlockedForRecoveryCall: shouldAttemptKeroGatewayRecovery({ keroMode: 'work', fromKero: true, gatewayRecovery: true })
+            recoveryBlockedForRecoveryCall: shouldAttemptKeroGatewayRecovery({ keroMode: 'work', fromKero: true, gatewayRecovery: true }),
+            decision: getKeroModelCallRecoveryDecision(messageError, { keroMode: 'work', fromKero: true, allowGatewayRecovery: true }),
+            recursiveDecision: getKeroModelCallRecoveryDecision(messageError, { keroMode: 'work', fromKero: true, gatewayRecovery: true })
         };
     });
     if (!result.ok) {
@@ -10315,6 +10442,36 @@ function addSvbRuntimeOutputLimitRecoverySelfTest(checks) {
         problems.length === 0,
         '출력 한도 복구 판정 자체 테스트',
         problems.length ? `문제: ${problems.join(' / ')}` : 'finish_reason=length 계열 오류를 일반 재시도 대신 작은 단위 복구 대상으로 판정',
+        problems.length ? 'error' : 'ok'
+    ));
+}
+
+function addSvbRuntimeOutputLimitDecisionSelfTest(checks) {
+    const result = readSvbRuntimeValue('output limit recovery decision helper self test', () => {
+        const error = new Error('provider stopped because finish_reason=length');
+        const recovery = getKeroModelCallRecoveryDecision(error, { keroMode: 'work', fromKero: true, allowGatewayRecovery: true });
+        const recursive = getKeroModelCallRecoveryDecision(error, { keroMode: 'work', fromKero: true, gatewayRecovery: true });
+        return {
+            detectsLimit: recovery.kind === 'output_limit',
+            canRecover: recovery.canRecover === true,
+            noSameRequestRetry: recovery.retrySameRequest === false,
+            blocksRecursiveRecovery: recursive.canRecover === false
+        };
+    });
+    if (!result.ok) {
+        checks.push(makeSvbRuntimeCheck(false, 'output limit recovery decision helper self test', result.error, 'error'));
+        return;
+    }
+    const value = result.value || {};
+    const problems = [];
+    if (!value.detectsLimit) problems.push('output limit was not detected');
+    if (!value.canRecover) problems.push('recoverable output limit was not routed to recovery');
+    if (!value.noSameRequestRetry) problems.push('same large request retry was not blocked');
+    if (!value.blocksRecursiveRecovery) problems.push('recursive gateway recovery was not blocked');
+    checks.push(makeSvbRuntimeCheck(
+        problems.length === 0,
+        'output limit recovery decision helper self test',
+        problems.length ? `Problems: ${problems.join(' / ')}` : 'output-limit errors are routed to small-step recovery instead of repeating the same request',
         problems.length ? 'error' : 'ok'
     ));
 }
@@ -10890,12 +11047,15 @@ function runSvbRuntimeSelfCheck(options = {}) {
     addSvbRuntimeFunctionCheck(checks, '도구 이벤트 바인딩 bindKeroToolsEvents', () => localFunctions.bindKeroToolsEvents || globalThis?.bindKeroToolsEvents);
     addSvbRuntimeActionParserSelfTest(checks);
     addSvbRuntimeSteeringQueueSelfTest(checks);
+    addSvbRuntimeControlRoutingSelfTest(checks);
+    addSvbRuntimeMissingImproveFallbackSelfTest(checks);
     addSvbRuntimeInputQueueRecoverySelfTest(checks);
     addSvbRuntimeWarningReplaySelfTest(checks);
     addSvbRuntimeWorkTargetRecoverySelfTest(checks);
     addSvbRuntimePluginMetadataSelfTest(checks);
     addSvbRuntimeGatewayFallbackSelfTest(checks);
     addSvbRuntimeOutputLimitRecoverySelfTest(checks);
+    addSvbRuntimeOutputLimitDecisionSelfTest(checks);
     addSvbRuntimeContextPayloadSelfTest(checks);
     addSvbRuntimeBulkCreateRangeSelfTest(checks);
     addSvbRuntimeMissionPersistSelfTest(checks);
@@ -28605,12 +28765,15 @@ ${steeringBlock ? `\n${steeringBlock}` : ''}`;
         const currentMissionStatus = safeString(currentKeroMission?.status || '');
         const currentMissionId = safeString(currentKeroMission?.id || '');
         const currentMissionStorageId = safeString(currentKeroPersistentStorageId || currentKeroMission?.storageId || '');
-        const controlOnlyResumeRequest = isWorkMode && resumeRequest && (
-            isKeroControlOnlyResumeRequest(visibleUserInput)
-            || options.resumeOnly === true
-            || options.retryOnly === true
-        );
-        const currentMissionObjective = getKeroMissionObjectiveText(currentKeroMission);
+        const controlResumeRouting = isWorkMode
+            ? resolveKeroControlOnlyResumeRouting(visibleUserInput, currentKeroMission, {
+                resumeRequest,
+                resumeOnly: options.resumeOnly === true,
+                retryOnly: options.retryOnly === true
+            })
+            : { controlOnly: false, blocked: false, objective: '' };
+        const controlOnlyResumeRequest = !!controlResumeRouting.controlOnly;
+        const currentMissionObjective = safeString(controlResumeRouting.objective || getKeroMissionObjectiveText(currentKeroMission));
         const currentMissionSettled = ['done', 'cancelled'].includes(currentMissionStatus);
         const settledMissionRetryQueueCount = retryRequest && currentKeroMission && currentMissionSettled
             ? getKeroFailedInputCount(keroQueuedUserInputs, currentMissionId)
@@ -28952,18 +29115,18 @@ ${steeringBlock ? `\n${steeringBlock}` : ''}`;
             }
             let modelUserInput = userInput;
             let modelVisibleUserInput = visibleUserInput;
-            if (controlOnlyResumeRequest && currentKeroMission && currentMissionObjective) {
-                modelUserInput = currentMissionObjective;
-                modelVisibleUserInput = currentMissionObjective;
+            if (controlOnlyResumeRequest && !controlResumeRouting.blocked && controlResumeRouting.modelUserInput) {
+                modelUserInput = controlResumeRouting.modelUserInput;
+                modelVisibleUserInput = controlResumeRouting.visibleUserInput || controlResumeRouting.modelUserInput;
                 addKeroWorkstreamEvent(
                     '제어어 라우팅',
                     `"${visibleUserInput.slice(0, 40)}" 입력을 새 작업으로 보내지 않고 이전 미션 목표로 이어갑니다.`,
                     'context',
                     taskProgressOptions
                 );
-            } else if (controlOnlyResumeRequest && currentKeroMission && !currentMissionObjective) {
+            } else if (controlOnlyResumeRequest && controlResumeRouting.blocked) {
                 removeLoadingMessage();
-                const detail = '이전 미션 목표를 찾지 못해 재시도할 수 없습니다. 새 작업 내용을 다시 입력해주세요.';
+                const detail = controlResumeRouting.detail || '이전 미션 목표를 찾지 못해 재시도할 수 없습니다. 새 작업 내용을 다시 입력해주세요.';
                 addKeroWorkstreamEvent('재개 목표 없음', detail, 'warning', taskProgressOptions);
                 await addBotMessage(detail);
                 if (backgroundJobId) {
@@ -34096,7 +34259,7 @@ function validatePluginScriptMetadata(script, expectedName, options = {}) {
         throw new Error(`${label} script는 //@api 3.0 메타데이터가 필요합니다.`);
     }
     if (api && api !== '3.0') {
-        throw new Error(`${label} script의 //@api ${api}는 v1.4.2 기준 권장 API 3.0이 아니어서 저장을 중단했습니다.`);
+        throw new Error(`${label} script의 //@api ${api}는 v1.4.3 기준 권장 API 3.0이 아니어서 저장을 중단했습니다.`);
     }
     if (metadata.updateURL) {
         if (!metadata.updateUrlValid) {
@@ -36890,7 +37053,7 @@ function getBulkOutputHint(targetType) {
     return 'result는 항목 JSON 배열이어야 합니다.';
 }
 
-/* === RisuAI SuperVibeBot v1.4.2 Guide (Concise Version) === */
+/* === RisuAI SuperVibeBot v1.4.3 Guide (Concise Version) === */
 const RISUAI_GUIDE = {
     overview: `
 ## System Overview
@@ -39400,6 +39563,25 @@ function shouldAttemptKeroGatewayRecovery(options = {}) {
         && options.gatewayRecovery !== true;
 }
 
+function getKeroModelCallRecoveryDecision(error, options = {}) {
+    let kind = 'none';
+    if (isProviderOutputLimitError(error)) {
+        kind = 'output_limit';
+    } else if (isKeroModelHardTimeoutError(error)) {
+        kind = 'hard_timeout';
+    } else if (isProviderGatewayTimeoutError(error)) {
+        kind = 'gateway_timeout';
+    }
+    const recoverable = kind !== 'none';
+    const canRecover = recoverable && shouldAttemptKeroGatewayRecovery(options);
+    return {
+        kind,
+        recoverable,
+        canRecover,
+        retrySameRequest: recoverable ? false : true
+    };
+}
+
 function inferKeroBulkCreateTargetFromText(text) {
     const source = safeString(text);
     if (/정규식|regex/i.test(source)) return 'regex';
@@ -39569,6 +39751,14 @@ function hasKeroGatewayLargeCharacterLorebookSignal(text = '') {
     return /(\d{1,4})\s*(?:개|명|항목|개\s*이상|명\s*이상)|수십|대량|각각|각자|each|per/i.test(source);
 }
 
+function hasKeroGatewayGenreBuildSignal(input = '') {
+    const text = safeString(input).toLowerCase();
+    if (!/(fantasy|sci[\s-]*fi|\bsf\b|modern|romance|mystery|horror|academy|sim|simulation|rpg|worldbuild|world-build)/i.test(text)) {
+        return false;
+    }
+    return !/(name|title|idea|recommend|list|example|prompt|sentence)\s*only|only\s*(name|title|idea|recommend|list|example|prompt|sentence)/i.test(text);
+}
+
 function inferKeroImproveTargetsFromText(text = '') {
     const source = safeString(text);
     const targets = [];
@@ -39594,7 +39784,7 @@ function inferKeroImproveTargetsFromText(text = '') {
 function buildKeroMissingImproveFallbackResponse(userText, assistantText = '', options = {}) {
     const request = safeString(options.userRequest || userText).trim();
     if (!request || !isKeroImproveLikeRequest(request)) return '';
-    if (isKeroGatewayFullCharacterBuildRequest(request) || isKeroFullCharacterBuildRequest(request)) return '';
+    if (isKeroGatewayFullCharacterBuildRequest(request)) return '';
     if (/적용하지\s*마|저장하지\s*마|제안만|보기만|예시만/i.test(request)) return '';
     if (/(왜|원인|무슨|어떻게|가능|될까|인가|확인|분석|검토|문제|오류|에러|버그)[^\n]{0,30}(설명|알려|파악|체크|봐)/i.test(request)
         && !/(수정해|고쳐줘|개선해|적용|저장|바꿔줘|변경해|만들어|생성)/i.test(request)) {
@@ -39639,7 +39829,7 @@ function isKeroGatewayFullCharacterBuildRequest(text = '') {
     ].filter((pattern) => pattern.test(source)).length;
     return targetSignal
         && (workSignal || largeCharacterLorebookSignal)
-        && (contentSignals >= 2 || strongFullBuildSignal || hasKeroGenreBuildSignal(source) || largeCharacterLorebookSignal);
+        && (contentSignals >= 2 || strongFullBuildSignal || hasKeroGatewayGenreBuildSignal(source) || largeCharacterLorebookSignal);
 }
 
 function inferKeroGatewayFallbackGenre(text = '') {
@@ -41519,11 +41709,12 @@ async function translateSingleChunk(systemPrompt, userText, retries = 3, options
             }
             const friendlyMessage = getFriendlyModelErrorMessage(error);
             const eventMessage = friendlyMessage.replace(/\s+/g, ' ').slice(0, 600);
+            const recoveryDecision = getKeroModelCallRecoveryDecision(error, effectiveOptions);
             Logger.error(`[translateSingleChunk] Attempt ${attempt}/${retries} failed:`, error.message);
 
-            if (isProviderOutputLimitError(error)) {
+            if (recoveryDecision.kind === 'output_limit') {
                 updateKeroProgress(attempt, retries, '메인 모델 출력 한도 초과', attemptProgressOptions);
-                const canRecoverOutputLimit = shouldAttemptKeroGatewayRecovery(effectiveOptions);
+                const canRecoverOutputLimit = recoveryDecision.canRecover;
                 addKeroWorkstreamEvent('모델 출력 한도 초과', eventMessage, canRecoverOutputLimit ? 'retry' : 'error', attemptProgressOptions);
                 if (canRecoverOutputLimit) {
                     try {
@@ -41537,10 +41728,10 @@ async function translateSingleChunk(systemPrompt, userText, retries = 3, options
                 throw new Error(friendlyMessage);
             }
 
-            if (isProviderGatewayTimeoutError(error) || isKeroModelHardTimeoutError(error)) {
-                const timeoutKind = isKeroModelHardTimeoutError(error) ? 'hard timeout' : '게이트웨이 타임아웃';
+            if (recoveryDecision.kind === 'gateway_timeout' || recoveryDecision.kind === 'hard_timeout') {
+                const timeoutKind = recoveryDecision.kind === 'hard_timeout' ? 'hard timeout' : '게이트웨이 타임아웃';
                 updateKeroProgress(attempt, retries, `메인 모델 ${timeoutKind}`, attemptProgressOptions);
-                const canRecoverGatewayTimeout = shouldAttemptKeroGatewayRecovery(effectiveOptions);
+                const canRecoverGatewayTimeout = recoveryDecision.canRecover;
                 addKeroWorkstreamEvent(isKeroModelHardTimeoutError(error) ? '모델 호출 hard timeout' : '모델 게이트웨이 타임아웃', eventMessage, canRecoverGatewayTimeout ? 'retry' : 'error', attemptProgressOptions);
                 let gatewayMessage = friendlyMessage;
                 if (canRecoverGatewayTimeout) {
@@ -47831,7 +48022,7 @@ async function loadInitialSettings() {
 async function registerUIElements() {
     // 채팅 화면 메뉴에 버튼 추가 (플로팅 버튼 대신)
     await risuai.registerButton({
-        name: "SuperVibeBot v1.4.2",
+        name: "SuperVibeBot v1.4.3",
         icon: "🐸",
         iconType: "html",
         location: "chat"  // 채팅 메뉴에 배치 (화면 가림 방지)
@@ -47840,7 +48031,7 @@ async function registerUIElements() {
     });
 
     await risuai.registerSetting(
-        "SuperVibeBot v1.4.2 Settings",
+        "SuperVibeBot v1.4.3 Settings",
         async () => {
             await openSettingsWindow();
         },
@@ -47883,7 +48074,7 @@ function cleanup() {
 (async () => {
     try {
         Logger.info("=".repeat(50));
-        Logger.info("SuperVibeBot v1.4.2");
+        Logger.info("SuperVibeBot v1.4.3");
         Logger.info("RisuAI Plugin API 3.0");
         Logger.info("=".repeat(50));
         await loadInitialSettings();
