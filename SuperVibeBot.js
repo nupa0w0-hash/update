@@ -1,13 +1,13 @@
 //@name SuperVibeBot
-//@display-name 🐸 SuperVibeBot v1.5.22
-//@version 1.5.22
+//@display-name 🐸 SuperVibeBot v1.5.23
+//@version 1.5.23
 //@api 3.0
 //@update-url https://github.com/nupa0w0-hash/supervibebot-update/releases/latest/download/SuperVibeBot.update.js
 //@arg api_key string "" "Google AI Studio API 키를 입력하세요 (Vertex AI, API Hub 또는 GitHub Copilot 연동 시 불필요)."
 //@arg disable_safety int 0 "안전 필터 비활성화 (1=OFF, 0=ON)"
 
 if (typeof risuai === "undefined") {
-    alert("⚠️ SuperVibeBot v1.5.22는 RisuAI Plugin API 3.0이 필요합니다.");
+    alert("⚠️ SuperVibeBot v1.5.23는 RisuAI Plugin API 3.0이 필요합니다.");
     throw new Error("API 3.0 required");
 }
 
@@ -164,7 +164,7 @@ async function safeCopyText(text, options = {}) {
 }
 
 /**
- * SuperVibeBot v1.5.22 Release Notes
+ * SuperVibeBot v1.5.23 Release Notes
  *
  * 🎉 Major Changes
  * - Caps sub-agent consultation packets to 120k desktop, 80k constrained, and 60k background chars
@@ -189,6 +189,7 @@ async function safeCopyText(text, options = {}) {
  * - Runtime diagnostics now verify SuperVibeBot uses the GitHub Releases latest update URL
  * - Plugin creation guidance now recommends GitHub Releases latest/download over raw branch URLs
  * - Plugin update-url guidance no longer uses source/raw-like Korean wording that can confuse authors
+ * - Runtime diagnostics now verify full character context does not leak unused personality/scenario fields
  * - Sub-agent report calls now default to 4096 output tokens on desktop and 2048 on constrained/mobile/webview profiles
  * - Explicit sub-agent output overrides are clamped to a WebView-safe hard cap
  * - API responses that ignore max_tokens are shortened before entering Kero's parser/renderer
@@ -205,6 +206,7 @@ async function safeCopyText(text, options = {}) {
  * - Runtime diagnostics now reject raw refs update-url regressions for SuperVibeBot
  * - RisuAI plugin metadata guide now warns against raw.githubusercontent branch URLs as default update channels
  * - Validation messages now say HTTPS .js file URL instead of raw/source-like JS URL wording
+ * - Strengthened legacy character field self-checks so Kero keeps traits/setup inside desc instead of deprecated fields
  * - Prevents GLM/Kimi/API Hub sub-agents from returning or rendering oversized manager reports
  * - Runtime diagnostics now verify sub-agent hard caps, response truncation, and conservative large-payload parallel limits
  * - Safer selected-item expansion in both global and Kero chat execution paths
@@ -12112,6 +12114,16 @@ function addSvbRuntimeLegacyFieldPolicySelfTest(checks) {
             scenario_prompt: '숨겨야 하는 시나리오 별칭',
             customField: '보존해야 하는 커스텀 필드'
         }, ['name']);
+        const fullContext = buildFullCharacterContext({
+            name: '진단 캐릭터',
+            desc: '디스크립션 본문',
+            personality: '모델 컨텍스트에 나오면 안 되는 personality 본문',
+            scenario: '모델 컨텍스트에 나오면 안 되는 scenario 본문',
+            personalityText: '모델 컨텍스트에 나오면 안 되는 personalityText 본문',
+            scenario_prompt: '모델 컨텍스트에 나오면 안 되는 scenario_prompt 본문',
+            customField: '보존 가능한 기타 필드'
+        }) || {};
+        const fullContextText = JSON.stringify(fullContext);
         const pipelineEntry = makeLorebookEntryForModelContext(defaultWrite, 3);
         return {
             defaultHasSecondkey: Object.prototype.hasOwnProperty.call(defaultWrite, 'secondkey'),
@@ -12125,6 +12137,10 @@ function addSvbRuntimeLegacyFieldPolicySelfTest(checks) {
             contextLegacyModeWasMultiple: contextEntry.legacyModeWasMultiple === true,
             extraHasPersonalityAlias: Object.keys(extraFields).some((key) => /personality|scenario|성격|시나리오/i.test(key)),
             customField: extraFields.customField,
+            fullContextLeaksLegacyCharacterFields: /personality|scenario/.test(fullContextText)
+                || fullContextText.includes('모델 컨텍스트에 나오면 안 되는'),
+            fullContextKeepsDesc: fullContext?.descriptions?.desc === '디스크립션 본문',
+            fullContextKeepsCustomExtra: fullContext?.rawCharacterExtraFields?.customField === '보존 가능한 기타 필드',
             pipelineHasSecondkey: Object.prototype.hasOwnProperty.call(pipelineEntry, 'secondkey'),
             pipelineMode: safeString(pipelineEntry.mode)
         };
@@ -12143,6 +12159,9 @@ function addSvbRuntimeLegacyFieldPolicySelfTest(checks) {
     if (value.contextMode !== 'normal' || !value.contextLegacySecondkeyPresent || !value.contextLegacyModeWasMultiple) problems.push('모델 컨텍스트 legacy 표시/보정 실패');
     if (value.extraHasPersonalityAlias) problems.push('personality/scenario alias extra 필터 실패');
     if (value.customField !== '보존해야 하는 커스텀 필드') problems.push('비 legacy extra 필드 보존 실패');
+    if (value.fullContextLeaksLegacyCharacterFields) problems.push('full character context personality/scenario 원문 숨김 실패');
+    if (!value.fullContextKeepsDesc) problems.push('full character context desc 보존 실패');
+    if (!value.fullContextKeepsCustomExtra) problems.push('full character context custom extra 보존 실패');
     if (value.pipelineHasSecondkey || value.pipelineMode !== 'normal') problems.push('AI-write to context pipeline legacy 차단 실패');
     checks.push(makeSvbRuntimeCheck(
         problems.length === 0,
@@ -12487,7 +12506,7 @@ function addSvbRuntimePluginMetadataSelfTest(checks) {
         const superVibeMetadata = buildPluginMetadataSummary([
             '//@name SuperVibeBot',
             '//@display-name 🐸 SuperVibeBot diagnostic',
-            '//@version 1.5.22',
+            '//@version 1.5.23',
             '//@api 3.0',
             `//@update-url ${SUPER_VIBE_BOT_RELEASE_UPDATE_URL}`
         ].join('\n'));
@@ -39796,7 +39815,7 @@ function getBulkOutputHint(targetType) {
     return 'result는 항목 JSON 배열이어야 합니다.';
 }
 
-/* === RisuAI SuperVibeBot v1.5.22 Guide (Concise Version) === */
+/* === RisuAI SuperVibeBot v1.5.23 Guide (Concise Version) === */
 const RISUAI_GUIDE = {
     overview: `
 ## System Overview
@@ -50936,7 +50955,7 @@ async function loadInitialSettings() {
 async function registerUIElements() {
     // 채팅 화면 메뉴에 버튼 추가 (플로팅 버튼 대신)
     await risuai.registerButton({
-        name: "SuperVibeBot v1.5.22",
+        name: "SuperVibeBot v1.5.23",
         icon: "🐸",
         iconType: "html",
         location: "chat"  // 채팅 메뉴에 배치 (화면 가림 방지)
@@ -50945,7 +50964,7 @@ async function registerUIElements() {
     });
 
     await risuai.registerSetting(
-        "SuperVibeBot v1.5.22 Settings",
+        "SuperVibeBot v1.5.23 Settings",
         async () => {
             await openSettingsWindow();
         },
@@ -50988,7 +51007,7 @@ function cleanup() {
 (async () => {
     try {
         Logger.info("=".repeat(50));
-        Logger.info("SuperVibeBot v1.5.22");
+        Logger.info("SuperVibeBot v1.5.23");
         Logger.info("RisuAI Plugin API 3.0");
         Logger.info("=".repeat(50));
         await loadInitialSettings();
