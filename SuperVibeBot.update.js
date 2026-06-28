@@ -1,13 +1,13 @@
 //@name SuperVibeBot
-//@display-name 🐸 SuperVibeBot v1.5.10
-//@version 1.5.10
+//@display-name 🐸 SuperVibeBot v1.5.11
+//@version 1.5.11
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/supervibebot-update/refs/heads/main/SuperVibeBot.update.js
 //@arg api_key string "" "Google AI Studio API 키를 입력하세요 (Vertex AI, API Hub 또는 GitHub Copilot 연동 시 불필요)."
 //@arg disable_safety int 0 "안전 필터 비활성화 (1=OFF, 0=ON)"
 
 if (typeof risuai === "undefined") {
-    alert("⚠️ SuperVibeBot v1.5.10는 RisuAI Plugin API 3.0이 필요합니다.");
+    alert("⚠️ SuperVibeBot v1.5.11는 RisuAI Plugin API 3.0이 필요합니다.");
     throw new Error("API 3.0 required");
 }
 
@@ -163,25 +163,25 @@ async function safeCopyText(text, options = {}) {
 }
 
 /**
- * SuperVibeBot v1.5.10 Release Notes
+ * SuperVibeBot v1.5.11 Release Notes
  *
  * 🎉 Major Changes
- * - Migrated to RisuAI Plugin API 3.0
- * - Sandboxed iframe architecture for better security
- * - Official UI registration (registerButton/registerSetting)
- * - Improved error handling and retry logic
+ * - Stabilized missing @action recovery for character and part editing jobs
+ * - Prevented unqualified lorebook/regex/trigger improve fallback from expanding to all items
+ * - Blocked malformed embedded @action text from being saved inside character fields
+ * - Added runtime self-checks for lorebook fallback and selected-item safety
  *
  * ✨ New Features
- * - Auto theme (follows system preference)
- * - Live Preview with HTML/CSS editor
- * - Loading indicators for long operations
- * - Debounced auto-save for better performance
+ * - Lorebook/regex/trigger improve requests can recover from model responses that forgot @action
+ * - Unqualified part edits prefer checked items or the currently open item
+ * - Explicit all/every/전체 requests still run as all-item jobs
+ * - Malformed embedded action directives now fail before corrupting saved text
  *
  * 🔧 Improvements
- * - Better memory management (cleanup event listeners)
- * - Exponential backoff for API retries
- * - Centralized error handling
- * - Optimized storage access
+ * - Safer selected-item expansion in both global and Kero chat execution paths
+ * - Runtime diagnostics now catch missing lorebook fallback regressions
+ * - Field-action recovery behavior is consistent between global save paths and Kero UI paths
+ * - Existing auto-update URL is preserved
  *
  * ⚠️ Breaking Changes
  * - Requires RisuAI with API 3.0 support
@@ -8216,7 +8216,10 @@ function getTargetIdxFallback(target, actionIdx) {
 function expandIdxList(target, action, char) {
     const isSelected = action?.selected === true || action?.idx === 'selected';
     if (isSelected) {
-        return getSelectedPartIndexes(target, char);
+        const selected = getSelectedPartIndexes(target, char, { defaultSelectAll: action?.allowDefaultSelectAll === true });
+        if (selected.length || action?.preferCurrent !== true) return selected;
+        const fallbackIdx = getTargetIdxFallback(target, undefined);
+        return Number.isInteger(fallbackIdx) ? [fallbackIdx] : [];
     }
     const isAll = action?.all === true || action?.idx === '*' || action?.idx === 'all';
     if (!isAll) {
@@ -9561,7 +9564,10 @@ function recoverKeroActionDirectivesFromFieldText(value, label = '필드', colle
 
     const parsed = parseKeroAction(source);
     const extractedActions = ensureArray(parsed.actions).filter((action) => action && typeof action === 'object');
-    if (!extractedActions.length) return source;
+    if (!extractedActions.length) {
+        assertNoKeroActionDirectiveInFieldText(source, label);
+        return source;
+    }
 
     if (Array.isArray(collector)) {
         collector.push(...extractedActions);
@@ -11803,11 +11809,33 @@ function addSvbRuntimeMissingImproveFallbackSelfTest(checks) {
             'The description needs tighter focus.',
             { userRequest: request }
         );
+        const loreRequest = '로어북을 더 자연스럽게 개선해줘';
+        const loreResponse = buildKeroMissingImproveFallbackResponse(
+            loreRequest,
+            '로어북 문장 밀도를 높이면 좋겠습니다.',
+            { userRequest: loreRequest }
+        );
+        const loreActions = parseKeroAction(loreResponse).actions || [];
+        const loreAction = loreActions.find((action) => normalizeKeroActionTargetName(action?.target) === 'lorebook');
+        const allLoreRequest = '전체 로어북을 더 자연스럽게 개선해줘';
+        const allLoreActions = parseKeroAction(buildKeroMissingImproveFallbackResponse(allLoreRequest, '', { userRequest: allLoreRequest })).actions || [];
+        const allLoreAction = allLoreActions.find((action) => normalizeKeroActionTargetName(action?.target) === 'lorebook');
+        let malformedFieldActionBlocked = false;
+        try {
+            recoverKeroActionDirectivesFromFieldText('본문\n@action { broken', 'self test field', [], { silentRecoveryEvent: true });
+        } catch (error) {
+            malformedFieldActionBlocked = /@action|작업 명령/i.test(error?.message || String(error));
+        }
         const fullBuildProbe = isKeroGatewayFullCharacterBuildRequest('make this bot fantasy lorebook');
         return {
             generated: typeof response === 'string',
             hasAction: /@action/.test(response),
             hasDescTarget: /"target"\s*:\s*"desc"/.test(response),
+            hasLorebookAction: !!loreAction,
+            loreDefaultsToSelected: loreAction?.selected === true && loreAction?.all !== true,
+            lorePrefersCurrent: loreAction?.preferCurrent === true,
+            explicitAllStillAll: allLoreAction?.all === true,
+            malformedFieldActionBlocked,
             gatewayGenreHelper: typeof hasKeroGatewayGenreBuildSignal === 'function',
             fullBuildProbeType: typeof fullBuildProbe === 'boolean'
         };
@@ -11821,12 +11849,17 @@ function addSvbRuntimeMissingImproveFallbackSelfTest(checks) {
     if (!value.generated) problems.push('fallback did not return a string');
     if (!value.hasAction) problems.push('fallback did not create @action');
     if (!value.hasDescTarget) problems.push('fallback did not target desc');
+    if (!value.hasLorebookAction) problems.push('lorebook improve fallback did not create an action');
+    if (!value.loreDefaultsToSelected) problems.push('unqualified lorebook fallback did not default to selected/current');
+    if (!value.lorePrefersCurrent) problems.push('unqualified lorebook fallback does not prefer current item');
+    if (!value.explicitAllStillAll) problems.push('explicit all lorebook fallback did not preserve all:true');
+    if (!value.malformedFieldActionBlocked) problems.push('malformed field @action was not blocked');
     if (!value.gatewayGenreHelper) problems.push('gateway genre helper is missing');
     if (!value.fullBuildProbeType) problems.push('gateway full-build probe did not return boolean');
     checks.push(makeSvbRuntimeCheck(
         problems.length === 0,
         'missing improve fallback no ReferenceError self test',
-        problems.length ? `Problems: ${problems.join(' / ')}` : 'description improve fallback can create an action without hidden-scope helpers',
+        problems.length ? `Problems: ${problems.join(' / ')}` : 'description and lorebook improve fallback create safe actions; malformed embedded @action is blocked',
         problems.length ? 'error' : 'ok'
     ));
 }
@@ -11835,6 +11868,9 @@ function addSvbRuntimeIndexFallbackSelfTest(checks) {
     const result = readSvbRuntimeValue('선택 항목 idx fallback 자체 테스트', () => {
         const previousLoreResult = currentLorebookResult;
         const previousRegexResult = currentRegexResult;
+        const previousLoreInitialized = partItemSelectionInitialized.lorebook;
+        const previousLoreIdentity = partItemSelectionIdentity.lorebook;
+        const previousLoreSelection = Array.from(getPartSelectionSet('lorebook'));
         try {
             currentLorebookResult = { idx: 7 };
             currentRegexResult = { idx: 3 };
@@ -11842,15 +11878,33 @@ function addSvbRuntimeIndexFallbackSelfTest(checks) {
             const explicitString = expandIdxList('regex', { idx: '4' }, {});
             const fallbackLore = expandIdxList('lorebook', { idx: undefined }, {});
             const invalid = expandIdxList('trigger', { idx: 'not-a-number' }, {});
+            partItemSelectionIdentity.lorebook = '';
+            partItemSelectionInitialized.lorebook = false;
+            getPartSelectionSet('lorebook').clear();
+            const selectedWithoutDefaultAll = expandIdxList('lorebook', { selected: true }, {
+                name: 'Self Test',
+                globalLore: [{ comment: 'A', content: 'A' }, { comment: 'B', content: 'B' }]
+            });
+            const selectedPreferCurrent = expandIdxList('lorebook', { selected: true, preferCurrent: true }, {
+                name: 'Self Test',
+                globalLore: [{ comment: 'A', content: 'A' }, { comment: 'B', content: 'B' }]
+            });
             return {
                 explicitNumber: explicitNumber[0],
                 explicitString: explicitString[0],
                 fallbackLore: fallbackLore[0],
-                invalidLength: invalid.length
+                invalidLength: invalid.length,
+                selectedWithoutDefaultAllLength: selectedWithoutDefaultAll.length,
+                selectedPreferCurrent: selectedPreferCurrent[0]
             };
         } finally {
             currentLorebookResult = previousLoreResult;
             currentRegexResult = previousRegexResult;
+            partItemSelectionIdentity.lorebook = previousLoreIdentity;
+            partItemSelectionInitialized.lorebook = previousLoreInitialized;
+            const loreSelection = getPartSelectionSet('lorebook');
+            loreSelection.clear();
+            previousLoreSelection.forEach((index) => loreSelection.add(index));
         }
     });
     if (!result.ok) {
@@ -11863,10 +11917,12 @@ function addSvbRuntimeIndexFallbackSelfTest(checks) {
     if (value.explicitString !== 4) problems.push('문자열 idx 처리 실패');
     if (value.fallbackLore !== 7) problems.push('현재 로어북 결과 fallback 실패');
     if (value.invalidLength !== 0) problems.push('무효 idx 차단 실패');
+    if (value.selectedWithoutDefaultAllLength !== 0) problems.push('selected:true가 미초기화 상태에서 전체 선택으로 확장됨');
+    if (value.selectedPreferCurrent !== 7) problems.push('selected preferCurrent fallback 실패');
     checks.push(makeSvbRuntimeCheck(
         problems.length === 0,
         '선택 항목 idx fallback 자체 테스트',
-        problems.length ? `문제: ${problems.join(' / ')}` : '명시 idx와 현재 결과 fallback idx가 undefined helper 없이 처리됨',
+        problems.length ? `문제: ${problems.join(' / ')}` : '명시 idx와 현재 결과 fallback이 처리되고 selected:true는 미초기화 전체 선택으로 번지지 않음',
         problems.length ? 'error' : 'ok'
     ));
 }
@@ -28242,7 +28298,10 @@ ${steeringBlock ? `\n${steeringBlock}` : ''}`;
     function expandIdxList(target, action, char) {
         const isSelected = action?.selected === true || action?.idx === 'selected';
         if (isSelected) {
-            return getSelectedPartIndexes(target, char);
+            const selected = getSelectedPartIndexes(target, char, { defaultSelectAll: action?.allowDefaultSelectAll === true });
+            if (selected.length || action?.preferCurrent !== true) return selected;
+            const fallbackIdx = getTargetIdxFallback(target, undefined);
+            return Number.isInteger(fallbackIdx) ? [fallbackIdx] : [];
         }
         const isAll = action?.all === true || action?.idx === '*' || action?.idx === 'all';
         if (!isAll) {
@@ -39331,7 +39390,7 @@ function getBulkOutputHint(targetType) {
     return 'result는 항목 JSON 배열이어야 합니다.';
 }
 
-/* === RisuAI SuperVibeBot v1.5.10 Guide (Concise Version) === */
+/* === RisuAI SuperVibeBot v1.5.11 Guide (Concise Version) === */
 const RISUAI_GUIDE = {
     overview: `
 ## System Overview
@@ -42065,6 +42124,42 @@ function inferKeroImproveTargetsFromText(text = '') {
     return targets;
 }
 
+function inferKeroImprovePartIndexesFromText(text = '') {
+    const source = safeString(text);
+    const indexes = new Set();
+    const addZeroBased = (value) => {
+        const parsed = Math.floor(Number(value));
+        if (Number.isInteger(parsed) && parsed >= 0) indexes.add(parsed);
+    };
+    const addOneBased = (value) => {
+        const parsed = Math.floor(Number(value));
+        if (Number.isInteger(parsed) && parsed > 0) indexes.add(parsed - 1);
+    };
+    [
+        /\bidx\s*[:=]?\s*(\d{1,4})/gi,
+        /\bindex\s*[:=]?\s*(\d{1,4})/gi
+    ].forEach((pattern) => {
+        let match;
+        while ((match = pattern.exec(source))) addZeroBased(match[1]);
+    });
+    [
+        /#\s*(\d{1,4})/g,
+        /(\d{1,4})\s*(?:번|번째|항목)/g
+    ].forEach((pattern) => {
+        let match;
+        while ((match = pattern.exec(source))) addOneBased(match[1]);
+    });
+    return Array.from(indexes).sort((a, b) => a - b);
+}
+
+function shouldKeroImproveAllPartsFromText(text = '') {
+    return /전체|모든|전부|일괄|all|every|\*/i.test(safeString(text));
+}
+
+function shouldKeroImproveSelectedPartsFromText(text = '') {
+    return /선택|체크|selected|checked/i.test(safeString(text));
+}
+
 function buildKeroMissingImproveFallbackResponse(userText, assistantText = '', options = {}) {
     const request = safeString(options.userRequest || userText).trim();
     if (!request || !isKeroImproveLikeRequest(request)) return '';
@@ -42074,9 +42169,9 @@ function buildKeroMissingImproveFallbackResponse(userText, assistantText = '', o
         && !/(수정해|고쳐줘|개선해|적용|저장|바꿔줘|변경해|만들어|생성)/i.test(request)) {
         return '';
     }
-    const targets = inferKeroImproveTargetsFromText(request)
-        .filter((target) => !['lorebook', 'regex', 'trigger'].includes(target) || /전체|모든|전부|선택|체크|selected|all|idx|#\d+/i.test(request));
+    const targets = inferKeroImproveTargetsFromText(request);
     if (!targets.length) return '';
+    const requestedIndexes = inferKeroImprovePartIndexesFromText(request);
     const actions = targets.map((target) => {
         const action = {
             type: 'improve',
@@ -42087,8 +42182,15 @@ function buildKeroMissingImproveFallbackResponse(userText, assistantText = '', o
             reason: 'missing_action_local_fallback'
         };
         if (['lorebook', 'regex', 'trigger'].includes(target)) {
-            if (/선택|체크|selected/i.test(request)) action.selected = true;
-            else action.all = true;
+            if (requestedIndexes.length) {
+                action.idx = requestedIndexes.length === 1 ? requestedIndexes[0] : requestedIndexes;
+            } else if (shouldKeroImproveAllPartsFromText(request)) {
+                action.all = true;
+            } else {
+                action.selected = true;
+                action.preferCurrent = true;
+                if (!shouldKeroImproveSelectedPartsFromText(request)) action.reason = 'missing_action_selected_or_current_fallback';
+            }
         }
         return action;
     });
@@ -50341,7 +50443,7 @@ async function loadInitialSettings() {
 async function registerUIElements() {
     // 채팅 화면 메뉴에 버튼 추가 (플로팅 버튼 대신)
     await risuai.registerButton({
-        name: "SuperVibeBot v1.5.10",
+        name: "SuperVibeBot v1.5.11",
         icon: "🐸",
         iconType: "html",
         location: "chat"  // 채팅 메뉴에 배치 (화면 가림 방지)
@@ -50350,7 +50452,7 @@ async function registerUIElements() {
     });
 
     await risuai.registerSetting(
-        "SuperVibeBot v1.5.10 Settings",
+        "SuperVibeBot v1.5.11 Settings",
         async () => {
             await openSettingsWindow();
         },
@@ -50393,7 +50495,7 @@ function cleanup() {
 (async () => {
     try {
         Logger.info("=".repeat(50));
-        Logger.info("SuperVibeBot v1.5.10");
+        Logger.info("SuperVibeBot v1.5.11");
         Logger.info("RisuAI Plugin API 3.0");
         Logger.info("=".repeat(50));
         await loadInitialSettings();
@@ -50510,3 +50612,4 @@ function bindAllResultApplyButtons() {
         });
     }
 }
+
