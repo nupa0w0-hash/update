@@ -2,7 +2,7 @@
 //@display-name ☸Eros Tower 1.0.4
 //@api 3.0
 //@version 1.0.4
-//@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.update.js
+//@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
 //@arg et_provider string Legacy default provider. Dashboard provider registry is preferred.
@@ -12770,7 +12770,7 @@
               displayName: '☸에로스 타워 3.0',
               version: '3.0',
               enabled: true,
-              script: '//@name ☸에로스 타워\n//@display-name ☸Eros Tower 3.0\n//@version 3.0\n//@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.update.js\nfunction shouldNotAppear() {}',
+              script: '//@name ☸에로스 타워\n//@display-name ☸Eros Tower 3.0\n//@version 3.0\n//@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js\nfunction shouldNotAppear() {}',
             }],
             enabledModules: [],
           };
