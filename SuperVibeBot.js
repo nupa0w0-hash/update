@@ -1,13 +1,13 @@
 ﻿//@name SuperVibeBot
-//@display-name 🐸 SuperVibeBot v1.5.4
-//@version 1.5.4
+//@display-name 🐸 SuperVibeBot v1.5.5
+//@version 1.5.5
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/supervibebot-update/main/SuperVibeBot.update.js
 //@arg api_key string "" "Google AI Studio API 키를 입력하세요 (Vertex AI, API Hub 또는 GitHub Copilot 연동 시 불필요)."
 //@arg disable_safety int 0 "안전 필터 비활성화 (1=OFF, 0=ON)"
 
 if (typeof risuai === "undefined") {
-    alert("⚠️ SuperVibeBot v1.5.4는 RisuAI Plugin API 3.0이 필요합니다.");
+    alert("⚠️ SuperVibeBot v1.5.5는 RisuAI Plugin API 3.0이 필요합니다.");
     throw new Error("API 3.0 required");
 }
 
@@ -163,7 +163,7 @@ async function safeCopyText(text, options = {}) {
 }
 
 /**
- * SuperVibeBot v1.5.4 Release Notes
+ * SuperVibeBot v1.5.5 Release Notes
  *
  * 🎉 Major Changes
  * - Migrated to RisuAI Plugin API 3.0
@@ -4424,6 +4424,55 @@ function readSvbRuntimeTierOverride() {
     return '';
 }
 
+function resolveSvbRuntimeConstraintSignals(input = {}) {
+    const isMobile = input.isMobile === true;
+    const isWebView = input.isWebView === true;
+    const isPocketRisu = input.isPocketRisu === true;
+    const mobileLikeRuntime = isMobile || isWebView || isPocketRisu;
+    const deviceMemoryGb = svbReadFiniteNumber(input.deviceMemoryGb, 0);
+    const heapLimit = svbReadFiniteNumber(input.heapLimit, 0);
+    const heapRatio = svbReadFiniteNumber(input.heapRatio, 0);
+    const hardwareConcurrency = Math.max(1, Math.floor(svbReadFiniteNumber(input.hardwareConcurrency, 2)));
+    const effectiveType = safeString(input.effectiveType || '').toLowerCase();
+    const saveData = input.saveData === true;
+    const backgrounded = input.backgrounded === true;
+    const missingMobileMemorySignal = mobileLikeRuntime && deviceMemoryGb <= 0 && heapLimit <= 0;
+    const lowHeapLimit = heapLimit > 0 && heapLimit < 1200000000;
+    const highHeapUsage = heapRatio >= 0.75;
+    const lowDeviceMemory = deviceMemoryGb > 0
+        && (mobileLikeRuntime
+            ? deviceMemoryGb <= SVB_LOW_MEMORY_DEVICE_MEMORY_GB
+            : deviceMemoryGb <= 2);
+    const lowDesktopMemoryCombo = !mobileLikeRuntime
+        && deviceMemoryGb > 2
+        && deviceMemoryGb <= SVB_LOW_MEMORY_DEVICE_MEMORY_GB
+        && (hardwareConcurrency <= SVB_LOW_CORE_HARDWARE_CONCURRENCY || lowHeapLimit || highHeapUsage);
+    const lowCoreRuntime = mobileLikeRuntime && hardwareConcurrency <= SVB_LOW_CORE_HARDWARE_CONCURRENCY;
+    const lowRuntimeNetwork = mobileLikeRuntime && (
+        saveData
+        || effectiveType === 'slow-2g'
+        || effectiveType === '2g'
+    );
+    return {
+        mobileLikeRuntime,
+        lowDeviceMemory,
+        lowHeapLimit,
+        highHeapUsage,
+        lowDesktopMemoryCombo,
+        lowCoreRuntime,
+        missingMobileMemorySignal,
+        lowRuntimeNetwork,
+        lowMemory: backgrounded
+            || lowDeviceMemory
+            || lowDesktopMemoryCombo
+            || lowHeapLimit
+            || highHeapUsage
+            || lowCoreRuntime
+            || missingMobileMemorySignal
+            || lowRuntimeNetwork
+    };
+}
+
 function getSvbRuntimeEnvironmentProfile(options = {}) {
     const now = Date.now();
     if (options.force !== true && svbRuntimeProfileCache && now - svbRuntimeProfileCacheAt < SVB_RUNTIME_PROFILE_CACHE_MS) {
@@ -4469,16 +4518,19 @@ function getSvbRuntimeEnvironmentProfile(options = {}) {
         const androidWebView = isAndroid && (ua.includes('; wv') || ua.includes(' wv') || (ua.includes('version/') && ua.includes('chrome/')));
         const isWebView = isPocketRisu || ua.includes('webview') || androidWebView || hasWebkitBridge || hasAndroidBridge;
         const backgrounded = doc?.hidden === true || doc?.visibilityState === 'hidden' || doc?.visibilityState === 'prerender';
-        const missingMobileMemorySignal = isMobile && deviceMemoryGb <= 0 && heapLimit <= 0;
-        const lowMemory = backgrounded
-            || (deviceMemoryGb > 0 && deviceMemoryGb <= SVB_LOW_MEMORY_DEVICE_MEMORY_GB)
-            || (heapLimit > 0 && heapLimit < 1200000000)
-            || heapRatio >= 0.75
-            || (isMobile && hardwareConcurrency <= SVB_LOW_CORE_HARDWARE_CONCURRENCY)
-            || missingMobileMemorySignal
-            || saveData
-            || effectiveType === 'slow-2g'
-            || effectiveType === '2g';
+        const constraintSignals = resolveSvbRuntimeConstraintSignals({
+            isMobile,
+            isWebView,
+            isPocketRisu,
+            backgrounded,
+            deviceMemoryGb,
+            heapLimit,
+            heapRatio,
+            hardwareConcurrency,
+            saveData,
+            effectiveType
+        });
+        const lowMemory = constraintSignals.lowMemory;
         const constrained = backgrounded || isPocketRisu || isWebView || isMobile || lowMemory;
         let tier = backgrounded ? 'background'
             : lowMemory ? 'low'
@@ -4508,6 +4560,7 @@ function getSvbRuntimeEnvironmentProfile(options = {}) {
             heapRatio,
             saveData,
             effectiveType,
+            constraintSignals,
             uaHint: rawUa.slice(0, 80)
         });
         if (backgrounded) profile.reason.push('background');
@@ -8274,6 +8327,7 @@ let svbAdaptiveLimitsCacheAt = 0;
 let svbWorkstreamRenderTimer = null;
 let svbWorkstreamRenderDirty = false;
 let svbWorkstreamRenderReason = "";
+let svbWorkstreamRenderVersion = 0;
 let keroChatTaskRunning = false;
 let keroQueuedUserInputs = [];
 let keroProcessingQueuedInput = false;
@@ -8679,6 +8733,33 @@ async function flushKeroWorkstreamPersistNow(reason = 'manual_flush') {
     }
 }
 
+function settleKeroWorkstreamRenderResult(result, reason = 'render', renderVersion = svbWorkstreamRenderVersion) {
+    const fail = (error) => failKeroWorkstreamRender(error, reason, renderVersion);
+    const finish = (rendered) => {
+        if (renderVersion !== svbWorkstreamRenderVersion) return true;
+        if (rendered === false) {
+            svbWorkstreamRenderDirty = true;
+            return false;
+        }
+        svbWorkstreamRenderDirty = false;
+        svbWorkstreamRenderReason = safeString(reason || svbWorkstreamRenderReason || 'workstream');
+        return true;
+    };
+    if (result && typeof result.then === 'function') {
+        result.then(finish).catch(fail);
+        return true;
+    }
+    return finish(result);
+}
+
+function failKeroWorkstreamRender(error, reason = 'render', renderVersion = svbWorkstreamRenderVersion) {
+    if (renderVersion === svbWorkstreamRenderVersion) {
+        svbWorkstreamRenderDirty = true;
+    }
+    Logger.warn(`Kero workstream render failed (${reason}):`, error?.message || error);
+    return false;
+}
+
 function scheduleKeroWorkstreamRender(reason = 'workstream', options = {}) {
     if (typeof keroWorkstreamRenderer !== 'function') return false;
     const limits = getSvbAdaptiveRuntimeLimits();
@@ -8687,16 +8768,17 @@ function scheduleKeroWorkstreamRender(reason = 'workstream', options = {}) {
     const urgent = visible && /^(?:done|success|error|warning|retry|action|verified)$/i.test(status);
     const delay = urgent ? 0 : limits.workstreamRenderDelayMs;
     svbWorkstreamRenderDirty = true;
+    svbWorkstreamRenderVersion += 1;
     svbWorkstreamRenderReason = safeString(reason || svbWorkstreamRenderReason || 'workstream');
     if (svbWorkstreamRenderTimer) return true;
     const run = () => {
         svbWorkstreamRenderTimer = null;
         if (!svbWorkstreamRenderDirty) return;
-        svbWorkstreamRenderDirty = false;
+        const renderVersion = svbWorkstreamRenderVersion;
         try {
-            keroWorkstreamRenderer();
+            settleKeroWorkstreamRenderResult(keroWorkstreamRenderer(), svbWorkstreamRenderReason, renderVersion);
         } catch (error) {
-            Logger.warn(`Kero workstream scheduled render failed (${svbWorkstreamRenderReason}):`, error?.message || error);
+            failKeroWorkstreamRender(error, svbWorkstreamRenderReason, renderVersion);
         }
     };
     svbWorkstreamRenderTimer = setTimeout(run, Math.max(0, delay));
@@ -8709,17 +8791,15 @@ function flushScheduledKeroWorkstreamRender(reason = 'flush') {
         svbWorkstreamRenderTimer = null;
     }
     svbWorkstreamRenderDirty = true;
+    svbWorkstreamRenderVersion += 1;
     svbRuntimeProfileCacheAt = 0;
     svbAdaptiveLimitsCacheAt = 0;
     if (typeof keroWorkstreamRenderer !== 'function') return false;
+    const renderVersion = svbWorkstreamRenderVersion;
     try {
-        keroWorkstreamRenderer();
-        svbWorkstreamRenderDirty = false;
-        svbWorkstreamRenderReason = safeString(reason || 'flush');
-        return true;
+        return settleKeroWorkstreamRenderResult(keroWorkstreamRenderer(), reason, renderVersion);
     } catch (error) {
-        Logger.warn(`Kero workstream flush render failed (${reason}):`, error?.message || error);
-        return false;
+        return failKeroWorkstreamRender(error, reason, renderVersion);
     }
 }
 
@@ -12570,6 +12650,54 @@ function addSvbRuntimeAdaptiveLimitsSelfTest(checks) {
             backgrounded: true,
             reason: ['diagnostic-background']
         });
+        const desktop4Signals = resolveSvbRuntimeConstraintSignals({
+            isMobile: false,
+            isWebView: false,
+            isPocketRisu: false,
+            backgrounded: false,
+            deviceMemoryGb: 4,
+            heapLimit: 1800000000,
+            heapRatio: 0.2,
+            hardwareConcurrency: 4,
+            saveData: false,
+            effectiveType: '4g'
+        });
+        const desktop2Signals = resolveSvbRuntimeConstraintSignals({
+            isMobile: false,
+            isWebView: false,
+            isPocketRisu: false,
+            backgrounded: false,
+            deviceMemoryGb: 2,
+            heapLimit: 1800000000,
+            heapRatio: 0.2,
+            hardwareConcurrency: 4,
+            saveData: false,
+            effectiveType: '4g'
+        });
+        const desktop4LowCoreSignals = resolveSvbRuntimeConstraintSignals({
+            isMobile: false,
+            isWebView: false,
+            isPocketRisu: false,
+            backgrounded: false,
+            deviceMemoryGb: 4,
+            heapLimit: 1800000000,
+            heapRatio: 0.2,
+            hardwareConcurrency: 2,
+            saveData: false,
+            effectiveType: '4g'
+        });
+        const mobile4Signals = resolveSvbRuntimeConstraintSignals({
+            isMobile: true,
+            isWebView: true,
+            isPocketRisu: true,
+            backgrounded: false,
+            deviceMemoryGb: 4,
+            heapLimit: 0,
+            heapRatio: 0,
+            hardwareConcurrency: 4,
+            saveData: true,
+            effectiveType: '2g'
+        });
         const packetFits = [desktop, pocket, background].every((limits) =>
             Number(limits.subAgentPacketCharLimit || 0) < Number(limits.subAgentContextCharLimit || 0)
         );
@@ -12588,6 +12716,10 @@ function addSvbRuntimeAdaptiveLimitsSelfTest(checks) {
             desktopDelay: desktop.workstreamRenderDelayMs,
             pocketChunk: pocket.bulkDefaultChunkSize,
             desktopChunk: desktop.bulkDefaultChunkSize,
+            desktop4Low: desktop4Signals.lowMemory,
+            desktop2LowDevice: desktop2Signals.lowDeviceMemory,
+            desktop4LowCore: desktop4LowCoreSignals.lowMemory,
+            mobile4Low: mobile4Signals.lowMemory,
             packetFits
         };
     });
@@ -12604,10 +12736,14 @@ function addSvbRuntimeAdaptiveLimitsSelfTest(checks) {
     if (Number(value.pocketEvents || 0) >= Number(value.desktopEvents || 0)) problems.push('모바일 작업흐름 렌더 축소 실패');
     if (Number(value.backgroundDelay || 0) <= Number(value.desktopDelay || 0)) problems.push('백그라운드 렌더 지연 실패');
     if (Number(value.pocketChunk || 0) >= Number(value.desktopChunk || 0)) problems.push('모바일 대량 생성 chunk 축소 실패');
+    if (value.desktop4Low === true) problems.push('데스크톱 4GB low 오분류');
+    if (value.desktop2LowDevice !== true) problems.push('데스크톱 2GB low 감지 실패');
+    if (value.desktop4LowCore !== true) problems.push('저코어 4GB 데스크톱 low 감지 실패');
+    if (value.mobile4Low !== true) problems.push('모바일/포켓Risu low 감지 실패');
     checks.push(makeSvbRuntimeCheck(
         problems.length === 0,
         '모바일/포켓Risu 적응형 예산 자체 테스트',
-        `desktop packet/context ${value.desktopPacket || 0}/${value.desktopContext || 0} · pocket ${value.pocketPacket || 0}/${value.pocketContext || 0} · parallel ${value.pocketParallel || 0}${problems.length ? ` · 문제: ${problems.join(' / ')}` : ''}`,
+        `desktop packet/context ${value.desktopPacket || 0}/${value.desktopContext || 0} · pocket ${value.pocketPacket || 0}/${value.pocketContext || 0} · desktop4Low ${value.desktop4Low === true ? 'yes' : 'no'} · parallel ${value.pocketParallel || 0}${problems.length ? ` · 문제: ${problems.join(' / ')}` : ''}`,
         problems.length ? 'error' : 'ok'
     ));
 }
@@ -29162,7 +29298,7 @@ ${steeringBlock ? `\n${steeringBlock}` : ''}`;
         };
     }
 
-    async function renderKeroWorkstream() {
+    function renderKeroWorkstream() {
         const adaptiveLimits = getSvbAdaptiveRuntimeLimits();
         try {
             if (typeof flushExpiredSubAgentConsultationGuards === 'function') {
@@ -29183,16 +29319,16 @@ ${steeringBlock ? `\n${steeringBlock}` : ''}`;
             summary.textContent = `${context.modeLabel} 모드 · ${context.targetName || '새 작업'} · ${formatReferenceSelectionSummary()}${missionText}${queueText}`;
         }
         renderKeroQueuePanel(currentKeroMission?.id || '');
-        if (!list) return;
+        if (!list) return true;
         if (adaptiveLimits.backgrounded) {
             svbWorkstreamRenderDirty = true;
-            return;
+            return false;
         }
         list.innerHTML = '';
         renderSvbRuntimeDiagnostics();
         if (!keroWorkstreamEvents.length) {
             list.appendChild(el('div', { class: 'kero-empty', text: '아직 기록된 작업 흐름이 없습니다.' }));
-            return;
+            return true;
         }
         keroWorkstreamEvents.slice(0, adaptiveLimits.workstreamRenderEventLimit).forEach((entry) => {
             list.appendChild(el('div', { class: 'kero-workstream-item' }, [
@@ -29203,6 +29339,7 @@ ${steeringBlock ? `\n${steeringBlock}` : ''}`;
                 el('div', { class: 'kero-workstream-detail', text: entry.detail || '' })
             ]));
         });
+        return true;
     }
 
     keroWorkstreamRenderer = renderKeroWorkstream;
@@ -39066,7 +39203,7 @@ function getBulkOutputHint(targetType) {
     return 'result는 항목 JSON 배열이어야 합니다.';
 }
 
-/* === RisuAI SuperVibeBot v1.5.4 Guide (Concise Version) === */
+/* === RisuAI SuperVibeBot v1.5.5 Guide (Concise Version) === */
 const RISUAI_GUIDE = {
     overview: `
 ## System Overview
@@ -50080,7 +50217,7 @@ async function loadInitialSettings() {
 async function registerUIElements() {
     // 채팅 화면 메뉴에 버튼 추가 (플로팅 버튼 대신)
     await risuai.registerButton({
-        name: "SuperVibeBot v1.5.4",
+        name: "SuperVibeBot v1.5.5",
         icon: "🐸",
         iconType: "html",
         location: "chat"  // 채팅 메뉴에 배치 (화면 가림 방지)
@@ -50089,7 +50226,7 @@ async function registerUIElements() {
     });
 
     await risuai.registerSetting(
-        "SuperVibeBot v1.5.4 Settings",
+        "SuperVibeBot v1.5.5 Settings",
         async () => {
             await openSettingsWindow();
         },
@@ -50132,7 +50269,7 @@ function cleanup() {
 (async () => {
     try {
         Logger.info("=".repeat(50));
-        Logger.info("SuperVibeBot v1.5.4");
+        Logger.info("SuperVibeBot v1.5.5");
         Logger.info("RisuAI Plugin API 3.0");
         Logger.info("=".repeat(50));
         await loadInitialSettings();
