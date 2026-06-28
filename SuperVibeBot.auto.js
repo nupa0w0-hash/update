@@ -1,13 +1,13 @@
 //@name SuperVibeBot
-//@display-name 🐸 SuperVibeBot v1.5.13
-//@version 1.5.13
+//@display-name 🐸 SuperVibeBot v1.5.14
+//@version 1.5.14
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/supervibebot-update/refs/heads/main/SuperVibeBot.update.js
 //@arg api_key string "" "Google AI Studio API 키를 입력하세요 (Vertex AI, API Hub 또는 GitHub Copilot 연동 시 불필요)."
 //@arg disable_safety int 0 "안전 필터 비활성화 (1=OFF, 0=ON)"
 
 if (typeof risuai === "undefined") {
-    alert("⚠️ SuperVibeBot v1.5.13는 RisuAI Plugin API 3.0이 필요합니다.");
+    alert("⚠️ SuperVibeBot v1.5.14는 RisuAI Plugin API 3.0이 필요합니다.");
     throw new Error("API 3.0 required");
 }
 
@@ -163,9 +163,14 @@ async function safeCopyText(text, options = {}) {
 }
 
 /**
- * SuperVibeBot v1.5.13 Release Notes
+ * SuperVibeBot v1.5.14 Release Notes
  *
  * 🎉 Major Changes
+ * - Caps sub-agent consultation packets to 120k desktop, 80k constrained, and 60k background chars
+ * - Reduces PocketRisu/WebView crash pressure even when mobile/WebView runtime detection misses
+ * - Releases Kero chat task locks when resume/setup storage operations fail before the main protected run
+ * - Applies lorebook/regex/trigger action idx filters instead of relying on whichever current result is open
+ * - Coalesces background status DOM rendering to reduce WebView progress-update pressure
  * - Added hard output-token and response-character caps for sub-agent reports to reduce WebView/PocketRisu crash pressure
  * - Truncates oversized sub-agent responses before JSON parsing and manager-board rendering
  * - Limits sub-agent parallelism to 1 for payloads over 120k chars even if WebView/mobile detection fails
@@ -175,6 +180,8 @@ async function safeCopyText(text, options = {}) {
  * - Added runtime self-checks for lorebook fallback, selected-item safety, and sub-agent output caps
  *
  * ✨ New Features
+ * - Sub-agent packet hard caps now apply from adaptive runtime limits before provider calls
+ * - Lorebook Builder now treats multiple keys and secondkey as explicit advanced options, not defaults
  * - Sub-agent report calls now default to 4096 output tokens on desktop and 2048 on constrained/mobile/webview profiles
  * - Explicit sub-agent output overrides are clamped to a WebView-safe hard cap
  * - API responses that ignore max_tokens are shortened before entering Kero's parser/renderer
@@ -185,6 +192,8 @@ async function safeCopyText(text, options = {}) {
  * - Malformed embedded action directives now fail before corrupting saved text
  *
  * 🔧 Improvements
+ * - Runtime diagnostics now verify packet hard caps for desktop, PocketRisu, and background profiles
+ * - Runtime diagnostics now verify bulk apply idx filtering
  * - Prevents GLM/Kimi/API Hub sub-agents from returning or rendering oversized manager reports
  * - Runtime diagnostics now verify sub-agent hard caps, response truncation, and conservative large-payload parallel limits
  * - Safer selected-item expansion in both global and Kero chat execution paths
@@ -1807,7 +1816,7 @@ Each lorebook entry has:
 - **insertorder** (number) — Insertion order / priority
 - **selective** (boolean) — If true, only triggers when key matches
 - **alwaysActive** (boolean) — Include constantly when appropriate
-- **secondkey** (string) — Secondary trigger key (AND condition with primary)
+- **secondkey** (string) — Legacy/advanced secondary trigger key; leave empty unless the user explicitly asks for AND-key behavior
 - **useRegex** (boolean) — Treat keys as regex when needed
 - **folder** (string) — Parent folder key/id
 
@@ -1815,9 +1824,9 @@ Do not output legacy fields such as **position**, **disable**, **insertonce**, *
 
 ### Key Strategy
 - Use specific character names, location names, and concept terms as keys
-- Comma-separate multiple keys: \`"Alice, alice, 앨리스"\`
-- Include both English and Korean variants of names
-- Use secondary keys for context-dependent lore: key="Alice", secondkey="combat" → only triggers when both appear
+- Prefer one practical primary key per entry. Do not use multiple-key mode by default.
+- Include both English and Korean variants only when the character/material actually uses both names.
+- Leave secondkey empty by default. Use secondary keys only when the user explicitly asks for strict AND-trigger lore.
 
 ### Content Writing Best Practices
 1. **Be complete before concise** — Remove filler, but keep concrete facts, relationships, constraints, sensory cues, and roleplay hooks.
@@ -2136,7 +2145,7 @@ Real characters are complex:
 
 ### Use Format Tags for AI Guidance
 \`\`\`
-<personality>core traits and behavioral patterns</personality>
+<traits>core traits and behavioral patterns</traits>
 <appearance>physical description</appearance>
 <speech>how they communicate</speech>
 <background>history and context</background>
@@ -2736,6 +2745,7 @@ const KERO_MISSION_STEP_LIMIT = 80;
 const KERO_WORKSTREAM_VISIBLE_EVENT_LIMIT = 40;
 const KERO_WORKSTREAM_TITLE_CHAR_LIMIT = 140;
 const KERO_WORKSTREAM_DETAIL_CHAR_LIMIT = 1200;
+const KERO_BACKGROUND_STATUS_RENDER_DEBOUNCE_MS = 700;
 const KERO_MISSION_STALE_MS = 6 * 60 * 60 * 1000;
 const KERO_INPUT_QUEUE_PROCESSING_STALE_MS = 5 * 60 * 1000;
 const KERO_INPUT_QUEUE_FOREIGN_PROCESSING_STALE_MS = 2 * 60 * 60 * 1000;
@@ -2754,6 +2764,9 @@ const KERO_SUBAGENT_HUGE_CONTEXT_PARALLEL = 1;
 const KERO_SUBAGENT_CONTEXT_TOKEN_LIMIT = 90000;
 const KERO_SUBAGENT_CONTEXT_CHAR_LIMIT = 220000;
 const KERO_SUBAGENT_PACKET_CHAR_LIMIT = 260000;
+const SVB_SUBAGENT_DESKTOP_PACKET_HARD_CAP_CHARS = 120000;
+const SVB_SUBAGENT_CONSTRAINED_PACKET_HARD_CAP_CHARS = 80000;
+const SVB_SUBAGENT_BACKGROUND_PACKET_HARD_CAP_CHARS = 60000;
 const KERO_SUBAGENT_SYSTEM_EXCERPT_CHAR_LIMIT = 6000;
 const KERO_SUBAGENT_USER_TEXT_CHAR_LIMIT = 12000;
 const KERO_SUBAGENT_MANAGER_BOARD_CHAR_LIMIT = 14000;
@@ -4553,6 +4566,7 @@ function computeSvbAdaptiveRuntimeLimits(profile = getSvbRuntimeEnvironmentProfi
             : tier === 'mobile' ? 0.64
                 : tier === 'desktop' ? 0.9
                     : 1;
+    const mobileOrLow = safeProfile.isPocketRisu || safeProfile.isWebView || safeProfile.isMobile || safeProfile.lowMemory || tier === 'low' || tier === 'background';
     let subAgentContextCharLimit = Math.floor(KERO_SUBAGENT_CONTEXT_CHAR_LIMIT * multiplier);
     if (safeProfile.isPocketRisu || safeProfile.isWebView || safeProfile.isMobile) {
         subAgentContextCharLimit = Math.min(subAgentContextCharLimit, 140000);
@@ -4567,11 +4581,16 @@ function computeSvbAdaptiveRuntimeLimits(profile = getSvbRuntimeEnvironmentProfi
     const packetContextCeiling = Math.max(12000, subAgentContextCharLimit - SVB_SUBAGENT_PACKET_CONTEXT_HEADROOM_CHARS);
     let subAgentPacketCharLimit = Math.floor(KERO_SUBAGENT_PACKET_CHAR_LIMIT * multiplier);
     subAgentPacketCharLimit = Math.min(subAgentPacketCharLimit, packetContextCeiling);
+    const packetRuntimeHardCap = (safeProfile.backgrounded || tier === 'background')
+        ? SVB_SUBAGENT_BACKGROUND_PACKET_HARD_CAP_CHARS
+        : mobileOrLow
+            ? SVB_SUBAGENT_CONSTRAINED_PACKET_HARD_CAP_CHARS
+            : SVB_SUBAGENT_DESKTOP_PACKET_HARD_CAP_CHARS;
+    subAgentPacketCharLimit = Math.min(subAgentPacketCharLimit, packetRuntimeHardCap);
     subAgentPacketCharLimit = Math.max(SVB_SUBAGENT_MIN_PACKET_CHAR_LIMIT, subAgentPacketCharLimit);
     if (subAgentPacketCharLimit >= subAgentContextCharLimit) {
         subAgentPacketCharLimit = Math.max(12000, subAgentContextCharLimit - 4000);
     }
-    const mobileOrLow = safeProfile.isPocketRisu || safeProfile.isWebView || safeProfile.isMobile || safeProfile.lowMemory || tier === 'low' || tier === 'background';
     const subAgentMaxParallel = mobileOrLow ? 1 : KERO_SUBAGENT_MAX_PARALLEL;
     const subAgentLargeParallel = mobileOrLow ? 1 : KERO_SUBAGENT_LARGE_CONTEXT_PARALLEL;
     const visibleEvents = tier === 'background' ? 12
@@ -8270,6 +8289,9 @@ let keroBackgroundToastCount = 0;
 let keroBackgroundHostUsesRootDocument = false;
 let keroBackgroundLastToast = { message: '', at: 0 };
 let keroBackgroundStatusToastState = { node: null, lastShownAt: 0, lastUpdatedAt: 0, message: '' };
+let keroBackgroundStatusRenderTimer = null;
+let keroBackgroundStatusRenderRunning = false;
+let keroBackgroundStatusRenderQueued = false;
 let keroCompletionNoticeActive = false;
 let keroCompletionNoticeTimer = null;
 let keroCompletionNoticeDoc = null;
@@ -8403,6 +8425,27 @@ function buildKeroBatchResultsFromState(target, state = bulkEditState?.[target])
         };
     });
     return { success: improved.map((item) => item.name), failed: [], improved };
+}
+
+function hasKeroActionPartSelection(action = {}) {
+    return action?.idx !== undefined && action?.idx !== null
+        || action?.all === true
+        || action?.selected === true
+        || Array.isArray(action?.indexes)
+        || Array.isArray(action?.indices)
+        || Array.isArray(action?.idxList);
+}
+
+function filterKeroBatchResultsByIdxList(batchResults, idxList = []) {
+    if (!batchResults || !Array.isArray(batchResults.improved)) return batchResults;
+    const idxSet = new Set(ensureArray(idxList).filter((idx) => Number.isInteger(idx)));
+    if (!idxSet.size) return { ...batchResults, success: [], failed: batchResults.failed || [], improved: [] };
+    const improved = batchResults.improved.filter((item) => idxSet.has(Number(item?.idx)));
+    return {
+        ...batchResults,
+        success: improved.map((item) => item.name).filter(Boolean),
+        improved
+    };
 }
 
 function getKeroCurrentBatchItem(char, target, idx) {
@@ -11906,13 +11949,21 @@ function addSvbRuntimeIndexFallbackSelfTest(checks) {
                 name: 'Self Test',
                 globalLore: [{ comment: 'A', content: 'A' }, { comment: 'B', content: 'B' }]
             });
+            const batchResults = buildKeroBatchResultsFromState('lorebook', {
+                idxList: [2, 5],
+                result: [{ comment: 'A', content: 'A+' }, { comment: 'B', content: 'B+' }],
+                original: [{ comment: 'A', content: 'A' }, { comment: 'B', content: 'B' }]
+            });
+            const filteredBatch = filterKeroBatchResultsByIdxList(batchResults, [5]);
             return {
                 explicitNumber: explicitNumber[0],
                 explicitString: explicitString[0],
                 fallbackLore: fallbackLore[0],
                 invalidLength: invalid.length,
                 selectedWithoutDefaultAllLength: selectedWithoutDefaultAll.length,
-                selectedPreferCurrent: selectedPreferCurrent[0]
+                selectedPreferCurrent: selectedPreferCurrent[0],
+                filteredBatchCount: filteredBatch?.improved?.length || 0,
+                filteredBatchIdx: filteredBatch?.improved?.[0]?.idx
             };
         } finally {
             currentLorebookResult = previousLoreResult;
@@ -11936,6 +11987,7 @@ function addSvbRuntimeIndexFallbackSelfTest(checks) {
     if (value.invalidLength !== 0) problems.push('무효 idx 차단 실패');
     if (value.selectedWithoutDefaultAllLength !== 0) problems.push('selected:true가 미초기화 상태에서 전체 선택으로 확장됨');
     if (value.selectedPreferCurrent !== 7) problems.push('selected preferCurrent fallback 실패');
+    if (value.filteredBatchCount !== 1 || value.filteredBatchIdx !== 5) problems.push('bulk apply idx 필터 실패');
     checks.push(makeSvbRuntimeCheck(
         problems.length === 0,
         '선택 항목 idx fallback 자체 테스트',
@@ -12843,6 +12895,11 @@ function addSvbRuntimeAdaptiveLimitsSelfTest(checks) {
         const packetFits = [desktop, pocket, background].every((limits) =>
             Number(limits.subAgentPacketCharLimit || 0) < Number(limits.subAgentContextCharLimit || 0)
         );
+        const packetHardCaps = {
+            desktop: Number(desktop.subAgentPacketCharLimit || 0) <= SVB_SUBAGENT_DESKTOP_PACKET_HARD_CAP_CHARS,
+            pocket: Number(pocket.subAgentPacketCharLimit || 0) <= SVB_SUBAGENT_CONSTRAINED_PACKET_HARD_CAP_CHARS,
+            background: Number(background.subAgentPacketCharLimit || 0) <= SVB_SUBAGENT_BACKGROUND_PACKET_HARD_CAP_CHARS
+        };
         return {
             desktopPacket: desktop.subAgentPacketCharLimit,
             desktopContext: desktop.subAgentContextCharLimit,
@@ -12862,7 +12919,8 @@ function addSvbRuntimeAdaptiveLimitsSelfTest(checks) {
             desktop2LowDevice: desktop2Signals.lowDeviceMemory,
             desktop4LowCore: desktop4LowCoreSignals.lowMemory,
             mobile4Low: mobile4Signals.lowMemory,
-            packetFits
+            packetFits,
+            packetHardCaps
         };
     });
     if (!result.ok) {
@@ -12871,6 +12929,9 @@ function addSvbRuntimeAdaptiveLimitsSelfTest(checks) {
     }
     const value = result.value || {};
     const problems = [];
+    if (!value.packetHardCaps?.desktop) problems.push('desktop packet hard cap failed');
+    if (!value.packetHardCaps?.pocket) problems.push('pocket packet hard cap failed');
+    if (!value.packetHardCaps?.background) problems.push('background packet hard cap failed');
     if (!value.packetFits) problems.push('packet/context headroom 실패');
     if (Number(value.pocketParallel || 0) !== 1 || Number(value.backgroundParallel || 0) !== 1) problems.push('모바일/백그라운드 병렬 1 제한 실패');
     if (Number(value.pocketContext || 0) >= Number(value.desktopContext || 0)) problems.push('포켓Risu context 예산 축소 실패');
@@ -15350,8 +15411,9 @@ async function showKeroCompletionNotice(message, type = 'done') {
     return true;
 }
 
-function renderKeroBackgroundStatus() {
-    ensureKeroBackgroundStatusHost().then((host) => {
+function renderKeroBackgroundStatusNow() {
+    keroBackgroundStatusRenderRunning = true;
+    return ensureKeroBackgroundStatusHost().then((host) => {
         const doc = host.ownerDocument || document;
         const statusWrap = host.querySelector?.('[data-svb-bg-status="true"]') || host;
         const activeJobs = getActiveKeroBackgroundJobs();
@@ -15371,7 +15433,38 @@ function renderKeroBackgroundStatus() {
         }
     }).catch((error) => {
         Logger.warn('Kero background status render failed:', error?.message || error);
+    }).finally(() => {
+        keroBackgroundStatusRenderRunning = false;
+        if (keroBackgroundStatusRenderQueued) {
+            keroBackgroundStatusRenderQueued = false;
+            scheduleKeroBackgroundStatusRender();
+        }
     });
+}
+
+function scheduleKeroBackgroundStatusRender(delayMs = KERO_BACKGROUND_STATUS_RENDER_DEBOUNCE_MS) {
+    if (keroBackgroundStatusRenderTimer) return;
+    if (keroBackgroundStatusRenderRunning) {
+        keroBackgroundStatusRenderQueued = true;
+        return;
+    }
+    const delay = Math.max(0, Number(delayMs) || 0);
+    keroBackgroundStatusRenderTimer = setTimeout(() => {
+        keroBackgroundStatusRenderTimer = null;
+        renderKeroBackgroundStatusNow();
+    }, delay);
+}
+
+function renderKeroBackgroundStatus(options = {}) {
+    if (options.immediate === true) {
+        if (keroBackgroundStatusRenderTimer) {
+            clearTimeout(keroBackgroundStatusRenderTimer);
+            keroBackgroundStatusRenderTimer = null;
+        }
+        return renderKeroBackgroundStatusNow();
+    }
+    scheduleKeroBackgroundStatusRender(options.delayMs);
+    return null;
 }
 
 function createKeroBackgroundJob(label, detail = '', options = {}) {
@@ -28927,7 +29020,7 @@ ${steeringBlock ? `\n${steeringBlock}` : ''}`;
             const canApply = hasKeroActionResult(target);
             if (canApply) {
                 updateKeroProgress(0, 1, `${getTargetLabel(target)} 적용 중...`, actionProgressOptions);
-                const applied = await applyKeroAction(target, actionAbortOptions);
+                const applied = await applyKeroAction(target, { ...actionAbortOptions, action });
                 if (applied === false) {
                     updateKeroProgress(1, 1, `${getTargetLabel(target)} 적용 중단`, actionProgressOptions);
                     await addBotMessage(`⚠️ ${getTargetLabel(target)} 적용이 완료되지 않았습니다. 저장된 데이터는 변경하지 않았고, 필요하면 다시 개선을 실행해주세요.`);
@@ -31126,7 +31219,11 @@ ${steeringBlock ? `\n${steeringBlock}` : ''}`;
         const taskKeroMode = safeString(options.keroMode || currentKeroMode) || currentKeroMode;
         const taskWorkTargetMode = normalizeWorkTargetMode(options.workTargetMode || currentWorkTargetMode);
         keroChatTaskRunning = true;
-        updateKeroQueuedInputUi();
+        try {
+            updateKeroQueuedInputUi();
+        } catch (error) {
+            Logger.warn('Kero queue UI update failed after lock:', error?.message || error);
+        }
         const isWorkMode = taskKeroMode === 'work';
         let backgroundJobId = null;
         try {
@@ -31136,6 +31233,46 @@ ${steeringBlock ? `\n${steeringBlock}` : ''}`;
         }
         const taskProgressOptions = backgroundJobId ? { jobId: backgroundJobId, requireCurrentJob: true } : {};
         let backgroundJobClosed = false;
+        const cleanupKeroChatTaskSetupFailure = async (error, stage = 'setup') => {
+            const detail = `요청 준비 단계(${stage})에서 오류가 발생해 작업 잠금을 해제합니다: ${error?.message || error}`;
+            Logger.warn('Kero chat task setup failed:', detail);
+            try {
+                addKeroWorkstreamEvent('요청 준비 오류', detail, 'error', taskProgressOptions);
+            } catch (_) {}
+            if (backgroundJobId && !backgroundJobClosed) {
+                try {
+                    finishKeroBackgroundJob(backgroundJobId, 'error', detail);
+                } catch (finishError) {
+                    Logger.warn('Kero setup failure background job close failed:', finishError?.message || finishError);
+                }
+                backgroundJobClosed = true;
+            }
+            if (isWorkMode) {
+                try {
+                    await finishKeroMission('error', detail);
+                } catch (missionError) {
+                    Logger.warn('Kero setup failure mission close failed:', missionError?.message || missionError);
+                }
+            }
+            if (!backgroundJobId || currentKeroRequestJobId === backgroundJobId) {
+                currentKeroRequestJobId = null;
+                keroChatTaskRunning = false;
+                if (sendBtn) sendBtn.textContent = originalText === '작업 중...' ? '전송' : originalText;
+            }
+            try {
+                updateKeroQueuedInputUi();
+            } catch (_) {}
+            try {
+                inputEl?.focus?.();
+            } catch (_) {}
+            return {
+                handled: false,
+                success: false,
+                status: 'error',
+                queueDisposition: 'failed',
+                detail
+            };
+        };
         let actionJobSummary = null;
         let bulkJobSummary = null;
         let bulkAutoResumeResult = null;
@@ -31169,8 +31306,12 @@ ${steeringBlock ? `\n${steeringBlock}` : ''}`;
         let settledMissionRetryRequeued = 0;
         let retryFailedQueueRequeued = 0;
         if (resumeRequest && currentKeroMission && !['done', 'cancelled'].includes(currentMissionStatus)) {
-            await reconcileCompletedKeroBulkWarningActionJobs(currentMissionStorageId, currentMissionId);
-            resumeAvailability = await getKeroMissionResumeAvailability(currentMissionStorageId, currentMissionId);
+            try {
+                await reconcileCompletedKeroBulkWarningActionJobs(currentMissionStorageId, currentMissionId);
+                resumeAvailability = await getKeroMissionResumeAvailability(currentMissionStorageId, currentMissionId);
+            } catch (error) {
+                return await cleanupKeroChatTaskSetupFailure(error, 'resume-preflight');
+            }
         }
         const hasNormallyResumableMissionStatus = ['interrupted', 'error', 'blocked', 'running'].includes(currentMissionStatus);
         const hasWarningResumeWork = currentMissionStatus === 'warning'
@@ -31220,7 +31361,11 @@ ${steeringBlock ? `\n${steeringBlock}` : ''}`;
                 settledMissionRetryRequeued = requeuedInputs.requeued;
                 keroQueueDrainAgainRequested = true;
                 keroQueuedUserInputs = requeuedInputs.queue;
-                await saveKeroInputQueue(currentKeroPersistentStorageId, keroQueuedUserInputs);
+                try {
+                    await saveKeroInputQueue(currentKeroPersistentStorageId, keroQueuedUserInputs);
+                } catch (error) {
+                    return await cleanupKeroChatTaskSetupFailure(error, 'settled-mission-requeue-save');
+                }
                 const retryParts = [];
                 if (attentionRetryCount > 0) retryParts.push(`확인필요 ${attentionRetryCount}개`);
                 if (hardFailedRetryCount > 0) retryParts.push(`실패 ${hardFailedRetryCount}개`);
@@ -31236,7 +31381,11 @@ ${steeringBlock ? `\n${steeringBlock}` : ''}`;
                 retryFailedQueueRequeued = requeuedInputs.requeued;
                 keroQueueDrainAgainRequested = true;
                 keroQueuedUserInputs = requeuedInputs.queue;
-                await saveKeroInputQueue(currentKeroPersistentStorageId, keroQueuedUserInputs);
+                try {
+                    await saveKeroInputQueue(currentKeroPersistentStorageId, keroQueuedUserInputs);
+                } catch (error) {
+                    return await cleanupKeroChatTaskSetupFailure(error, 'orphan-queue-retry-save');
+                }
                 const retryParts = [];
                 if (attentionRetryCount > 0) retryParts.push(`확인필요 ${attentionRetryCount}개`);
                 if (hardFailedRetryCount > 0) retryParts.push(`실패 ${hardFailedRetryCount}개`);
@@ -31263,7 +31412,11 @@ ${steeringBlock ? `\n${steeringBlock}` : ''}`;
                 if (requeuedInputs.requeued > 0) {
                     keroQueueDrainAgainRequested = true;
                     keroQueuedUserInputs = requeuedInputs.queue;
-                    await saveKeroInputQueue(currentKeroPersistentStorageId, keroQueuedUserInputs);
+                    try {
+                        await saveKeroInputQueue(currentKeroPersistentStorageId, keroQueuedUserInputs);
+                    } catch (error) {
+                        return await cleanupKeroChatTaskSetupFailure(error, 'warning-retry-requeue-save');
+                    }
                     const retryParts = [];
                     if (attentionRetryCount > 0) retryParts.push(`확인필요 ${attentionRetryCount}개`);
                     if (hardFailedRetryCount > 0) retryParts.push(`실패 ${hardFailedRetryCount}개`);
@@ -32320,7 +32473,7 @@ ${metaBlock}
 - CBS 문법: Curly Braced Syntax (변수, 조건문, 반복문). Lua 로직 내부에 CBS를 직접 넣지 말고 ChatVar/State API를 사용한다.
 - Lua 5.4: 트리거 스크립트, 비동기 함수, print/log, setState/getState, listenEdit를 우선한다.
 - Regex: editinput/editoutput/editprocess/editdisplay 계열. editdisplay는 최종 표시 레이어다.
-- Lorebook 현재 필드: key, secondkey, comment, content, mode, insertorder, alwaysActive, selective, useRegex, folder.
+- Lorebook 현재 필드: key, secondkey, comment, content, mode, insertorder, alwaysActive, selective, useRegex, folder. 실사용 기본은 단일 key이며 secondkey/multiple key는 명시 요청이 있을 때만 쓴다.
 - ChatVar: 변수 네이밍 규칙 (cv 프리픽스 권장)
 
 ## 📝 응답 형식
@@ -39440,7 +39593,7 @@ function getBulkOutputHint(targetType) {
     return 'result는 항목 JSON 배열이어야 합니다.';
 }
 
-/* === RisuAI SuperVibeBot v1.5.13 Guide (Concise Version) === */
+/* === RisuAI SuperVibeBot v1.5.14 Guide (Concise Version) === */
 const RISUAI_GUIDE = {
     overview: `
 ## System Overview
@@ -39586,7 +39739,7 @@ Dynamic context injection.
 
 ### Current RisuAI Entry Shape
 - \`key\`: primary activation keywords or folder id.
-- \`secondkey\`: secondary activation keywords.
+- \`secondkey\`: legacy/advanced secondary activation keywords; keep empty unless the user explicitly asks for AND-key behavior.
 - \`comment\`: display name / memo.
 - \`content\`: injected lore text.
 - \`mode\`: \`normal\`, \`multiple\`, \`constant\`, \`child\`, or \`folder\`.
@@ -41410,7 +41563,7 @@ STRICT JSON OUTPUT FORMAT (JSON Array):
     "mode": "normal",
     "insertorder": 100,
     "alwaysActive": false,
-    "secondkey": "optional secondary keys",
+    "secondkey": "",
     "selective": false,
     "useRegex": false,
     "folder": "folder:uuid (optional, if inside folder)"
@@ -41429,6 +41582,8 @@ STRICT JSON OUTPUT FORMAT (JSON Array):
 
 RULES:
 - Return ONLY the JSON Array.
+- Use one practical primary key by default; leave secondkey empty unless explicitly requested.
+- Do not use multiple-key mode unless the user explicitly asks for it.
 - Preserve special tags: {{user}}, {{char}}, <START>, etc.
 - No markdown formatting (no bold/italic).
 - No explanations.`,
@@ -41543,20 +41698,53 @@ async function applyKeroAction(target, options = {}) {
         return await applyVariablesImprovement(options);
     }
     if (target === 'lorebook') {
-        if (!currentLorebookResult?.improved && bulkEditState?.lorebook?.result?.length) {
-            return await applyKeroBatchResults(buildKeroBatchResultsFromState('lorebook'), 'lorebook', options);
+        const action = options.action || {};
+        const char = hasKeroActionPartSelection(action) ? await getCharacterData() : null;
+        const idxList = hasKeroActionPartSelection(action) ? expandIdxList('lorebook', { ...action, preferCurrent: true }, char) : [];
+        if (idxList.length && currentLorebookResult?.improved && !idxList.includes(Number(currentLorebookResult.idx))) {
+            addKeroWorkstreamEvent('로어북 적용 대상 불일치', `요청 idx ${idxList.join(', ')} · 현재 결과 idx ${currentLorebookResult.idx}`, 'warning', options);
+            currentLorebookResult = null;
+        }
+        if ((!currentLorebookResult?.improved || idxList.length) && bulkEditState?.lorebook?.result?.length) {
+            const batchResults = idxList.length
+                ? filterKeroBatchResultsByIdxList(buildKeroBatchResultsFromState('lorebook'), idxList)
+                : buildKeroBatchResultsFromState('lorebook');
+            if (batchResults?.improved?.length) return await applyKeroBatchResults(batchResults, 'lorebook', options);
+            if (idxList.length) return false;
         }
         return await applyLorebookImprovement(options);
     }
     if (target === 'regex') {
-        if (!currentRegexResult?.improved && bulkEditState?.regex?.result?.length) {
-            return await applyKeroBatchResults(buildKeroBatchResultsFromState('regex'), 'regex', options);
+        const action = options.action || {};
+        const char = hasKeroActionPartSelection(action) ? await getCharacterData() : null;
+        const idxList = hasKeroActionPartSelection(action) ? expandIdxList('regex', { ...action, preferCurrent: true }, char) : [];
+        if (idxList.length && currentRegexResult?.improved && !idxList.includes(Number(currentRegexResult.idx))) {
+            addKeroWorkstreamEvent('정규식 적용 대상 불일치', `요청 idx ${idxList.join(', ')} · 현재 결과 idx ${currentRegexResult.idx}`, 'warning', options);
+            currentRegexResult = null;
+        }
+        if ((!currentRegexResult?.improved || idxList.length) && bulkEditState?.regex?.result?.length) {
+            const batchResults = idxList.length
+                ? filterKeroBatchResultsByIdxList(buildKeroBatchResultsFromState('regex'), idxList)
+                : buildKeroBatchResultsFromState('regex');
+            if (batchResults?.improved?.length) return await applyKeroBatchResults(batchResults, 'regex', options);
+            if (idxList.length) return false;
         }
         return await applyRegexImprovement(options);
     }
     if (target === 'trigger') {
-        if (!currentTriggerResult?.improved && bulkEditState?.trigger?.result?.length) {
-            return await applyKeroBatchResults(buildKeroBatchResultsFromState('trigger'), 'trigger', options);
+        const action = options.action || {};
+        const char = hasKeroActionPartSelection(action) ? await getCharacterData() : null;
+        const idxList = hasKeroActionPartSelection(action) ? expandIdxList('trigger', { ...action, preferCurrent: true }, char) : [];
+        if (idxList.length && currentTriggerResult?.improved && !idxList.includes(Number(currentTriggerResult.idx))) {
+            addKeroWorkstreamEvent('트리거 적용 대상 불일치', `요청 idx ${idxList.join(', ')} · 현재 결과 idx ${currentTriggerResult.idx}`, 'warning', options);
+            currentTriggerResult = null;
+        }
+        if ((!currentTriggerResult?.improved || idxList.length) && bulkEditState?.trigger?.result?.length) {
+            const batchResults = idxList.length
+                ? filterKeroBatchResultsByIdxList(buildKeroBatchResultsFromState('trigger'), idxList)
+                : buildKeroBatchResultsFromState('trigger');
+            if (batchResults?.improved?.length) return await applyKeroBatchResults(batchResults, 'trigger', options);
+            if (idxList.length) return false;
         }
         return await applyTriggerImprovement(options);
     }
@@ -49667,7 +49855,6 @@ async function openVibeLogStudio() {
             getCharacterField(char, 'desc')
             || getCharacterField(char, 'description')
             || getCharacterField(char, 'persona')
-            || getCharacterField(char, 'personality')
             || ''
         ).trim();
         return {
@@ -50548,7 +50735,7 @@ async function loadInitialSettings() {
 async function registerUIElements() {
     // 채팅 화면 메뉴에 버튼 추가 (플로팅 버튼 대신)
     await risuai.registerButton({
-        name: "SuperVibeBot v1.5.13",
+        name: "SuperVibeBot v1.5.14",
         icon: "🐸",
         iconType: "html",
         location: "chat"  // 채팅 메뉴에 배치 (화면 가림 방지)
@@ -50557,7 +50744,7 @@ async function registerUIElements() {
     });
 
     await risuai.registerSetting(
-        "SuperVibeBot v1.5.13 Settings",
+        "SuperVibeBot v1.5.14 Settings",
         async () => {
             await openSettingsWindow();
         },
@@ -50600,7 +50787,7 @@ function cleanup() {
 (async () => {
     try {
         Logger.info("=".repeat(50));
-        Logger.info("SuperVibeBot v1.5.13");
+        Logger.info("SuperVibeBot v1.5.14");
         Logger.info("RisuAI Plugin API 3.0");
         Logger.info("=".repeat(50));
         await loadInitialSettings();
