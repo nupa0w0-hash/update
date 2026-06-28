@@ -10222,7 +10222,7 @@ function addSvbRuntimePluginMetadataSelfTest(checks) {
 
 function addSvbRuntimeGatewayFallbackSelfTest(checks) {
     const result = readSvbRuntimeValue('게이트웨이 fallback 자체 테스트', () => {
-        const sampleRequest = '이봇을 정통 판타지 시뮬봇으로 만들고 싶어. 등장인물은 50명이상 각각의 로어북이 존재하고, 탄탄한 세계관, 인물관계, 정통판타지에 어울리는 상태창, CSS, 디자인, 설레는 소설같은 첫 메세지, 흔한 이름에 흔한 지명에 흔한 세계는 싫어.';
+        const sampleRequest = '진단용 대형 캐릭터 제작 요청: 이름, 디스크립션, 첫 메시지, 상태창 HTML/CSS, 그리고 서로 다른 등장인물 로어북 50개를 만들어줘. 흔한 이름과 복붙식 설정은 피하고 각 인물의 역할, 관계, 비밀을 분리해줘.';
         const fallback = buildKeroLocalGatewayFallbackResponse(sampleRequest, {
             userRequest: sampleRequest,
             allowSmallCreate: true,
@@ -10282,6 +10282,40 @@ function addSvbRuntimeGatewayFallbackSelfTest(checks) {
         '게이트웨이 fallback 자체 테스트',
         `액션 ${value.actionCount || 0}개 · bulk ${value.bulkCount || 0}개 · 스타터 로어북 ${value.starterLorebookCount || 0}개 · bulk 요청 ${value.bulkRequestLength || 0}자${missing.length ? ` · 문제: ${missing.join(', ')}` : ''}`,
         missing.length ? 'error' : 'ok'
+    ));
+}
+
+function addSvbRuntimeOutputLimitRecoverySelfTest(checks) {
+    const result = readSvbRuntimeValue('출력 한도 복구 판정 자체 테스트', () => {
+        const coded = new Error('diagnostic output limit');
+        coded.code = 'KERO_MODEL_OUTPUT_LIMIT';
+        const messageError = new Error('NanoGPT 응답이 출력 한도에서 잘렸습니다 (length). 더 작은 단계로 나눠 다시 시도합니다.');
+        return {
+            codedDetected: isProviderOutputLimitError(coded),
+            messageDetected: isProviderOutputLimitError(messageError),
+            retryableDetected: isRetryableModelTransportError(messageError),
+            friendlyMentionsSplit: /작은\s*작업\s*단위|작은\s*실행\s*단위/.test(getFriendlyModelErrorMessage(messageError)),
+            recoveryAllowed: shouldAttemptKeroGatewayRecovery({ keroMode: 'work', fromKero: true, allowGatewayRecovery: true }),
+            recoveryBlockedForRecoveryCall: shouldAttemptKeroGatewayRecovery({ keroMode: 'work', fromKero: true, gatewayRecovery: true })
+        };
+    });
+    if (!result.ok) {
+        checks.push(makeSvbRuntimeCheck(false, '출력 한도 복구 판정 자체 테스트', result.error, 'error'));
+        return;
+    }
+    const value = result.value || {};
+    const problems = [];
+    if (!value.codedDetected) problems.push('구조화 출력 한도 오류 감지 실패');
+    if (!value.messageDetected) problems.push('length 메시지 감지 실패');
+    if (!value.retryableDetected) problems.push('복구 가능 오류 판정 실패');
+    if (!value.friendlyMentionsSplit) problems.push('사용자 안내에 작은 단위 전환 누락');
+    if (!value.recoveryAllowed) problems.push('작업모드 복구 허용 실패');
+    if (value.recoveryBlockedForRecoveryCall) problems.push('복구 호출 중 재귀 방지 실패');
+    checks.push(makeSvbRuntimeCheck(
+        problems.length === 0,
+        '출력 한도 복구 판정 자체 테스트',
+        problems.length ? `문제: ${problems.join(' / ')}` : 'finish_reason=length 계열 오류를 일반 재시도 대신 작은 단위 복구 대상으로 판정',
+        problems.length ? 'error' : 'ok'
     ));
 }
 
@@ -10861,6 +10895,7 @@ function runSvbRuntimeSelfCheck(options = {}) {
     addSvbRuntimeWorkTargetRecoverySelfTest(checks);
     addSvbRuntimePluginMetadataSelfTest(checks);
     addSvbRuntimeGatewayFallbackSelfTest(checks);
+    addSvbRuntimeOutputLimitRecoverySelfTest(checks);
     addSvbRuntimeContextPayloadSelfTest(checks);
     addSvbRuntimeBulkCreateRangeSelfTest(checks);
     addSvbRuntimeMissionPersistSelfTest(checks);
