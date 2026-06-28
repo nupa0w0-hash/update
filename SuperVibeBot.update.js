@@ -1,13 +1,13 @@
 //@name SuperVibeBot
-//@display-name 🐸 SuperVibeBot v1.5.26
-//@version 1.5.26
+//@display-name 🐸 SuperVibeBot v1.5.27
+//@version 1.5.27
 //@api 3.0
 //@update-url https://github.com/nupa0w0-hash/supervibebot-update/releases/latest/download/SuperVibeBot.update.js
 //@arg api_key string "" "Google AI Studio API 키를 입력하세요 (Vertex AI, API Hub 또는 GitHub Copilot 연동 시 불필요)."
 //@arg disable_safety int 0 "안전 필터 비활성화 (1=OFF, 0=ON)"
 
 if (typeof risuai === "undefined") {
-    alert("⚠️ SuperVibeBot v1.5.26는 RisuAI Plugin API 3.0이 필요합니다.");
+    alert("⚠️ SuperVibeBot v1.5.27는 RisuAI Plugin API 3.0이 필요합니다.");
     throw new Error("API 3.0 required");
 }
 
@@ -164,7 +164,7 @@ async function safeCopyText(text, options = {}) {
 }
 
 /**
- * SuperVibeBot v1.5.26 Release Notes
+ * SuperVibeBot v1.5.27 Release Notes
  *
  * 🎉 Major Changes
  * - Caps sub-agent consultation packets to 120k desktop, 80k constrained, and 60k background chars
@@ -193,6 +193,7 @@ async function safeCopyText(text, options = {}) {
  * - Runtime diagnostics now flush expired sub-agent consultation guards before judging stuck sub-agent state
  * - Control-only resume/retry now stops empty interrupted missions instead of re-calling the original large prompt
  * - Lorebook AI writes now normalize model-only key arrays to one practical primary key and strip legacy key variant fields
+ * - Automatic sub-agent consultation now skips constrained/background WebView runtimes unless the user explicitly asked for sub-agents/GLM/Kimi
  * - Sub-agent report calls now default to 4096 output tokens on desktop and 2048 on constrained/mobile/webview profiles
  * - Explicit sub-agent output overrides are clamped to a WebView-safe hard cap
  * - API responses that ignore max_tokens are shortened before entering Kero's parser/renderer
@@ -211,6 +212,7 @@ async function safeCopyText(text, options = {}) {
  * - Validation messages now say HTTPS .js file URL instead of raw/source-like JS URL wording
  * - Strengthened legacy character field self-checks so Kero keeps traits/setup inside desc instead of deprecated fields
  * - Removes confusing key(s), bilingual-key, position, and recursive-scan guidance from Lorebook Builder defaults
+ * - Reduces PocketRisu/WebView stalls from automatic pre-consultation while preserving explicit sub-agent requests
  * - Improves recovery from backgrounded PocketRisu/WebView sessions where timer callbacks may have been delayed
  * - Prevents “continue/retry” loops when a restored mission has no saved actions, bulk jobs, or queued work
  * - Prevents GLM/Kimi/API Hub sub-agents from returning or rendering oversized manager reports
@@ -5109,6 +5111,15 @@ function stringifySvbSubAgentConsultationPayload(payload = {}, trace = null, opt
     return text;
 }
 
+function isExplicitKeroSubmodelRequest(text = '') {
+    return /(서브\s*(에이전트|모델)|sub[-\s]?agent|submodel|에이전트.*(활용|사용|같이|함께)|((활용|사용|같이|함께).*(에이전트|GLM|KIMI|glm|kimi))|GLM|KIMI|glm|kimi)/i.test(safeString(text));
+}
+
+function shouldSkipAutoSubmodelsForRuntime(request = '', adaptiveLimits = getSvbAdaptiveRuntimeLimits()) {
+    if (isExplicitKeroSubmodelRequest(request)) return false;
+    return Boolean(adaptiveLimits?.backgrounded || adaptiveLimits?.isPocketRisu || adaptiveLimits?.isWebView || adaptiveLimits?.lowMemory);
+}
+
 function shouldUseSubmodelsForKeroRequest(options = {}) {
     if (options.useSubmodels === true) return true;
     if (options.useSubmodels === false) return false;
@@ -5118,11 +5129,10 @@ function shouldUseSubmodelsForKeroRequest(options = {}) {
     if (!request) return false;
 
     const mode = normalizeWorkTargetMode(currentWorkTargetMode);
-    const explicitSubagentPattern = /(서브\s*(에이전트|모델)|sub[-\s]?agent|submodel|에이전트.*(활용|사용|같이|함께)|((활용|사용|같이|함께).*(에이전트|GLM|KIMI|glm|kimi))|GLM|KIMI|glm|kimi)/i;
     const simplePattern = /(삭제|지워|제거|적용|저장|추가|생성|만들어|이름만|간단|인삿말|하나|몇\s*개)/i;
     const complexPattern = /(분석|검토|토론|설계|구조|리팩토링|스파게티|오류|문제|버그|테스트|전체|대량|최적화|코딩|스크립트|API|HTML|에셋|프리셋|워크플로|모듈|플러그인|정규식|컨텍스트|완벽|최고|복잡|대규모)/i;
 
-    if (explicitSubagentPattern.test(request)) return true;
+    if (isExplicitKeroSubmodelRequest(request)) return true;
     if (simplePattern.test(request) && /(삭제|지워|제거|적용|저장|추가|생성|만들어)/i.test(request)) return false;
     if (complexPattern.test(request)) return true;
     if (mode === "module" || mode === "plugin") return true;
@@ -12620,7 +12630,7 @@ function addSvbRuntimePluginMetadataSelfTest(checks) {
         const superVibeMetadata = buildPluginMetadataSummary([
             '//@name SuperVibeBot',
             '//@display-name 🐸 SuperVibeBot diagnostic',
-            '//@version 1.5.26',
+            '//@version 1.5.27',
             '//@api 3.0',
             `//@update-url ${SUPER_VIBE_BOT_RELEASE_UPDATE_URL}`
         ].join('\n'));
@@ -13256,6 +13266,72 @@ function addSvbRuntimeAdaptiveLimitsSelfTest(checks) {
     ));
 }
 
+function addSvbRuntimeSubAgentAutoSkipSelfTest(checks) {
+    const result = readSvbRuntimeValue('서브에이전트 자동 생략 정책 자체 테스트', () => {
+        const desktop = computeSvbAdaptiveRuntimeLimits({
+            tier: 'desktop',
+            isMobile: false,
+            isWebView: false,
+            isPocketRisu: false,
+            lowMemory: false,
+            backgrounded: false,
+            reason: ['diagnostic-desktop']
+        });
+        const pocket = computeSvbAdaptiveRuntimeLimits({
+            tier: 'low',
+            isMobile: true,
+            isWebView: true,
+            isPocketRisu: true,
+            lowMemory: true,
+            backgrounded: false,
+            reason: ['diagnostic-pocket']
+        });
+        const background = computeSvbAdaptiveRuntimeLimits({
+            tier: 'background',
+            isMobile: true,
+            isWebView: true,
+            isPocketRisu: true,
+            lowMemory: true,
+            backgrounded: true,
+            reason: ['diagnostic-background']
+        });
+        return {
+            explicitGlm: isExplicitKeroSubmodelRequest('GLM과 KIMI도 같이 검토해줘'),
+            explicitSubagent: isExplicitKeroSubmodelRequest('서브에이전트를 활용해서 작업해줘'),
+            autoDesktopSkip: shouldSkipAutoSubmodelsForRuntime('전체 구조를 검토해줘', desktop),
+            autoPocketSkip: shouldSkipAutoSubmodelsForRuntime('전체 구조를 검토해줘', pocket),
+            autoBackgroundSkip: shouldSkipAutoSubmodelsForRuntime('전체 구조를 검토해줘', background),
+            explicitPocketSkip: shouldSkipAutoSubmodelsForRuntime('포켓에서도 GLM KIMI와 함께 검토해줘', pocket),
+            explicitBackgroundSkip: shouldSkipAutoSubmodelsForRuntime('서브에이전트와 같이 검토해줘', background),
+            desktopTimeout: resolveKeroSubAgentConsultationTimeoutMs({ adaptiveLimits: desktop }),
+            pocketTimeout: resolveKeroSubAgentConsultationTimeoutMs({ adaptiveLimits: pocket }),
+            backgroundTimeout: resolveKeroSubAgentConsultationTimeoutMs({ adaptiveLimits: background }),
+            pocketExplicitTimeout: resolveKeroSubAgentConsultationTimeoutMs({ adaptiveLimits: pocket, subAgentTimeoutMs: 10 * 60 * 1000 })
+        };
+    });
+    if (!result.ok) {
+        checks.push(makeSvbRuntimeCheck(false, '서브에이전트 자동 생략 정책 자체 테스트', result.error, 'error'));
+        return;
+    }
+    const value = result.value || {};
+    const problems = [];
+    if (!value.explicitGlm || !value.explicitSubagent) problems.push('명시 서브에이전트 요청 감지 실패');
+    if (value.autoDesktopSkip) problems.push('데스크톱 자동 서브에이전트 오생략');
+    if (!value.autoPocketSkip) problems.push('포켓/WebView 자동 서브에이전트 생략 실패');
+    if (!value.autoBackgroundSkip) problems.push('백그라운드 자동 서브에이전트 생략 실패');
+    if (value.explicitPocketSkip || value.explicitBackgroundSkip) problems.push('명시 서브에이전트 요청까지 생략함');
+    if (Number(value.desktopTimeout || 0) !== KERO_SUBAGENT_CONSULTATION_TIMEOUT_MS) problems.push('데스크톱 timeout 기본값 변경');
+    if (Number(value.pocketTimeout || 0) !== 90 * 1000) problems.push('포켓/WebView timeout cap 실패');
+    if (Number(value.backgroundTimeout || 0) !== 60 * 1000) problems.push('백그라운드 timeout cap 실패');
+    if (Number(value.pocketExplicitTimeout || 0) !== 90 * 1000) problems.push('명시 timeout의 포켓 cap 실패');
+    checks.push(makeSvbRuntimeCheck(
+        problems.length === 0,
+        '서브에이전트 자동 생략 정책 자체 테스트',
+        problems.length ? `문제: ${problems.join(' / ')}` : '명시 요청은 보존하고 포켓/WebView/백그라운드 자동 선검토만 생략',
+        problems.length ? 'error' : 'ok'
+    ));
+}
+
 function addSvbRuntimeBulkCreateRangeSelfTest(checks) {
     const result = readSvbRuntimeValue('대량 생성 range/retry 자체 테스트', () => {
         const adaptiveLimits = getSvbAdaptiveRuntimeLimits({ force: true });
@@ -13718,6 +13794,7 @@ function runSvbRuntimeSelfCheck(options = {}) {
     addSvbRuntimeContextPayloadSelfTest(checks);
     addSvbRuntimeSubAgentPayloadBudgetSelfTest(checks);
     addSvbRuntimeAdaptiveLimitsSelfTest(checks);
+    addSvbRuntimeSubAgentAutoSkipSelfTest(checks);
     addSvbRuntimeBulkCreateRangeSelfTest(checks);
     addSvbRuntimeMissionPersistSelfTest(checks);
     addSvbRuntimeSubAgentHardCapSelfTest(checks);
@@ -39980,7 +40057,7 @@ function getBulkOutputHint(targetType) {
     return 'result는 항목 JSON 배열이어야 합니다.';
 }
 
-/* === RisuAI SuperVibeBot v1.5.26 Guide (Concise Version) === */
+/* === RisuAI SuperVibeBot v1.5.27 Guide (Concise Version) === */
 const RISUAI_GUIDE = {
     overview: `
 ## System Overview
@@ -44024,19 +44101,25 @@ function buildKeroSubAgentContextPayloadState(contextPayload = null, options = {
 }
 
 function resolveKeroSubAgentConsultationTimeoutMs(options = {}) {
+    const adaptiveLimits = options.adaptiveLimits || getSvbAdaptiveRuntimeLimits({ force: true });
+    const runtimeCap = adaptiveLimits?.backgrounded
+        ? 60 * 1000
+        : (adaptiveLimits?.isPocketRisu || adaptiveLimits?.isWebView || adaptiveLimits?.lowMemory)
+            ? 90 * 1000
+            : KERO_SUBAGENT_CONSULTATION_TIMEOUT_MS;
     const explicit = Number(
         options.subAgentConsultationTimeoutMs ||
         options.subAgentTimeoutMs ||
         options.submodelTimeoutMs
     );
     if (Number.isFinite(explicit) && explicit > 0) {
-        return Math.max(30000, Math.min(15 * 60 * 1000, explicit));
+        return Math.max(30000, Math.min(15 * 60 * 1000, runtimeCap, explicit));
     }
     const inherited = Number(options.timeoutMs);
     if (Number.isFinite(inherited) && inherited > 0) {
-        return Math.max(30000, Math.min(KERO_SUBAGENT_CONSULTATION_TIMEOUT_MS, inherited));
+        return Math.max(30000, Math.min(KERO_SUBAGENT_CONSULTATION_TIMEOUT_MS, runtimeCap, inherited));
     }
-    return KERO_SUBAGENT_CONSULTATION_TIMEOUT_MS;
+    return Math.max(30000, Math.min(KERO_SUBAGENT_CONSULTATION_TIMEOUT_MS, runtimeCap));
 }
 
 function resolveKeroSubAgentConsultationHardCapMs(timeoutMs = KERO_SUBAGENT_CONSULTATION_TIMEOUT_MS) {
@@ -44462,6 +44545,17 @@ async function buildSubmodelConsultationBlock(systemPrompt, userText, options = 
     const configuredSubmodels = normalizeSubAgentModels(apiHubSubmodels).filter((item) => item.enabled !== false).slice(0, KERO_SUBAGENT_MAX_CONFIGURED);
     if (!configuredSubmodels.length) return "";
     const adaptiveLimits = getSvbAdaptiveRuntimeLimits({ force: true });
+    const submodelRequestText = options.userRequest || userText;
+    if (shouldSkipAutoSubmodelsForRuntime(submodelRequestText, adaptiveLimits)) {
+        const subAgentProgressOptions = normalizeKeroProgressOptions(options);
+        addKeroWorkstreamEvent(
+            '서브에이전트 자동 생략',
+            `runtime=${adaptiveLimits.tier || 'unknown'} · ${ensureArray(adaptiveLimits.reason).join(', ') || 'constrained'} · 명시 요청이 없어 메인 모델로 바로 진행합니다.`,
+            'warning',
+            subAgentProgressOptions
+        );
+        return "";
+    }
     const enrichedOptions = await buildKeroContextOptions(options);
     const taskText = limitSvbMiddleText(userText, adaptiveLimits.subAgentUserTextCharLimit, 'user_task_or_data');
     const systemText = safeString(systemPrompt);
@@ -51124,7 +51218,7 @@ async function loadInitialSettings() {
 async function registerUIElements() {
     // 채팅 화면 메뉴에 버튼 추가 (플로팅 버튼 대신)
     await risuai.registerButton({
-        name: "SuperVibeBot v1.5.26",
+        name: "SuperVibeBot v1.5.27",
         icon: "🐸",
         iconType: "html",
         location: "chat"  // 채팅 메뉴에 배치 (화면 가림 방지)
@@ -51133,7 +51227,7 @@ async function registerUIElements() {
     });
 
     await risuai.registerSetting(
-        "SuperVibeBot v1.5.26 Settings",
+        "SuperVibeBot v1.5.27 Settings",
         async () => {
             await openSettingsWindow();
         },
@@ -51176,7 +51270,7 @@ function cleanup() {
 (async () => {
     try {
         Logger.info("=".repeat(50));
-        Logger.info("SuperVibeBot v1.5.26");
+        Logger.info("SuperVibeBot v1.5.27");
         Logger.info("RisuAI Plugin API 3.0");
         Logger.info("=".repeat(50));
         await loadInitialSettings();
