@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.5
+//@display-name ☸Eros Tower 1.1.6
 //@api 3.0
-//@version 1.1.5
+//@version 1.1.6
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -33,18 +33,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.5
+ * Eros Tower 1.1.6
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.5 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.6 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.5';
+  const VERSION = '1.1.6';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.5`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.6`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -55,12 +55,13 @@
   const MAX_EVENT_LOG = 100;
   const MAX_RUN_LOGS = 12;
   const MAX_RUN_LOG_TEXT_CHARS = 16000;
+  const MAX_USAGE_EVENTS = 500;
   const LONG_MEMORY_EXCERPT_CHARS = 1800;
   const STORAGE_VERIFY_HASH_LIMIT = 384000;
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.5 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.6 analysis context';
   const GOOGLE_OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
   const GOOGLE_CLOUD_PLATFORM_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
   const PSYCHE_RECOMMENDED_MODELS = Object.freeze([
@@ -157,6 +158,8 @@
     referenceModuleIds: [],
     referencePluginKeys: [],
     activeModelPresetId: 'ollama-glm-5-2-cloud',
+    usageTrackingEnabled: true,
+    usageLogMax: MAX_USAGE_EVENTS,
   };
 
   const API_PROVIDER_PRESETS = Object.freeze({
@@ -386,6 +389,54 @@
     },
   });
 
+  const USAGE_PRICE_TABLE = Object.freeze({
+    ollama: [
+      { match: /.*/, inputPerM: 0, outputPerM: 0, label: 'local/no-metered-billing' },
+    ],
+    lmstudio: [
+      { match: /.*/, inputPerM: 0, outputPerM: 0, label: 'local/no-metered-billing' },
+    ],
+    vllm: [
+      { match: /.*/, inputPerM: 0, outputPerM: 0, label: 'local/no-metered-billing' },
+    ],
+    openai: [
+      { match: /^gpt-4\.1-mini$/i, inputPerM: 0.4, outputPerM: 1.6, label: 'builtin-estimate' },
+      { match: /^gpt-4\.1$/i, inputPerM: 2, outputPerM: 8, label: 'builtin-estimate' },
+      { match: /^gpt-4o$/i, inputPerM: 2.5, outputPerM: 10, label: 'builtin-estimate' },
+      { match: /^gpt-4o-mini$/i, inputPerM: 0.15, outputPerM: 0.6, label: 'builtin-estimate' },
+    ],
+    google: [
+      { match: /gemini-2\.5-flash/i, inputPerM: 0.3, outputPerM: 2.5, label: 'builtin-estimate' },
+      { match: /gemini-2\.0-flash/i, inputPerM: 0.1, outputPerM: 0.4, label: 'builtin-estimate' },
+    ],
+    'vertex-ai': [
+      { match: /gemini-2\.5-flash/i, inputPerM: 0.3, outputPerM: 2.5, label: 'builtin-estimate' },
+      { match: /gemini-2\.0-flash/i, inputPerM: 0.1, outputPerM: 0.4, label: 'builtin-estimate' },
+      { match: /claude.*sonnet/i, inputPerM: 3, outputPerM: 15, label: 'builtin-estimate' },
+      { match: /claude.*haiku/i, inputPerM: 0.8, outputPerM: 4, label: 'builtin-estimate' },
+    ],
+    claude: [
+      { match: /sonnet/i, inputPerM: 3, outputPerM: 15, label: 'builtin-estimate' },
+      { match: /haiku/i, inputPerM: 0.8, outputPerM: 4, label: 'builtin-estimate' },
+    ],
+    deepseek: [
+      { match: /deepseek-chat|deepseek-v3/i, inputPerM: 0.27, outputPerM: 1.1, label: 'builtin-estimate' },
+      { match: /deepseek-reasoner/i, inputPerM: 0.55, outputPerM: 2.19, label: 'builtin-estimate' },
+    ],
+    mistral: [
+      { match: /small/i, inputPerM: 0.1, outputPerM: 0.3, label: 'builtin-estimate' },
+      { match: /large/i, inputPerM: 2, outputPerM: 6, label: 'builtin-estimate' },
+    ],
+    openrouter: [],
+    groq: [],
+    together: [],
+    fireworks: [],
+    perplexity: [],
+    nanogpt: [],
+    'vercel-ai-gateway': [],
+    custom: [],
+  });
+
   const AGENT_ROLE_DESCRIPTIONS = Object.freeze({
     world: '현재 장면과 오프스크린 세계 전선, 이동/시간/자원/소문/제도 반응을 추적합니다.',
     character: '인물 자율성, 관계 호감도·애정도·신뢰·긴장·사회도, 장르별 스테이터스, 지식 방화벽을 관리합니다.',
@@ -465,6 +516,7 @@
     backup: scope => `backup:${scope}`,
     snapshots: scope => `snapshots:${scope}`,
     runLog: scope => `runlog:${scope}`,
+    usage: 'usage-ledger',
     embeddingCache: (providerId, model) => `embedding-cache:${slug(providerId || 'provider')}:${hashString(model || 'model')}`,
   };
 
@@ -758,6 +810,8 @@
     merged.enabled = parseBool(merged.enabled, DEFAULT_CONFIG.enabled) === true;
     merged.debugLog = parseBool(merged.debugLog, DEFAULT_CONFIG.debugLog) === true;
     merged.runLogEnabled = parseBool(merged.runLogEnabled, DEFAULT_CONFIG.runLogEnabled) === true;
+    merged.usageTrackingEnabled = parseBool(merged.usageTrackingEnabled, DEFAULT_CONFIG.usageTrackingEnabled) === true;
+    merged.usageLogMax = parseNumber(merged.usageLogMax, DEFAULT_CONFIG.usageLogMax, 40, 2000);
     merged.bypassAuxRequests = parseBool(merged.bypassAuxRequests, DEFAULT_CONFIG.bypassAuxRequests) === true;
     merged.stateApiEnabled = parseBool(merged.stateApiEnabled, DEFAULT_CONFIG.stateApiEnabled) === true;
     merged.autoCapEnabled = parseBool(merged.autoCapEnabled, DEFAULT_CONFIG.autoCapEnabled) === true;
@@ -1389,6 +1443,9 @@
       ...conf,
       provider,
       providerId: providerEntry?.id || agent?.providerId || conf.activeProviderId,
+      agentId: agent?.id || '',
+      agentName: agent?.name || agent?.id || '',
+      agentPhase: agent?.phase || '',
       baseUrl,
       model: cleanString(agent?.model || providerEntry?.defaultModel || preset?.model || conf.model, providerDefaults(provider).model),
       temperature: parseNumber(agent?.temperature ?? preset?.temperature, conf.temperature, 0, 2),
@@ -5856,6 +5913,13 @@
       throw new Error(`Embeddings ${res.status}: ${text.slice(0, 240)}`);
     }
     const data = await readResponseJsonWithTimeout(res, conf.timeoutMs, 'embeddings');
+    const usageMessages = [{ role: 'user', content: (Array.isArray(inputs) ? inputs : []).join('\n\n') }];
+    await safeRecordApiUsage({
+      ...conf,
+      agentId: 'embedding',
+      agentName: 'Embedding Retrieval',
+      agentPhase: 'retrieval',
+    }, usageMessages, data, '', 'embeddings');
     if (Array.isArray(data?.data)) return data.data.map(item => item.embedding).filter(Array.isArray);
     if (Array.isArray(data?.embeddings)) return data.embeddings.filter(Array.isArray);
     if (Array.isArray(data?.embedding)) return [data.embedding];
@@ -8140,7 +8204,9 @@
       throw new Error(`Agent API ${res.status}: ${text.slice(0, 300)}`);
     }
     const data = await readResponseJsonWithTimeout(res, conf.timeoutMs, 'chat/completions');
-    return extractOpenAIText(data);
+    const text = extractOpenAIText(data);
+    await safeRecordApiUsage(conf, messages, data, text, 'openai-compatible');
+    return text;
   }
 
   async function callAnthropic(conf, messages) {
@@ -8161,7 +8227,10 @@
       const text = await readResponseTextWithTimeout(res, conf.timeoutMs, 'anthropic messages').catch(() => '');
       throw new Error(`Anthropic API ${res.status}: ${text.slice(0, 300)}`);
     }
-    return extractAnthropicText(await readResponseJsonWithTimeout(res, conf.timeoutMs, 'anthropic messages'));
+    const data = await readResponseJsonWithTimeout(res, conf.timeoutMs, 'anthropic messages');
+    const text = extractAnthropicText(data);
+    await safeRecordApiUsage(conf, messages, data, text, 'anthropic-messages');
+    return text;
   }
 
   function normalizeVertexModelId(model) {
@@ -8258,7 +8327,10 @@
       const text = await readResponseTextWithTimeout(res, conf.timeoutMs, 'vertex generateContent').catch(() => '');
       throw new Error(`Vertex Gemini ${res.status}: ${text.slice(0, 300)}`);
     }
-    return extractGeminiNativeText(await readResponseJsonWithTimeout(res, conf.timeoutMs, 'vertex generateContent'));
+    const data = await readResponseJsonWithTimeout(res, conf.timeoutMs, 'vertex generateContent');
+    const text = extractGeminiNativeText(data);
+    await safeRecordApiUsage(conf, messages, data, text, 'vertex-gemini');
+    return text;
   }
 
   async function callVertexClaudeNative(conf, messages, runtime, token) {
@@ -8279,7 +8351,10 @@
       const text = await readResponseTextWithTimeout(res, conf.timeoutMs, 'vertex rawPredict').catch(() => '');
       throw new Error(`Vertex Claude ${res.status}: ${text.slice(0, 300)}`);
     }
-    return extractAnthropicText(await readResponseJsonWithTimeout(res, conf.timeoutMs, 'vertex rawPredict'));
+    const data = await readResponseJsonWithTimeout(res, conf.timeoutMs, 'vertex rawPredict');
+    const text = extractAnthropicText(data);
+    await safeRecordApiUsage(conf, messages, data, text, 'vertex-claude');
+    return text;
   }
 
   function applyExtraBody(payload, conf) {
@@ -9480,6 +9555,344 @@
     return Math.ceil(Number(chars || 0) / 3);
   }
 
+  function normalizeUsageTokenNumber(value) {
+    const n = Number(value);
+    return Number.isFinite(n) && n > 0 ? Math.round(n) : 0;
+  }
+
+  function extractOpenAIUsage(data) {
+    const usage = data?.usage || {};
+    return {
+      inputTokens: normalizeUsageTokenNumber(usage.prompt_tokens ?? usage.input_tokens),
+      outputTokens: normalizeUsageTokenNumber(usage.completion_tokens ?? usage.output_tokens),
+      totalTokens: normalizeUsageTokenNumber(usage.total_tokens),
+      cachedTokens: normalizeUsageTokenNumber(
+        usage.prompt_tokens_details?.cached_tokens
+        ?? usage.input_tokens_details?.cached_tokens
+        ?? usage.input_token_details?.cache_read
+      ),
+      estimated: false,
+    };
+  }
+
+  function extractAnthropicUsage(data) {
+    const usage = data?.usage || {};
+    return {
+      inputTokens: normalizeUsageTokenNumber(usage.input_tokens),
+      outputTokens: normalizeUsageTokenNumber(usage.output_tokens),
+      totalTokens: normalizeUsageTokenNumber(usage.input_tokens) + normalizeUsageTokenNumber(usage.output_tokens),
+      cachedTokens: normalizeUsageTokenNumber(usage.cache_read_input_tokens),
+      cacheWriteTokens: normalizeUsageTokenNumber(usage.cache_creation_input_tokens),
+      estimated: false,
+    };
+  }
+
+  function extractVertexGeminiUsage(data) {
+    const usage = data?.usageMetadata || data?.usage || {};
+    return {
+      inputTokens: normalizeUsageTokenNumber(usage.promptTokenCount ?? usage.prompt_tokens ?? usage.input_tokens),
+      outputTokens: normalizeUsageTokenNumber(usage.candidatesTokenCount ?? usage.completion_tokens ?? usage.output_tokens),
+      totalTokens: normalizeUsageTokenNumber(usage.totalTokenCount ?? usage.total_tokens),
+      cachedTokens: normalizeUsageTokenNumber(usage.cachedContentTokenCount ?? usage.cached_tokens),
+      estimated: false,
+    };
+  }
+
+  function extractUsageFromResponse(data, kind) {
+    const label = String(kind || '').toLowerCase();
+    if (label.includes('anthropic') || label.includes('claude')) return extractAnthropicUsage(data);
+    if (label.includes('vertex-gemini') || label.includes('gemini')) return extractVertexGeminiUsage(data);
+    return extractOpenAIUsage(data);
+  }
+
+  function completeUsageWithEstimate(usage, messages, text) {
+    const out = { ...(usage || {}) };
+    const input = normalizeUsageTokenNumber(out.inputTokens);
+    const output = normalizeUsageTokenNumber(out.outputTokens);
+    const total = normalizeUsageTokenNumber(out.totalTokens);
+    if (total || input || output) {
+      out.inputTokens = input;
+      out.outputTokens = output;
+      out.totalTokens = total || input + output;
+      out.cachedTokens = normalizeUsageTokenNumber(out.cachedTokens);
+      out.cacheWriteTokens = normalizeUsageTokenNumber(out.cacheWriteTokens);
+      out.estimated = out.estimated === true;
+      return out;
+    }
+    const estimatedInput = estimateMessagesTokens(messages);
+    const estimatedOutput = estimateTokensApprox(text);
+    return {
+      inputTokens: estimatedInput,
+      outputTokens: estimatedOutput,
+      totalTokens: estimatedInput + estimatedOutput,
+      cachedTokens: 0,
+      cacheWriteTokens: 0,
+      estimated: true,
+    };
+  }
+
+  function numberOrNull(value) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  function extractProviderReportedCost(data) {
+    const candidates = [
+      data?.usage?.cost,
+      data?.usage?.cost_usd,
+      data?.usage?.total_cost,
+      data?.usage?.total_cost_usd,
+      data?.cost,
+      data?.cost_usd,
+      data?.response_metadata?.cost,
+      data?.response_metadata?.cost_usd,
+    ];
+    for (const item of candidates) {
+      const n = numberOrNull(item);
+      if (n !== null && n >= 0) return n;
+    }
+    return null;
+  }
+
+  function normalizeUsageModelName(model) {
+    return String(model || '').trim().replace(/^models\//, '').replace(/^google\//, '').replace(/^anthropic\//, '');
+  }
+
+  function resolveUsagePrice(provider, model) {
+    const providerKey = normalizeProvider(provider);
+    const modelName = normalizeUsageModelName(model);
+    const entries = USAGE_PRICE_TABLE[providerKey] || [];
+    for (const entry of entries) {
+      try {
+        if (entry?.match?.test?.(modelName)) return entry;
+      } catch (_) {}
+    }
+    if (providerKey === 'openrouter' || providerKey === 'vercel-ai-gateway') {
+      const routed = modelName.split('/').filter(Boolean);
+      const routedProvider = normalizeProvider(routed.length > 1 ? routed[0] : '');
+      const routedModel = routed.length > 1 ? routed.slice(1).join('/') : modelName;
+      if (routedProvider && routedProvider !== providerKey) return resolveUsagePrice(routedProvider, routedModel);
+    }
+    return null;
+  }
+
+  function estimateUsageCost(provider, model, usage, data) {
+    const reported = extractProviderReportedCost(data);
+    if (reported !== null) return { usd: reported, source: 'provider-reported', priceKnown: true };
+    const price = resolveUsagePrice(provider, model);
+    if (!price) return { usd: null, source: 'unknown', priceKnown: false };
+    const input = normalizeUsageTokenNumber(usage?.inputTokens);
+    const output = normalizeUsageTokenNumber(usage?.outputTokens);
+    const usd = ((input * Number(price.inputPerM || 0)) + (output * Number(price.outputPerM || 0))) / 1000000;
+    return {
+      usd: Number.isFinite(usd) ? usd : null,
+      source: price.label || 'builtin-estimate',
+      priceKnown: true,
+      inputPerM: Number(price.inputPerM || 0),
+      outputPerM: Number(price.outputPerM || 0),
+    };
+  }
+
+  function emptyUsageLedger() {
+    return {
+      version: VERSION,
+      updatedAt: '',
+      events: [],
+    };
+  }
+
+  function normalizeUsageEvent(event) {
+    if (!event || typeof event !== 'object') return null;
+    const totalTokens = normalizeUsageTokenNumber(event.totalTokens);
+    return {
+      id: cleanString(event.id, `usage-${hashString(safeJsonStringify(event)).slice(0, 12)}`),
+      at: cleanString(event.at, nowIso()),
+      provider: normalizeProvider(event.provider || ''),
+      providerId: cleanString(event.providerId, ''),
+      model: cleanString(event.model, ''),
+      endpointKind: cleanString(event.endpointKind, ''),
+      agentId: cleanString(event.agentId, ''),
+      agentName: cleanString(event.agentName, ''),
+      agentPhase: cleanString(event.agentPhase, ''),
+      inputTokens: normalizeUsageTokenNumber(event.inputTokens),
+      outputTokens: normalizeUsageTokenNumber(event.outputTokens),
+      totalTokens,
+      cachedTokens: normalizeUsageTokenNumber(event.cachedTokens),
+      cacheWriteTokens: normalizeUsageTokenNumber(event.cacheWriteTokens),
+      estimated: event.estimated === true,
+      costUsd: event.costUsd === null || event.costUsd === undefined ? null : numberOrNull(event.costUsd),
+      costSource: cleanString(event.costSource, ''),
+      priceKnown: event.priceKnown === true,
+    };
+  }
+
+  function normalizeUsageLedger(ledger) {
+    const events = Array.isArray(ledger?.events)
+      ? ledger.events.map(normalizeUsageEvent).filter(Boolean)
+      : [];
+    events.sort((a, b) => String(b.at || '').localeCompare(String(a.at || '')));
+    return {
+      version: cleanString(ledger?.version, VERSION),
+      updatedAt: cleanString(ledger?.updatedAt, ''),
+      events: events.slice(0, MAX_USAGE_EVENTS),
+    };
+  }
+
+  async function loadUsageLedger() {
+    return normalizeUsageLedger(await Storage.get(STORAGE.usage, emptyUsageLedger()));
+  }
+
+  async function saveUsageLedger(ledger, conf = null) {
+    const normalized = normalizeUsageLedger(ledger);
+    const max = parseNumber(conf?.usageLogMax, DEFAULT_CONFIG.usageLogMax, 40, 2000);
+    normalized.events = normalized.events.slice(0, max);
+    normalized.updatedAt = nowIso();
+    normalized.version = VERSION;
+    await Storage.set(STORAGE.usage, normalized);
+    return normalized;
+  }
+
+  function usageEventId() {
+    return `usage-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  async function safeRecordApiUsage(conf, messages, data, text, endpointKind = 'chat') {
+    if (conf?.usageTrackingEnabled === false) return null;
+    try {
+      const usage = completeUsageWithEstimate(extractUsageFromResponse(data, endpointKind), messages, text);
+      const cost = estimateUsageCost(conf?.provider, conf?.model, usage, data);
+      const event = normalizeUsageEvent({
+        id: usageEventId(),
+        at: nowIso(),
+        provider: conf?.provider || '',
+        providerId: conf?.providerId || conf?.activeProviderId || '',
+        model: conf?.model || '',
+        endpointKind,
+        agentId: conf?.agentId || '',
+        agentName: conf?.agentName || '',
+        agentPhase: conf?.agentPhase || '',
+        inputTokens: usage.inputTokens,
+        outputTokens: usage.outputTokens,
+        totalTokens: usage.totalTokens,
+        cachedTokens: usage.cachedTokens,
+        cacheWriteTokens: usage.cacheWriteTokens,
+        estimated: usage.estimated === true,
+        costUsd: cost.usd,
+        costSource: cost.source,
+        priceKnown: cost.priceKnown,
+      });
+      if (!event) return null;
+      const ledger = await loadUsageLedger();
+      ledger.events = [event].concat(ledger.events || []);
+      await saveUsageLedger(ledger, conf);
+      return event;
+    } catch (err) {
+      log('usage ledger save failed', err?.message || err);
+      return null;
+    }
+  }
+
+  function usageDateParts(value) {
+    const date = value ? new Date(value) : new Date();
+    if (!Number.isFinite(date.getTime())) return { day: '', month: '' };
+    return {
+      day: date.toISOString().slice(0, 10),
+      month: date.toISOString().slice(0, 7),
+    };
+  }
+
+  function emptyUsageBucket(id = '') {
+    return {
+      id,
+      events: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+      estimatedEvents: 0,
+      costUsd: 0,
+      unknownCostEvents: 0,
+      models: {},
+      agents: {},
+      latestAt: '',
+    };
+  }
+
+  function addUsageToBucket(bucket, event) {
+    bucket.events += 1;
+    bucket.inputTokens += normalizeUsageTokenNumber(event.inputTokens);
+    bucket.outputTokens += normalizeUsageTokenNumber(event.outputTokens);
+    bucket.totalTokens += normalizeUsageTokenNumber(event.totalTokens);
+    if (event.estimated) bucket.estimatedEvents += 1;
+    if (Number.isFinite(Number(event.costUsd))) bucket.costUsd += Number(event.costUsd);
+    else bucket.unknownCostEvents += 1;
+    if (!bucket.latestAt || String(event.at || '').localeCompare(bucket.latestAt) > 0) bucket.latestAt = event.at || '';
+    const modelKey = event.model || '(model)';
+    bucket.models[modelKey] = bucket.models[modelKey] || emptyUsageBucket(modelKey);
+    if (bucket.models[modelKey] !== bucket) addUsageToBucketFlat(bucket.models[modelKey], event);
+    const agentKey = event.agentName || event.agentId || '(manual/test)';
+    bucket.agents[agentKey] = bucket.agents[agentKey] || emptyUsageBucket(agentKey);
+    addUsageToBucketFlat(bucket.agents[agentKey], event);
+  }
+
+  function addUsageToBucketFlat(bucket, event) {
+    bucket.events += 1;
+    bucket.inputTokens += normalizeUsageTokenNumber(event.inputTokens);
+    bucket.outputTokens += normalizeUsageTokenNumber(event.outputTokens);
+    bucket.totalTokens += normalizeUsageTokenNumber(event.totalTokens);
+    if (event.estimated) bucket.estimatedEvents += 1;
+    if (Number.isFinite(Number(event.costUsd))) bucket.costUsd += Number(event.costUsd);
+    else bucket.unknownCostEvents += 1;
+    if (!bucket.latestAt || String(event.at || '').localeCompare(bucket.latestAt) > 0) bucket.latestAt = event.at || '';
+  }
+
+  function summarizeUsageLedger(ledger, conf = null) {
+    const normalized = normalizeUsageLedger(ledger);
+    const today = usageDateParts().day;
+    const thisMonth = usageDateParts().month;
+    const summary = {
+      total: emptyUsageBucket('total'),
+      today: emptyUsageBucket(today),
+      month: emptyUsageBucket(thisMonth),
+      providers: {},
+      providersMonth: {},
+      recent: normalized.events.slice(0, 40),
+      updatedAt: normalized.updatedAt,
+    };
+    normalized.events.forEach(event => {
+      addUsageToBucket(summary.total, event);
+      const parts = usageDateParts(event.at);
+      if (parts.day === today) addUsageToBucket(summary.today, event);
+      if (parts.month === thisMonth) addUsageToBucket(summary.month, event);
+      const providerKey = event.providerId || event.provider || 'provider';
+      summary.providers[providerKey] = summary.providers[providerKey] || emptyUsageBucket(providerKey);
+      summary.providers[providerKey].provider = event.provider || '';
+      summary.providers[providerKey].providerId = event.providerId || '';
+      addUsageToBucket(summary.providers[providerKey], event);
+      if (parts.month === thisMonth) {
+        summary.providersMonth[providerKey] = summary.providersMonth[providerKey] || emptyUsageBucket(providerKey);
+        summary.providersMonth[providerKey].provider = event.provider || '';
+        summary.providersMonth[providerKey].providerId = event.providerId || '';
+        addUsageToBucket(summary.providersMonth[providerKey], event);
+      }
+    });
+    (conf?.providerRegistry || []).forEach(provider => {
+      const key = provider.id || provider.provider || 'provider';
+      summary.providers[key] = summary.providers[key] || emptyUsageBucket(key);
+      summary.providers[key].provider = provider.provider || summary.providers[key].provider || '';
+      summary.providers[key].providerId = provider.id || summary.providers[key].providerId || '';
+      summary.providers[key].providerName = provider.name || provider.label || provider.id || '';
+      summary.providers[key].registered = true;
+      summary.providers[key].hasApiKey = Boolean(provider.apiKey);
+      summary.providersMonth[key] = summary.providersMonth[key] || emptyUsageBucket(key);
+      summary.providersMonth[key].provider = provider.provider || summary.providersMonth[key].provider || '';
+      summary.providersMonth[key].providerId = provider.id || summary.providersMonth[key].providerId || '';
+      summary.providersMonth[key].providerName = provider.name || provider.label || provider.id || '';
+      summary.providersMonth[key].registered = true;
+      summary.providersMonth[key].hasApiKey = Boolean(provider.apiKey);
+    });
+    return summary;
+  }
+
   async function buildMainInjection(state, context, notes, budget, conf = null) {
     if (conf?.recallTraceEnabled === false) state._suppressRecallTrace = true;
     const briefing = await buildMainBriefing(state, context, notes, budget || 4200, conf);
@@ -10350,8 +10763,9 @@
       const runLogs = context.noSession ? [] : await Storage.get(STORAGE.runLog(context.scope), []);
       const snapshots = context.noSession ? [] : await loadStateSnapshots(context.scope);
       const backup = context.noSession ? null : await Storage.get(STORAGE.backup(context.scope), null);
+      const usageLedger = await loadUsageLedger();
       installDebugApi(conf, context, state, snapshots, backup);
-      await paintDashboardHtml(buildDashboardHtml(conf, context, state, runLogs, snapshots, backup));
+      await paintDashboardHtml(buildDashboardHtml(conf, context, state, runLogs, snapshots, backup, usageLedger));
       setupDashboardHandlers(conf, context, state);
     } catch (err) {
       Runtime.lastError = err?.message || String(err || 'dashboard open failed');
@@ -10363,7 +10777,7 @@
     }
   }
 
-  function buildDashboardHtml(conf, context, state, runLogs, snapshots = [], backup = null) {
+  function buildDashboardHtml(conf, context, state, runLogs, snapshots = [], backup = null, usageLedger = null) {
     const logs = Array.isArray(runLogs) ? runLogs : [];
     return `
       <style>${dashboardStyles()}</style>
@@ -10392,6 +10806,7 @@
           <section class="et-view" data-view="agents">${renderAgentPanel(conf)}</section>
           <section class="et-view" data-view="references">${renderReferencePanel(conf, context)}</section>
           <section class="et-view" data-view="state">${renderStatePanel(conf, context, state, snapshots, backup)}</section>
+          <section class="et-view" data-view="usage">${renderUsagePanel(conf, usageLedger)}</section>
           <section class="et-view" data-view="runs">${renderRunLogPanel(logs)}</section>
         </main>
       </div>`;
@@ -11355,6 +11770,139 @@
     }).join('')}</div>${list.length > 24 ? `<details class="et-full"><summary>전체보기</summary><pre>${escHtml(safeJsonStringify(list))}</pre></details>` : ''}`;
   }
 
+  function renderUsagePanel(conf, usageLedger = null) {
+    const summary = summarizeUsageLedger(usageLedger || emptyUsageLedger(), conf);
+    return `
+      <section class="et-panel">
+        <div class="et-ops-head">
+          <div>
+            <h2>사용량</h2>
+            <div class="et-note">에로스 타워가 직접 호출한 에이전트/임베딩 API의 usage를 기록합니다. Provider 응답 cost가 있으면 그 값을 우선하고, 없으면 내장 가격표 추정 또는 미확인으로 표시합니다.</div>
+          </div>
+          <div class="et-actions et-actions-inline">
+            <button id="et-reset-usage" type="button">사용량 초기화</button>
+          </div>
+        </div>
+        <div class="et-grid-3" style="margin-top:14px">
+          ${statBox('이번 달 토큰', formatUsageTokens(summary.month.totalTokens))}
+          ${statBox('이번 달 비용', formatUsageBucketCost(summary.month))}
+          ${statBox('오늘 토큰', formatUsageTokens(summary.today.totalTokens))}
+          ${statBox('오늘 비용', formatUsageBucketCost(summary.today))}
+          ${statBox('전체 호출', summary.total.events)}
+          ${statBox('추정 이벤트', summary.total.estimatedEvents)}
+        </div>
+        <div id="et-usage-status" class="et-status" data-kind="info">${escHtml(summary.updatedAt ? `마지막 갱신 ${formatDateShort(summary.updatedAt)}` : '')}</div>
+      </section>
+      <section class="et-panel" style="margin-top:14px">
+        <h2>Provider별 사용량</h2>
+        ${renderUsageProviderTable(conf, summary)}
+      </section>
+      <section class="et-panel" style="margin-top:14px">
+        <h2>최근 API 이벤트</h2>
+        ${renderUsageRecentEvents(summary.recent)}
+      </section>`;
+  }
+
+  function formatUsageTokens(value) {
+    const n = normalizeUsageTokenNumber(value);
+    return n.toLocaleString('ko-KR');
+  }
+
+  function formatUsageUsd(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return '미확인';
+    if (n === 0) return '$0.0000';
+    if (n < 0.0001) return `<$0.0001`;
+    return `$${n.toFixed(n < 0.01 ? 5 : 4)}`;
+  }
+
+  function formatUsageBucketCost(bucket) {
+    const known = formatUsageUsd(bucket?.costUsd || 0);
+    const unknown = Number(bucket?.unknownCostEvents || 0);
+    if (!bucket?.events) return '$0.0000';
+    return unknown ? `${known} + 미확인 ${unknown}` : known;
+  }
+
+  function usageSourceLabel(event) {
+    if (!event) return '-';
+    const source = event.costSource || 'unknown';
+    const estimated = event.estimated ? ' / 토큰 추정' : '';
+    if (source === 'provider-reported') return `Provider 보고${estimated}`;
+    if (source === 'unknown') return `가격 미확인${estimated}`;
+    return `내장 단가 추정${estimated}`;
+  }
+
+  function quotaSupportInfo(provider) {
+    const providerKey = normalizeProvider(provider?.provider || provider?.id || '');
+    if (providerKey === 'openrouter') return { checkable: true, label: '크레딧 조회 가능' };
+    if (providerKey === 'deepseek') return { checkable: true, label: '잔액 조회 가능' };
+    if (providerKey === 'nanogpt') return { checkable: true, label: '잔액 조회 가능' };
+    if (providerKey === 'ollama' || providerKey === 'lmstudio' || providerKey === 'vllm') return { checkable: false, label: '로컬/비과금' };
+    if (providerKey === 'openai' || providerKey === 'claude' || providerKey === 'vertex-ai') {
+      return { checkable: false, label: 'Admin/IAM 별도 필요' };
+    }
+    return { checkable: false, label: '표준 조회 없음' };
+  }
+
+  function renderUsageProviderTable(conf, summary) {
+    const registry = Array.isArray(conf?.providerRegistry) ? conf.providerRegistry : [];
+    const keys = uniqueStrings(registry.map(item => item.id).concat(Object.keys(summary.providers || {})));
+    if (!keys.length) return emptyState('등록된 Provider가 없습니다.');
+    const rows = keys.map(key => {
+      const provider = findProviderEntry(registry, key) || null;
+      const total = summary.providers[key] || emptyUsageBucket(key);
+      const month = summary.providersMonth[key] || emptyUsageBucket(key);
+      const providerKey = normalizeProvider(provider?.provider || total.provider || '');
+      const support = quotaSupportInfo(provider || total);
+      const hasKey = Boolean(provider?.apiKey);
+      const quotaButton = support.checkable
+        ? `<button type="button" data-usage-quota-provider="${escHtml(key)}" ${hasKey ? '' : 'disabled'}>할당량 체크</button>`
+        : '';
+      const status = [
+        provider ? '등록됨' : '기록만 있음',
+        hasKey ? 'API Key 있음' : providerKey && !['ollama', 'lmstudio', 'vllm'].includes(providerKey) ? 'API Key 없음' : '',
+      ].filter(Boolean).join(' / ');
+      return `
+        <tr>
+          <td>
+            <b>${escHtml(provider?.name || total.providerName || key)}</b>
+            <div class="et-note">${escHtml(providerKey || '-')} / ${escHtml(key)}</div>
+          </td>
+          <td>${escHtml(status || '-')}</td>
+          <td>${formatUsageTokens(month.totalTokens)}<div class="et-note">입력 ${formatUsageTokens(month.inputTokens)} / 출력 ${formatUsageTokens(month.outputTokens)}</div></td>
+          <td>${escHtml(formatUsageBucketCost(month))}</td>
+          <td>
+            <div class="et-note">${escHtml(support.label)}</div>
+            ${quotaButton}
+          </td>
+        </tr>`;
+    }).join('');
+    return `
+      <table class="et-table">
+        <thead><tr><th>Provider</th><th>상태</th><th>이번 달 토큰</th><th>이번 달 비용</th><th>할당량</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div class="et-note" style="margin-top:10px">OpenAI/Anthropic/Vertex의 조직 사용량/비용 API는 별도 Admin 또는 IAM 권한이 필요해서 기본 API Key만으로는 조회하지 않습니다.</div>`;
+  }
+
+  function renderUsageRecentEvents(events) {
+    const list = Array.isArray(events) ? events : [];
+    if (!list.length) return emptyState('아직 저장된 API 사용량이 없습니다.');
+    return `
+      <table class="et-table">
+        <thead><tr><th>시간</th><th>Provider / 모델</th><th>Agent</th><th>토큰</th><th>비용</th><th>근거</th></tr></thead>
+        <tbody>${list.slice(0, 24).map(event => `
+          <tr>
+            <td>${escHtml(formatDateShort(event.at))}</td>
+            <td>${escHtml(event.providerId || event.provider || '-')}<div class="et-note">${escHtml(event.model || '-')}</div></td>
+            <td>${escHtml(event.agentName || event.agentId || event.endpointKind || '-')}</td>
+            <td>${formatUsageTokens(event.totalTokens)}<div class="et-note">입력 ${formatUsageTokens(event.inputTokens)} / 출력 ${formatUsageTokens(event.outputTokens)}</div></td>
+            <td>${escHtml(formatUsageUsd(event.costUsd))}</td>
+            <td>${escHtml(usageSourceLabel(event))}</td>
+          </tr>`).join('')}</tbody>
+      </table>`;
+  }
+
   function renderRunLogPanel(logs) {
     if (!logs.length) return `<section class="et-panel">${emptyState('아직 저장된 Run Log가 없습니다.')}</section>`;
     return `
@@ -11592,6 +12140,7 @@
       { value: 'agents', label: '에이전트' },
       { value: 'references', label: '참고 자료' },
       { value: 'state', label: '관리상태' },
+      { value: 'usage', label: '사용량' },
       { value: 'runs', label: 'Run Log' },
     ];
     return `<div class="et-menu-anchor"><button type="button" id="et-dashboard-menu-toggle" class="et-menu-toggle" aria-haspopup="menu" aria-expanded="false">메뉴</button><nav id="et-dashboard-menu-popover" class="et-dashboard-menu" data-open="false" aria-label="에로스 타워 메뉴">${options.map(option => `<button type="button" class="et-menu-button" data-tab-target="${escHtml(option.value)}" data-dashboard-menu-button="${escHtml(option.value)}" data-active="${option.value === active ? 'true' : 'false'}">${escHtml(option.label)}</button>`).join('')}</nav></div>`;
@@ -11857,6 +12406,78 @@
     return normalizeModelOptions(models, conf.model, conf.providerPreset);
   }
 
+  function quotaProviderRuntime(provider, conf) {
+    return {
+      ...conf,
+      ...provider,
+      provider: normalizeProvider(provider?.provider || conf?.provider),
+      providerId: provider?.id || conf?.activeProviderId || '',
+      baseUrl: normalizeUrl(provider?.baseUrl || conf?.baseUrl || ''),
+      apiKey: provider?.apiKey || conf?.providerKeys?.[provider?.provider] || conf?.apiKey || '',
+      extraHeaders: provider?.extraHeaders || conf?.extraHeaders || '',
+      timeoutMs: conf?.timeoutMs || DEFAULT_CONFIG.timeoutMs,
+    };
+  }
+
+  async function readQuotaJson(runtime, url, label) {
+    const res = await fetchWithTimeout(url, {
+      method: 'GET',
+      headers: await buildApiHeaders(runtime, false),
+    }, runtime.timeoutMs, label);
+    if (!res.ok) {
+      const text = await readResponseTextWithTimeout(res, runtime.timeoutMs, label).catch(() => '');
+      throw new Error(`${label} ${res.status}: ${text.slice(0, 220)}`);
+    }
+    return readResponseJsonWithTimeout(res, runtime.timeoutMs, label);
+  }
+
+  async function checkProviderQuota(provider, conf) {
+    const runtime = quotaProviderRuntime(provider, conf);
+    const providerKey = normalizeProvider(runtime.provider);
+    if (!runtime.apiKey && !['ollama', 'lmstudio', 'vllm'].includes(providerKey)) throw new Error('API Key가 저장된 Provider만 할당량을 조회할 수 있습니다.');
+    if (providerKey === 'ollama' || providerKey === 'lmstudio' || providerKey === 'vllm') {
+      return { provider: providerKey, message: '로컬 Provider는 API 할당량/과금 조회 대상이 아닙니다.', details: null };
+    }
+    if (providerKey === 'openrouter') {
+      const data = await readQuotaJson(runtime, buildApiUrl(runtime.baseUrl || 'https://openrouter.ai/api/v1', '/credits'), 'openrouter credits');
+      const payload = data?.data || data || {};
+      const totalCredits = numberOrNull(payload.total_credits ?? payload.totalCredits ?? payload.limit);
+      const totalUsage = numberOrNull(payload.total_usage ?? payload.totalUsage ?? payload.usage);
+      const remaining = totalCredits !== null && totalUsage !== null ? totalCredits - totalUsage : numberOrNull(payload.remaining ?? payload.limit_remaining);
+      return {
+        provider: providerKey,
+        message: `OpenRouter 크레딧: 사용 ${formatUsageUsd(totalUsage)} / 총 ${formatUsageUsd(totalCredits)}${remaining !== null ? ` / 남음 ${formatUsageUsd(remaining)}` : ''}`,
+        details: payload,
+      };
+    }
+    if (providerKey === 'deepseek') {
+      const base = normalizeUrl(runtime.baseUrl || 'https://api.deepseek.com').replace(/\/v1$/i, '');
+      const data = await readQuotaJson(runtime, `${base}/user/balance`, 'deepseek balance');
+      const balances = Array.isArray(data?.balance_infos) ? data.balance_infos : Array.isArray(data?.data?.balance_infos) ? data.data.balance_infos : [];
+      const lines = balances.map(item => `${item.currency || item.currency_code || 'balance'} ${item.total_balance ?? item.granted_balance ?? item.topped_up_balance ?? '-'}`).join(' / ');
+      return {
+        provider: providerKey,
+        message: lines ? `DeepSeek 잔액: ${lines}` : 'DeepSeek 잔액 응답을 받았지만 표시할 balance_infos가 없습니다.',
+        details: data,
+      };
+    }
+    if (providerKey === 'nanogpt') {
+      const data = await readQuotaJson(runtime, buildApiUrl(runtime.baseUrl || 'https://nano-gpt.com/api/v1', '/balance'), 'nanogpt balance');
+      const balance = numberOrNull(data?.balance ?? data?.data?.balance ?? data?.credits ?? data?.data?.credits);
+      return {
+        provider: providerKey,
+        message: balance !== null ? `NanoGPT 잔액: ${formatUsageUsd(balance)}` : 'NanoGPT 잔액 응답을 받았지만 표준 balance 필드를 찾지 못했습니다.',
+        details: data,
+      };
+    }
+    const support = quotaSupportInfo(runtime);
+    return {
+      provider: providerKey,
+      message: `${provider?.name || providerKey}는 플러그인에서 바로 조회 가능한 표준 할당량 API가 없습니다. (${support.label})`,
+      details: null,
+    };
+  }
+
   function setupDashboardHandlers(conf, context, state = null) {
     const $ = id => document.getElementById(id);
     const setStatusNode = (id, text, kind = 'info') => {
@@ -11872,6 +12493,7 @@
     const setReferenceStatus = (text, kind = 'info') => setLocalStatus('et-reference-status', text, kind);
     const setRecoveryStatus = (text, kind = 'info') => setLocalStatus('et-recovery-status', text, kind);
     const setCbsStatus = (text, kind = 'info') => setLocalStatus('et-cbs-status', text, kind);
+    const setUsageStatus = (text, kind = 'info') => setLocalStatus('et-usage-status', text, kind);
     const setAgentStatus = (agentId, text, kind = 'info') => setLocalStatus(`et-agent-status-${agentId}`, text, kind);
 
     const saveCurrent = async (statusSetter = setMainStatus, message = '설정 저장 완료. 다음 요청부터 적용됩니다.') => {
@@ -11958,6 +12580,30 @@
         const next = await saveCurrent(setReferenceStatus, '참고 자료 저장 완료. 다음 요청부터 canon source와 관리상태에 반영됩니다.');
         setReferenceStatus(`참고 자료 저장 완료: ${formatReferenceConfigSummary(next)}`, 'success');
       }, 'et-reference-status');
+    });
+
+    document.querySelectorAll('[data-usage-quota-provider]').forEach(button => {
+      if (button.getAttribute('data-wired') === 'true') return;
+      button.setAttribute('data-wired', 'true');
+      button.addEventListener('click', async event => {
+        const providerId = event.currentTarget.getAttribute('data-usage-quota-provider') || '';
+        await withBusy(event.currentTarget, async () => {
+          const next = readDashboardConfigFromUI(conf);
+          const provider = findProviderEntry(next.providerRegistry, providerId);
+          if (!provider) throw new Error(`${providerId} Provider를 찾지 못했습니다.`);
+          setUsageStatus(`${provider.name || provider.id} 할당량을 확인하는 중...`, 'info');
+          const result = await checkProviderQuota(provider, next);
+          setUsageStatus(result.message || '할당량 확인 완료.', 'success');
+        }, 'et-usage-status').catch(err => setUsageStatus(`할당량 확인 실패: ${err.message}`, 'error'));
+      });
+    });
+
+    $('et-reset-usage')?.addEventListener('click', async event => {
+      if (!confirm('에로스 타워 API 사용량 기록을 초기화할까요? Provider 설정과 Run Log는 삭제하지 않습니다.')) return;
+      await withBusy(event.currentTarget, async () => {
+        await Storage.remove(STORAGE.usage);
+        setUsageStatus('사용량 기록을 초기화했습니다. 창을 다시 열면 표가 비워집니다.', 'success');
+      }, 'et-usage-status').catch(err => setUsageStatus(`사용량 초기화 실패: ${err.message}`, 'error'));
     });
 
     document.querySelectorAll('.et-toggle').forEach(button => {
