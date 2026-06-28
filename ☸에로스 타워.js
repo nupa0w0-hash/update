@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.0.7
+//@display-name ☸Eros Tower 1.0.8
 //@api 3.0
-//@version 1.0.7
+//@version 1.0.8
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -10,9 +10,10 @@
 //@arg et_api_key string Agent API key. Local Ollama can be blank.
 //@arg et_model string Agent model. Example: glm-5.2:cloud
 //@arg et_temperature string Agent temperature. Default 0.25
-//@arg et_max_tokens string Agent max tokens. Default 2200
-//@arg et_context_window int Recent chat turns used by agents. Default 14
-//@arg et_timeout_ms int Agent API timeout in ms. Default 120000
+//@arg et_max_tokens string Agent max tokens. Default 4096
+//@arg et_context_window int Recent chat turns used by agents. Default 48
+//@arg et_timeout_s int Agent API timeout in seconds. Default 300
+//@arg et_timeout_ms int Legacy agent API timeout in ms. Use et_timeout_s for new installs.
 //@arg et_debug_log string Print debug logs. true/false
 //@arg et_run_log_enabled string Store run logs. true/false
 //@arg et_bypass_aux_requests string Skip helper requests. true/false
@@ -32,18 +33,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.0.7
+ * Eros Tower 1.0.8
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.0.7 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.0.8 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.0.7';
+  const VERSION = '1.0.8';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.0.7`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.0.8`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -59,7 +60,7 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.0.7 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.0.8 analysis context';
   const GOOGLE_OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
   const GOOGLE_CLOUD_PLATFORM_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
   const PSYCHE_RECOMMENDED_MODELS = Object.freeze([
@@ -68,6 +69,8 @@
     'deepseek-v4-flash',
     'claude-sonnet-4-6',
   ]);
+  const LEGACY_DEFAULT_TIMEOUT_MS = 120000;
+  const DEFAULT_TIMEOUT_MS = 300 * 1000;
 
   const DEFAULT_CONFIG = {
     enabled: true,
@@ -79,7 +82,7 @@
     temperature: 0.25,
     maxTokens: 4096,
     contextWindow: 48,
-    timeoutMs: 120000,
+    timeoutMs: DEFAULT_TIMEOUT_MS,
     debugLog: false,
     runLogEnabled: true,
     bypassAuxRequests: true,
@@ -637,6 +640,21 @@
     return out;
   }
 
+  function normalizeTimeoutMsSetting(value, fallback = DEFAULT_CONFIG.timeoutMs) {
+    const ms = parseNumber(value, fallback, 15000, 600000);
+    return ms === LEGACY_DEFAULT_TIMEOUT_MS ? DEFAULT_CONFIG.timeoutMs : ms;
+  }
+
+  function timeoutSecondsToMs(value, fallback = DEFAULT_CONFIG.timeoutMs) {
+    const raw = String(value ?? '').trim();
+    if (!raw) return fallback;
+    return Math.round(parseNumber(raw, fallback / 1000, 15, 600) * 1000);
+  }
+
+  function timeoutMsToSeconds(value, fallback = DEFAULT_CONFIG.timeoutMs) {
+    return Math.round(normalizeTimeoutMsSetting(value, fallback) / 1000);
+  }
+
   function cleanString(value, fallback = '') {
     const raw = String(value ?? '').trim();
     return raw || fallback;
@@ -676,6 +694,8 @@
 
   async function getConfig() {
     const stored = await Storage.get(STORAGE.config, {});
+    const timeoutSecondsArg = cleanString(await getArg('et_timeout_s', ''), '');
+    const legacyTimeoutMsArg = cleanString(await getArg('et_timeout_ms', ''), '');
     const args = {
       enabled: parseBool(await getArg('et_enabled', ''), undefined),
       mode: cleanString(await getArg('et_mode', ''), ''),
@@ -686,7 +706,7 @@
       temperature: cleanString(await getArg('et_temperature', ''), ''),
       maxTokens: cleanString(await getArg('et_max_tokens', ''), ''),
       contextWindow: cleanString(await getArg('et_context_window', ''), ''),
-      timeoutMs: cleanString(await getArg('et_timeout_ms', ''), ''),
+      timeoutMs: timeoutSecondsArg ? timeoutSecondsToMs(timeoutSecondsArg) : legacyTimeoutMsArg,
       debugLog: parseBool(await getArg('et_debug_log', ''), undefined),
       runLogEnabled: parseBool(await getArg('et_run_log_enabled', ''), undefined),
       bypassAuxRequests: parseBool(await getArg('et_bypass_aux_requests', ''), undefined),
@@ -733,7 +753,7 @@
     merged.temperature = parseNumber(merged.temperature, DEFAULT_CONFIG.temperature, 0, 2);
     merged.maxTokens = parseNumber(merged.maxTokens, DEFAULT_CONFIG.maxTokens, 128, 16000);
     merged.contextWindow = parseNumber(merged.contextWindow, DEFAULT_CONFIG.contextWindow, 4, 80);
-    merged.timeoutMs = parseNumber(merged.timeoutMs, DEFAULT_CONFIG.timeoutMs, 15000, 600000);
+    merged.timeoutMs = normalizeTimeoutMsSetting(merged.timeoutMs, DEFAULT_CONFIG.timeoutMs);
     merged.injectionBudget = parseNumber(merged.injectionBudget, DEFAULT_CONFIG.injectionBudget, 1200, 40000);
     merged.enabled = parseBool(merged.enabled, DEFAULT_CONFIG.enabled) === true;
     merged.debugLog = parseBool(merged.debugLog, DEFAULT_CONFIG.debugLog) === true;
@@ -1258,7 +1278,7 @@
         temperature: Number.isFinite(Number(agent.temperature)) ? Number(agent.temperature) : undefined,
         maxTokens: Number.isFinite(Number(agent.maxTokens)) ? Number(agent.maxTokens) : undefined,
         contextWindow: Number.isFinite(Number(agent.contextWindow)) ? Number(agent.contextWindow) : undefined,
-        timeoutMs: Number.isFinite(Number(agent.timeoutMs)) ? Number(agent.timeoutMs) : undefined,
+        timeoutMs: Number.isFinite(Number(agent.timeoutMs)) ? normalizeTimeoutMsSetting(agent.timeoutMs) : undefined,
         postMode,
         includeSettingBlocks: agent.includeSettingBlocks !== false,
         includeHistory: agent.includeHistory !== false,
@@ -1312,7 +1332,7 @@
       temperature: parseNumber(agent.temperature ?? fallback?.temperature, conf.temperature, 0, 2),
       maxTokens: parseNumber(agent.maxTokens ?? fallback?.maxTokens, conf.maxTokens, 128, 16000),
       contextWindow: parseNumber(agent.contextWindow ?? fallback?.contextWindow, conf.contextWindow, 4, 80),
-      timeoutMs: parseNumber(agent.timeoutMs ?? fallback?.timeoutMs, conf.timeoutMs, 15000, 600000),
+      timeoutMs: normalizeTimeoutMsSetting(agent.timeoutMs ?? fallback?.timeoutMs, conf.timeoutMs),
       systemPrompt: agent.systemPrompt || fallback?.systemPrompt || '',
       userTemplate: agent.userTemplate || fallback?.userTemplate || defaultUserTemplate(fallback?.phase || agent.phase, agent.id),
       postMode: normalizePostMode(agent.postMode || fallback?.postMode),
@@ -1374,7 +1394,7 @@
       temperature: parseNumber(agent?.temperature ?? preset?.temperature, conf.temperature, 0, 2),
       maxTokens: parseNumber(agent?.maxTokens ?? preset?.maxTokens, conf.maxTokens, 128, 16000),
       contextWindow: parseNumber(agent?.contextWindow ?? preset?.contextWindow, conf.contextWindow, 4, 80),
-      timeoutMs: parseNumber(agent?.timeoutMs ?? preset?.timeoutMs, conf.timeoutMs, 15000, 600000),
+      timeoutMs: normalizeTimeoutMsSetting(agent?.timeoutMs ?? preset?.timeoutMs, conf.timeoutMs),
       apiKey: providerEntry?.apiKey || conf.providerKeys?.[provider] || conf.apiKey || '',
       modelsPath: providerEntry && providerEntry.modelsPath !== undefined ? providerEntry.modelsPath : conf.modelsPath,
       chatPath: providerEntry?.chatPath || conf.chatPath,
@@ -10677,7 +10697,7 @@
                 ${inputField('Temperature', `et-agent-temperature-${agent.id}`, 'number', String(agent.temperature ?? conf.temperature), '0.25', `min="0" max="2" step="0.05" class="et-agent-temperature" data-agent-id="${escHtml(agent.id)}"`)}
                 ${inputField('Max Tokens', `et-agent-max-tokens-${agent.id}`, 'number', String(agent.maxTokens ?? conf.maxTokens), '4096', `min="128" max="16000" class="et-agent-max-tokens" data-agent-id="${escHtml(agent.id)}"`)}
                 ${inputField('최근 대화', `et-agent-context-window-${agent.id}`, 'number', String(agent.contextWindow ?? conf.contextWindow), '48', `min="4" max="80" class="et-agent-context-window" data-agent-id="${escHtml(agent.id)}"`)}
-                ${inputField('Timeout ms', `et-agent-timeout-ms-${agent.id}`, 'number', String(agent.timeoutMs ?? conf.timeoutMs), '120000', `min="15000" class="et-agent-timeout-ms" data-agent-id="${escHtml(agent.id)}"`)}
+                ${inputField('Timeout s', `et-agent-timeout-s-${agent.id}`, 'number', String(timeoutMsToSeconds(agent.timeoutMs ?? conf.timeoutMs)), '300', `min="15" max="600" class="et-agent-timeout-s" data-agent-id="${escHtml(agent.id)}"`)}
               </div>
               ${agent.phase === 'post' ? `<div class="et-row">
                 ${selectField('후처리 적용', `et-agent-post-mode-${agent.id}`, normalizePostMode(agent.postMode), [
@@ -12297,7 +12317,7 @@
       temperature: parseNumber(value('et-agent-temperature', base.temperature ?? conf.temperature), base.temperature ?? conf.temperature, 0, 2),
       maxTokens: parseNumber(value('et-agent-max-tokens', base.maxTokens ?? conf.maxTokens), base.maxTokens ?? conf.maxTokens, 128, 16000),
       contextWindow: parseNumber(value('et-agent-context-window', base.contextWindow ?? conf.contextWindow), base.contextWindow ?? conf.contextWindow, 4, 80),
-      timeoutMs: parseNumber(value('et-agent-timeout-ms', base.timeoutMs ?? conf.timeoutMs), base.timeoutMs ?? conf.timeoutMs, 15000, 600000),
+      timeoutMs: timeoutSecondsToMs(value('et-agent-timeout-s', timeoutMsToSeconds(base.timeoutMs ?? conf.timeoutMs)), base.timeoutMs ?? conf.timeoutMs),
       postMode: normalizePostMode(value('et-agent-post-mode', base.postMode || 'suffix')),
     };
   }
