@@ -1,13 +1,13 @@
 //@name SuperVibeBot
-//@display-name 🐸 SuperVibeBot v1.5.9
-//@version 1.5.9
+//@display-name 🐸 SuperVibeBot v1.5.10
+//@version 1.5.10
 //@api 3.0
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/supervibebot-update/refs/heads/main/SuperVibeBot.update.js
 //@arg api_key string "" "Google AI Studio API 키를 입력하세요 (Vertex AI, API Hub 또는 GitHub Copilot 연동 시 불필요)."
 //@arg disable_safety int 0 "안전 필터 비활성화 (1=OFF, 0=ON)"
 
 if (typeof risuai === "undefined") {
-    alert("⚠️ SuperVibeBot v1.5.9는 RisuAI Plugin API 3.0이 필요합니다.");
+    alert("⚠️ SuperVibeBot v1.5.10는 RisuAI Plugin API 3.0이 필요합니다.");
     throw new Error("API 3.0 required");
 }
 
@@ -163,7 +163,7 @@ async function safeCopyText(text, options = {}) {
 }
 
 /**
- * SuperVibeBot v1.5.9 Release Notes
+ * SuperVibeBot v1.5.10 Release Notes
  *
  * 🎉 Major Changes
  * - Migrated to RisuAI Plugin API 3.0
@@ -2731,6 +2731,7 @@ const KERO_MISSION_STALE_MS = 6 * 60 * 60 * 1000;
 const KERO_INPUT_QUEUE_PROCESSING_STALE_MS = 5 * 60 * 1000;
 const KERO_INPUT_QUEUE_FOREIGN_PROCESSING_STALE_MS = 2 * 60 * 60 * 1000;
 const KERO_INPUT_QUEUE_HEARTBEAT_MS = 30 * 1000;
+const KERO_INPUT_QUEUE_STORAGE_LIMIT = 100;
 const KERO_ACTION_JOB_RUNNING_STALE_MS = 20 * 60 * 1000;
 const KERO_CONTEXT_TOKEN_LIMIT = 500000;
 const KERO_CONTEXT_CHARS_PER_TOKEN = 2.5;
@@ -2750,6 +2751,7 @@ const KERO_SUBAGENT_MANAGER_BOARD_CHAR_LIMIT = 14000;
 const SVB_RUNTIME_PROFILE_CACHE_MS = 3000;
 const SVB_RUNTIME_UA_MAX_CHARS = 512;
 const SVB_MOBILE_VIEWPORT_MAX_WIDTH = 768;
+const SVB_TABLET_VIEWPORT_MAX_WIDTH = 1100;
 const SVB_LOW_MEMORY_DEVICE_MEMORY_GB = 4;
 const SVB_LOW_CORE_HARDWARE_CONCURRENCY = 4;
 const SVB_SUBAGENT_PACKET_CONTEXT_HEADROOM_CHARS = 12000;
@@ -2771,6 +2773,8 @@ const KERO_COMPLETION_NOTICE_ID = "svb-kero-completion-notice";
 const KERO_BACKGROUND_STATUS_TOAST_MS = 2600;
 const KERO_BACKGROUND_DONE_TOAST_MS = 3200;
 const KERO_BACKGROUND_ERROR_TOAST_MS = 4200;
+const KERO_BACKGROUND_STATUS_TOAST_MIN_INTERVAL_MS = 45000;
+const KERO_BACKGROUND_STATUS_TOAST_UPDATE_INTERVAL_MS = 1200;
 const KERO_CREATE_BATCH_LIMIT = 50;
 const KERO_BULK_DEFAULT_CHUNK_SIZE = 10;
 const KERO_BULK_CREATE_MAX_ITEMS = 1000;
@@ -2795,6 +2799,14 @@ const KERO_HEARTBEAT_SUPPRESSION_TTL_MS = 10 * 60 * 1000;
 const KERO_ACTION_JOB_PERSIST_RETRY_DELAYS = [0, 250, 900];
 const KERO_MISSION_PERSIST_RETRY_DELAYS = KERO_ACTION_JOB_PERSIST_RETRY_DELAYS;
 const KERO_WAKE_ACTION_ZOMBIE_MS = KERO_ACTION_EXECUTION_TIMEOUT_MS + 5 * 60 * 1000;
+const KERO_ACTION_JOB_STORAGE_LIMIT = 200;
+const KERO_ACTION_JOB_DONE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const KERO_ACTION_JOB_DETAIL_CHAR_LIMIT = 1200;
+const KERO_BULK_JOB_STORAGE_LIMIT = 80;
+const KERO_BULK_JOB_DONE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const KERO_BULK_JOB_CHUNK_LIMIT = 240;
+const KERO_BULK_JOB_RANGE_LIMIT = 240;
+const KERO_BULK_JOB_TEXT_CHAR_LIMIT = 800;
 const KERO_RUNTIME_WAKE_RECOVERY_DEBOUNCE_MS = 350;
 const KERO_RELEASED_ZOMBIE_JOB_TTL_MS = 24 * 60 * 60 * 1000;
 const KERO_BULK_AUTO_RESUME_DELAY_MS = 1500;
@@ -3357,10 +3369,86 @@ async function loadKeroActionJobs(charOrId) {
     return parsed && typeof parsed === 'object' ? parsed : {};
 }
 
+function getKeroJobTimestampMs(job = {}) {
+    const values = [
+        job.updatedAt,
+        job.finishedAt,
+        job.completedAt,
+        job.createdAt,
+        job.startedAt
+    ];
+    for (const value of values) {
+        const parsed = Date.parse(safeString(value || ''));
+        if (Number.isFinite(parsed)) return parsed;
+    }
+    return 0;
+}
+
+function isKeroActiveStoredJob(job = {}) {
+    const status = safeString(job?.status || '').toLowerCase();
+    return ['queued', 'pending', 'running', 'progress', 'processing', 'action'].includes(status);
+}
+
+function compactKeroStoredJobText(value, limit = KERO_ACTION_JOB_DETAIL_CHAR_LIMIT) {
+    const text = safeString(value);
+    if (!text || text.length <= limit) return text;
+    return limitSvbMiddleText(text, limit, 'stored_job_text');
+}
+
+function compactKeroStoredJobValue(value, stringLimit = KERO_ACTION_JOB_DETAIL_CHAR_LIMIT, depth = 0) {
+    if (value === null || value === undefined) return value;
+    if (typeof value === 'string') return compactKeroStoredJobText(value, stringLimit);
+    if (typeof value !== 'object') return value;
+    if (depth >= 5) return '[SVB_STORAGE_COMPACTED: object depth limit]';
+    if (Array.isArray(value)) {
+        const limit = depth <= 1 ? 80 : 40;
+        return value.slice(0, limit).map((item) => compactKeroStoredJobValue(item, stringLimit, depth + 1));
+    }
+    const out = {};
+    Object.entries(value).forEach(([key, item]) => {
+        out[key] = compactKeroStoredJobValue(item, stringLimit, depth + 1);
+    });
+    return out;
+}
+
+function sanitizeKeroActionJobForStorage(job = {}) {
+    const active = isKeroActiveStoredJob(job);
+    const clone = makeCloneableData(job || {}) || {};
+    ['lastError', 'detail', 'message', 'reason'].forEach((key) => {
+        if (clone[key] !== undefined) clone[key] = compactKeroStoredJobText(clone[key], KERO_ACTION_JOB_DETAIL_CHAR_LIMIT);
+    });
+    if (clone.verification && typeof clone.verification === 'object') {
+        clone.verification = compactKeroStoredJobValue(clone.verification, active ? KERO_ACTION_JOB_DETAIL_CHAR_LIMIT : 600);
+    }
+    if (!active && clone.action && typeof clone.action === 'object') {
+        clone.action = compactKeroStoredJobValue(makeKeroPersistableAction(clone.action), 800);
+    }
+    return clone;
+}
+
+function pruneKeroActionJobsForStorage(jobs = {}) {
+    const now = Date.now();
+    const entries = Object.entries(jobs || {})
+        .map(([id, job]) => [id, sanitizeKeroActionJobForStorage({ ...(job || {}), id: job?.id || id })])
+        .filter(([, job]) => {
+            if (isKeroActiveStoredJob(job)) return true;
+            const timestamp = getKeroJobTimestampMs(job);
+            return !timestamp || now - timestamp <= KERO_ACTION_JOB_DONE_TTL_MS;
+        })
+        .sort((a, b) => {
+            const aActive = isKeroActiveStoredJob(a[1]) ? 1 : 0;
+            const bActive = isKeroActiveStoredJob(b[1]) ? 1 : 0;
+            if (aActive !== bActive) return bActive - aActive;
+            return getKeroJobTimestampMs(b[1]) - getKeroJobTimestampMs(a[1]);
+        })
+        .slice(0, KERO_ACTION_JOB_STORAGE_LIMIT);
+    return Object.fromEntries(entries);
+}
+
 async function saveKeroActionJobs(charOrId, jobs) {
     const id = typeof charOrId === 'string' ? charOrId : await getKeroCharId(charOrId);
     if (!id) return;
-    const ok = await safePluginSetItem(KERO_KEYS.ACTION_JOBS(id), JSON.stringify(jobs || {}), `kero action jobs save:${id}`);
+    const ok = await safePluginSetItem(KERO_KEYS.ACTION_JOBS(id), JSON.stringify(pruneKeroActionJobsForStorage(jobs || {})), `kero action jobs save:${id}`);
     if (!ok) throw new Error(`액션 job 상태 저장 실패: ${id}`);
 }
 
@@ -3392,6 +3480,16 @@ function normalizeKeroInputQueue(queue = []) {
             };
         })
         .filter(Boolean);
+}
+
+function capKeroInputQueue(queue = [], limit = KERO_INPUT_QUEUE_STORAGE_LIMIT) {
+    const normalized = normalizeKeroInputQueue(queue);
+    const safeLimit = Math.max(1, Number(limit || KERO_INPUT_QUEUE_STORAGE_LIMIT) || KERO_INPUT_QUEUE_STORAGE_LIMIT);
+    if (normalized.length <= safeLimit) return normalized;
+    const attention = normalized.filter(isKeroAttentionInputQueueItem);
+    const active = normalized.filter((item) => ['queued', 'processing'].includes(safeString(item.status || '')) && !isKeroAttentionInputQueueItem(item));
+    const inactive = normalized.filter((item) => !attention.includes(item) && !active.includes(item));
+    return [...inactive, ...active, ...attention].slice(-safeLimit);
 }
 
 function recoverStaleKeroInputQueue(queue = [], options = {}) {
@@ -3438,7 +3536,7 @@ async function loadKeroInputQueue(charOrId) {
 async function saveKeroInputQueue(charOrId, queue) {
     const id = typeof charOrId === 'string' ? charOrId : await getKeroCharId(charOrId);
     if (!id) return;
-    await safePluginSetItem(KERO_KEYS.INPUT_QUEUE(id), JSON.stringify(normalizeKeroInputQueue(queue).slice(-100)), `kero input queue save:${id}`);
+    await safePluginSetItem(KERO_KEYS.INPUT_QUEUE(id), JSON.stringify(capKeroInputQueue(queue)), `kero input queue save:${id}`);
 }
 
 async function loadKeroWorkstreamEvents(charOrId) {
@@ -3451,7 +3549,15 @@ async function loadKeroWorkstreamEvents(charOrId) {
 async function saveKeroWorkstreamEvents(charOrId, events) {
     const id = typeof charOrId === 'string' ? charOrId : await getKeroCharId(charOrId);
     if (!id) return;
-    await safePluginSetItem(KERO_KEYS.WORKSTREAM(id), JSON.stringify(ensureArray(events).slice(0, KERO_MISSION_EVENT_LIMIT)), `kero workstream save:${id}`);
+    const persistentEvents = ensureArray(events)
+        .filter((event) => event?.ephemeral !== true)
+        .slice(0, KERO_MISSION_EVENT_LIMIT)
+        .map((event) => {
+            const clone = { ...(event || {}) };
+            delete clone.ephemeral;
+            return clone;
+        });
+    await safePluginSetItem(KERO_KEYS.WORKSTREAM(id), JSON.stringify(persistentEvents), `kero workstream save:${id}`);
 }
 
 async function loadKeroBulkCreateJobs(charOrId) {
@@ -3462,10 +3568,57 @@ async function loadKeroBulkCreateJobs(charOrId) {
     return parsed && typeof parsed === 'object' ? parsed : {};
 }
 
+function sanitizeKeroBulkRangeForStorage(range = {}) {
+    const clone = makeCloneableData(range || {}) || {};
+    ['reason', 'lastError', 'error', 'message', 'detail'].forEach((key) => {
+        if (clone[key] !== undefined) clone[key] = compactKeroStoredJobText(clone[key], KERO_BULK_JOB_TEXT_CHAR_LIMIT);
+    });
+    return clone;
+}
+
+function sanitizeKeroBulkJobForStorage(job = {}) {
+    const active = isKeroActiveStoredJob(job);
+    const clone = makeCloneableData(job || {}) || {};
+    ['lastError', 'error', 'message', 'detail', 'reason'].forEach((key) => {
+        if (clone[key] !== undefined) clone[key] = compactKeroStoredJobText(clone[key], KERO_BULK_JOB_TEXT_CHAR_LIMIT);
+    });
+    if (Array.isArray(clone.failedRanges)) {
+        clone.failedRanges = clone.failedRanges
+            .slice(0, active ? Math.max(KERO_BULK_JOB_RANGE_LIMIT, clone.failedRanges.length) : KERO_BULK_JOB_RANGE_LIMIT)
+            .map(sanitizeKeroBulkRangeForStorage);
+    }
+    if (Array.isArray(clone.completedRanges)) {
+        clone.completedRanges = active ? clone.completedRanges : clone.completedRanges.slice(0, KERO_BULK_JOB_RANGE_LIMIT);
+    }
+    if (Array.isArray(clone.chunks) && !active) {
+        clone.chunks = clone.chunks.slice(0, KERO_BULK_JOB_CHUNK_LIMIT).map((chunk) => compactKeroStoredJobValue(chunk, 600, 0));
+    }
+    return clone;
+}
+
+function pruneKeroBulkCreateJobsForStorage(jobs = {}) {
+    const now = Date.now();
+    const entries = Object.entries(jobs || {})
+        .map(([id, job]) => [id, sanitizeKeroBulkJobForStorage({ ...(job || {}), id: job?.id || id })])
+        .filter(([, job]) => {
+            if (isKeroActiveStoredJob(job)) return true;
+            const timestamp = getKeroJobTimestampMs(job);
+            return !timestamp || now - timestamp <= KERO_BULK_JOB_DONE_TTL_MS;
+        })
+        .sort((a, b) => {
+            const aActive = isKeroActiveStoredJob(a[1]) ? 1 : 0;
+            const bActive = isKeroActiveStoredJob(b[1]) ? 1 : 0;
+            if (aActive !== bActive) return bActive - aActive;
+            return getKeroJobTimestampMs(b[1]) - getKeroJobTimestampMs(a[1]);
+        })
+        .slice(0, KERO_BULK_JOB_STORAGE_LIMIT);
+    return Object.fromEntries(entries);
+}
+
 async function saveKeroBulkCreateJobs(charOrId, jobs) {
     const id = typeof charOrId === 'string' ? charOrId : await getKeroCharId(charOrId);
     if (!id) return;
-    const ok = await safePluginSetItem(KERO_KEYS.BULK_CREATE_JOBS(id), JSON.stringify(jobs || {}), `kero bulk create jobs save:${id}`);
+    const ok = await safePluginSetItem(KERO_KEYS.BULK_CREATE_JOBS(id), JSON.stringify(pruneKeroBulkCreateJobsForStorage(jobs || {})), `kero bulk create jobs save:${id}`);
     if (!ok) throw new Error(`대량 생성 job 상태 저장 실패: ${id}`);
 }
 
@@ -4296,7 +4449,14 @@ function getSvbRuntimeEnvironmentProfile(options = {}) {
         const isAndroid = ua.includes('android');
         const isIos = ua.includes('iphone') || ua.includes('ipad') || ua.includes('ipod');
         const uaMobile = nav?.userAgentData?.mobile === true || ua.includes('mobile') || isAndroid || isIos;
-        const viewportMobile = viewportWidth > 0 && viewportWidth <= SVB_MOBILE_VIEWPORT_MAX_WIDTH && touchPoints > 0;
+        const coarsePointer = (() => {
+            try { return typeof win?.matchMedia === 'function' && win.matchMedia('(pointer: coarse)').matches === true; }
+            catch (_) { return false; }
+        })();
+        const shortestViewportSide = viewportWidth > 0 && viewportHeight > 0 ? Math.min(viewportWidth, viewportHeight) : 0;
+        const viewportMobile = (viewportWidth > 0 && viewportWidth <= SVB_MOBILE_VIEWPORT_MAX_WIDTH && touchPoints > 0)
+            || (viewportWidth > 0 && viewportWidth <= SVB_TABLET_VIEWPORT_MAX_WIDTH && coarsePointer)
+            || (touchPoints > 0 && shortestViewportSide > 0 && shortestViewportSide <= SVB_MOBILE_VIEWPORT_MAX_WIDTH);
         const isMobile = uaMobile || viewportMobile;
         const isPocketRisu = ua.includes('pocketrisu') || ua.includes('pocket-risu') || ua.includes('pocket risu') || ua.includes('포켓risu') || ua.includes('포켓리수');
         const hasWebkitBridge = !!win?.webkit?.messageHandlers;
@@ -4339,6 +4499,7 @@ function getSvbRuntimeEnvironmentProfile(options = {}) {
             viewportWidth,
             viewportHeight,
             touchPoints,
+            coarsePointer,
             hardwareConcurrency,
             deviceMemoryGb,
             heapLimit,
@@ -8088,6 +8249,7 @@ let keroBackgroundOverlayExpanded = false;
 let keroBackgroundToastCount = 0;
 let keroBackgroundHostUsesRootDocument = false;
 let keroBackgroundLastToast = { message: '', at: 0 };
+let keroBackgroundStatusToastState = { node: null, lastShownAt: 0, lastUpdatedAt: 0, message: '' };
 let keroCompletionNoticeActive = false;
 let keroCompletionNoticeTimer = null;
 let keroCompletionNoticeDoc = null;
@@ -11208,6 +11370,16 @@ async function announceKeroRecoverySnapshotIfNeeded(storageId, mission = current
     return true;
 }
 
+function isKeroEphemeralWorkstreamEvent(status = '', title = '', detail = '') {
+    const normalizedStatus = safeString(status || '').toLowerCase();
+    const normalizedTitle = safeString(title || '');
+    const normalizedDetail = safeString(detail || '');
+    if (normalizedStatus !== 'progress') return false;
+    const text = `${normalizedTitle} ${normalizedDetail}`;
+    if (/완료|실패|오류|타임아웃|timeout|hard cap|복구|보류|취소|액션|저장|검증|경고|warning|error|done|blocked/i.test(text)) return false;
+    return /진행 중|계속 진행 중|응답을 기다리는 중|검토 중|호출하는 중|읽는 중|정리하는 중|대기 중|progress/i.test(text);
+}
+
 function addKeroWorkstreamEvent(title, detail = '', status = 'info', options = {}) {
     try {
         try {
@@ -11229,6 +11401,7 @@ function addKeroWorkstreamEvent(title, detail = '', status = 'info', options = {
         const normalizedTitle = capSvbWorkstreamText(title || '', adaptiveLimits.workstreamTitleCharLimit, 'title');
         const normalizedStatus = safeString(status || 'info');
         const normalizedDetail = capSvbWorkstreamText(detail || '', adaptiveLimits.workstreamDetailCharLimit, 'detail');
+        const ephemeral = options.persist === false || isKeroEphemeralWorkstreamEvent(normalizedStatus, normalizedTitle, normalizedDetail);
         const bypassHeartbeatSuppression = shouldBypassKeroHeartbeatSuppression(normalizedStatus, normalizedTitle, normalizedDetail, options)
             || shouldBypassKeroHeartbeatSuppression(normalizedStatus, normalizedTitle, normalizedDetail, progressOptions);
         if (eventJobId
@@ -11241,12 +11414,15 @@ function addKeroWorkstreamEvent(title, detail = '', status = 'info', options = {
             title: normalizedTitle || '작업',
             detail: normalizedDetail,
             status: normalizedStatus,
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            ...(ephemeral ? { ephemeral: true } : {})
         };
         keroWorkstreamEvents.unshift(entry);
         keroWorkstreamEvents = keroWorkstreamEvents.slice(0, adaptiveLimits.workstreamVisibleEventLimit);
-        updateKeroMissionState({}, entry);
-        scheduleKeroWorkstreamPersist();
+        if (!ephemeral) {
+            updateKeroMissionState({}, entry);
+            scheduleKeroWorkstreamPersist();
+        }
         scheduleKeroWorkstreamRender('event', { status: normalizedStatus });
         return true;
     } catch (error) {
@@ -13313,6 +13489,7 @@ function renderKeroQueuePanel(missionId = currentKeroMission?.id || '') {
     const panel = document.getElementById('kero-queue-panel');
     if (!panel) return;
     const targetMissionId = safeString(missionId || '');
+    keroQueuedUserInputs = capKeroInputQueue(keroQueuedUserInputs);
     const items = normalizeKeroInputQueue(keroQueuedUserInputs)
         .filter((item) => isKeroRecordInMission(item.missionId, targetMissionId));
     panel.innerHTML = '';
@@ -15131,12 +15308,43 @@ function updateKeroBackgroundJob(id, patch = {}) {
     }
 }
 
+function pruneKeroBackgroundToastWrap(toastWrap, maxCount = 4) {
+    try {
+        const children = Array.from(toastWrap?.children || []);
+        const overflow = children.length - Math.max(1, maxCount);
+        if (overflow <= 0) return;
+        children.slice(0, overflow).forEach((node) => {
+            if (node === keroBackgroundStatusToastState.node) return;
+            node.remove();
+            keroBackgroundToastCount = Math.max(0, keroBackgroundToastCount - 1);
+        });
+    } catch (error) {
+        Logger.debug('Kero toast prune skipped:', error?.message || error);
+    }
+}
+
 function showKeroBackgroundToast(message, type = 'done', durationMs) {
     const text = String(message ?? '').trim();
     if (!text) return;
     const now = Date.now();
     if (type === 'status') {
-        if (keroBackgroundLastToast.message === text && now - keroBackgroundLastToast.at < 5000) return;
+        if (keroBackgroundLastToast.message === text && now - keroBackgroundLastToast.at < KERO_BACKGROUND_STATUS_TOAST_UPDATE_INTERVAL_MS) return;
+        const existingStatusToast = keroBackgroundStatusToastState.node;
+        if (existingStatusToast?.isConnected) {
+            if (text !== keroBackgroundStatusToastState.message && now - keroBackgroundStatusToastState.lastUpdatedAt >= KERO_BACKGROUND_STATUS_TOAST_UPDATE_INTERVAL_MS) {
+                existingStatusToast.textContent = text.length > 72 ? `${text.slice(0, 69)}...` : text;
+                keroBackgroundStatusToastState.message = text;
+                keroBackgroundStatusToastState.lastUpdatedAt = now;
+            }
+            keroBackgroundLastToast = { message: text, at: now };
+            renderKeroBackgroundStatus();
+            return;
+        }
+        if (now - keroBackgroundStatusToastState.lastShownAt < KERO_BACKGROUND_STATUS_TOAST_MIN_INTERVAL_MS) {
+            keroBackgroundLastToast = { message: text, at: now };
+            renderKeroBackgroundStatus();
+            return;
+        }
     }
     keroBackgroundLastToast = { message: text, at: now };
     const displayText = text.length > 72 ? `${text.slice(0, 69)}...` : text;
@@ -15153,11 +15361,23 @@ function showKeroBackgroundToast(message, type = 'done', durationMs) {
         toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
         toast.setAttribute('aria-live', type === 'error' ? 'assertive' : 'polite');
         toastWrap.appendChild(toast);
+        pruneKeroBackgroundToastWrap(toastWrap, 4);
+        if (type === 'status') {
+            keroBackgroundStatusToastState = {
+                node: toast,
+                lastShownAt: now,
+                lastUpdatedAt: now,
+                message: text
+            };
+        }
         host.style.display = 'flex';
         syncKeroBackgroundOverlay();
         setTimeout(() => {
             toast.remove();
             keroBackgroundToastCount = Math.max(0, keroBackgroundToastCount - 1);
+            if (keroBackgroundStatusToastState.node === toast) {
+                keroBackgroundStatusToastState.node = null;
+            }
             renderKeroBackgroundStatus();
         }, toastDuration);
     }).catch((error) => {
@@ -30167,7 +30387,7 @@ ${steeringBlock ? `\n${steeringBlock}` : ''}`;
                 return keroQueuedUserInputs;
             })
             : keroQueuedUserInputs;
-        keroQueuedUserInputs = normalizeKeroInputQueue([
+        keroQueuedUserInputs = capKeroInputQueue([
             ...baseQueue,
             {
                 id: inputId,
@@ -39111,7 +39331,7 @@ function getBulkOutputHint(targetType) {
     return 'result는 항목 JSON 배열이어야 합니다.';
 }
 
-/* === RisuAI SuperVibeBot v1.5.9 Guide (Concise Version) === */
+/* === RisuAI SuperVibeBot v1.5.10 Guide (Concise Version) === */
 const RISUAI_GUIDE = {
     overview: `
 ## System Overview
@@ -50121,7 +50341,7 @@ async function loadInitialSettings() {
 async function registerUIElements() {
     // 채팅 화면 메뉴에 버튼 추가 (플로팅 버튼 대신)
     await risuai.registerButton({
-        name: "SuperVibeBot v1.5.9",
+        name: "SuperVibeBot v1.5.10",
         icon: "🐸",
         iconType: "html",
         location: "chat"  // 채팅 메뉴에 배치 (화면 가림 방지)
@@ -50130,7 +50350,7 @@ async function registerUIElements() {
     });
 
     await risuai.registerSetting(
-        "SuperVibeBot v1.5.9 Settings",
+        "SuperVibeBot v1.5.10 Settings",
         async () => {
             await openSettingsWindow();
         },
@@ -50173,7 +50393,7 @@ function cleanup() {
 (async () => {
     try {
         Logger.info("=".repeat(50));
-        Logger.info("SuperVibeBot v1.5.9");
+        Logger.info("SuperVibeBot v1.5.10");
         Logger.info("RisuAI Plugin API 3.0");
         Logger.info("=".repeat(50));
         await loadInitialSettings();
@@ -50290,7 +50510,3 @@ function bindAllResultApplyButtons() {
         });
     }
 }
-
-
-
-
