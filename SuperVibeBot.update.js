@@ -1,13 +1,13 @@
 //@name SuperVibeBot
-//@display-name 🐸 SuperVibeBot v1.5.21
-//@version 1.5.21
+//@display-name 🐸 SuperVibeBot v1.5.22
+//@version 1.5.22
 //@api 3.0
 //@update-url https://github.com/nupa0w0-hash/supervibebot-update/releases/latest/download/SuperVibeBot.update.js
 //@arg api_key string "" "Google AI Studio API 키를 입력하세요 (Vertex AI, API Hub 또는 GitHub Copilot 연동 시 불필요)."
 //@arg disable_safety int 0 "안전 필터 비활성화 (1=OFF, 0=ON)"
 
 if (typeof risuai === "undefined") {
-    alert("⚠️ SuperVibeBot v1.5.21는 RisuAI Plugin API 3.0이 필요합니다.");
+    alert("⚠️ SuperVibeBot v1.5.22는 RisuAI Plugin API 3.0이 필요합니다.");
     throw new Error("API 3.0 required");
 }
 
@@ -164,7 +164,7 @@ async function safeCopyText(text, options = {}) {
 }
 
 /**
- * SuperVibeBot v1.5.21 Release Notes
+ * SuperVibeBot v1.5.22 Release Notes
  *
  * 🎉 Major Changes
  * - Caps sub-agent consultation packets to 120k desktop, 80k constrained, and 60k background chars
@@ -188,6 +188,7 @@ async function safeCopyText(text, options = {}) {
  * - Runtime diagnostics now verify the legacy field policy for lorebook writes and model context
  * - Runtime diagnostics now verify SuperVibeBot uses the GitHub Releases latest update URL
  * - Plugin creation guidance now recommends GitHub Releases latest/download over raw branch URLs
+ * - Plugin update-url guidance no longer uses source/raw-like Korean wording that can confuse authors
  * - Sub-agent report calls now default to 4096 output tokens on desktop and 2048 on constrained/mobile/webview profiles
  * - Explicit sub-agent output overrides are clamped to a WebView-safe hard cap
  * - API responses that ignore max_tokens are shortened before entering Kero's parser/renderer
@@ -203,6 +204,7 @@ async function safeCopyText(text, options = {}) {
  * - Runtime diagnostics now verify secondkey/multiple mode suppression and personality/scenario alias filtering
  * - Runtime diagnostics now reject raw refs update-url regressions for SuperVibeBot
  * - RisuAI plugin metadata guide now warns against raw.githubusercontent branch URLs as default update channels
+ * - Validation messages now say HTTPS .js file URL instead of raw/source-like JS URL wording
  * - Prevents GLM/Kimi/API Hub sub-agents from returning or rendering oversized manager reports
  * - Runtime diagnostics now verify sub-agent hard caps, response truncation, and conservative large-payload parallel limits
  * - Safer selected-item expansion in both global and Kero chat execution paths
@@ -12485,7 +12487,7 @@ function addSvbRuntimePluginMetadataSelfTest(checks) {
         const superVibeMetadata = buildPluginMetadataSummary([
             '//@name SuperVibeBot',
             '//@display-name 🐸 SuperVibeBot diagnostic',
-            '//@version 1.5.21',
+            '//@version 1.5.22',
             '//@api 3.0',
             `//@update-url ${SUPER_VIBE_BOT_RELEASE_UPDATE_URL}`
         ].join('\n'));
@@ -32559,8 +32561,8 @@ ${metaBlock}
 - 다중 생성 예시: @action {"type":"create","target":"lorebook","payload":[{"comment":"인삿말 1","key":"greeting_1","content":"안녕하세요! 오늘도 반갑습니다. 이 항목이 발동될 때 캐릭터가 방문자를 어떤 태도로 맞이하는지, 말투와 분위기까지 짧게 포함한다.","alwaysActive":false,"selective":true,"mode":"normal"},{"comment":"인삿말 2","key":"greeting_2","content":"어서오세요! 편안하게 이야기해 주세요. 특정 장소나 관계가 있다면 환대 방식, 거리감, 반복해서 쓰일 표현을 함께 정리한다.","alwaysActive":false,"selective":true,"mode":"normal"},{"comment":"인삿말 3","key":"greeting_3","content":"환영합니다! 무엇을 도와드릴까요? 안내 역할, 첫 대면의 분위기, 이후 대화로 이어지는 단서를 함께 제공한다.","alwaysActive":false,"selective":true,"mode":"normal"}]}
 - 모듈 생성: @action {"type":"create","target":"module","payload":{"name":"모듈 이름","description":"설명","namespace":"선택","lorebook":[],"regex":[],"trigger":[],"cjs":"","assets":[]},"enabled":false}
 - 플러그인 생성: @action {"type":"create","target":"plugin","payload":{"name":"plugin_id","displayName":"표시 이름","script":"//@name plugin_id\\n//@api 3.0\\n//@version 0.1.0\\n...","enabled":false}}
-- 플러그인 자동 업데이트를 요청받으면 script 상단 512바이트 안에 //@version을 두고, 배포 URL이 확인된 경우에만 //@update-url https://... 원본 JS URL을 추가한다. 임의/가짜 update-url은 넣지 않는다.
-- //@update-url은 https 원본 JS여야 하며 서버가 CORS와 Range 요청을 지원해야 한다. GitHub를 쓰는 경우 raw 브랜치 URL보다 Releases latest/download/FILENAME.js를 우선 사용한다.
+- 플러그인 자동 업데이트를 요청받으면 script 상단 512바이트 안에 //@version을 두고, 배포 URL이 확인된 경우에만 //@update-url에 https://... .js 파일 URL을 추가한다. 임의/가짜 update-url은 넣지 않는다.
+- //@update-url은 https로 시작하는 .js 파일 URL이어야 하며 브라우저 fetch가 가능해야 한다. GitHub를 쓰는 경우 raw 브랜치 URL보다 Releases latest/download/FILENAME.js를 우선 사용한다.
 - raw.githubusercontent.com 브랜치 경로와 GitHub raw refs 경로는 캐시/지연으로 업데이트가 안 보일 수 있으므로 자동 업데이트 기본값으로 추천하지 않는다.
 
         ### update (수정)
@@ -36963,7 +36965,7 @@ function buildPluginMetadataSummary(script) {
     const updateUrlValid = updateURL ? isValidPluginUpdateUrl(updateURL) : false;
     const versionComparable = version ? isRisuComparablePluginVersion(version) : false;
     const problems = [];
-    if (updateURL && !updateUrlValid) problems.push('//@update-url은 https 원본 JS URL이어야 합니다.');
+    if (updateURL && !updateUrlValid) problems.push('//@update-url은 https로 시작하는 .js 파일 URL이어야 합니다.');
     if (updateURL && !version) problems.push('//@update-url을 쓰려면 //@version이 필요합니다.');
     if (updateURL && version && !versionWithinUpdateCheckWindow) problems.push('RisuAI 업데이트 검사용 //@version이 첫 512바이트 안에 없습니다.');
     if (updateURL && version && !versionComparable) problems.push('RisuAI 버전 비교는 1.2.3 같은 숫자 점 표기만 안정적으로 처리합니다.');
@@ -37004,7 +37006,7 @@ function validatePluginScriptMetadata(script, expectedName, options = {}) {
     }
     if (metadata.updateURL) {
         if (!metadata.updateUrlValid) {
-            throw new Error(`${label} script의 //@update-url은 유효한 https 원본 JS URL이어야 합니다.`);
+            throw new Error(`${label} script의 //@update-url은 유효한 HTTPS .js 파일 URL이어야 합니다.`);
         }
         if (!metadata.version) {
             throw new Error(`${label} script에서 //@update-url을 쓰려면 //@version이 필요합니다.`);
@@ -37026,7 +37028,7 @@ function validatePluginAutoUpdateSettings(plugin, label = '플러그인') {
     const storedVersion = safeString(plugin.versionOfPlugin).trim();
     if (storedUpdateURL) {
         if (!isValidPluginUpdateUrl(storedUpdateURL)) {
-            throw new Error(`${label}의 updateURL은 유효한 https 원본 JS URL이어야 합니다.`);
+            throw new Error(`${label}의 updateURL은 유효한 HTTPS .js 파일 URL이어야 합니다.`);
         }
         if (!storedVersion) {
             throw new Error(`${label}의 updateURL을 쓰려면 versionOfPlugin 또는 script의 //@version이 필요합니다.`);
@@ -39794,7 +39796,7 @@ function getBulkOutputHint(targetType) {
     return 'result는 항목 JSON 배열이어야 합니다.';
 }
 
-/* === RisuAI SuperVibeBot v1.5.21 Guide (Concise Version) === */
+/* === RisuAI SuperVibeBot v1.5.22 Guide (Concise Version) === */
 const RISUAI_GUIDE = {
     overview: `
 ## System Overview
@@ -50934,7 +50936,7 @@ async function loadInitialSettings() {
 async function registerUIElements() {
     // 채팅 화면 메뉴에 버튼 추가 (플로팅 버튼 대신)
     await risuai.registerButton({
-        name: "SuperVibeBot v1.5.21",
+        name: "SuperVibeBot v1.5.22",
         icon: "🐸",
         iconType: "html",
         location: "chat"  // 채팅 메뉴에 배치 (화면 가림 방지)
@@ -50943,7 +50945,7 @@ async function registerUIElements() {
     });
 
     await risuai.registerSetting(
-        "SuperVibeBot v1.5.21 Settings",
+        "SuperVibeBot v1.5.22 Settings",
         async () => {
             await openSettingsWindow();
         },
@@ -50986,7 +50988,7 @@ function cleanup() {
 (async () => {
     try {
         Logger.info("=".repeat(50));
-        Logger.info("SuperVibeBot v1.5.21");
+        Logger.info("SuperVibeBot v1.5.22");
         Logger.info("RisuAI Plugin API 3.0");
         Logger.info("=".repeat(50));
         await loadInitialSettings();
