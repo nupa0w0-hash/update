@@ -1,18 +1,19 @@
 //@name SuperVibeBot
-//@display-name 🐸 SuperVibeBot v1.5.19
-//@version 1.5.19
+//@display-name 🐸 SuperVibeBot v1.5.20
+//@version 1.5.20
 //@api 3.0
 //@update-url https://github.com/nupa0w0-hash/supervibebot-update/releases/latest/download/SuperVibeBot.update.js
 //@arg api_key string "" "Google AI Studio API 키를 입력하세요 (Vertex AI, API Hub 또는 GitHub Copilot 연동 시 불필요)."
 //@arg disable_safety int 0 "안전 필터 비활성화 (1=OFF, 0=ON)"
 
 if (typeof risuai === "undefined") {
-    alert("⚠️ SuperVibeBot v1.5.19는 RisuAI Plugin API 3.0이 필요합니다.");
+    alert("⚠️ SuperVibeBot v1.5.20는 RisuAI Plugin API 3.0이 필요합니다.");
     throw new Error("API 3.0 required");
 }
 
 // 개발 모드 플래그 (릴리스 시 false 유지)
 const DEV_MODE = false;
+const SUPER_VIBE_BOT_RELEASE_UPDATE_URL = 'https://github.com/nupa0w0-hash/supervibebot-update/releases/latest/download/SuperVibeBot.update.js';
 // 페르소나 기능 제어 플래그
 const PERSONA_DYNAMIC_AVAILABLE = false;
 const PERSONA_APPLY_DISABLED = true;
@@ -163,7 +164,7 @@ async function safeCopyText(text, options = {}) {
 }
 
 /**
- * SuperVibeBot v1.5.19 Release Notes
+ * SuperVibeBot v1.5.20 Release Notes
  *
  * 🎉 Major Changes
  * - Caps sub-agent consultation packets to 120k desktop, 80k constrained, and 60k background chars
@@ -185,6 +186,7 @@ async function safeCopyText(text, options = {}) {
  * - AI-generated lorebook writes now remove secondkey/multiple mode unless explicitly requested
  * - Model context hides legacy lorebook activation details and character personality/scenario aliases by default
  * - Runtime diagnostics now verify the legacy field policy for lorebook writes and model context
+ * - Runtime diagnostics now verify SuperVibeBot uses the GitHub Releases latest update URL
  * - Sub-agent report calls now default to 4096 output tokens on desktop and 2048 on constrained/mobile/webview profiles
  * - Explicit sub-agent output overrides are clamped to a WebView-safe hard cap
  * - API responses that ignore max_tokens are shortened before entering Kero's parser/renderer
@@ -198,6 +200,7 @@ async function safeCopyText(text, options = {}) {
  * - Runtime diagnostics now verify packet hard caps for desktop, PocketRisu, and background profiles
  * - Runtime diagnostics now verify bulk apply idx filtering
  * - Runtime diagnostics now verify secondkey/multiple mode suppression and personality/scenario alias filtering
+ * - Runtime diagnostics now reject raw refs update-url regressions for SuperVibeBot
  * - Prevents GLM/Kimi/API Hub sub-agents from returning or rendering oversized manager reports
  * - Runtime diagnostics now verify sub-agent hard caps, response truncation, and conservative large-payload parallel limits
  * - Safer selected-item expansion in both global and Kero chat execution paths
@@ -12477,6 +12480,15 @@ function addSvbRuntimePluginMetadataSelfTest(checks) {
             '//@name ignored-plugin',
             '//@api 3.0'
         ].join('\n'));
+        const superVibeMetadata = buildPluginMetadataSummary([
+            '//@name SuperVibeBot',
+            '//@display-name 🐸 SuperVibeBot diagnostic',
+            '//@version 1.5.20',
+            '//@api 3.0',
+            `//@update-url ${SUPER_VIBE_BOT_RELEASE_UPDATE_URL}`
+        ].join('\n'));
+        const superVibeUsesReleaseLatest = /^https:\/\/github\.com\/nupa0w0-hash\/supervibebot-update\/releases\/latest\/download\/SuperVibeBot\.update\.js$/i.test(SUPER_VIBE_BOT_RELEASE_UPDATE_URL);
+        const superVibeUsesLegacyRawRefs = /raw\.githubusercontent\.com\/nupa0w0-hash\/supervibebot-update\/refs\/heads\/main|github\.com\/nupa0w0-hash\/supervibebot-update\/raw\/refs\/heads\/main/i.test(SUPER_VIBE_BOT_RELEASE_UPDATE_URL);
         return {
             autoUpdateReady: metadata.autoUpdateReady === true,
             versionByteIndex: metadata.versionByteIndex,
@@ -12489,7 +12501,11 @@ function addSvbRuntimePluginMetadataSelfTest(checks) {
             badVersionRejected,
             storedInvalidRejected,
             storedMismatchRejected,
-            stringMetadataIgnored: !stringMetadataIgnored.version && !stringMetadataIgnored.name
+            stringMetadataIgnored: !stringMetadataIgnored.version && !stringMetadataIgnored.name,
+            superVibeUpdateUrl: SUPER_VIBE_BOT_RELEASE_UPDATE_URL,
+            superVibeMetadataReady: superVibeMetadata.autoUpdateReady === true,
+            superVibeUsesReleaseLatest,
+            superVibeUsesLegacyRawRefs
         };
     });
     if (!result.ok) {
@@ -12510,10 +12526,13 @@ function addSvbRuntimePluginMetadataSelfTest(checks) {
     if (!value.storedInvalidRejected) problems.push('저장 updateURL http 허용');
     if (!value.storedMismatchRejected) problems.push('script/store updateURL 불일치 허용');
     if (!value.stringMetadataIgnored) problems.push('스크립트 문자열 내부 메타데이터 오인');
+    if (!value.superVibeMetadataReady) problems.push('슈바봇 release update-url 자동 업데이트 판정 실패');
+    if (!value.superVibeUsesReleaseLatest) problems.push('슈바봇 update-url이 release latest 경로가 아님');
+    if (value.superVibeUsesLegacyRawRefs) problems.push('슈바봇 update-url이 raw refs 캐시 위험 경로임');
     checks.push(makeSvbRuntimeCheck(
         problems.length === 0,
         '플러그인 자동 업데이트 메타데이터 자체 테스트',
-        `version byte ${value.versionByteIndex ?? -1} · 기본 ${value.defaultVersion || '없음'} · 저장 ${value.normalizedVersion || '없음'}${problems.length ? ` · 문제: ${problems.join(' / ')}` : ''}`,
+        `version byte ${value.versionByteIndex ?? -1} · 기본 ${value.defaultVersion || '없음'} · 저장 ${value.normalizedVersion || '없음'} · 슈바봇 URL ${value.superVibeUpdateUrl || '없음'}${problems.length ? ` · 문제: ${problems.join(' / ')}` : ''}`,
         problems.length ? 'error' : 'ok'
     ));
 }
@@ -39772,7 +39791,7 @@ function getBulkOutputHint(targetType) {
     return 'result는 항목 JSON 배열이어야 합니다.';
 }
 
-/* === RisuAI SuperVibeBot v1.5.19 Guide (Concise Version) === */
+/* === RisuAI SuperVibeBot v1.5.20 Guide (Concise Version) === */
 const RISUAI_GUIDE = {
     overview: `
 ## System Overview
@@ -50911,7 +50930,7 @@ async function loadInitialSettings() {
 async function registerUIElements() {
     // 채팅 화면 메뉴에 버튼 추가 (플로팅 버튼 대신)
     await risuai.registerButton({
-        name: "SuperVibeBot v1.5.19",
+        name: "SuperVibeBot v1.5.20",
         icon: "🐸",
         iconType: "html",
         location: "chat"  // 채팅 메뉴에 배치 (화면 가림 방지)
@@ -50920,7 +50939,7 @@ async function registerUIElements() {
     });
 
     await risuai.registerSetting(
-        "SuperVibeBot v1.5.19 Settings",
+        "SuperVibeBot v1.5.20 Settings",
         async () => {
             await openSettingsWindow();
         },
@@ -50963,7 +50982,7 @@ function cleanup() {
 (async () => {
     try {
         Logger.info("=".repeat(50));
-        Logger.info("SuperVibeBot v1.5.19");
+        Logger.info("SuperVibeBot v1.5.20");
         Logger.info("RisuAI Plugin API 3.0");
         Logger.info("=".repeat(50));
         await loadInitialSettings();
