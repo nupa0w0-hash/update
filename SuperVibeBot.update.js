@@ -7401,7 +7401,11 @@ const keroRuntimeWakeHandlerCleanups = [];
 const keroRuntimeLocalOps = {
     drainQueuedInputs: null,
     renderWorkstream: null,
-    updateQueuedInputUi: null
+    updateQueuedInputUi: null,
+    addBotMessage: null,
+    handleKeroActionRequest: null,
+    openKeroToolsPanel: null,
+    bindKeroToolsEvents: null
 };
 const keroReleasedZombieJobIds = new Set();
 const keroReleasedZombieJobMeta = new Map();
@@ -9511,7 +9515,9 @@ async function announceKeroRecoverySnapshotIfNeeded(storageId, mission = current
     addKeroWorkstreamEvent('작업 복구 대시보드', detail, getKeroRecoverySnapshotStatus(snapshot));
     const botMessage = typeof options.addBotMessage === 'function'
         ? options.addBotMessage
-        : (typeof globalThis?.addBotMessage === 'function' ? globalThis.addBotMessage : null);
+        : (typeof keroRuntimeLocalOps?.addBotMessage === 'function'
+            ? keroRuntimeLocalOps.addBotMessage
+            : (typeof globalThis?.addBotMessage === 'function' ? globalThis.addBotMessage : null));
     if (botMessage) {
         try {
             await botMessage(formatKeroRecoverySnapshotMessage(snapshot));
@@ -11196,10 +11202,37 @@ function requeueFailedKeroInputQueue(queue = keroQueuedUserInputs, missionId = c
 
 function isKeroChatTaskLikelyZombie(now = Date.now()) {
     if (!keroChatTaskRunning) return false;
+    if (isKeroSubAgentWaitLikelyZombie(now)) return true;
     const activeJob = currentKeroRequestJobId ? keroBackgroundJobs.get(currentKeroRequestJobId) : null;
     const missionUpdatedAt = Date.parse(currentKeroMission?.updatedAt || currentKeroMission?.createdAt || '');
     const lastActiveAt = Number(activeJob?.updatedAt || 0) || (Number.isFinite(missionUpdatedAt) ? missionUpdatedAt : 0);
     return lastActiveAt > 0 && now - lastActiveAt > KERO_WAKE_ACTION_ZOMBIE_MS;
+}
+
+function getLatestKeroSubAgentWaitEventTime() {
+    const waitPattern = /sub[-_ ]?agent|submodel|consultation|agent|서브|에이전트|병렬|응답|대기/i;
+    const activePattern = /wait|waiting|pending|parallel|consultation|response|대기|응답|병렬|검토/i;
+    for (const entry of ensureArray(keroWorkstreamEvents)) {
+        const text = `${safeString(entry?.title || '')} ${safeString(entry?.detail || '')}`;
+        if (!waitPattern.test(text) || !activePattern.test(text)) continue;
+        const ts = Date.parse(entry?.timestamp || '');
+        if (Number.isFinite(ts)) return ts;
+    }
+    return 0;
+}
+
+function isKeroSubAgentWaitLikelyZombie(now = Date.now()) {
+    try {
+        const activeGuards = (activeSubAgentConsultationGuards?.size || 0) + (activeSubAgentConsultationHardCaps?.size || 0);
+        if (activeGuards > 0) return false;
+        const lastWaitAt = getLatestKeroSubAgentWaitEventTime();
+        if (!lastWaitAt) return false;
+        const staleMs = resolveKeroSubAgentConsultationHardCapMs(KERO_SUBAGENT_CONSULTATION_TIMEOUT_MS) + 60 * 1000;
+        return now - lastWaitAt > staleMs;
+    } catch (error) {
+        Logger.warn('Kero sub-agent zombie check failed:', error?.message || error);
+        return false;
+    }
 }
 
 function pruneKeroReleasedZombieJobIds(now = Date.now()) {
@@ -11255,12 +11288,28 @@ function registerKeroRuntimeLocalOps(ops = {}) {
     if (typeof ops.updateQueuedInputUi === 'function') {
         keroRuntimeLocalOps.updateQueuedInputUi = ops.updateQueuedInputUi;
     }
+    if (typeof ops.addBotMessage === 'function') {
+        keroRuntimeLocalOps.addBotMessage = ops.addBotMessage;
+    }
+    if (typeof ops.handleKeroActionRequest === 'function') {
+        keroRuntimeLocalOps.handleKeroActionRequest = ops.handleKeroActionRequest;
+    }
+    if (typeof ops.openKeroToolsPanel === 'function') {
+        keroRuntimeLocalOps.openKeroToolsPanel = ops.openKeroToolsPanel;
+    }
+    if (typeof ops.bindKeroToolsEvents === 'function') {
+        keroRuntimeLocalOps.bindKeroToolsEvents = ops.bindKeroToolsEvents;
+    }
 }
 
 function clearKeroRuntimeLocalOps() {
     keroRuntimeLocalOps.drainQueuedInputs = null;
     keroRuntimeLocalOps.renderWorkstream = null;
     keroRuntimeLocalOps.updateQueuedInputUi = null;
+    keroRuntimeLocalOps.addBotMessage = null;
+    keroRuntimeLocalOps.handleKeroActionRequest = null;
+    keroRuntimeLocalOps.openKeroToolsPanel = null;
+    keroRuntimeLocalOps.bindKeroToolsEvents = null;
 }
 
 async function resolveKeroWakeStorageId() {
@@ -26887,6 +26936,13 @@ ${steeringBlock ? `\n${steeringBlock}` : ''}`;
     }
 
     async function renderKeroWorkstream() {
+        try {
+            if (typeof flushExpiredSubAgentConsultationGuards === 'function') {
+                flushExpiredSubAgentConsultationGuards('workstream_render');
+            }
+        } catch (error) {
+            Logger.warn('Kero workstream guard flush failed:', error?.message || error);
+        }
         const summary = document.getElementById('kero-workstream-summary');
         const list = document.getElementById('kero-workstream-list');
         if (summary) {
@@ -26921,6 +26977,14 @@ ${steeringBlock ? `\n${steeringBlock}` : ''}`;
 
     async function initializeKeroAssistantState() {
         if (keroChatTaskRunning || keroProcessingQueuedInput) {
+            try {
+                await recoverKeroRuntimeStateOnWake('assistant_state_refresh');
+            } catch (error) {
+                Logger.warn('Kero assistant state wake recovery failed:', error?.message || error);
+            }
+            if (!keroChatTaskRunning && !keroProcessingQueuedInput) {
+                return await initializeKeroAssistantState();
+            }
             keroAssistantStateRefreshPending = true;
             addKeroWorkstreamEvent('상태 갱신 보류', '현재 케로 작업이 끝난 뒤 선택 대상/큐/미션 상태를 다시 불러옵니다.', 'queued');
             return;
@@ -29694,7 +29758,11 @@ ${stringifyKeroContextPayload(effectiveContextPayload)}
     registerKeroRuntimeLocalOps({
         drainQueuedInputs: drainKeroQueuedInputs,
         renderWorkstream: renderKeroWorkstream,
-        updateQueuedInputUi: updateKeroQueuedInputUi
+        updateQueuedInputUi: updateKeroQueuedInputUi,
+        addBotMessage,
+        handleKeroActionRequest,
+        openKeroToolsPanel,
+        bindKeroToolsEvents
     });
     Logger.debug('=== Event Binding Check ===');
     Logger.debug(`Chat send: ${document.getElementById('risu-trans-chat-send') ? '✅' : '❌'}`);
