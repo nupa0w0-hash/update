@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.0.9
+//@display-name ☸Eros Tower 1.1.0
 //@api 3.0
-//@version 1.0.9
+//@version 1.1.0
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -33,18 +33,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.0.9
+ * Eros Tower 1.1.0
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.0.9 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.0 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.0.9';
+  const VERSION = '1.1.0';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.0.9`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.0`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -60,7 +60,7 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.0.9 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.0 analysis context';
   const GOOGLE_OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
   const GOOGLE_CLOUD_PLATFORM_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
   const PSYCHE_RECOMMENDED_MODELS = Object.freeze([
@@ -10378,6 +10378,7 @@
 
         <section class="et-context-bar">
           ${contextChip('캐릭터', displayCharacterName(context))}
+          ${dashboardMenuSelect('api')}
         </section>
         ${context.noSession ? `
           <section class="et-panel et-session-banner">
@@ -10385,14 +10386,6 @@
             <div class="et-note">현재 캐릭터/채팅방 세션을 확인하지 못했습니다. API Provider, 에이전트, 임베딩 설정은 저장할 수 있고, 관리상태·복구·CBS 재인덱싱은 채팅방을 연 뒤 실행됩니다.</div>
           </section>` : ''}
         ${renderDashboardAlerts(conf, state, logs)}
-
-        <nav class="et-tabs" aria-label="에로스 타워 설정">
-          ${tabButton('api', 'API / Provider', true)}
-          ${tabButton('agents', '에이전트')}
-          ${tabButton('references', '참고 자료')}
-          ${tabButton('state', '관리상태')}
-          ${tabButton('runs', 'Run Log')}
-        </nav>
 
         <main>
           <section class="et-view" data-view="api" data-active="true">${renderApiPanel(conf)}</section>
@@ -10460,12 +10453,13 @@
       .et-close, button { border:1px solid #dcb7ad; border-radius:8px; background:#fffdfa; color:#6f3444; padding:8px 12px; font:inherit; font-size:13px; cursor:pointer; box-shadow:0 1px 0 rgba(120,70,50,.08); }
       .et-close:hover, button:hover { background:#fff1ed; border-color:#c98e86; }
       button:disabled { opacity:.55; cursor:wait; }
-      .et-context-bar { display:grid; grid-template-columns:repeat(auto-fit, minmax(145px, 1fr)); gap:8px; margin:14px 0; }
+      .et-context-bar { display:grid; grid-template-columns:minmax(180px, 1fr) minmax(180px, 260px); gap:8px; margin:14px 0; align-items:stretch; }
       .et-chip { min-width:0; border:1px solid #ead4c5; background:#fffdfa; border-radius:8px; padding:9px 10px; }
       .et-chip-label { color:#a06f72; font-size:11px; }
       .et-chip-value { margin-top:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; font-weight:650; }
-      .et-tabs { display:flex; flex-wrap:wrap; gap:8px; margin:0 0 14px; }
-      .et-tab[data-active="true"] { background:#f3c5b8; border-color:#c77f80; color:#5b2535; }
+      .et-menu-chip { min-width:0; border:1px solid #ead4c5; background:#fffdfa; border-radius:8px; padding:8px 10px; display:grid; grid-template-columns:auto minmax(0, 1fr); gap:8px; align-items:center; }
+      .et-menu-chip label { margin:0; color:#a06f72; white-space:nowrap; }
+      .et-menu-chip select { min-height:32px; padding:6px 8px; background:#fffaf5; }
       .et-view { display:none; }
       .et-view[data-active="true"] { display:block; }
       .et-grid { display:grid; grid-template-columns:1.05fr .95fr; gap:14px; align-items:start; }
@@ -10547,7 +10541,7 @@
       pre { white-space:pre-wrap; word-break:break-word; margin:0; background:#fff8f1; border:1px solid #ead2c3; border-radius:8px; padding:12px; max-height:360px; overflow:auto; font-size:12px; }
       @keyframes et-shell-pulse { 0%, 100% { transform:scale(1); opacity:.82; } 50% { transform:scale(1.06); opacity:1; } }
       @media (max-width: 980px) {
-        .et-context-bar { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+        .et-context-bar { grid-template-columns:1fr; }
         .et-grid, .et-grid-3, .et-row-4 { grid-template-columns:1fr; }
         .et-agent, .et-agent-body { grid-template-columns:1fr; }
         .et-ops-head { display:block; }
@@ -11588,8 +11582,15 @@
     return `<div class="et-toggle-wrap"><input id="${escHtml(id)}" type="hidden" value="${value}"><button type="button" class="et-toggle" data-target="${escHtml(id)}" data-label="${escHtml(label)}" data-value="${value}">${escHtml(label)}: ${enabled ? '켜짐' : '꺼짐'}</button></div>`;
   }
 
-  function tabButton(tab, label, active = false) {
-    return `<button class="et-tab" data-tab="${escHtml(tab)}" data-active="${active ? 'true' : 'false'}">${escHtml(label)}</button>`;
+  function dashboardMenuSelect(active = 'api') {
+    const options = [
+      { value: 'api', label: 'API / Provider' },
+      { value: 'agents', label: '에이전트' },
+      { value: 'references', label: '참고 자료' },
+      { value: 'state', label: '관리상태' },
+      { value: 'runs', label: 'Run Log' },
+    ];
+    return `<div class="et-menu-chip"><label for="et-dashboard-menu">메뉴</label><select id="et-dashboard-menu" aria-label="에로스 타워 메뉴">${options.map(option => `<option value="${escHtml(option.value)}" ${option.value === active ? 'selected' : ''}>${escHtml(option.label)}</option>`).join('')}</select></div>`;
   }
 
   function contextChip(label, value) {
@@ -11877,18 +11878,16 @@
       return next;
     };
 
-    document.querySelectorAll('.et-tab').forEach(button => {
-      button.addEventListener('click', () => {
-        const tab = button.getAttribute('data-tab');
-        document.querySelectorAll('.et-tab').forEach(x => x.setAttribute('data-active', String(x === button)));
-        document.querySelectorAll('.et-view').forEach(x => x.setAttribute('data-active', String(x.getAttribute('data-view') === tab)));
-      });
-    });
+    const activateDashboardView = (tab) => {
+      const value = String(tab || 'api');
+      const menu = $('et-dashboard-menu');
+      if (menu) menu.value = value;
+      document.querySelectorAll('.et-view').forEach(x => x.setAttribute('data-active', String(x.getAttribute('data-view') === value)));
+    };
+    $('et-dashboard-menu')?.addEventListener('change', event => activateDashboardView(event.currentTarget.value));
     document.querySelectorAll('[data-tab-target]').forEach(button => {
       button.addEventListener('click', () => {
-        const tab = button.getAttribute('data-tab-target');
-        const target = document.querySelector(`.et-tab[data-tab="${tab}"]`);
-        if (target && typeof target.click === 'function') target.click();
+        activateDashboardView(button.getAttribute('data-tab-target'));
       });
     });
 
