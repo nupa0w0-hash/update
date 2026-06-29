@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.10
+//@display-name ☸Eros Tower 1.1.11
 //@api 3.0
-//@version 1.1.10
+//@version 1.1.11
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -33,18 +33,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.10
+ * Eros Tower 1.1.11
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.10 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.11 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.10';
+  const VERSION = '1.1.11';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.10`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.11`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -87,7 +87,7 @@
     'clue',
     'worldFront',
   ]);
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.10 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.11 analysis context';
   const GOOGLE_OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
   const GOOGLE_CLOUD_PLATFORM_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
   const PSYCHE_RECOMMENDED_MODELS = Object.freeze([
@@ -1743,6 +1743,7 @@
       memoryLedger: [],
       secretLedger: [],
       loreLedger: [],
+      canonicalIdentity: createDefaultCanonicalIdentityState(),
       plotThreads: {
         foreshadowing: [],
         clues: [],
@@ -1824,6 +1825,7 @@
     next.memoryLedger = normalizeMemoryEntries(Array.isArray(next.memoryLedger) ? next.memoryLedger : [], next, next.turn);
     next.secretLedger = normalizeSecretEntries(Array.isArray(next.secretLedger) ? next.secretLedger : [], next, next.turn, '', []);
     next.loreLedger = normalizeCommittedLedgerArray(Array.isArray(next.loreLedger) ? next.loreLedger : [], 'lore', next.turn);
+    next.canonicalIdentity = normalizeCanonicalIdentityState(next.canonicalIdentity);
     next.plotThreads = { ...createDefaultState(mode).plotThreads, ...(next.plotThreads || {}) };
     next.plotThreads.resourceChannels = Array.isArray(next.plotThreads.resourceChannels) ? next.plotThreads.resourceChannels : [];
     next.knowledge = { units: [], ...(next.knowledge || {}) };
@@ -3827,7 +3829,9 @@
       : contextMessages;
     const mode = resolveMode(conf.mode, character, modeSignals, db, currentChat, conf);
     const noSession = !currentChat && !normalizedRequestMessages.length && !chatIdentity.key;
-    const canonicalSources = collectCanonicalSources(character, db, currentChat, conf);
+    const runtimeLorebookEntries = await readCurrentLorebookEntries();
+    const canonicalConf = { ...conf, runtimeLorebookEntries };
+    const canonicalSources = collectCanonicalSources(character, db, currentChat, canonicalConf);
     const settingBlocks = buildSettingBlocks(character, db, currentChat, canonicalSources, registeredFirstMessage);
     return {
       scope,
@@ -3838,6 +3842,7 @@
       character,
       db,
       currentChat,
+      runtimeLorebookEntries,
       canonicalSources,
       firstMessageInfo: {
         ...registeredFirstMessage,
@@ -3850,6 +3855,12 @@
       settingBlocks,
       mode,
     };
+  }
+
+  async function readCurrentLorebookEntries() {
+    if (typeof api.getCurrentLorebookEntries !== 'function') return [];
+    const raw = await safeCall(() => api.getCurrentLorebookEntries(), []);
+    return collectLoreArrays(raw).slice(0, 260);
   }
 
   async function safeCall(fn, fallback) {
@@ -4335,6 +4346,10 @@
     return '';
   }
 
+  function normalizeMode(value) {
+    return parseModeToken(value) || (String(value || '').trim() === 'novel' ? 'novel' : 'rp');
+  }
+
   function normalizeModeTokenText(value) {
     return String(value ?? '').trim().toLowerCase().replace(/[_-]+/g, ' ');
   }
@@ -4702,6 +4717,11 @@
     ].filter(Boolean).join('\n');
   }
 
+
+  function getCurrentLorebookEntries(conf = null) {
+    return Array.isArray(conf?.runtimeLorebookEntries) ? conf.runtimeLorebookEntries : [];
+  }
+
   function collectCanonicalSources(character, db, chat, conf = null) {
     const out = [];
     const rawCbsCandidates = [];
@@ -4777,6 +4797,13 @@
     });
     collectGlobalNoteTexts(db).forEach((content, idx) => {
       add({ content, name: idx ? `Database Global Note ${idx + 1}` : 'Database Global Note' }, 'globalNote', 'database global note', `db:globalNote:${idx}`, { owner: 'database' });
+    });
+    const runtimeLore = getCurrentLorebookEntries(conf);
+    runtimeLore.slice(0, 96).forEach((entry, idx) => {
+      add(entry, 'activeLorebook', 'active lorebook', `runtime:currentLorebook:${idx}`, {
+        owner: 'runtime',
+        sourceApi: 'getCurrentLorebookEntries',
+      });
     });
     const globalLore = collectCharacterLoreEntries(character);
     globalLore.slice(0, 48).forEach((entry, idx) => add(entry, 'globalLore', 'character lore', `char:globalLore:${idx}`, { owner: 'character' }));
@@ -5766,6 +5793,7 @@
     if (alwaysActive) return 8;
     if (kind === 'desc' || kind === 'firstMessage') return 8;
     if (kind === 'globalNote') return 7;
+    if (kind === 'activeLorebook') return 7;
     if (kind === 'localLore') return 7;
     if (kind === 'globalLore') return 6;
     if (kind === 'referenceCharacter' || kind === 'referenceCharacterNote' || kind === 'referenceCharacterLore') return 5;
@@ -5777,6 +5805,7 @@
 
   function inferCanonicalScope(kind, meta = {}) {
     if (kind === 'localLore') return 'chat';
+    if (kind === 'activeLorebook') return 'active-lorebook';
     if (kind === 'globalNote') return meta.owner || 'global';
     if (kind === 'moduleLore') return `module:${meta.moduleId || meta.moduleName || 'unknown'}`;
     if (kind === 'referenceCharacter' || kind === 'referenceCharacterNote' || kind === 'referenceCharacterLore') return `reference-character:${meta.referenceId || meta.referenceName || 'unknown'}`;
@@ -5813,7 +5842,7 @@
     const profile = AGENT_RETRIEVAL_PROFILE[agentId] || AGENT_RETRIEVAL_PROFILE.main;
     const query = buildRetrievalQuery(context, priorNotes, profile.keywords);
     const budget = Math.max(1200, Number(budgetOverride || profile.budget || 4200));
-    const controlFloor = buildMainControlFloorContext(context, Math.min(Math.max(900, Math.floor(budget * 0.35)), budget));
+    const controlFloor = buildMainControlFloorContext(context, Math.min(Math.max(900, Math.floor(budget * 0.35)), budget), state);
     const retrievalBudget = Math.max(700, budget - controlFloor.length - 80);
     const staged = await stagedRetrieveCandidates(agentId, state, query, profile, conf, context);
     const candidates = staged.candidates;
@@ -6078,7 +6107,7 @@
       Math.max(700, totalBudget - 900),
       totalBudget,
     );
-    const controlFloor = buildMainControlFloorContext(context, floorBudget);
+    const controlFloor = buildMainControlFloorContext(context, floorBudget, state);
     const remainingBudget = Math.max(700, totalBudget - controlFloor.length - 80);
     const staged = await stagedRetrieveCandidates('main', state, query, AGENT_RETRIEVAL_PROFILE.main, conf, context);
     const candidates = staged.candidates;
@@ -6113,8 +6142,29 @@
     return briefing;
   }
 
-  function buildMainControlFloorContext(context, budget = 3600) {
+  function buildMainControlFloorContext(context, budget = 3600, state = null) {
     const lines = [];
+    lines.push('[Current Writing Mode] ' + normalizeMode(context?.mode || 'rp'));
+    const identity = normalizeCanonicalIdentityState(state?.canonicalIdentity || buildCanonicalIdentityState(context?.canonicalSources || [], state?.turn || 0));
+    if (identity.subjects.length) {
+      lines.push('[Identity Baseline - Protected]');
+      identity.subjects.slice(0, 6).forEach(subject => {
+        const immutable = Object.entries(subject.immutable || {}).map(([key, value]) => `${key}=${value}`).join('; ');
+        const aliases = normalizeStringArray(subject.aliases).filter(alias => alias && alias !== subject.name).slice(0, 5).join(', ');
+        lines.push(`- ${subject.name}${aliases ? ` (${aliases})` : ''}: ${immutable || 'identity facts present in canonical lore'}`);
+      });
+      const mutableLines = identity.subjects
+        .map(subject => {
+          const mutable = Object.entries(subject.mutableBaseline || {}).map(([key, value]) => `${key}=${value}`).join('; ');
+          return mutable ? `- ${subject.name}: ${mutable}` : '';
+        })
+        .filter(Boolean);
+      if (mutableLines.length) {
+        lines.push('[Mutable Baseline - Can Change By Later Canon]');
+        mutableLines.slice(0, 6).forEach(line => lines.push(line));
+      }
+      lines.push('- Identity guard: immutable identity fields outrank later memory/state commits unless the user or explicit final output retcons them.');
+    }
     const firstMessage = String(context?.firstMessageInfo?.message || '').trim();
     if (firstMessage) {
       const firstCap = Math.min(2200, Math.max(600, Math.floor(Number(budget || 0) * 0.42)));
@@ -6193,8 +6243,8 @@
       if (wanted.some(rx => rx.test(plain))) picked.push(plain.replace(/\s+/g, ' '));
     });
     const currentRoleHints = normalizePinnedIdentityFacts(text);
-    if (/清虚门|淸虛門|청허문/.test(text)) currentRoleHints.push('current affiliation=清虚门/청허문');
-    if (/弟子|道士|도사|제자/.test(text)) currentRoleHints.push('current role=young Taoist disciple');
+    if (/清虚门|淸虛門|청허문/.test(text)) currentRoleHints.push('baseline affiliation=清虚门/청허문');
+    if (/弟子|道士|도사|제자/.test(text)) currentRoleHints.push('baseline role=young Taoist disciple');
     if (/孤儿|孤兒|고아/.test(text)) currentRoleHints.push('orphan=background/surname context, not current scene location');
     if (/穿越者|현대\s*한국|现代韩国|past life|transmigrat/i.test(text)) currentRoleHints.push('past-life knowledge must not override current body/status');
     return uniqueStrings(currentRoleHints.concat(picked)).slice(0, 12).join('; ');
@@ -6206,9 +6256,9 @@
     const lineFor = pattern => raw.split(/\n+/).map(line => line.trim()).find(line => pattern.test(line)) || '';
     const genderLine = lineFor(/(?:性别|性別|성별|gender|sex)\s*[:：]/i);
     if (/(?:性别|性別|성별|gender|sex)\s*[:：]\s*(?:男|男性|male|man|남자|남성)/i.test(genderLine)) {
-      out.push('current gender=male/남성; do not write as female/woman');
+      out.push('identity gender=male/남성; do not write as female/woman');
     } else if (/(?:性别|性別|성별|gender|sex)\s*[:：]\s*(?:女|女性|female|woman|여자|여성)/i.test(genderLine)) {
-      out.push('current gender=female/여성');
+      out.push('identity gender=female/여성');
     }
     const sexualityLine = lineFor(/(?:性向|성향|sexuality|position)\s*[:：]/i);
     if (/(?:同性恋|同性愛|gay|homosexual|동성애)/i.test(sexualityLine)) out.push('sexuality=gay/homosexual');
@@ -7648,8 +7698,233 @@
       out.plotThreads.resourceChannels = normalizeCommittedLedgerArray(out.plotThreads.resourceChannels, 'resourceChannel', turn);
     }
     if (out.knowledge?.units) out.knowledge.units = normalizeCommittedLedgerArray(out.knowledge.units, 'knowledge', turn);
+    conflicts.push(...applyCanonicalIdentityGuardsToCommit(out, state, turn));
     out._evidenceConflicts = conflicts.concat(findEvidenceConflicts(out, state, turn));
     return out;
+  }
+
+
+  function createDefaultCanonicalIdentityState() {
+    return { version: 1, sourceHash: '', updatedAt: '', subjects: [], warnings: [] };
+  }
+
+  function normalizeCanonicalIdentityState(value) {
+    const base = createDefaultCanonicalIdentityState();
+    const source = value && typeof value === 'object' ? value : {};
+    return {
+      ...base,
+      ...source,
+      subjects: (Array.isArray(source.subjects) ? source.subjects : []).map(normalizeIdentitySubject).filter(Boolean).slice(0, 24),
+      warnings: normalizeStringArray(source.warnings).slice(0, 12),
+    };
+  }
+
+  function normalizeIdentitySubject(subject) {
+    if (!subject || typeof subject !== 'object') return null;
+    const name = cleanString(subject.name || subject.id, '');
+    if (!name) return null;
+    return {
+      id: cleanString(subject.id || ('identity:' + slug(name)), 'identity:' + slug(name)),
+      name,
+      aliases: normalizeStringArray(subject.aliases).slice(0, 16),
+      immutable: normalizeIdentityFieldMap(subject.immutable),
+      mutableBaseline: normalizeIdentityFieldMap(subject.mutableBaseline),
+      evidence: Array.isArray(subject.evidence) ? subject.evidence.slice(0, 8) : [],
+      sourceRank: parseNumber(subject.sourceRank, SOURCE_RANK.lorebook + 15, 0, 100),
+      confidence: parseNumber(subject.confidence, 0.96, 0, 1),
+      importance: parseNumber(subject.importance, 10, 0, 10),
+      lastSeenTurn: parseNumber(subject.lastSeenTurn, 0, 0, 999999),
+    };
+  }
+
+  function normalizeIdentityFieldMap(value) {
+    const out = {};
+    if (!value || typeof value !== 'object') return out;
+    Object.entries(value).forEach(([key, raw]) => {
+      const clean = typeof raw === 'string' ? raw.trim() : Array.isArray(raw) ? uniqueStrings(raw).join(', ') : String(raw ?? '').trim();
+      if (clean) out[key] = clean.slice(0, 260);
+    });
+    return out;
+  }
+
+  function syncCanonicalIdentityState(state, canonicalSources) {
+    if (!state) return false;
+    const next = buildCanonicalIdentityState(canonicalSources, state.turn);
+    const oldHash = String(state.canonicalIdentity?.sourceHash || '');
+    if (!next.subjects.length && oldHash) return false;
+    state.canonicalIdentity = next;
+    return oldHash !== next.sourceHash;
+  }
+
+  function buildCanonicalIdentityState(canonicalSources, turn = 0) {
+    const sources = (Array.isArray(canonicalSources) ? canonicalSources : []).filter(isPinnedIdentityLoreSource).slice(0, 12);
+    const subjects = [];
+    sources.forEach(source => {
+      const profile = extractCanonicalIdentityProfile(source, turn);
+      if (!profile) return;
+      const existingIndex = subjects.findIndex(item => identitySubjectsOverlap(item, profile));
+      if (existingIndex >= 0) subjects[existingIndex] = mergeIdentitySubject(subjects[existingIndex], profile);
+      else subjects.push(profile);
+    });
+    return {
+      ...createDefaultCanonicalIdentityState(),
+      sourceHash: hashString(sources.map(source => String(source.path || source.label || '') + ':' + String(source.hash || hashString(source.content || ''))).join('|')),
+      updatedAt: nowIso(),
+      subjects: subjects.slice(0, 24),
+      warnings: [],
+    };
+  }
+
+  function isPinnedIdentityLoreSource(source) {
+    if (!source) return false;
+    if (source.kind === 'desc' || source.kind === 'firstMessage') return true;
+    const label = (String(source.label || '') + '\n' + String(source.path || '')).toLowerCase();
+    const content = String(source.content || '').slice(0, 1800);
+    return /yeon[-\s]?su|identity|profile|oc|gender|sex|role|status/i.test(label)
+      || /#\s*OC|name\s*[:：]|gender\s*[:：]|sex\s*[:：]|sexuality\s*[:：]|position\s*[:：]|age\s*[:：]|role\s*[:：]|status\s*[:：]/i.test(content)
+      || /연수|성별|남성|여성|바텀|탑/.test(content);
+  }
+
+  function extractCanonicalIdentityProfile(source, turn = 0) {
+    const text = String(source?.content || '').normalize('NFC');
+    if (!text.trim()) return null;
+    const lines = text.split(/\n+/).map(line => line.trim()).filter(Boolean);
+    const field = patterns => {
+      for (const line of lines) {
+        const clean = line.replace(/^[-*]\s*/, '');
+        for (const pattern of patterns) {
+          const match = clean.match(pattern);
+          if (match) return String(match[1] || '').trim();
+        }
+      }
+      return '';
+    };
+    const rawName = field([/^(?:name|이름|성명|姓名|名前)\s*[:：]\s*(.+)$/i]) || (/yeon[-\s]?su|연수|渊水|淵水/i.test(text) ? 'Yeon-su' : '');
+    const name = cleanIdentityName(rawName) || cleanIdentityName(firstNonEmpty(source?.label, source?.path, ''));
+    if (!name || isGenericCharacterStateToken(name)) return null;
+    const aliases = uniqueStrings([rawName, name, 'Yeon-su', '연수', '渊水', '淵水'].concat(normalizeStringArray(source?.activationKeys)).map(cleanIdentityName).filter(Boolean)).slice(0, 16);
+    const genderValue = field([/^(?:gender|sex|성별|性别|性別)\s*[:：]\s*(.+)$/i]) || text;
+    const immutable = {};
+    const gender = normalizeIdentityGender(genderValue);
+    if (gender) immutable.gender = gender;
+    const position = normalizeSexualPosition(field([/^(?:sexuality|position|성향|포지션|性向)\s*[:：]\s*(.+)$/i]) || text);
+    if (position) immutable.position = position;
+    const mutableBaseline = {};
+    const affiliationValue = field([/^(?:affiliation|所属门派|所屬門派|소속|所属)\s*[:：]\s*(.+)$/i]);
+    if (affiliationValue) mutableBaseline.affiliation = normalizeIdentityAffiliation(affiliationValue);
+    const roleValue = field([/^(?:role|status|class|역할|신분|상태|身份\/阶级|身份|身分)\s*[:：]\s*(.+)$/i]);
+    if (roleValue) mutableBaseline.role = summarizeCanonicalContent(roleValue, 220);
+    return normalizeIdentitySubject({
+      id: 'identity:' + hashString(String(name) + ':' + String(source?.hash || source?.path || '')).slice(0, 12),
+      name,
+      aliases,
+      immutable,
+      mutableBaseline,
+      sourceRank: Math.max(SOURCE_RANK.lorebook + 18, parseNumber(source?.priority, 8, 0, 10) * 8),
+      confidence: 0.96,
+      importance: 10,
+      lastSeenTurn: turn,
+      evidence: [{ source: firstNonEmpty(source?.path, source?.sourceId, source?.kind, 'canonical-source'), quoteOrSummary: summarizeCanonicalContent(text, 420), certainty: 'established' }],
+    });
+  }
+
+  function cleanIdentityName(value) {
+    return String(value || '').replace(/^[-*]\s*/, '').replace(/^(?:name|이름)\s*[:：]\s*/i, '').split(/[()（）]/)[0].replace(/[;；。].*$/, '').trim().slice(0, 80);
+  }
+
+  function normalizeIdentityGender(value) {
+    const text = String(value || '').toLowerCase();
+    if (/(?:\bmale\b|\bman\b|남성|남자|男)/i.test(text) && !/(?:\bfemale\b|여성|여자|女)/i.test(text)) return 'male/남성';
+    if (/(?:\bfemale\b|여성|여자|女)/i.test(text)) return 'female/여성';
+    return '';
+  }
+
+  function normalizeSexualPosition(value) {
+    const text = String(value || '');
+    const out = [];
+    if (/(?:bottom|uke|受|바텀)/i.test(text)) out.push('bottom/受');
+    if (/(?:top|seme|攻|탑)/i.test(text)) out.push('top/攻');
+    return out.join(', ');
+  }
+
+  function normalizeIdentityAffiliation(value) {
+    const text = summarizeCanonicalContent(value, 220);
+    if (/清虚门|淸虛門|청허문/.test(text)) return '清虚门/청허문';
+    return text;
+  }
+
+  function identitySubjectsOverlap(a, b) {
+    const left = uniqueStrings([a?.name].concat(normalizeStringArray(a?.aliases))).map(item => item.toLowerCase());
+    const right = uniqueStrings([b?.name].concat(normalizeStringArray(b?.aliases))).map(item => item.toLowerCase());
+    return left.some(x => right.some(y => x === y || x.includes(y) || y.includes(x)));
+  }
+
+  function mergeIdentitySubject(oldSubject, nextSubject) {
+    return normalizeIdentitySubject({
+      ...oldSubject,
+      aliases: uniqueStrings(normalizeStringArray(oldSubject.aliases).concat(normalizeStringArray(nextSubject.aliases))).slice(0, 16),
+      immutable: { ...oldSubject.immutable, ...nextSubject.immutable },
+      mutableBaseline: { ...oldSubject.mutableBaseline, ...nextSubject.mutableBaseline },
+      evidence: (Array.isArray(oldSubject.evidence) ? oldSubject.evidence : []).concat(Array.isArray(nextSubject.evidence) ? nextSubject.evidence : []).slice(0, 8),
+      sourceRank: Math.max(oldSubject.sourceRank || 0, nextSubject.sourceRank || 0),
+      confidence: Math.max(oldSubject.confidence || 0, nextSubject.confidence || 0),
+      importance: Math.max(oldSubject.importance || 0, nextSubject.importance || 0),
+      lastSeenTurn: Math.max(oldSubject.lastSeenTurn || 0, nextSubject.lastSeenTurn || 0),
+    });
+  }
+
+
+  function applyCanonicalIdentityGuardsToCommit(commit, state, turn) {
+    const conflicts = [];
+    const subjects = normalizeCanonicalIdentityState(state?.canonicalIdentity).subjects;
+    if (!subjects.length || !Array.isArray(commit?.characters)) return conflicts;
+    commit.characters.forEach(character => {
+      const subject = findIdentitySubjectForCharacter(subjects, character);
+      if (!subject) return;
+      const gender = String(subject.immutable?.gender || '').toLowerCase();
+      if (!gender) return;
+      ['gender', 'sex', 'pronoun', 'pronouns', 'status', 'role', 'description', 'summary'].forEach(field => {
+        const value = character?.[field];
+        if (!isMeaningfulValue(value) || !identityGenderContradicts(gender, value)) return;
+        const existing = (state.characters && Object.values(state.characters).find(item => itemKey(item) === itemKey(character))) || {};
+        if (isMeaningfulValue(existing[field])) character[field] = existing[field];
+        else delete character[field];
+        conflicts.push(makeConflict('identity_' + field, 'canonical identity rejected contradictory ' + field + ' for ' + subject.name, character, subject, turn, {
+          decisionId: 'id-' + hashString(String(subject.name) + ':' + String(field) + ':' + String(turn)).slice(0, 12),
+          field,
+          resolution: 'rejected',
+          winner: 'canonicalIdentity',
+          reasonCodes: ['canonical-identity-gender-guard'],
+          oldValuePreview: previewValueForConflict(subject.immutable.gender),
+          newValuePreview: previewValueForConflict(value),
+        }));
+      });
+    });
+    return conflicts;
+  }
+
+  function findIdentitySubjectForCharacter(subjects, character) {
+    const names = uniqueStrings([character?.name, character?.id].concat(normalizeStringArray(character?.aliases))).map(item => item.toLowerCase()).filter(Boolean);
+    if (!names.length && subjects.length === 1) return subjects[0];
+    return subjects.find(subject => {
+      const identityNames = uniqueStrings([subject.name].concat(normalizeStringArray(subject.aliases))).map(item => item.toLowerCase()).filter(Boolean);
+      return identityNames.some(left => names.some(right => left === right || left.includes(right) || right.includes(left)));
+    }) || null;
+  }
+
+  function identityGenderContradicts(identityGender, value) {
+    const text = stringifyLedgerItem(value);
+    if (/(?:\bmale\b|남성|男|남자|he\/him|\bhe\b|\bhim\b)/i.test(identityGender)) return hasFemaleGenderTerm(text) && !hasMaleGenderTerm(text);
+    if (/(?:\bfemale\b|여성|女|여자|she\/her|\bshe\b|\bher\b)/i.test(identityGender)) return hasMaleGenderTerm(text) && !hasFemaleGenderTerm(text);
+    return false;
+  }
+
+  function hasFemaleGenderTerm(text) {
+    return /(?:\bfemale\b|\bwoman\b|\bgirl\b|she\/her|\bshe\b|\bher\b|여성|여자|女)/i.test(String(text || ''));
+  }
+
+  function hasMaleGenderTerm(text) {
+    return /(?:\bmale\b|\bman\b|\bboy\b|he\/him|\bhe\b|\bhim\b|남성|남자|男)/i.test(String(text || ''));
   }
 
   function normalizeMemoryEntries(entries, state, turn) {
@@ -10948,6 +11223,7 @@
     }
     const bootstrapSync = syncCurrentCharacterBootstrap(state, context);
     const canonicalSync = syncCanonicalLoreLedger(state, context.canonicalSources);
+    const identitySync = syncCanonicalIdentityState(state, context.canonicalSources);
     const cbsSync = syncCbsDiagnostics(state, context, conf);
     const longMemorySync = syncChatLongMemoryLedger(state, context.messages, conf.contextWindow, conf.coldStartChunkSize);
     const memoryRecoverySync = runMemoryGardenRecovery(state, context.messages, conf, sessionSync);
@@ -10976,6 +11252,7 @@
       sessionRewindSync,
       bootstrapSync,
       canonicalSync,
+      identitySync,
       cbsSync,
       longMemorySync,
       memoryRecoverySync,
@@ -11045,6 +11322,7 @@
     }
     const bootstrapSync = syncCurrentCharacterBootstrap(state, context);
     const canonicalSync = syncCanonicalLoreLedger(state, context.canonicalSources);
+    const identitySync = syncCanonicalIdentityState(state, context.canonicalSources);
     const cbsSync = syncCbsDiagnostics(state, context, conf);
     const notes = pendingRun?.notes || Runtime.lastRun?.notes || [];
     let postContext = contextWithAssistantOutput(context, finalContent);
@@ -11089,6 +11367,7 @@
       sessionRewindSync,
       bootstrapSync,
       canonicalSync,
+      identitySync,
       cbsSync,
       longMemorySync,
       memoryRecoverySync,
@@ -13367,9 +13646,10 @@
         const freshState = await loadState(freshContext.scope, freshContext.mode, nextConf);
         syncSessionDiagnostics(freshState, freshContext, nextConf);
         const canonicalSync = syncCanonicalLoreLedger(freshState, freshContext.canonicalSources);
+        const identitySync = syncCanonicalIdentityState(freshState, freshContext.canonicalSources);
         const cbsSync = syncCbsDiagnostics(freshState, freshContext, nextConf);
         await saveState(freshContext.scope, freshState, nextConf);
-        setCbsStatus(`CBS 재인덱싱 완료. Lore 추가 ${canonicalSync.added || 0}, 갱신 ${canonicalSync.revised || 0}, CBS 변수 ${cbsSync.candidates || 0}개`, 'success');
+        setCbsStatus(`CBS 재인덱싱 완료. Lore 추가 ${canonicalSync.added || 0}, 갱신 ${canonicalSync.revised || 0}, Identity ${identitySync ? '갱신' : '유지'}, CBS 변수 ${cbsSync.candidates || 0}개`, 'success');
       }, 'et-cbs-status').catch(err => setCbsStatus(`CBS 재인덱싱 실패: ${err.message}`, 'error'));
     });
 
@@ -14186,6 +14466,15 @@
             conflicts: resolved._evidenceConflicts,
           };
         },
+
+        testIdentityGuard: () => {
+          const targetState = createDefaultState(context?.mode || 'rp');
+          targetState.canonicalIdentity = normalizeCanonicalIdentityState({
+            subjects: [{ name: 'Yeon-su', aliases: ['연수', 'yeonsu'], immutable: { gender: 'male/남성' }, evidence: [{ source: 'debug', quoteOrSummary: 'gender=male', certainty: 'established' }] }],
+          });
+          const resolved = resolveEvidenceCommit({ characters: [{ id: 'yeonsu', name: 'Yeon-su', gender: 'female', status: 'female disciple', role: 'girl', sourceRank: SOURCE_RANK.recent_chat }] }, targetState, {}, '', 1);
+          return { identity: targetState.canonicalIdentity, character: resolved.characters?.[0] || null, conflicts: resolved._evidenceConflicts || [] };
+        },
         testInjectionTrace: async () => {
           const targetState = createDefaultState(context?.mode || 'rp');
           targetState.turn = 4;
@@ -14205,6 +14494,7 @@
             referenceCharacterIds: ['ref-char'],
             referenceModuleIds: ['ref-module'],
             referencePluginKeys: ['ref-plugin', '☸에로스 타워 3.0'],
+            runtimeLorebookEntries: [{ key: ['runtime'], content: 'Currently active runtime lorebook entry.', alwaysActive: true }],
           };
           const targetCharacter = {
             id: 'main-char',

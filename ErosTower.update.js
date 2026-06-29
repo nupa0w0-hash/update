@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.5
+//@display-name ☸Eros Tower 1.1.11
 //@api 3.0
-//@version 1.1.5
+//@version 1.1.11
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -33,18 +33,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.5
+ * Eros Tower 1.1.11
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.5 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.11 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.5';
+  const VERSION = '1.1.11';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.5`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.11`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -55,12 +55,39 @@
   const MAX_EVENT_LOG = 100;
   const MAX_RUN_LOGS = 12;
   const MAX_RUN_LOG_TEXT_CHARS = 16000;
+  const MAX_USAGE_EVENTS = 500;
   const LONG_MEMORY_EXCERPT_CHARS = 1800;
   const STORAGE_VERIFY_HASH_LIMIT = 384000;
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.5 analysis context';
+  const CURRENT_SCENE_TAIL_MESSAGES = 6;
+  const CURRENT_SCENE_TAIL_CHARS = 1800;
+  const RECALL_KIND_SOFT_CAPS = Object.freeze({
+    sceneTail: 1,
+    scene: 1,
+    character: 4,
+    relationship: 4,
+    secret: 3,
+    lore: 5,
+    memory: 7,
+    event: 4,
+    foreshadowing: 3,
+    clue: 3,
+    worldFront: 3,
+    continuityRisk: 2,
+  });
+  const RECALL_PROTECTED_KINDS = Object.freeze([
+    'sceneTail',
+    'scene',
+    'character',
+    'relationship',
+    'secret',
+    'foreshadowing',
+    'clue',
+    'worldFront',
+  ]);
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.11 analysis context';
   const GOOGLE_OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
   const GOOGLE_CLOUD_PLATFORM_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
   const PSYCHE_RECOMMENDED_MODELS = Object.freeze([
@@ -157,6 +184,8 @@
     referenceModuleIds: [],
     referencePluginKeys: [],
     activeModelPresetId: 'ollama-glm-5-2-cloud',
+    usageTrackingEnabled: true,
+    usageLogMax: MAX_USAGE_EVENTS,
   };
 
   const API_PROVIDER_PRESETS = Object.freeze({
@@ -386,6 +415,54 @@
     },
   });
 
+  const USAGE_PRICE_TABLE = Object.freeze({
+    ollama: [
+      { match: /.*/, inputPerM: 0, outputPerM: 0, label: 'local/no-metered-billing' },
+    ],
+    lmstudio: [
+      { match: /.*/, inputPerM: 0, outputPerM: 0, label: 'local/no-metered-billing' },
+    ],
+    vllm: [
+      { match: /.*/, inputPerM: 0, outputPerM: 0, label: 'local/no-metered-billing' },
+    ],
+    openai: [
+      { match: /^gpt-4\.1-mini$/i, inputPerM: 0.4, outputPerM: 1.6, label: 'builtin-estimate' },
+      { match: /^gpt-4\.1$/i, inputPerM: 2, outputPerM: 8, label: 'builtin-estimate' },
+      { match: /^gpt-4o$/i, inputPerM: 2.5, outputPerM: 10, label: 'builtin-estimate' },
+      { match: /^gpt-4o-mini$/i, inputPerM: 0.15, outputPerM: 0.6, label: 'builtin-estimate' },
+    ],
+    google: [
+      { match: /gemini-2\.5-flash/i, inputPerM: 0.3, outputPerM: 2.5, label: 'builtin-estimate' },
+      { match: /gemini-2\.0-flash/i, inputPerM: 0.1, outputPerM: 0.4, label: 'builtin-estimate' },
+    ],
+    'vertex-ai': [
+      { match: /gemini-2\.5-flash/i, inputPerM: 0.3, outputPerM: 2.5, label: 'builtin-estimate' },
+      { match: /gemini-2\.0-flash/i, inputPerM: 0.1, outputPerM: 0.4, label: 'builtin-estimate' },
+      { match: /claude.*sonnet/i, inputPerM: 3, outputPerM: 15, label: 'builtin-estimate' },
+      { match: /claude.*haiku/i, inputPerM: 0.8, outputPerM: 4, label: 'builtin-estimate' },
+    ],
+    claude: [
+      { match: /sonnet/i, inputPerM: 3, outputPerM: 15, label: 'builtin-estimate' },
+      { match: /haiku/i, inputPerM: 0.8, outputPerM: 4, label: 'builtin-estimate' },
+    ],
+    deepseek: [
+      { match: /deepseek-chat|deepseek-v3/i, inputPerM: 0.27, outputPerM: 1.1, label: 'builtin-estimate' },
+      { match: /deepseek-reasoner/i, inputPerM: 0.55, outputPerM: 2.19, label: 'builtin-estimate' },
+    ],
+    mistral: [
+      { match: /small/i, inputPerM: 0.1, outputPerM: 0.3, label: 'builtin-estimate' },
+      { match: /large/i, inputPerM: 2, outputPerM: 6, label: 'builtin-estimate' },
+    ],
+    openrouter: [],
+    groq: [],
+    together: [],
+    fireworks: [],
+    perplexity: [],
+    nanogpt: [],
+    'vercel-ai-gateway': [],
+    custom: [],
+  });
+
   const AGENT_ROLE_DESCRIPTIONS = Object.freeze({
     world: '현재 장면과 오프스크린 세계 전선, 이동/시간/자원/소문/제도 반응을 추적합니다.',
     character: '인물 자율성, 관계 호감도·애정도·신뢰·긴장·사회도, 장르별 스테이터스, 지식 방화벽을 관리합니다.',
@@ -465,6 +542,8 @@
     backup: scope => `backup:${scope}`,
     snapshots: scope => `snapshots:${scope}`,
     runLog: scope => `runlog:${scope}`,
+    usage: 'usage-ledger',
+    quota: 'quota-snapshots',
     embeddingCache: (providerId, model) => `embedding-cache:${slug(providerId || 'provider')}:${hashString(model || 'model')}`,
   };
 
@@ -758,6 +837,8 @@
     merged.enabled = parseBool(merged.enabled, DEFAULT_CONFIG.enabled) === true;
     merged.debugLog = parseBool(merged.debugLog, DEFAULT_CONFIG.debugLog) === true;
     merged.runLogEnabled = parseBool(merged.runLogEnabled, DEFAULT_CONFIG.runLogEnabled) === true;
+    merged.usageTrackingEnabled = parseBool(merged.usageTrackingEnabled, DEFAULT_CONFIG.usageTrackingEnabled) === true;
+    merged.usageLogMax = parseNumber(merged.usageLogMax, DEFAULT_CONFIG.usageLogMax, 40, 2000);
     merged.bypassAuxRequests = parseBool(merged.bypassAuxRequests, DEFAULT_CONFIG.bypassAuxRequests) === true;
     merged.stateApiEnabled = parseBool(merged.stateApiEnabled, DEFAULT_CONFIG.stateApiEnabled) === true;
     merged.autoCapEnabled = parseBool(merged.autoCapEnabled, DEFAULT_CONFIG.autoCapEnabled) === true;
@@ -876,7 +957,7 @@
     const raw = String(provider || '').trim().toLowerCase();
     if (['anthropic', 'claude'].includes(raw)) return 'claude';
     if (['vertex', 'vertexai', 'vertex-ai'].includes(raw)) return 'vertex-ai';
-    if (['ollama', 'openai', 'deepseek', 'google', 'vertex-ai', 'openrouter', 'groq', 'together', 'mistral', 'fireworks', 'perplexity', 'nanogpt', 'vercel-ai-gateway', 'lmstudio', 'vllm', 'custom'].includes(raw)) return raw;
+    if (['ollama', 'openai', 'deepseek', 'google', 'vertex-ai', 'openrouter', 'groq', 'together', 'mistral', 'fireworks', 'perplexity', 'nanogpt', 'vercel-ai-gateway', 'lmstudio', 'vllm', 'copilot', 'custom'].includes(raw)) return raw;
     return 'ollama';
   }
 
@@ -898,6 +979,7 @@
       'vercel-ai-gateway': { baseUrl: 'https://ai-gateway.vercel.sh/v1', model: 'openai/gpt-4.1-mini' },
       lmstudio: { baseUrl: 'http://127.0.0.1:1234/v1', model: '' },
       vllm: { baseUrl: 'http://127.0.0.1:8000/v1', model: '' },
+      copilot: { baseUrl: '', model: '' },
       custom: { baseUrl: '', model: '' },
     };
     return map[normalizeProvider(provider)] || map.ollama;
@@ -1389,6 +1471,9 @@
       ...conf,
       provider,
       providerId: providerEntry?.id || agent?.providerId || conf.activeProviderId,
+      agentId: agent?.id || '',
+      agentName: agent?.name || agent?.id || '',
+      agentPhase: agent?.phase || '',
       baseUrl,
       model: cleanString(agent?.model || providerEntry?.defaultModel || preset?.model || conf.model, providerDefaults(provider).model),
       temperature: parseNumber(agent?.temperature ?? preset?.temperature, conf.temperature, 0, 2),
@@ -1658,6 +1743,7 @@
       memoryLedger: [],
       secretLedger: [],
       loreLedger: [],
+      canonicalIdentity: createDefaultCanonicalIdentityState(),
       plotThreads: {
         foreshadowing: [],
         clues: [],
@@ -1739,6 +1825,7 @@
     next.memoryLedger = normalizeMemoryEntries(Array.isArray(next.memoryLedger) ? next.memoryLedger : [], next, next.turn);
     next.secretLedger = normalizeSecretEntries(Array.isArray(next.secretLedger) ? next.secretLedger : [], next, next.turn, '', []);
     next.loreLedger = normalizeCommittedLedgerArray(Array.isArray(next.loreLedger) ? next.loreLedger : [], 'lore', next.turn);
+    next.canonicalIdentity = normalizeCanonicalIdentityState(next.canonicalIdentity);
     next.plotThreads = { ...createDefaultState(mode).plotThreads, ...(next.plotThreads || {}) };
     next.plotThreads.resourceChannels = Array.isArray(next.plotThreads.resourceChannels) ? next.plotThreads.resourceChannels : [];
     next.knowledge = { units: [], ...(next.knowledge || {}) };
@@ -2621,18 +2708,13 @@
     const registeredFirstMessage = context?.firstMessageInfo?.message !== undefined
       ? context.firstMessageInfo
       : resolveRegisteredFirstMessage(character, context?.currentChat);
-    const globalLore = []
-      .concat(Array.isArray(character?.globalLore) ? character.globalLore : [])
-      .concat(Array.isArray(character?.lorebook) ? character.lorebook : [])
-      .concat(Array.isArray(character?.data?.globalLore) ? character.data.globalLore : []);
-    const localLore = []
-      .concat(Array.isArray(context?.currentChat?.localLore) ? context.currentChat.localLore : [])
-      .concat(Array.isArray(context?.currentChat?.lorebook) ? context.currentChat.lorebook : []);
+    const globalLore = collectCharacterLoreEntries(character);
+    const localLore = collectChatLoreEntries(context?.currentChat);
     const modules = getDatabaseModules(db);
-    const enabled = new Set((Array.isArray(db?.enabledModules) ? db.enabledModules : []).map(String));
+    const enabled = collectEnabledModuleKeys(db, context?.currentChat);
     const enabledModuleLore = modules
-      .filter(mod => enabled.has(String(mod?.id)) || enabled.has(String(mod?.name)) || enabled.has(String(mod?.namespace)))
-      .map(mod => ({ id: mod?.id || mod?.name || '', lorebook: Array.isArray(mod?.lorebook) ? mod.lorebook : [] }));
+      .filter((mod, modIdx) => moduleMatchesEnabledKey(mod, referenceModuleId(mod, modIdx), enabled))
+      .map((mod, modIdx) => ({ id: mod?.id || mod?.name || referenceModuleId(mod, modIdx) || '', lorebook: collectModuleLoreEntries(mod) }));
     const fp = {
       at: nowIso(),
       scope: String(context?.scope || ''),
@@ -3747,7 +3829,9 @@
       : contextMessages;
     const mode = resolveMode(conf.mode, character, modeSignals, db, currentChat, conf);
     const noSession = !currentChat && !normalizedRequestMessages.length && !chatIdentity.key;
-    const canonicalSources = collectCanonicalSources(character, db, currentChat, conf);
+    const runtimeLorebookEntries = await readCurrentLorebookEntries();
+    const canonicalConf = { ...conf, runtimeLorebookEntries };
+    const canonicalSources = collectCanonicalSources(character, db, currentChat, canonicalConf);
     const settingBlocks = buildSettingBlocks(character, db, currentChat, canonicalSources, registeredFirstMessage);
     return {
       scope,
@@ -3758,6 +3842,7 @@
       character,
       db,
       currentChat,
+      runtimeLorebookEntries,
       canonicalSources,
       firstMessageInfo: {
         ...registeredFirstMessage,
@@ -3770,6 +3855,12 @@
       settingBlocks,
       mode,
     };
+  }
+
+  async function readCurrentLorebookEntries() {
+    if (typeof api.getCurrentLorebookEntries !== 'function') return [];
+    const raw = await safeCall(() => api.getCurrentLorebookEntries(), []);
+    return collectLoreArrays(raw).slice(0, 260);
   }
 
   async function safeCall(fn, fallback) {
@@ -4255,6 +4346,10 @@
     return '';
   }
 
+  function normalizeMode(value) {
+    return parseModeToken(value) || (String(value || '').trim() === 'novel' ? 'novel' : 'rp');
+  }
+
   function normalizeModeTokenText(value) {
     return String(value ?? '').trim().toLowerCase().replace(/[_-]+/g, ' ');
   }
@@ -4428,71 +4523,161 @@
     ), referencePluginKey).filter(plugin => !isErosTowerPluginRecord(plugin));
   }
 
+  function unwrapRisuObjectData(value) {
+    if (!value || typeof value !== 'object') return value;
+    if (String(value.type || '').toLowerCase() === 'risu' && value.data && typeof value.data === 'object' && !Array.isArray(value.data)) return value.data;
+    return value;
+  }
+
+  function unwrapRisuLoreData(value) {
+    if (!value || typeof value !== 'object') return value;
+    if (String(value.type || '').toLowerCase() === 'risu' && value.data !== undefined) return value.data;
+    return value;
+  }
+
+  function looksLikeLoreEntry(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    const hasText = firstNonEmpty(value.content, value.prompt, value.text, value.entry, value.description, value.desc, value.data);
+    if (!hasText) return false;
+    return value.comment !== undefined
+      || value.key !== undefined
+      || value.secondkey !== undefined
+      || value.alwaysActive !== undefined
+      || value.selective !== undefined
+      || value.bookVersion !== undefined
+      || value.insertorder !== undefined
+      || value.mode !== undefined;
+  }
+
   function collectLoreArrays(...values) {
-    return values.flatMap(value => Array.isArray(value) ? value : []).filter(Boolean);
+    const out = [];
+    const visit = (value, depth = 0) => {
+      if (value === undefined || value === null || depth > 4) return;
+      const raw = unwrapRisuLoreData(value);
+      if (Array.isArray(raw)) {
+        raw.forEach(item => visit(item, depth + 1));
+        return;
+      }
+      if (!raw || typeof raw !== 'object') return;
+      if (looksLikeLoreEntry(raw)) {
+        out.push(raw);
+        return;
+      }
+      const nestedKeys = [
+        'entries',
+        'items',
+        'lorebook',
+        'globalLore',
+        'localLore',
+        'chatLore',
+        'chatLorebook',
+        'chatLoreBook',
+        'chat_lorebook',
+        'characterBook',
+        'data',
+      ];
+      nestedKeys.forEach(key => {
+        if (raw[key] !== undefined) visit(raw[key], depth + 1);
+      });
+      const values = Object.values(raw);
+      if (values.length && values.length <= 400 && values.every(looksLikeLoreEntry)) values.forEach(item => visit(item, depth + 1));
+    };
+    values.forEach(value => visit(value, 0));
+    return out.filter(Boolean);
   }
 
   function collectCharacterLoreEntries(character) {
+    const source = unwrapRisuObjectData(character) || {};
     return collectLoreArrays(
-      character?.globalLore,
-      character?.lorebook,
-      character?.characterBook,
-      character?.data?.globalLore,
-      character?.data?.lorebook,
-      character?.data?.characterBook
+      source?.globalLore,
+      source?.lorebook,
+      source?.characterBook,
+      source?.data?.globalLore,
+      source?.data?.lorebook,
+      source?.data?.characterBook
     );
   }
 
   function collectChatLoreEntries(chat) {
+    const source = unwrapRisuObjectData(chat) || {};
     return collectLoreArrays(
-      chat?.localLore,
-      chat?.lorebook,
-      chat?.chatLore,
-      chat?.chatLorebook,
-      chat?.chatLoreBook,
-      chat?.chat_lorebook,
-      chat?.chat_lore_book,
-      chat?.chatLorebooks,
-      chat?.chat_lorebooks,
-      chat?.data?.localLore,
-      chat?.data?.lorebook,
-      chat?.data?.chatLore,
-      chat?.data?.chatLorebook,
-      chat?.data?.chatLoreBook,
-      chat?.data?.chat_lorebook,
-      chat?.data?.chat_lore_book,
-      chat?.data?.chatLorebooks,
-      chat?.data?.chat_lorebooks
+      source?.localLore,
+      source?.lorebook,
+      source?.chatLore,
+      source?.chatLorebook,
+      source?.chatLoreBook,
+      source?.chat_lorebook,
+      source?.chat_lore_book,
+      source?.chatLorebooks,
+      source?.chat_lorebooks,
+      source?.data?.localLore,
+      source?.data?.lorebook,
+      source?.data?.chatLore,
+      source?.data?.chatLorebook,
+      source?.data?.chatLoreBook,
+      source?.data?.chat_lorebook,
+      source?.data?.chat_lore_book,
+      source?.data?.chatLorebooks,
+      source?.data?.chat_lorebooks
     );
   }
 
   function collectModuleLoreEntries(module) {
+    const source = unwrapRisuObjectData(module) || {};
     return collectLoreArrays(
-      module?.lorebook,
-      module?.globalLore,
-      module?.data?.lorebook,
-      module?.data?.globalLore
+      source?.lorebook,
+      source?.globalLore,
+      source?.data?.lorebook,
+      source?.data?.globalLore
     );
   }
 
+  function collectEnabledModuleKeys(db, chat = null) {
+    const sourceChat = unwrapRisuObjectData(chat) || {};
+    const sourceDb = unwrapRisuObjectData(db) || {};
+    return new Set(uniqueStrings([])
+      .concat(normalizeStringArray(sourceDb?.enabledModules))
+      .concat(normalizeStringArray(sourceDb?.data?.enabledModules))
+      .concat(normalizeStringArray(sourceChat?.modules))
+      .concat(normalizeStringArray(sourceChat?.enabledModules))
+      .concat(normalizeStringArray(sourceChat?.data?.modules))
+      .concat(normalizeStringArray(sourceChat?.data?.enabledModules))
+      .map(String));
+  }
+
+  function moduleMatchesEnabledKey(mod, modId, enabled) {
+    if (!enabled || !enabled.size) return false;
+    return [
+      modId,
+      mod?.id,
+      mod?.name,
+      mod?.namespace,
+      mod?.key,
+      mod?.data?.id,
+      mod?.data?.name,
+      mod?.data?.namespace,
+    ].some(value => value !== undefined && value !== null && enabled.has(String(value)));
+  }
+
   function collectGlobalNoteTexts(target) {
+    const source = unwrapRisuObjectData(target) || {};
     const raw = [
-      target?.post_history_instructions,
-      target?.postHistoryInstructions,
-      target?.posthistoryinstructions,
-      target?.replaceGlobalNote,
-      target?.globalNote,
-      target?.global_note,
-      target?.authorNote,
-      target?.note,
-      target?.data?.post_history_instructions,
-      target?.data?.postHistoryInstructions,
-      target?.data?.posthistoryinstructions,
-      target?.data?.replaceGlobalNote,
-      target?.data?.globalNote,
-      target?.data?.global_note,
-      target?.data?.authorNote,
-      target?.data?.note,
+      source?.post_history_instructions,
+      source?.postHistoryInstructions,
+      source?.posthistoryinstructions,
+      source?.replaceGlobalNote,
+      source?.globalNote,
+      source?.global_note,
+      source?.authorNote,
+      source?.note,
+      source?.data?.post_history_instructions,
+      source?.data?.postHistoryInstructions,
+      source?.data?.posthistoryinstructions,
+      source?.data?.replaceGlobalNote,
+      source?.data?.globalNote,
+      source?.data?.global_note,
+      source?.data?.authorNote,
+      source?.data?.note,
     ];
     return uniqueStrings(raw.map(value => String(value || '').trim()).filter(Boolean)).slice(0, 8);
   }
@@ -4530,6 +4715,11 @@
       symbols.length ? `Script symbols: ${symbols.join(', ')}` : '',
       script ? `Script size: ${script.length} chars. Raw plugin source is kept out of RP context.` : '',
     ].filter(Boolean).join('\n');
+  }
+
+
+  function getCurrentLorebookEntries(conf = null) {
+    return Array.isArray(conf?.runtimeLorebookEntries) ? conf.runtimeLorebookEntries : [];
   }
 
   function collectCanonicalSources(character, db, chat, conf = null) {
@@ -4608,15 +4798,22 @@
     collectGlobalNoteTexts(db).forEach((content, idx) => {
       add({ content, name: idx ? `Database Global Note ${idx + 1}` : 'Database Global Note' }, 'globalNote', 'database global note', `db:globalNote:${idx}`, { owner: 'database' });
     });
+    const runtimeLore = getCurrentLorebookEntries(conf);
+    runtimeLore.slice(0, 96).forEach((entry, idx) => {
+      add(entry, 'activeLorebook', 'active lorebook', `runtime:currentLorebook:${idx}`, {
+        owner: 'runtime',
+        sourceApi: 'getCurrentLorebookEntries',
+      });
+    });
     const globalLore = collectCharacterLoreEntries(character);
     globalLore.slice(0, 48).forEach((entry, idx) => add(entry, 'globalLore', 'character lore', `char:globalLore:${idx}`, { owner: 'character' }));
     const localLore = collectChatLoreEntries(chat);
     localLore.slice(0, 48).forEach((entry, idx) => add(entry, 'localLore', 'chat lore', `chat:localLore:${idx}`, { owner: 'chat' }));
     const modules = Array.isArray(db?.modules) ? db.modules : [];
-    const enabled = new Set((Array.isArray(db?.enabledModules) ? db.enabledModules : []).map(String));
+    const enabled = collectEnabledModuleKeys(db, chat);
     modules.forEach((mod, modIdx) => {
       const modId = referenceModuleId(mod, modIdx);
-      const isEnabled = enabled.has(String(mod?.id)) || enabled.has(String(mod?.name)) || enabled.has(String(mod?.namespace)) || enabled.has(modId);
+      const isEnabled = moduleMatchesEnabledKey(mod, modId, enabled);
       if (!isEnabled) return;
       collectModuleLoreEntries(mod).slice(0, 48).forEach((entry, idx) => add(entry, 'moduleLore', `module: ${mod?.name || mod?.id || 'unknown'}`, `module:${modId || 'unknown'}:lore:${idx}`, { owner: 'module', moduleId: modId || '', moduleName: mod?.name || '' }));
     });
@@ -5596,6 +5793,7 @@
     if (alwaysActive) return 8;
     if (kind === 'desc' || kind === 'firstMessage') return 8;
     if (kind === 'globalNote') return 7;
+    if (kind === 'activeLorebook') return 7;
     if (kind === 'localLore') return 7;
     if (kind === 'globalLore') return 6;
     if (kind === 'referenceCharacter' || kind === 'referenceCharacterNote' || kind === 'referenceCharacterLore') return 5;
@@ -5607,6 +5805,7 @@
 
   function inferCanonicalScope(kind, meta = {}) {
     if (kind === 'localLore') return 'chat';
+    if (kind === 'activeLorebook') return 'active-lorebook';
     if (kind === 'globalNote') return meta.owner || 'global';
     if (kind === 'moduleLore') return `module:${meta.moduleId || meta.moduleName || 'unknown'}`;
     if (kind === 'referenceCharacter' || kind === 'referenceCharacterNote' || kind === 'referenceCharacterLore') return `reference-character:${meta.referenceId || meta.referenceName || 'unknown'}`;
@@ -5643,20 +5842,23 @@
     const profile = AGENT_RETRIEVAL_PROFILE[agentId] || AGENT_RETRIEVAL_PROFILE.main;
     const query = buildRetrievalQuery(context, priorNotes, profile.keywords);
     const budget = Math.max(1200, Number(budgetOverride || profile.budget || 4200));
-    const controlFloor = buildMainControlFloorContext(context, Math.min(Math.max(900, Math.floor(budget * 0.35)), budget));
+    const controlFloor = buildMainControlFloorContext(context, Math.min(Math.max(900, Math.floor(budget * 0.35)), budget), state);
     const retrievalBudget = Math.max(700, budget - controlFloor.length - 80);
-    const staged = await stagedRetrieveCandidates(agentId, state, query, profile, conf);
+    const staged = await stagedRetrieveCandidates(agentId, state, query, profile, conf, context);
     const candidates = staged.candidates;
     const selected = selectCandidates(candidates, profile.limit, retrievalBudget);
     const pack = formatRetrievalPack(agentId, state, selected, query);
     return [controlFloor, staged.note, pack].filter(Boolean).join('\n\n').slice(0, budget);
   }
 
-  async function stagedRetrieveCandidates(agentId, state, queryTerms, profile, conf = null) {
-    let candidates = rankStateCandidates(state, queryTerms, profile);
+  async function stagedRetrieveCandidates(agentId, state, queryTerms, profile, conf = null, context = null) {
+    const signature = buildRecallQuerySignature(queryTerms, context, state);
+    const sceneTail = collectCurrentSceneTailCandidates(context, state, signature);
+    let candidates = mergeRecallCandidates(sceneTail.concat(rankStateCandidates(state, queryTerms, profile, signature)));
     const stats = {
       profile: agentId,
       lexical: candidates.length,
+      sceneTail: sceneTail.length,
       embedded: 0,
       spread: 0,
       blocked: 0,
@@ -5856,6 +6058,13 @@
       throw new Error(`Embeddings ${res.status}: ${text.slice(0, 240)}`);
     }
     const data = await readResponseJsonWithTimeout(res, conf.timeoutMs, 'embeddings');
+    const usageMessages = [{ role: 'user', content: (Array.isArray(inputs) ? inputs : []).join('\n\n') }];
+    await safeRecordApiUsage({
+      ...conf,
+      agentId: 'embedding',
+      agentName: 'Embedding Retrieval',
+      agentPhase: 'retrieval',
+    }, usageMessages, data, '', 'embeddings');
     if (Array.isArray(data?.data)) return data.data.map(item => item.embedding).filter(Array.isArray);
     if (Array.isArray(data?.embeddings)) return data.embeddings.filter(Array.isArray);
     if (Array.isArray(data?.embedding)) return [data.embedding];
@@ -5898,9 +6107,9 @@
       Math.max(700, totalBudget - 900),
       totalBudget,
     );
-    const controlFloor = buildMainControlFloorContext(context, floorBudget);
+    const controlFloor = buildMainControlFloorContext(context, floorBudget, state);
     const remainingBudget = Math.max(700, totalBudget - controlFloor.length - 80);
-    const staged = await stagedRetrieveCandidates('main', state, query, AGENT_RETRIEVAL_PROFILE.main, conf);
+    const staged = await stagedRetrieveCandidates('main', state, query, AGENT_RETRIEVAL_PROFILE.main, conf, context);
     const candidates = staged.candidates;
     const selected = selectCandidates(candidates, AGENT_RETRIEVAL_PROFILE.main.limit, remainingBudget);
     const retrievalPack = formatRetrievalPack('main', state, selected, query);
@@ -5915,6 +6124,8 @@
       'Never output <Thoughts>, <think>, reasoning, analysis headings, run logs, or agent labels. Final response must be only the in-world reply.',
       'Do not write an English draft, translation draft, planning draft, or title before the final prose. Use one final language matching the current conversation.',
       'Source order: current user/recent chat > final output/canon > character card/author note/lore > stored state > agent inference.',
+      'Pinned identity lore is current canon. Do not turn background tags such as orphan, unknown surname, past life, or origin into a new opening scene/status when affiliation/role is already specified.',
+      'Gender and sexual position are separate. If pinned lore says male/man and bottom/uke/受, keep the character male; bottom is not female gender or a reason to feminize unless canon explicitly says so.',
       'Older low-importance memories are intentionally faded unless repeated, important, or relevant now.',
       '',
       controlFloor,
@@ -5931,21 +6142,58 @@
     return briefing;
   }
 
-  function buildMainControlFloorContext(context, budget = 3600) {
+  function buildMainControlFloorContext(context, budget = 3600, state = null) {
     const lines = [];
+    lines.push('[Current Writing Mode] ' + normalizeMode(context?.mode || 'rp'));
+    const identity = normalizeCanonicalIdentityState(state?.canonicalIdentity || buildCanonicalIdentityState(context?.canonicalSources || [], state?.turn || 0));
+    if (identity.subjects.length) {
+      lines.push('[Identity Baseline - Protected]');
+      identity.subjects.slice(0, 6).forEach(subject => {
+        const immutable = Object.entries(subject.immutable || {}).map(([key, value]) => `${key}=${value}`).join('; ');
+        const aliases = normalizeStringArray(subject.aliases).filter(alias => alias && alias !== subject.name).slice(0, 5).join(', ');
+        lines.push(`- ${subject.name}${aliases ? ` (${aliases})` : ''}: ${immutable || 'identity facts present in canonical lore'}`);
+      });
+      const mutableLines = identity.subjects
+        .map(subject => {
+          const mutable = Object.entries(subject.mutableBaseline || {}).map(([key, value]) => `${key}=${value}`).join('; ');
+          return mutable ? `- ${subject.name}: ${mutable}` : '';
+        })
+        .filter(Boolean);
+      if (mutableLines.length) {
+        lines.push('[Mutable Baseline - Can Change By Later Canon]');
+        mutableLines.slice(0, 6).forEach(line => lines.push(line));
+      }
+      lines.push('- Identity guard: immutable identity fields outrank later memory/state commits unless the user or explicit final output retcons them.');
+    }
     const firstMessage = String(context?.firstMessageInfo?.message || '').trim();
     if (firstMessage) {
       const firstCap = Math.min(2200, Math.max(600, Math.floor(Number(budget || 0) * 0.42)));
       lines.push(`[Registered First Message]\n${firstMessage.slice(0, firstCap)}`);
     }
     const alwaysLore = (Array.isArray(context?.canonicalSources) ? context.canonicalSources : [])
-      .filter(source => source?.meta?.alwaysActive);
+      .filter(source => source?.meta?.alwaysActive)
+      .sort(compareCanonicalControlFloorSource);
+    const pinnedLore = alwaysLore.filter(isPinnedIdentityLoreSource).slice(0, 4);
+    if (pinnedLore.length) {
+      lines.push('[Pinned Identity Lore]');
+      const used = lines.join('\n').length;
+      const available = Math.max(720, Number(budget || 0) - used - 220);
+      const perItemCap = Math.max(260, Math.min(1400, Math.floor(available / Math.max(1, pinnedLore.length))));
+      pinnedLore.forEach(source => {
+        const label = source.label || source.kind || source.path;
+        const facts = extractPinnedIdentityFacts(source.content);
+        const summary = String(source.content || '').replace(/\s+/g, ' ').trim().slice(0, perItemCap);
+        lines.push(`- ${label}: ${facts ? `${facts} | ` : ''}${summary}`);
+      });
+      lines.push('- Identity guard: treat current affiliation/status/role in pinned lore as present canon. Background labels such as orphan, unknown surname, past life, or origin do not replace the current scene role unless the registered first message explicitly says so.');
+    }
     if (alwaysLore.length) {
       lines.push('[Always-Active Lore Floor]');
       const used = lines.join('\n').length;
       const available = Math.max(480, Number(budget || 0) - used - (alwaysLore.length * 36));
-      const perItemCap = Math.max(120, Math.min(900, Math.floor(available / Math.max(1, alwaysLore.length))));
-      alwaysLore.forEach(source => {
+      const restLore = alwaysLore.filter(source => !pinnedLore.some(pinned => pinned.id === source.id || pinned.hash === source.hash));
+      const perItemCap = Math.max(140, Math.min(900, Math.floor(available / Math.max(1, restLore.length || 1))));
+      restLore.forEach(source => {
         const label = source.label || source.kind || source.path;
         const summary = String(source.content || '').replace(/\s+/g, ' ').trim().slice(0, perItemCap);
         lines.push(`- ${label}: ${summary}`);
@@ -5953,6 +6201,75 @@
     }
     const text = lines.length ? `[Eros Tower Control Floor]\n${lines.join('\n')}` : '';
     return text.length > budget ? `${text.slice(0, Math.max(0, budget - 80))}\n[Control Floor truncated by budget]` : text;
+  }
+
+  function compareCanonicalControlFloorSource(a, b) {
+    const ap = Number(a?.priority || 0);
+    const bp = Number(b?.priority || 0);
+    if (bp !== ap) return bp - ap;
+    const ai = Number(a?.meta?.insertOrder || 0);
+    const bi = Number(b?.meta?.insertOrder || 0);
+    if (bi !== ai) return bi - ai;
+    return String(a?.path || '').localeCompare(String(b?.path || ''));
+  }
+
+  function isPinnedIdentityLoreSource(source) {
+    if (!source) return false;
+    if (source.kind === 'desc' || source.kind === 'firstMessage') return true;
+    const label = `${source.label || ''}\n${source.path || ''}`.toLowerCase();
+    const contentHead = String(source.content || '').slice(0, 1600);
+    return /연수|渊水|淵水|yeon[-\s]?su|主角|主人公|주인공|인물|人物|角色|设定|設定|프로필|profile|identity|身份|oc/.test(label)
+      || /#\s*OC|###\s*身份|姓名[:：]|性别[:：]|所属门派[:：]|核心行动准则|핵심|신원|정체성/.test(contentHead);
+  }
+
+  function extractPinnedIdentityFacts(content) {
+    const text = String(content || '').replace(/\r\n/g, '\n');
+    if (!text.trim()) return '';
+    const lines = text.split('\n').map(line => line.trim()).filter(Boolean);
+    const wanted = [
+      /^(?:[-*]\s*)?(?:姓名|名前|이름|성명|name)\s*[:：]/i,
+      /^(?:[-*]\s*)?(?:年龄|年齡|나이|age)\s*[:：]/i,
+      /^(?:[-*]\s*)?(?:性别|性別|성별|gender|sex)\s*[:：]/i,
+      /^(?:[-*]\s*)?(?:性向|성향|sexuality|position)\s*[:：]/i,
+      /^(?:[-*]\s*)?(?:种族|種族|종족|race)\s*[:：]/i,
+      /^(?:[-*]\s*)?(?:所属门派|所屬門派|소속|所属|affiliation)\s*[:：]/i,
+      /^(?:[-*]\s*)?(?:身份\/阶级|身份|身分|신분|역할|role|status)\s*[:：]/i,
+      /^(?:[-*]\s*)?(?:核心行动准则|核心行動準則|핵심 행동|행동 원칙|core rule)\s*[:：]?/i,
+    ];
+    const picked = [];
+    lines.forEach(line => {
+      if (picked.length >= 10) return;
+      const plain = line.replace(/^[-*]\s*/, '');
+      if (wanted.some(rx => rx.test(plain))) picked.push(plain.replace(/\s+/g, ' '));
+    });
+    const currentRoleHints = normalizePinnedIdentityFacts(text);
+    if (/清虚门|淸虛門|청허문/.test(text)) currentRoleHints.push('baseline affiliation=清虚门/청허문');
+    if (/弟子|道士|도사|제자/.test(text)) currentRoleHints.push('baseline role=young Taoist disciple');
+    if (/孤儿|孤兒|고아/.test(text)) currentRoleHints.push('orphan=background/surname context, not current scene location');
+    if (/穿越者|현대\s*한국|现代韩国|past life|transmigrat/i.test(text)) currentRoleHints.push('past-life knowledge must not override current body/status');
+    return uniqueStrings(currentRoleHints.concat(picked)).slice(0, 12).join('; ');
+  }
+
+  function normalizePinnedIdentityFacts(text) {
+    const raw = String(text || '');
+    const out = [];
+    const lineFor = pattern => raw.split(/\n+/).map(line => line.trim()).find(line => pattern.test(line)) || '';
+    const genderLine = lineFor(/(?:性别|性別|성별|gender|sex)\s*[:：]/i);
+    if (/(?:性别|性別|성별|gender|sex)\s*[:：]\s*(?:男|男性|male|man|남자|남성)/i.test(genderLine)) {
+      out.push('identity gender=male/남성; do not write as female/woman');
+    } else if (/(?:性别|性別|성별|gender|sex)\s*[:：]\s*(?:女|女性|female|woman|여자|여성)/i.test(genderLine)) {
+      out.push('identity gender=female/여성');
+    }
+    const sexualityLine = lineFor(/(?:性向|성향|sexuality|position)\s*[:：]/i);
+    if (/(?:同性恋|同性愛|gay|homosexual|동성애)/i.test(sexualityLine)) out.push('sexuality=gay/homosexual');
+    if (/(?:受|bottom|바텀|uke)/i.test(sexualityLine)) out.push('bottom/受=sexual position only, not gender');
+    if (/(?:攻|top|탑|seme)/i.test(sexualityLine)) out.push('top/攻=sexual position only, not gender');
+    const ageLine = lineFor(/(?:年龄|年齡|나이|age)\s*[:：]/i);
+    if (/15\s*(?:岁|세|살|yo|years?)/i.test(ageLine)) out.push('current body age=15');
+    if (/(?:20多岁|20대|modern korea|现代韩国|현대\s*한국)/i.test(ageLine) || /(?:20多岁|20대|modern korea|现代韩国|현대\s*한국)/i.test(raw)) {
+      out.push('inner/past-life memory may be older, but current body/status remains canon');
+    }
+    return out;
   }
 
   function recordRecallTrace(state, queryTerms, selected, profile, meta = {}) {
@@ -5968,8 +6285,12 @@
       selected: (Array.isArray(selected) ? selected : []).slice(0, 10).map(item => ({
         kind: item.kind,
         path: item.path,
+        publicRef: item.publicRef || item.path,
+        axis: item.axis || recallAxisForKind(item.kind),
+        locator: item.locator || internalRecallLocator(item.kind, item.path, item.item, state),
         score: Math.round(item.score || 0),
         lineId: item.lineId || candidateTraceId(item),
+        entityAnchorHits: Array.isArray(item.entityAnchorHits) ? item.entityAnchorHits.slice(0, 6) : [],
         memoryTier: item.memoryTier || normalizeMemoryLifecycleTier(item.item?.memoryTier),
         heatScore: item.heatScore ?? item.item?.heatScore,
         sourceRank: item.sourceRank,
@@ -6006,10 +6327,170 @@
     return Array.from(new Set(tokens)).slice(0, 80);
   }
 
-  function rankStateCandidates(state, queryTerms, profile) {
+  function buildRecallQuerySignature(queryTerms, context, state) {
+    const recentText = (Array.isArray(context?.messages) ? context.messages : [])
+      .slice(-CURRENT_SCENE_TAIL_MESSAGES)
+      .map(message => `${message?.role || ''}: ${message?.content || message?.data || ''}`)
+      .join('\n');
+    const activeText = Object.values(state?.characters || {})
+      .filter(item => /active|present|current/i.test(String(item?.status || item?.state || 'active')))
+      .map(item => [item?.name, item?.id, item?.aliases].flat().join(' '))
+      .join('\n');
+    const text = [
+      (Array.isArray(queryTerms) ? queryTerms : []).join(' '),
+      getUserInput(context?.messages || []),
+      recentText,
+      activeText,
+    ].join('\n');
+    const lower = text.toLowerCase();
+    const currentHits = (lower.match(/\b(now|current|scene|present|today|immediate|latest|this)\b|지금|현재|이번|방금|직전|오늘/g) || []).length;
+    const pastHits = (lower.match(/\b(before|past|earlier|previous|old|remember|memory|backstory|history)\b|예전|과거|이전|전에|기억|옛날|지난/g) || []).length;
+    return {
+      tokens: recallTokens(text, 96),
+      entityAnchors: extractRecallEntityAnchors(text, 18),
+      currentWeight: clampFloat(0.48 + currentHits * 0.14 - pastHits * 0.06, 0.05, 0.95),
+      pastWeight: clampFloat(0.34 + pastHits * 0.16 - currentHits * 0.05, 0.05, 0.95),
+      turn: state?.turn || 0,
+    };
+  }
+
+  function recallTokens(value, limit = 80) {
+    const raw = String(value || '');
+    const tokens = raw.match(/[A-Za-z][A-Za-z0-9_-]{1,}|[가-힣][가-힣A-Za-z0-9_-]{1,}/g) || [];
+    const stop = new Set(['the', 'and', 'that', 'with', 'from', 'this', 'role', 'user', 'assistant', 'system']);
+    return uniqueStrings(tokens
+      .map(token => token.trim())
+      .filter(token => token.length >= 2 && !stop.has(token.toLowerCase())))
+      .slice(0, limit);
+  }
+
+  function extractRecallEntityAnchors(value, limit = 18) {
+    const text = String(value || '');
+    const candidates = text.match(/[A-Z][A-Za-z0-9_-]{2,}(?:\s+[A-Z][A-Za-z0-9_-]{2,}){0,2}|[가-힣]{2,8}/g) || [];
+    const stop = new Set(['User', 'Assistant', 'System', 'Role', 'Current', 'Previous']);
+    return uniqueStrings(candidates
+      .map(item => item.trim().replace(/\s+/g, ' '))
+      .filter(item => item.length >= 2 && item.length <= 32 && !stop.has(item)))
+      .slice(0, limit);
+  }
+
+  function collectCurrentSceneTailCandidates(context, state, signature) {
+    const messages = (Array.isArray(context?.messages) ? context.messages : [])
+      .filter(message => message?.role === 'user' || message?.role === 'assistant')
+      .slice(-CURRENT_SCENE_TAIL_MESSAGES);
+    if (!messages.length) return [];
+    const body = messages.map(message => {
+      const role = message.role === 'user' ? 'User' : 'Assistant';
+      return `[${role}] ${String(message.content || message.data || '').replace(/\s+/g, ' ').trim()}`;
+    }).join('\n').slice(-CURRENT_SCENE_TAIL_CHARS);
+    if (!body.trim()) return [];
+    const item = {
+      id: `current-scene-tail-${hashString(body).slice(0, 12)}`,
+      summary: body,
+      source: 'recent_chat',
+      sourceRank: SOURCE_RANK.recent_chat,
+      importance: 10,
+      confidence: 0.98,
+      canonLevel: 'current',
+      status: 'current',
+      createdTurn: state?.turn || 0,
+      lastSeenTurn: state?.turn || 0,
+      activationKeys: signature?.entityAnchors || [],
+      anchor: true,
+    };
+    return [{
+      kind: 'sceneTail',
+      path: 'current.sceneTail',
+      item,
+      text: body,
+      turn: state?.turn || 0,
+      sourceRank: SOURCE_RANK.recent_chat,
+      importance: 10,
+      confidence: 0.98,
+      tier: 5,
+      memoryTier: 'hot',
+      heatScore: 100,
+      status: 'current',
+      axis: 'current-scene',
+      publicRef: 'current.sceneTail',
+      locator: {
+        source: 'recent_chat',
+        tailHash: hashString(body),
+        messageCount: messages.length,
+        turn: state?.turn || 0,
+      },
+      score: 220 + Math.round((signature?.currentWeight || 0.5) * 40),
+    }];
+  }
+
+  function mergeRecallCandidates(candidates) {
+    const map = new Map();
+    (Array.isArray(candidates) ? candidates : []).forEach(candidate => {
+      if (!candidate) return;
+      const key = `${candidate.kind || ''}:${candidate.path || ''}:${candidate.item?.id || candidate.item?.sourceId || ''}`;
+      const previous = map.get(key);
+      if (!previous || Number(candidate.score || 0) > Number(previous.score || 0)) map.set(key, candidate);
+    });
+    return Array.from(map.values()).sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
+  }
+
+  function applyRecallSignatureBoost(candidate, signature, currentTurn) {
+    if (!signature) return candidate;
+    const anchors = Array.isArray(signature.entityAnchors) ? signature.entityAnchors : [];
+    if (!anchors.length) return candidate;
+    const haystack = String(candidate.text || '').toLowerCase();
+    const hits = anchors.filter(anchor => haystack.includes(String(anchor).toLowerCase())).slice(0, 8);
+    if (!hits.length) return candidate;
+    const age = Math.max(0, Number(currentTurn || 0) - Number(candidate.turn || 0));
+    const freshBoost = signature.currentWeight > signature.pastWeight && age <= 8 ? 6 : 0;
+    return {
+      ...candidate,
+      entityAnchorHits: hits,
+      score: Number(candidate.score || 0) + Math.min(34, hits.length * 9) + freshBoost,
+    };
+  }
+
+  function weightedRecallOverlap(candidate, queryTerms, signature) {
+    const haystack = String(candidate?.text || '').toLowerCase();
+    const baseTerms = Array.isArray(queryTerms) ? queryTerms : [];
+    const tokenTerms = Array.isArray(signature?.tokens) ? signature.tokens.map(item => String(item).toLowerCase()) : [];
+    const anchorTerms = Array.isArray(signature?.entityAnchors) ? signature.entityAnchors.map(item => String(item).toLowerCase()) : [];
+    let score = 0;
+    uniqueStrings(baseTerms.concat(tokenTerms)).slice(0, 120).forEach(term => {
+      const value = String(term || '').toLowerCase();
+      if (value.length >= 2 && haystack.includes(value)) score += 0.18;
+    });
+    anchorTerms.forEach(term => {
+      if (term.length >= 2 && haystack.includes(term)) score += 0.42;
+    });
+    return Math.min(3.2, score);
+  }
+
+  function recallIntentPenalty(candidate, signature, age) {
+    if (!signature) return 0;
+    const kind = candidate?.kind || '';
+    const status = String(candidate?.status || candidate?.item?.status || '').toLowerCase();
+    let score = 0;
+    if (signature.currentWeight >= signature.pastWeight) {
+      if (kind === 'sceneTail' || kind === 'scene') score += 30;
+      if (kind === 'character' || kind === 'relationship') score += 12;
+      if ((kind === 'memory' || kind === 'event') && age > 24) score -= Math.min(34, (age - 24) * 0.55);
+      if (/archived|superseded|resolved|faded|ended|closed/.test(status)) score -= 18;
+    }
+    if (signature.pastWeight > signature.currentWeight + 0.08) {
+      if (kind === 'memory' || kind === 'event' || kind === 'lore') score += 18;
+      if (kind === 'sceneTail' && age <= 2) score += 6;
+    }
+    return score;
+  }
+
+  function rankStateCandidates(state, queryTerms, profile, signature = null) {
     return collectStateCandidates(state)
       .filter(candidate => !profile?.kinds || profile.kinds.includes(candidate.kind))
-      .map(candidate => ({ ...candidate, score: scoreCandidate(candidate, queryTerms, state.turn, state) }))
+      .map(candidate => applyRecallSignatureBoost({
+        ...candidate,
+        score: scoreCandidate(candidate, queryTerms, state.turn, state, signature),
+      }, signature, state.turn))
       .sort((a, b) => b.score - a.score);
   }
 
@@ -6032,6 +6513,9 @@
         memoryTier: normalizeMemoryLifecycleTier(item?.memoryTier) || inferMemoryLifecycleTier(item, kind, state.turn),
         heatScore: parseNumber(item?.heatScore, memoryLifecycleHeat(item, kind, state.turn), 0, 100),
         status: String(item?.status || item?.maturity || item?.state || ''),
+        axis: recallAxisForKind(kind),
+        publicRef: publicRecallRef(kind, path, item),
+        locator: internalRecallLocator(kind, path, item, state),
       });
     };
 
@@ -6065,9 +6549,10 @@
     }
   }
 
-  function scoreCandidate(candidate, queryTerms, currentTurn, state = null) {
+  function scoreCandidate(candidate, queryTerms, currentTurn, state = null, signature = null) {
     const haystack = candidate.text.toLowerCase();
     const matchScore = queryTerms.reduce((sum, term) => sum + (haystack.includes(term) ? 8 : 0), 0);
+    const lexicalScore = weightedRecallOverlap(candidate, queryTerms, signature) * 34;
     const sourceScore = clampNumber(candidate.sourceRank, SOURCE_RANK.stored_state, 0, 100) * 0.18;
     const importanceScore = clampNumber(candidate.importance, 4, 0, 10) * 7;
     const confidenceScore = clampNumber(candidate.confidence, 0.6, 0, 1) * 18;
@@ -6084,7 +6569,8 @@
     const decay = parseNumber(candidate.item?.decay, candidate.kind === 'memory' ? calculateMemoryDecay(candidate.item, age) : 1, 0, 1);
     const decayScore = candidate.kind === 'memory' ? (decay - 1) * 34 : 0;
     const fadedPenalty = /faded/i.test(candidate.status) ? -22 : 0;
-    return matchScore + sourceScore + importanceScore + confidenceScore + recencyScore + tierScore + memoryTierScore + heatScore + lifecycleScore + activationScore + mustCarryScore + graphScore + boundaryPenalty + decayScore + fadedPenalty;
+    const intentScore = recallIntentPenalty(candidate, signature, age);
+    return matchScore + lexicalScore + sourceScore + importanceScore + confidenceScore + recencyScore + tierScore + memoryTierScore + heatScore + lifecycleScore + activationScore + mustCarryScore + graphScore + boundaryPenalty + decayScore + fadedPenalty + intentScore;
   }
 
   function associationActivationScore(candidate, state) {
@@ -6308,6 +6794,47 @@
     return `${pair[0]}=>${pair[1]}`;
   }
 
+  function recallAxisForKind(kind) {
+    const value = String(kind || '');
+    if (value === 'sceneTail' || value === 'scene') return 'current-scene';
+    if (value === 'character' || value === 'relationship' || value === 'socialGraph') return 'cast';
+    if (value === 'secret') return 'secret';
+    if (value === 'foreshadowing' || value === 'clue' || value === 'promiseDebtConsequence') return 'plot';
+    if (value === 'worldFront' || value === 'resourceChannel' || value === 'knowledge') return 'world';
+    if (value === 'lore') return 'canon-lore';
+    if (value === 'memory' || value === 'event') return 'memory';
+    return 'state';
+  }
+
+  function publicRecallRef(kind, path, item) {
+    const axis = recallAxisForKind(kind);
+    const rawLabel = firstNonEmpty(
+      item?.name,
+      item?.title,
+      item?.id,
+      item?.summary,
+      item?.quoteOrSummary,
+      item?.objective,
+      item?.seed,
+      path,
+    );
+    const label = String(rawLabel || kind || 'entry').replace(/\s+/g, ' ').trim().slice(0, 72);
+    return `${axis}:${label || kind || 'entry'}`;
+  }
+
+  function internalRecallLocator(kind, path, item, state) {
+    return {
+      kind,
+      path,
+      id: cleanString(item?.id, ''),
+      key: itemKey(item),
+      source: cleanString(item?.source, ''),
+      sourceId: cleanString(item?.sourceId, ''),
+      sourceHash: cleanString(item?.sourceHash || item?.hash || item?.canonicalSource?.hash, ''),
+      turn: inferItemTurn(item, state?.turn || 0),
+    };
+  }
+
   function candidateTerms(candidate) {
     const item = candidate.item || {};
     const source = [
@@ -6347,7 +6874,7 @@
 
   function isMustCarryCandidate(candidate) {
     const item = candidate?.item || {};
-    if (candidate?.kind === 'scene') return true;
+    if (candidate?.kind === 'scene' || candidate?.kind === 'sceneTail') return true;
     if (candidate?.kind === 'character' && /active|present|current/i.test(String(item.status || item.state || 'active'))) return true;
     if (candidate?.kind === 'lore') {
       const canonicalKind = String(item?.canonicalSource?.kind || '').toLowerCase();
@@ -6365,24 +6892,56 @@
   function selectCandidates(candidates, limit, budget) {
     const selected = [];
     const selectedIds = new Set();
+    const kindCounts = new Map();
+    const sourceCounts = new Map();
+    const turnCounts = new Map();
     let used = 0;
     const input = Array.isArray(candidates) ? candidates : [];
     const mustCarry = input
       .filter(isMustCarryCandidate)
       .sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
     const rest = input.filter(candidate => !isMustCarryCandidate(candidate));
+    const sourceBucketForCandidate = candidate => String(
+      candidate?.item?.sourceChunkHash
+      || candidate?.item?.sourceRangeHash
+      || candidate?.item?.canonicalSource?.hash
+      || candidate?.item?.sourceId
+      || candidate?.item?.source
+      || candidate?.path
+      || candidate?.kind
+      || 'unknown',
+    ).slice(0, 80);
+    const turnBucketForCandidate = candidate => Math.floor(Number(candidate?.turn || 0) / 12);
+    const protectedFloor = Math.min(Math.max(4, Math.floor(Number(limit || 0) * 0.36)), RECALL_PROTECTED_KINDS.length + 3);
+    const selectedProtectedCount = () => selected.filter(item => RECALL_PROTECTED_KINDS.includes(item.kind)).length;
+    const countCandidate = candidate => {
+      kindCounts.set(candidate.kind, (kindCounts.get(candidate.kind) || 0) + 1);
+      const sourceBucket = sourceBucketForCandidate(candidate);
+      sourceCounts.set(sourceBucket, (sourceCounts.get(sourceBucket) || 0) + 1);
+      const turnBucket = turnBucketForCandidate(candidate);
+      turnCounts.set(turnBucket, (turnCounts.get(turnBucket) || 0) + 1);
+    };
     const pushCandidate = (candidate, forceFloor = false) => {
       if (selected.length >= limit) return false;
       if (candidate.memoryTier === 'archived' && Number(candidate.score || 0) < 72) return false;
       if (candidate.memoryTier === 'disputed' && Number(candidate.score || 0) < 105) return false;
       const lineId = candidateTraceId(candidate);
       if (selectedIds.has(lineId)) return false;
+      const protectedKind = RECALL_PROTECTED_KINDS.includes(candidate.kind);
+      const diversityLocked = !forceFloor && selected.length >= Math.max(4, Math.floor(Number(limit || 0) * 0.28));
+      const softCap = RECALL_KIND_SOFT_CAPS[candidate.kind] || 9999;
+      if (diversityLocked && (kindCounts.get(candidate.kind) || 0) >= softCap && Number(candidate.score || 0) < 135) return false;
+      const sourceBucket = sourceBucketForCandidate(candidate);
+      if (diversityLocked && !protectedKind && (sourceCounts.get(sourceBucket) || 0) >= 3) return false;
+      const turnBucket = turnBucketForCandidate(candidate);
+      if (diversityLocked && candidate.kind === 'memory' && (turnCounts.get(turnBucket) || 0) >= 5 && Number(candidate.score || 0) < 128) return false;
       const line = formatCandidateLine({ ...candidate, lineId });
       const floorBudget = Math.max(1800, Math.floor(Number(budget || 0) * 0.38));
       if (used + line.length > budget && selected.length >= Math.max(4, Math.floor(limit / 3))) return false;
-      if (forceFloor && used + line.length > floorBudget && selected.length >= 4) return false;
+      if (forceFloor && used + line.length > floorBudget && selected.length >= 4 && selectedProtectedCount() >= protectedFloor) return false;
       selected.push({ ...candidate, line, lineId });
       selectedIds.add(lineId);
+      countCandidate(candidate);
       used += line.length;
       return true;
     };
@@ -6391,7 +6950,8 @@
     }
     for (const candidate of rest) {
       if (selected.length >= limit) break;
-      pushCandidate(candidate, false);
+      const needsProtectedFloor = RECALL_PROTECTED_KINDS.includes(candidate.kind) && selectedProtectedCount() < protectedFloor;
+      pushCandidate(candidate, needsProtectedFloor);
     }
     return selected;
   }
@@ -6424,10 +6984,12 @@
   function formatCandidateLine(candidate) {
     const summary = summarizeLedgerText(candidate.item, candidate.kind);
     const meta = [
+      candidate.axis ? `axis=${candidate.axis}` : '',
       `score=${Math.round(candidate.score || 0)}`,
       `importance=${candidate.importance}`,
       `confidence=${Number(candidate.confidence).toFixed(2)}`,
       `turn=${candidate.turn}`,
+      Array.isArray(candidate.entityAnchorHits) && candidate.entityAnchorHits.length ? `entityHits=${candidate.entityAnchorHits.slice(0, 4).join('/')}` : '',
       candidate.memoryTier ? `memoryTier=${candidate.memoryTier}` : '',
       candidate.kind === 'memory' ? `decay=${formatDecimal(candidate.item?.decay ?? 1)}` : '',
       candidate.kind === 'lore' && (candidate.item?.alwaysActive || candidate.item?.activationMode === 'always' || candidate.item?.canonicalSource?.meta?.alwaysActive) ? 'always' : '',
@@ -6435,7 +6997,7 @@
       candidate.tier ? `tier=${candidate.tier}` : '',
       candidate.status ? `status=${candidate.status}` : '',
     ].filter(Boolean).join(', ');
-    return `- ${candidate.path} (${meta}): ${summary}`;
+    return `- ${candidate.publicRef || candidate.path} (${meta}): ${summary}`;
   }
 
   function recordInjectionTrace(state, queryTerms, selected, injection, budget, staged = {}) {
@@ -6447,7 +7009,11 @@
         id: item.lineId || candidateTraceId(item),
         kind: item.kind,
         path: item.path,
+        publicRef: item.publicRef || item.path,
+        axis: item.axis || recallAxisForKind(item.kind),
+        locator: item.locator || internalRecallLocator(item.kind, item.path, item.item, state),
         score: Math.round(item.score || 0),
+        entityAnchorHits: Array.isArray(item.entityAnchorHits) ? item.entityAnchorHits.slice(0, 6) : [],
         memoryTier: item.memoryTier || normalizeMemoryLifecycleTier(item.item?.memoryTier),
         heatScore: item.heatScore ?? item.item?.heatScore,
         sourceRank: item.sourceRank,
@@ -7132,8 +7698,233 @@
       out.plotThreads.resourceChannels = normalizeCommittedLedgerArray(out.plotThreads.resourceChannels, 'resourceChannel', turn);
     }
     if (out.knowledge?.units) out.knowledge.units = normalizeCommittedLedgerArray(out.knowledge.units, 'knowledge', turn);
+    conflicts.push(...applyCanonicalIdentityGuardsToCommit(out, state, turn));
     out._evidenceConflicts = conflicts.concat(findEvidenceConflicts(out, state, turn));
     return out;
+  }
+
+
+  function createDefaultCanonicalIdentityState() {
+    return { version: 1, sourceHash: '', updatedAt: '', subjects: [], warnings: [] };
+  }
+
+  function normalizeCanonicalIdentityState(value) {
+    const base = createDefaultCanonicalIdentityState();
+    const source = value && typeof value === 'object' ? value : {};
+    return {
+      ...base,
+      ...source,
+      subjects: (Array.isArray(source.subjects) ? source.subjects : []).map(normalizeIdentitySubject).filter(Boolean).slice(0, 24),
+      warnings: normalizeStringArray(source.warnings).slice(0, 12),
+    };
+  }
+
+  function normalizeIdentitySubject(subject) {
+    if (!subject || typeof subject !== 'object') return null;
+    const name = cleanString(subject.name || subject.id, '');
+    if (!name) return null;
+    return {
+      id: cleanString(subject.id || ('identity:' + slug(name)), 'identity:' + slug(name)),
+      name,
+      aliases: normalizeStringArray(subject.aliases).slice(0, 16),
+      immutable: normalizeIdentityFieldMap(subject.immutable),
+      mutableBaseline: normalizeIdentityFieldMap(subject.mutableBaseline),
+      evidence: Array.isArray(subject.evidence) ? subject.evidence.slice(0, 8) : [],
+      sourceRank: parseNumber(subject.sourceRank, SOURCE_RANK.lorebook + 15, 0, 100),
+      confidence: parseNumber(subject.confidence, 0.96, 0, 1),
+      importance: parseNumber(subject.importance, 10, 0, 10),
+      lastSeenTurn: parseNumber(subject.lastSeenTurn, 0, 0, 999999),
+    };
+  }
+
+  function normalizeIdentityFieldMap(value) {
+    const out = {};
+    if (!value || typeof value !== 'object') return out;
+    Object.entries(value).forEach(([key, raw]) => {
+      const clean = typeof raw === 'string' ? raw.trim() : Array.isArray(raw) ? uniqueStrings(raw).join(', ') : String(raw ?? '').trim();
+      if (clean) out[key] = clean.slice(0, 260);
+    });
+    return out;
+  }
+
+  function syncCanonicalIdentityState(state, canonicalSources) {
+    if (!state) return false;
+    const next = buildCanonicalIdentityState(canonicalSources, state.turn);
+    const oldHash = String(state.canonicalIdentity?.sourceHash || '');
+    if (!next.subjects.length && oldHash) return false;
+    state.canonicalIdentity = next;
+    return oldHash !== next.sourceHash;
+  }
+
+  function buildCanonicalIdentityState(canonicalSources, turn = 0) {
+    const sources = (Array.isArray(canonicalSources) ? canonicalSources : []).filter(isPinnedIdentityLoreSource).slice(0, 12);
+    const subjects = [];
+    sources.forEach(source => {
+      const profile = extractCanonicalIdentityProfile(source, turn);
+      if (!profile) return;
+      const existingIndex = subjects.findIndex(item => identitySubjectsOverlap(item, profile));
+      if (existingIndex >= 0) subjects[existingIndex] = mergeIdentitySubject(subjects[existingIndex], profile);
+      else subjects.push(profile);
+    });
+    return {
+      ...createDefaultCanonicalIdentityState(),
+      sourceHash: hashString(sources.map(source => String(source.path || source.label || '') + ':' + String(source.hash || hashString(source.content || ''))).join('|')),
+      updatedAt: nowIso(),
+      subjects: subjects.slice(0, 24),
+      warnings: [],
+    };
+  }
+
+  function isPinnedIdentityLoreSource(source) {
+    if (!source) return false;
+    if (source.kind === 'desc' || source.kind === 'firstMessage') return true;
+    const label = (String(source.label || '') + '\n' + String(source.path || '')).toLowerCase();
+    const content = String(source.content || '').slice(0, 1800);
+    return /yeon[-\s]?su|identity|profile|oc|gender|sex|role|status/i.test(label)
+      || /#\s*OC|name\s*[:：]|gender\s*[:：]|sex\s*[:：]|sexuality\s*[:：]|position\s*[:：]|age\s*[:：]|role\s*[:：]|status\s*[:：]/i.test(content)
+      || /연수|성별|남성|여성|바텀|탑/.test(content);
+  }
+
+  function extractCanonicalIdentityProfile(source, turn = 0) {
+    const text = String(source?.content || '').normalize('NFC');
+    if (!text.trim()) return null;
+    const lines = text.split(/\n+/).map(line => line.trim()).filter(Boolean);
+    const field = patterns => {
+      for (const line of lines) {
+        const clean = line.replace(/^[-*]\s*/, '');
+        for (const pattern of patterns) {
+          const match = clean.match(pattern);
+          if (match) return String(match[1] || '').trim();
+        }
+      }
+      return '';
+    };
+    const rawName = field([/^(?:name|이름|성명|姓名|名前)\s*[:：]\s*(.+)$/i]) || (/yeon[-\s]?su|연수|渊水|淵水/i.test(text) ? 'Yeon-su' : '');
+    const name = cleanIdentityName(rawName) || cleanIdentityName(firstNonEmpty(source?.label, source?.path, ''));
+    if (!name || isGenericCharacterStateToken(name)) return null;
+    const aliases = uniqueStrings([rawName, name, 'Yeon-su', '연수', '渊水', '淵水'].concat(normalizeStringArray(source?.activationKeys)).map(cleanIdentityName).filter(Boolean)).slice(0, 16);
+    const genderValue = field([/^(?:gender|sex|성별|性别|性別)\s*[:：]\s*(.+)$/i]) || text;
+    const immutable = {};
+    const gender = normalizeIdentityGender(genderValue);
+    if (gender) immutable.gender = gender;
+    const position = normalizeSexualPosition(field([/^(?:sexuality|position|성향|포지션|性向)\s*[:：]\s*(.+)$/i]) || text);
+    if (position) immutable.position = position;
+    const mutableBaseline = {};
+    const affiliationValue = field([/^(?:affiliation|所属门派|所屬門派|소속|所属)\s*[:：]\s*(.+)$/i]);
+    if (affiliationValue) mutableBaseline.affiliation = normalizeIdentityAffiliation(affiliationValue);
+    const roleValue = field([/^(?:role|status|class|역할|신분|상태|身份\/阶级|身份|身分)\s*[:：]\s*(.+)$/i]);
+    if (roleValue) mutableBaseline.role = summarizeCanonicalContent(roleValue, 220);
+    return normalizeIdentitySubject({
+      id: 'identity:' + hashString(String(name) + ':' + String(source?.hash || source?.path || '')).slice(0, 12),
+      name,
+      aliases,
+      immutable,
+      mutableBaseline,
+      sourceRank: Math.max(SOURCE_RANK.lorebook + 18, parseNumber(source?.priority, 8, 0, 10) * 8),
+      confidence: 0.96,
+      importance: 10,
+      lastSeenTurn: turn,
+      evidence: [{ source: firstNonEmpty(source?.path, source?.sourceId, source?.kind, 'canonical-source'), quoteOrSummary: summarizeCanonicalContent(text, 420), certainty: 'established' }],
+    });
+  }
+
+  function cleanIdentityName(value) {
+    return String(value || '').replace(/^[-*]\s*/, '').replace(/^(?:name|이름)\s*[:：]\s*/i, '').split(/[()（）]/)[0].replace(/[;；。].*$/, '').trim().slice(0, 80);
+  }
+
+  function normalizeIdentityGender(value) {
+    const text = String(value || '').toLowerCase();
+    if (/(?:\bmale\b|\bman\b|남성|남자|男)/i.test(text) && !/(?:\bfemale\b|여성|여자|女)/i.test(text)) return 'male/남성';
+    if (/(?:\bfemale\b|여성|여자|女)/i.test(text)) return 'female/여성';
+    return '';
+  }
+
+  function normalizeSexualPosition(value) {
+    const text = String(value || '');
+    const out = [];
+    if (/(?:bottom|uke|受|바텀)/i.test(text)) out.push('bottom/受');
+    if (/(?:top|seme|攻|탑)/i.test(text)) out.push('top/攻');
+    return out.join(', ');
+  }
+
+  function normalizeIdentityAffiliation(value) {
+    const text = summarizeCanonicalContent(value, 220);
+    if (/清虚门|淸虛門|청허문/.test(text)) return '清虚门/청허문';
+    return text;
+  }
+
+  function identitySubjectsOverlap(a, b) {
+    const left = uniqueStrings([a?.name].concat(normalizeStringArray(a?.aliases))).map(item => item.toLowerCase());
+    const right = uniqueStrings([b?.name].concat(normalizeStringArray(b?.aliases))).map(item => item.toLowerCase());
+    return left.some(x => right.some(y => x === y || x.includes(y) || y.includes(x)));
+  }
+
+  function mergeIdentitySubject(oldSubject, nextSubject) {
+    return normalizeIdentitySubject({
+      ...oldSubject,
+      aliases: uniqueStrings(normalizeStringArray(oldSubject.aliases).concat(normalizeStringArray(nextSubject.aliases))).slice(0, 16),
+      immutable: { ...oldSubject.immutable, ...nextSubject.immutable },
+      mutableBaseline: { ...oldSubject.mutableBaseline, ...nextSubject.mutableBaseline },
+      evidence: (Array.isArray(oldSubject.evidence) ? oldSubject.evidence : []).concat(Array.isArray(nextSubject.evidence) ? nextSubject.evidence : []).slice(0, 8),
+      sourceRank: Math.max(oldSubject.sourceRank || 0, nextSubject.sourceRank || 0),
+      confidence: Math.max(oldSubject.confidence || 0, nextSubject.confidence || 0),
+      importance: Math.max(oldSubject.importance || 0, nextSubject.importance || 0),
+      lastSeenTurn: Math.max(oldSubject.lastSeenTurn || 0, nextSubject.lastSeenTurn || 0),
+    });
+  }
+
+
+  function applyCanonicalIdentityGuardsToCommit(commit, state, turn) {
+    const conflicts = [];
+    const subjects = normalizeCanonicalIdentityState(state?.canonicalIdentity).subjects;
+    if (!subjects.length || !Array.isArray(commit?.characters)) return conflicts;
+    commit.characters.forEach(character => {
+      const subject = findIdentitySubjectForCharacter(subjects, character);
+      if (!subject) return;
+      const gender = String(subject.immutable?.gender || '').toLowerCase();
+      if (!gender) return;
+      ['gender', 'sex', 'pronoun', 'pronouns', 'status', 'role', 'description', 'summary'].forEach(field => {
+        const value = character?.[field];
+        if (!isMeaningfulValue(value) || !identityGenderContradicts(gender, value)) return;
+        const existing = (state.characters && Object.values(state.characters).find(item => itemKey(item) === itemKey(character))) || {};
+        if (isMeaningfulValue(existing[field])) character[field] = existing[field];
+        else delete character[field];
+        conflicts.push(makeConflict('identity_' + field, 'canonical identity rejected contradictory ' + field + ' for ' + subject.name, character, subject, turn, {
+          decisionId: 'id-' + hashString(String(subject.name) + ':' + String(field) + ':' + String(turn)).slice(0, 12),
+          field,
+          resolution: 'rejected',
+          winner: 'canonicalIdentity',
+          reasonCodes: ['canonical-identity-gender-guard'],
+          oldValuePreview: previewValueForConflict(subject.immutable.gender),
+          newValuePreview: previewValueForConflict(value),
+        }));
+      });
+    });
+    return conflicts;
+  }
+
+  function findIdentitySubjectForCharacter(subjects, character) {
+    const names = uniqueStrings([character?.name, character?.id].concat(normalizeStringArray(character?.aliases))).map(item => item.toLowerCase()).filter(Boolean);
+    if (!names.length && subjects.length === 1) return subjects[0];
+    return subjects.find(subject => {
+      const identityNames = uniqueStrings([subject.name].concat(normalizeStringArray(subject.aliases))).map(item => item.toLowerCase()).filter(Boolean);
+      return identityNames.some(left => names.some(right => left === right || left.includes(right) || right.includes(left)));
+    }) || null;
+  }
+
+  function identityGenderContradicts(identityGender, value) {
+    const text = stringifyLedgerItem(value);
+    if (/(?:\bmale\b|남성|男|남자|he\/him|\bhe\b|\bhim\b)/i.test(identityGender)) return hasFemaleGenderTerm(text) && !hasMaleGenderTerm(text);
+    if (/(?:\bfemale\b|여성|女|여자|she\/her|\bshe\b|\bher\b)/i.test(identityGender)) return hasMaleGenderTerm(text) && !hasFemaleGenderTerm(text);
+    return false;
+  }
+
+  function hasFemaleGenderTerm(text) {
+    return /(?:\bfemale\b|\bwoman\b|\bgirl\b|she\/her|\bshe\b|\bher\b|여성|여자|女)/i.test(String(text || ''));
+  }
+
+  function hasMaleGenderTerm(text) {
+    return /(?:\bmale\b|\bman\b|\bboy\b|he\/him|\bhe\b|\bhim\b|남성|남자|男)/i.test(String(text || ''));
   }
 
   function normalizeMemoryEntries(entries, state, turn) {
@@ -8140,7 +8931,9 @@
       throw new Error(`Agent API ${res.status}: ${text.slice(0, 300)}`);
     }
     const data = await readResponseJsonWithTimeout(res, conf.timeoutMs, 'chat/completions');
-    return extractOpenAIText(data);
+    const text = extractOpenAIText(data);
+    await safeRecordApiUsage(conf, messages, data, text, 'openai-compatible');
+    return text;
   }
 
   async function callAnthropic(conf, messages) {
@@ -8161,7 +8954,10 @@
       const text = await readResponseTextWithTimeout(res, conf.timeoutMs, 'anthropic messages').catch(() => '');
       throw new Error(`Anthropic API ${res.status}: ${text.slice(0, 300)}`);
     }
-    return extractAnthropicText(await readResponseJsonWithTimeout(res, conf.timeoutMs, 'anthropic messages'));
+    const data = await readResponseJsonWithTimeout(res, conf.timeoutMs, 'anthropic messages');
+    const text = extractAnthropicText(data);
+    await safeRecordApiUsage(conf, messages, data, text, 'anthropic-messages');
+    return text;
   }
 
   function normalizeVertexModelId(model) {
@@ -8258,7 +9054,10 @@
       const text = await readResponseTextWithTimeout(res, conf.timeoutMs, 'vertex generateContent').catch(() => '');
       throw new Error(`Vertex Gemini ${res.status}: ${text.slice(0, 300)}`);
     }
-    return extractGeminiNativeText(await readResponseJsonWithTimeout(res, conf.timeoutMs, 'vertex generateContent'));
+    const data = await readResponseJsonWithTimeout(res, conf.timeoutMs, 'vertex generateContent');
+    const text = extractGeminiNativeText(data);
+    await safeRecordApiUsage(conf, messages, data, text, 'vertex-gemini');
+    return text;
   }
 
   async function callVertexClaudeNative(conf, messages, runtime, token) {
@@ -8279,7 +9078,10 @@
       const text = await readResponseTextWithTimeout(res, conf.timeoutMs, 'vertex rawPredict').catch(() => '');
       throw new Error(`Vertex Claude ${res.status}: ${text.slice(0, 300)}`);
     }
-    return extractAnthropicText(await readResponseJsonWithTimeout(res, conf.timeoutMs, 'vertex rawPredict'));
+    const data = await readResponseJsonWithTimeout(res, conf.timeoutMs, 'vertex rawPredict');
+    const text = extractAnthropicText(data);
+    await safeRecordApiUsage(conf, messages, data, text, 'vertex-claude');
+    return text;
   }
 
   function applyExtraBody(payload, conf) {
@@ -9480,6 +10282,400 @@
     return Math.ceil(Number(chars || 0) / 3);
   }
 
+  function normalizeUsageTokenNumber(value) {
+    const n = Number(value);
+    return Number.isFinite(n) && n > 0 ? Math.round(n) : 0;
+  }
+
+  function extractOpenAIUsage(data) {
+    const usage = data?.usage || {};
+    return {
+      inputTokens: normalizeUsageTokenNumber(usage.prompt_tokens ?? usage.input_tokens),
+      outputTokens: normalizeUsageTokenNumber(usage.completion_tokens ?? usage.output_tokens),
+      totalTokens: normalizeUsageTokenNumber(usage.total_tokens),
+      cachedTokens: normalizeUsageTokenNumber(
+        usage.prompt_tokens_details?.cached_tokens
+        ?? usage.input_tokens_details?.cached_tokens
+        ?? usage.input_token_details?.cache_read
+      ),
+      estimated: false,
+    };
+  }
+
+  function extractAnthropicUsage(data) {
+    const usage = data?.usage || {};
+    return {
+      inputTokens: normalizeUsageTokenNumber(usage.input_tokens),
+      outputTokens: normalizeUsageTokenNumber(usage.output_tokens),
+      totalTokens: normalizeUsageTokenNumber(usage.input_tokens) + normalizeUsageTokenNumber(usage.output_tokens),
+      cachedTokens: normalizeUsageTokenNumber(usage.cache_read_input_tokens),
+      cacheWriteTokens: normalizeUsageTokenNumber(usage.cache_creation_input_tokens),
+      estimated: false,
+    };
+  }
+
+  function extractVertexGeminiUsage(data) {
+    const usage = data?.usageMetadata || data?.usage || {};
+    return {
+      inputTokens: normalizeUsageTokenNumber(usage.promptTokenCount ?? usage.prompt_tokens ?? usage.input_tokens),
+      outputTokens: normalizeUsageTokenNumber(usage.candidatesTokenCount ?? usage.completion_tokens ?? usage.output_tokens),
+      totalTokens: normalizeUsageTokenNumber(usage.totalTokenCount ?? usage.total_tokens),
+      cachedTokens: normalizeUsageTokenNumber(usage.cachedContentTokenCount ?? usage.cached_tokens),
+      estimated: false,
+    };
+  }
+
+  function extractUsageFromResponse(data, kind) {
+    const label = String(kind || '').toLowerCase();
+    if (label.includes('anthropic') || label.includes('claude')) return extractAnthropicUsage(data);
+    if (label.includes('vertex-gemini') || label.includes('gemini')) return extractVertexGeminiUsage(data);
+    return extractOpenAIUsage(data);
+  }
+
+  function completeUsageWithEstimate(usage, messages, text) {
+    const out = { ...(usage || {}) };
+    const input = normalizeUsageTokenNumber(out.inputTokens);
+    const output = normalizeUsageTokenNumber(out.outputTokens);
+    const total = normalizeUsageTokenNumber(out.totalTokens);
+    if (total || input || output) {
+      out.inputTokens = input;
+      out.outputTokens = output;
+      out.totalTokens = total || input + output;
+      out.cachedTokens = normalizeUsageTokenNumber(out.cachedTokens);
+      out.cacheWriteTokens = normalizeUsageTokenNumber(out.cacheWriteTokens);
+      out.estimated = out.estimated === true;
+      return out;
+    }
+    const estimatedInput = estimateMessagesTokens(messages);
+    const estimatedOutput = estimateTokensApprox(text);
+    return {
+      inputTokens: estimatedInput,
+      outputTokens: estimatedOutput,
+      totalTokens: estimatedInput + estimatedOutput,
+      cachedTokens: 0,
+      cacheWriteTokens: 0,
+      estimated: true,
+    };
+  }
+
+  function numberOrNull(value) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  function extractProviderReportedCost(data) {
+    const candidates = [
+      data?.usage?.cost,
+      data?.usage?.cost_usd,
+      data?.usage?.total_cost,
+      data?.usage?.total_cost_usd,
+      data?.cost,
+      data?.cost_usd,
+      data?.response_metadata?.cost,
+      data?.response_metadata?.cost_usd,
+    ];
+    for (const item of candidates) {
+      const n = numberOrNull(item);
+      if (n !== null && n >= 0) return n;
+    }
+    return null;
+  }
+
+  function normalizeUsageModelName(model) {
+    return String(model || '').trim().replace(/^models\//, '').replace(/^google\//, '').replace(/^anthropic\//, '');
+  }
+
+  function resolveUsagePrice(provider, model) {
+    const providerKey = normalizeProvider(provider);
+    const modelName = normalizeUsageModelName(model);
+    const entries = USAGE_PRICE_TABLE[providerKey] || [];
+    for (const entry of entries) {
+      try {
+        if (entry?.match?.test?.(modelName)) return entry;
+      } catch (_) {}
+    }
+    if (providerKey === 'openrouter' || providerKey === 'vercel-ai-gateway') {
+      const routed = modelName.split('/').filter(Boolean);
+      const routedProvider = normalizeProvider(routed.length > 1 ? routed[0] : '');
+      const routedModel = routed.length > 1 ? routed.slice(1).join('/') : modelName;
+      if (routedProvider && routedProvider !== providerKey) return resolveUsagePrice(routedProvider, routedModel);
+    }
+    return null;
+  }
+
+  function estimateUsageCost(provider, model, usage, data) {
+    const reported = extractProviderReportedCost(data);
+    if (reported !== null) return { usd: reported, source: 'provider-reported', priceKnown: true };
+    const price = resolveUsagePrice(provider, model);
+    if (!price) return { usd: null, source: 'unknown', priceKnown: false };
+    const input = normalizeUsageTokenNumber(usage?.inputTokens);
+    const output = normalizeUsageTokenNumber(usage?.outputTokens);
+    const usd = ((input * Number(price.inputPerM || 0)) + (output * Number(price.outputPerM || 0))) / 1000000;
+    return {
+      usd: Number.isFinite(usd) ? usd : null,
+      source: price.label || 'builtin-estimate',
+      priceKnown: true,
+      inputPerM: Number(price.inputPerM || 0),
+      outputPerM: Number(price.outputPerM || 0),
+    };
+  }
+
+  function emptyUsageLedger() {
+    return {
+      version: VERSION,
+      updatedAt: '',
+      events: [],
+    };
+  }
+
+  function normalizeUsageEvent(event) {
+    if (!event || typeof event !== 'object') return null;
+    const totalTokens = normalizeUsageTokenNumber(event.totalTokens);
+    return {
+      id: cleanString(event.id, `usage-${hashString(safeJsonStringify(event)).slice(0, 12)}`),
+      at: cleanString(event.at, nowIso()),
+      provider: normalizeProvider(event.provider || ''),
+      providerId: cleanString(event.providerId, ''),
+      model: cleanString(event.model, ''),
+      endpointKind: cleanString(event.endpointKind, ''),
+      agentId: cleanString(event.agentId, ''),
+      agentName: cleanString(event.agentName, ''),
+      agentPhase: cleanString(event.agentPhase, ''),
+      inputTokens: normalizeUsageTokenNumber(event.inputTokens),
+      outputTokens: normalizeUsageTokenNumber(event.outputTokens),
+      totalTokens,
+      cachedTokens: normalizeUsageTokenNumber(event.cachedTokens),
+      cacheWriteTokens: normalizeUsageTokenNumber(event.cacheWriteTokens),
+      estimated: event.estimated === true,
+      costUsd: event.costUsd === null || event.costUsd === undefined ? null : numberOrNull(event.costUsd),
+      costSource: cleanString(event.costSource, ''),
+      priceKnown: event.priceKnown === true,
+    };
+  }
+
+  function normalizeUsageLedger(ledger) {
+    const events = Array.isArray(ledger?.events)
+      ? ledger.events.map(normalizeUsageEvent).filter(Boolean)
+      : [];
+    events.sort((a, b) => String(b.at || '').localeCompare(String(a.at || '')));
+    return {
+      version: cleanString(ledger?.version, VERSION),
+      updatedAt: cleanString(ledger?.updatedAt, ''),
+      events: events.slice(0, MAX_USAGE_EVENTS),
+    };
+  }
+
+  async function loadUsageLedger() {
+    return normalizeUsageLedger(await Storage.get(STORAGE.usage, emptyUsageLedger()));
+  }
+
+  async function saveUsageLedger(ledger, conf = null) {
+    const normalized = normalizeUsageLedger(ledger);
+    const max = parseNumber(conf?.usageLogMax, DEFAULT_CONFIG.usageLogMax, 40, 2000);
+    normalized.events = normalized.events.slice(0, max);
+    normalized.updatedAt = nowIso();
+    normalized.version = VERSION;
+    await Storage.set(STORAGE.usage, normalized);
+    return normalized;
+  }
+
+  function normalizeQuotaSnapshot(snapshot) {
+    if (!snapshot || typeof snapshot !== 'object') return null;
+    const providerId = cleanString(snapshot.providerId, '');
+    if (!providerId) return null;
+    return {
+      provider: normalizeProvider(snapshot.provider || ''),
+      providerId,
+      checkedAt: cleanString(snapshot.checkedAt, nowIso()),
+      billingKind: cleanString(snapshot.billingKind, 'manual'),
+      unit: cleanString(snapshot.unit, ''),
+      planName: cleanString(snapshot.planName, ''),
+      limit: snapshot.limit === null || snapshot.limit === undefined ? null : numberOrNull(snapshot.limit),
+      used: snapshot.used === null || snapshot.used === undefined ? null : numberOrNull(snapshot.used),
+      remaining: snapshot.remaining === null || snapshot.remaining === undefined ? null : numberOrNull(snapshot.remaining),
+      resetAt: cleanString(snapshot.resetAt, ''),
+      source: cleanString(snapshot.source, 'manual'),
+      message: cleanString(snapshot.message, ''),
+      details: snapshot.details && typeof snapshot.details === 'object' ? snapshot.details : null,
+    };
+  }
+
+  function emptyQuotaSnapshots() {
+    return { version: VERSION, updatedAt: '', providers: {} };
+  }
+
+  function normalizeQuotaSnapshots(value) {
+    const providers = {};
+    Object.entries(value?.providers || {}).forEach(([key, snapshot]) => {
+      const normalized = normalizeQuotaSnapshot({ providerId: key, ...(snapshot || {}) });
+      if (normalized) providers[normalized.providerId] = normalized;
+    });
+    return {
+      version: cleanString(value?.version, VERSION),
+      updatedAt: cleanString(value?.updatedAt, ''),
+      providers,
+    };
+  }
+
+  async function loadQuotaSnapshots() {
+    return normalizeQuotaSnapshots(await Storage.get(STORAGE.quota, emptyQuotaSnapshots()));
+  }
+
+  async function saveQuotaSnapshot(snapshot) {
+    const normalized = normalizeQuotaSnapshot(snapshot);
+    if (!normalized) return null;
+    const store = await loadQuotaSnapshots();
+    store.providers[normalized.providerId] = normalized;
+    store.updatedAt = nowIso();
+    store.version = VERSION;
+    await Storage.set(STORAGE.quota, store);
+    return normalized;
+  }
+
+  function usageEventId() {
+    return `usage-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  async function safeRecordApiUsage(conf, messages, data, text, endpointKind = 'chat') {
+    if (conf?.usageTrackingEnabled === false) return null;
+    try {
+      const usage = completeUsageWithEstimate(extractUsageFromResponse(data, endpointKind), messages, text);
+      const cost = estimateUsageCost(conf?.provider, conf?.model, usage, data);
+      const event = normalizeUsageEvent({
+        id: usageEventId(),
+        at: nowIso(),
+        provider: conf?.provider || '',
+        providerId: conf?.providerId || conf?.activeProviderId || '',
+        model: conf?.model || '',
+        endpointKind,
+        agentId: conf?.agentId || '',
+        agentName: conf?.agentName || '',
+        agentPhase: conf?.agentPhase || '',
+        inputTokens: usage.inputTokens,
+        outputTokens: usage.outputTokens,
+        totalTokens: usage.totalTokens,
+        cachedTokens: usage.cachedTokens,
+        cacheWriteTokens: usage.cacheWriteTokens,
+        estimated: usage.estimated === true,
+        costUsd: cost.usd,
+        costSource: cost.source,
+        priceKnown: cost.priceKnown,
+      });
+      if (!event) return null;
+      const ledger = await loadUsageLedger();
+      ledger.events = [event].concat(ledger.events || []);
+      await saveUsageLedger(ledger, conf);
+      return event;
+    } catch (err) {
+      log('usage ledger save failed', err?.message || err);
+      return null;
+    }
+  }
+
+  function usageDateParts(value) {
+    const date = value ? new Date(value) : new Date();
+    if (!Number.isFinite(date.getTime())) return { day: '', month: '' };
+    return {
+      day: date.toISOString().slice(0, 10),
+      month: date.toISOString().slice(0, 7),
+    };
+  }
+
+  function emptyUsageBucket(id = '') {
+    return {
+      id,
+      events: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+      estimatedEvents: 0,
+      costUsd: 0,
+      unknownCostEvents: 0,
+      models: {},
+      agents: {},
+      latestAt: '',
+    };
+  }
+
+  function addUsageToBucket(bucket, event) {
+    bucket.events += 1;
+    bucket.inputTokens += normalizeUsageTokenNumber(event.inputTokens);
+    bucket.outputTokens += normalizeUsageTokenNumber(event.outputTokens);
+    bucket.totalTokens += normalizeUsageTokenNumber(event.totalTokens);
+    if (event.estimated) bucket.estimatedEvents += 1;
+    if (Number.isFinite(Number(event.costUsd))) bucket.costUsd += Number(event.costUsd);
+    else bucket.unknownCostEvents += 1;
+    if (!bucket.latestAt || String(event.at || '').localeCompare(bucket.latestAt) > 0) bucket.latestAt = event.at || '';
+    const modelKey = event.model || '(model)';
+    bucket.models[modelKey] = bucket.models[modelKey] || emptyUsageBucket(modelKey);
+    if (bucket.models[modelKey] !== bucket) addUsageToBucketFlat(bucket.models[modelKey], event);
+    const agentKey = event.agentName || event.agentId || '(manual/test)';
+    bucket.agents[agentKey] = bucket.agents[agentKey] || emptyUsageBucket(agentKey);
+    addUsageToBucketFlat(bucket.agents[agentKey], event);
+  }
+
+  function addUsageToBucketFlat(bucket, event) {
+    bucket.events += 1;
+    bucket.inputTokens += normalizeUsageTokenNumber(event.inputTokens);
+    bucket.outputTokens += normalizeUsageTokenNumber(event.outputTokens);
+    bucket.totalTokens += normalizeUsageTokenNumber(event.totalTokens);
+    if (event.estimated) bucket.estimatedEvents += 1;
+    if (Number.isFinite(Number(event.costUsd))) bucket.costUsd += Number(event.costUsd);
+    else bucket.unknownCostEvents += 1;
+    if (!bucket.latestAt || String(event.at || '').localeCompare(bucket.latestAt) > 0) bucket.latestAt = event.at || '';
+  }
+
+  function summarizeUsageLedger(ledger, conf = null) {
+    const normalized = normalizeUsageLedger(ledger);
+    const today = usageDateParts().day;
+    const thisMonth = usageDateParts().month;
+    const summary = {
+      total: emptyUsageBucket('total'),
+      today: emptyUsageBucket(today),
+      month: emptyUsageBucket(thisMonth),
+      providers: {},
+      providersMonth: {},
+      providerEvents: {},
+      recent: normalized.events.slice(0, 40),
+      updatedAt: normalized.updatedAt,
+    };
+    normalized.events.forEach(event => {
+      addUsageToBucket(summary.total, event);
+      const parts = usageDateParts(event.at);
+      if (parts.day === today) addUsageToBucket(summary.today, event);
+      if (parts.month === thisMonth) addUsageToBucket(summary.month, event);
+      const providerKey = event.providerId || event.provider || 'provider';
+      summary.providerEvents[providerKey] = summary.providerEvents[providerKey] || [];
+      summary.providerEvents[providerKey].push(event);
+      summary.providers[providerKey] = summary.providers[providerKey] || emptyUsageBucket(providerKey);
+      summary.providers[providerKey].provider = event.provider || '';
+      summary.providers[providerKey].providerId = event.providerId || '';
+      addUsageToBucket(summary.providers[providerKey], event);
+      if (parts.month === thisMonth) {
+        summary.providersMonth[providerKey] = summary.providersMonth[providerKey] || emptyUsageBucket(providerKey);
+        summary.providersMonth[providerKey].provider = event.provider || '';
+        summary.providersMonth[providerKey].providerId = event.providerId || '';
+        addUsageToBucket(summary.providersMonth[providerKey], event);
+      }
+    });
+    (conf?.providerRegistry || []).forEach(provider => {
+      const key = provider.id || provider.provider || 'provider';
+      summary.providers[key] = summary.providers[key] || emptyUsageBucket(key);
+      summary.providers[key].provider = provider.provider || summary.providers[key].provider || '';
+      summary.providers[key].providerId = provider.id || summary.providers[key].providerId || '';
+      summary.providers[key].providerName = provider.name || provider.label || provider.id || '';
+      summary.providers[key].registered = true;
+      summary.providers[key].hasApiKey = Boolean(provider.apiKey);
+      summary.providersMonth[key] = summary.providersMonth[key] || emptyUsageBucket(key);
+      summary.providersMonth[key].provider = provider.provider || summary.providersMonth[key].provider || '';
+      summary.providersMonth[key].providerId = provider.id || summary.providersMonth[key].providerId || '';
+      summary.providersMonth[key].providerName = provider.name || provider.label || provider.id || '';
+      summary.providersMonth[key].registered = true;
+      summary.providersMonth[key].hasApiKey = Boolean(provider.apiKey);
+    });
+    return summary;
+  }
+
   async function buildMainInjection(state, context, notes, budget, conf = null) {
     if (conf?.recallTraceEnabled === false) state._suppressRecallTrace = true;
     const briefing = await buildMainBriefing(state, context, notes, budget || 4200, conf);
@@ -10027,6 +11223,7 @@
     }
     const bootstrapSync = syncCurrentCharacterBootstrap(state, context);
     const canonicalSync = syncCanonicalLoreLedger(state, context.canonicalSources);
+    const identitySync = syncCanonicalIdentityState(state, context.canonicalSources);
     const cbsSync = syncCbsDiagnostics(state, context, conf);
     const longMemorySync = syncChatLongMemoryLedger(state, context.messages, conf.contextWindow, conf.coldStartChunkSize);
     const memoryRecoverySync = runMemoryGardenRecovery(state, context.messages, conf, sessionSync);
@@ -10055,6 +11252,7 @@
       sessionRewindSync,
       bootstrapSync,
       canonicalSync,
+      identitySync,
       cbsSync,
       longMemorySync,
       memoryRecoverySync,
@@ -10124,6 +11322,7 @@
     }
     const bootstrapSync = syncCurrentCharacterBootstrap(state, context);
     const canonicalSync = syncCanonicalLoreLedger(state, context.canonicalSources);
+    const identitySync = syncCanonicalIdentityState(state, context.canonicalSources);
     const cbsSync = syncCbsDiagnostics(state, context, conf);
     const notes = pendingRun?.notes || Runtime.lastRun?.notes || [];
     let postContext = contextWithAssistantOutput(context, finalContent);
@@ -10168,6 +11367,7 @@
       sessionRewindSync,
       bootstrapSync,
       canonicalSync,
+      identitySync,
       cbsSync,
       longMemorySync,
       memoryRecoverySync,
@@ -10225,6 +11425,7 @@
       if (doc.documentElement?.style) {
         doc.documentElement.style.margin = '0';
         doc.documentElement.style.width = '100%';
+        doc.documentElement.style.height = '100%';
         doc.documentElement.style.minHeight = '100%';
         doc.documentElement.style.background = '#fff8f1';
         doc.documentElement.style.overflow = 'auto';
@@ -10232,6 +11433,7 @@
       if (doc.body?.style) {
         doc.body.style.margin = '0';
         doc.body.style.width = '100%';
+        doc.body.style.height = 'auto';
         doc.body.style.minHeight = '100%';
         doc.body.style.background = '#fff8f1';
         doc.body.style.overflow = 'auto';
@@ -10350,8 +11552,10 @@
       const runLogs = context.noSession ? [] : await Storage.get(STORAGE.runLog(context.scope), []);
       const snapshots = context.noSession ? [] : await loadStateSnapshots(context.scope);
       const backup = context.noSession ? null : await Storage.get(STORAGE.backup(context.scope), null);
+      const usageLedger = await loadUsageLedger();
+      const quotaSnapshots = await loadQuotaSnapshots();
       installDebugApi(conf, context, state, snapshots, backup);
-      await paintDashboardHtml(buildDashboardHtml(conf, context, state, runLogs, snapshots, backup));
+      await paintDashboardHtml(buildDashboardHtml(conf, context, state, runLogs, snapshots, backup, usageLedger, quotaSnapshots));
       setupDashboardHandlers(conf, context, state);
     } catch (err) {
       Runtime.lastError = err?.message || String(err || 'dashboard open failed');
@@ -10363,7 +11567,7 @@
     }
   }
 
-  function buildDashboardHtml(conf, context, state, runLogs, snapshots = [], backup = null) {
+  function buildDashboardHtml(conf, context, state, runLogs, snapshots = [], backup = null, usageLedger = null, quotaSnapshots = null) {
     const logs = Array.isArray(runLogs) ? runLogs : [];
     return `
       <style>${dashboardStyles()}</style>
@@ -10392,6 +11596,7 @@
           <section class="et-view" data-view="agents">${renderAgentPanel(conf)}</section>
           <section class="et-view" data-view="references">${renderReferencePanel(conf, context)}</section>
           <section class="et-view" data-view="state">${renderStatePanel(conf, context, state, snapshots, backup)}</section>
+          <section class="et-view" data-view="usage">${renderUsagePanel(conf, usageLedger, quotaSnapshots)}</section>
           <section class="et-view" data-view="runs">${renderRunLogPanel(logs)}</section>
         </main>
       </div>`;
@@ -11355,6 +12560,246 @@
     }).join('')}</div>${list.length > 24 ? `<details class="et-full"><summary>전체보기</summary><pre>${escHtml(safeJsonStringify(list))}</pre></details>` : ''}`;
   }
 
+  function renderUsagePanel(conf, usageLedger = null, quotaSnapshots = null) {
+    const summary = summarizeUsageLedger(usageLedger || emptyUsageLedger(), conf);
+    const quotas = normalizeQuotaSnapshots(quotaSnapshots || emptyQuotaSnapshots());
+    return `
+      <section class="et-panel">
+        <div class="et-ops-head">
+          <div>
+            <h2>사용량</h2>
+            <div class="et-note">에로스 타워가 직접 호출한 에이전트/임베딩 API의 usage를 기록합니다. Provider 응답 cost가 있으면 그 값을 우선하고, 없으면 내장 가격표 추정 또는 미확인으로 표시합니다.</div>
+          </div>
+          <div class="et-actions et-actions-inline">
+            <button id="et-reset-usage" type="button">사용량 초기화</button>
+          </div>
+        </div>
+        <div class="et-grid-3" style="margin-top:14px">
+          ${statBox('이번 달 토큰', formatUsageTokens(summary.month.totalTokens))}
+          ${statBox('이번 달 비용', formatUsageBucketCost(summary.month))}
+          ${statBox('오늘 토큰', formatUsageTokens(summary.today.totalTokens))}
+          ${statBox('오늘 비용', formatUsageBucketCost(summary.today))}
+          ${statBox('전체 호출', summary.total.events)}
+          ${statBox('추정 이벤트', summary.total.estimatedEvents)}
+        </div>
+        <div id="et-usage-status" class="et-status" data-kind="info">${escHtml(summary.updatedAt ? `마지막 갱신 ${formatDateShort(summary.updatedAt)}` : '')}</div>
+      </section>
+      <section class="et-panel" style="margin-top:14px">
+        <h2>Provider별 사용량</h2>
+        ${renderUsageProviderTable(conf, summary, quotas)}
+      </section>
+      <section class="et-panel" style="margin-top:14px">
+        <h2>최근 API 이벤트</h2>
+        ${renderUsageRecentEvents(summary.recent)}
+      </section>`;
+  }
+
+  function formatUsageTokens(value) {
+    const n = normalizeUsageTokenNumber(value);
+    return n.toLocaleString('ko-KR');
+  }
+
+  function formatUsageUsd(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return '미확인';
+    if (n === 0) return '$0.0000';
+    if (n < 0.0001) return `<$0.0001`;
+    return `$${n.toFixed(n < 0.01 ? 5 : 4)}`;
+  }
+
+  function formatUsageBucketCost(bucket) {
+    const known = formatUsageUsd(bucket?.costUsd || 0);
+    const unknown = Number(bucket?.unknownCostEvents || 0);
+    if (!bucket?.events) return '$0.0000';
+    return unknown ? `${known} + 미확인 ${unknown}` : known;
+  }
+
+  function usageSourceLabel(event) {
+    if (!event) return '-';
+    const source = event.costSource || 'unknown';
+    const estimated = event.estimated ? ' / 토큰 추정' : '';
+    if (source === 'provider-reported') return `Provider 보고${estimated}`;
+    if (source === 'unknown') return `가격 미확인${estimated}`;
+    return `내장 단가 추정${estimated}`;
+  }
+
+  function isLocalProviderId(provider) {
+    const id = String(provider?.id || provider?.providerId || provider?.preset || '').toLowerCase();
+    const baseUrl = String(provider?.baseUrl || '').toLowerCase();
+    return id.includes('ollama-local') || id === 'lmstudio' || id === 'vllm' || /127\.0\.0\.1|localhost/.test(baseUrl);
+  }
+
+  function isOllamaCloudProvider(provider) {
+    const id = String(provider?.id || provider?.providerId || provider?.preset || '').toLowerCase();
+    const baseUrl = String(provider?.baseUrl || '').toLowerCase();
+    return id.includes('ollama-cloud') || baseUrl.includes('ollama.com');
+  }
+
+  function normalizeUsageProviderId(value) {
+    return String(value || '').trim();
+  }
+
+  function providerRuntimeApiKey(provider, conf = null) {
+    if (!provider) return '';
+    return provider.apiKey || conf?.providerKeys?.[normalizeProvider(provider.provider)] || '';
+  }
+
+  function providerHasUsableConnection(provider, conf = null) {
+    if (!provider) return false;
+    if (providerRuntimeApiKey(provider, conf)) return true;
+    if (isUserCustomProvider(provider) && (provider.baseUrl || provider.modelsPath || provider.chatPath)) return true;
+    return false;
+  }
+
+  function collectConfiguredUsageProviderIds(conf, summary) {
+    const ids = new Set();
+    const agents = pipelineAgents(conf).filter(agent => agent?.enabled !== false);
+    agents.forEach(agent => {
+      const id = normalizeUsageProviderId(agent.providerId || conf.activeProviderId);
+      if (id) ids.add(id);
+    });
+    if (conf?.embeddingEnabled) {
+      const id = normalizeUsageProviderId(conf.embeddingProviderId || conf.activeProviderId);
+      if (id) ids.add(id);
+    }
+    Object.entries(summary?.providers || {}).forEach(([id, bucket]) => {
+      if (Number(bucket?.events || 0) > 0) ids.add(id);
+    });
+    return ids;
+  }
+
+  function isProviderVisibleForUsage(provider, key, conf, summary, configuredIds) {
+    const id = normalizeUsageProviderId(key || provider?.id || provider?.providerId || '');
+    const bucket = summary?.providers?.[id] || null;
+    if (Number(bucket?.events || 0) > 0) return true;
+    if (providerHasUsableConnection(provider, conf)) return true;
+    if (configuredIds?.has?.(id)) {
+      if (providerRuntimeApiKey(provider, conf) || isLocalProviderId(provider)) return true;
+      if (isUserCustomProvider(provider) && (provider?.baseUrl || provider?.modelsPath || provider?.chatPath)) return true;
+    }
+    return false;
+  }
+
+  function usageWindowBucket(events, windowMs) {
+    const cutoff = Date.now() - Number(windowMs || 0);
+    const bucket = emptyUsageBucket('window');
+    (Array.isArray(events) ? events : []).forEach(event => {
+      const at = new Date(event.at || 0).getTime();
+      if (!Number.isFinite(at) || at < cutoff) return;
+      addUsageToBucketFlat(bucket, event);
+    });
+    return bucket;
+  }
+
+  function formatOllamaCloudAllowanceLine(events) {
+    const session = usageWindowBucket(events, 5 * 60 * 60 * 1000);
+    const weekly = usageWindowBucket(events, 7 * 24 * 60 * 60 * 1000);
+    return `로컬 누적: 최근 5시간 ${session.events}회/${formatUsageTokens(session.totalTokens)} tokens · 최근 7일 ${weekly.events}회/${formatUsageTokens(weekly.totalTokens)} tokens`;
+  }
+
+  function providerAllowanceLine(provider, key, summary, quota = null) {
+    const events = summary?.providerEvents?.[key] || [];
+    if (isOllamaCloudProvider(provider)) return formatOllamaCloudAllowanceLine(events);
+    if (quota) return formatQuotaSnapshotLine(quota);
+    return '';
+  }
+
+  function quotaSupportInfo(provider) {
+    const providerKey = normalizeProvider(provider?.provider || provider?.id || '');
+    if (providerKey === 'ollama' && isOllamaCloudProvider(provider)) return { checkable: false, label: '5시간/7일 리셋 · 로컬 누적' };
+    if (providerKey === 'openrouter') return { checkable: true, label: '크레딧 조회 가능' };
+    if (providerKey === 'deepseek') return { checkable: true, label: '잔액 조회 가능' };
+    if (providerKey === 'nanogpt') return { checkable: true, label: '잔액/구독 사용량 조회 가능' };
+    if (providerKey === 'copilot') return { checkable: false, label: 'GitHub org/enterprise metrics 필요' };
+    if (providerKey === 'ollama' || providerKey === 'lmstudio' || providerKey === 'vllm') return { checkable: false, label: '로컬/비과금' };
+    if (providerKey === 'openai' || providerKey === 'claude' || providerKey === 'vertex-ai') {
+      return { checkable: false, label: 'Admin/IAM 별도 필요' };
+    }
+    return { checkable: false, label: '표준 조회 없음' };
+  }
+
+  function renderUsageProviderTable(conf, summary, quotaSnapshots = null) {
+    const registry = Array.isArray(conf?.providerRegistry) ? conf.providerRegistry : [];
+    const configuredIds = collectConfiguredUsageProviderIds(conf, summary);
+    const keys = uniqueStrings(registry.map(item => item.id).concat(Object.keys(summary.providers || {})))
+      .filter(key => isProviderVisibleForUsage(findProviderEntry(registry, key), key, conf, summary, configuredIds));
+    if (!keys.length) return emptyState('사용량을 표시할 Provider가 없습니다. API Key가 저장됐거나, 에이전트/임베딩에서 실제 선택됐거나, 사용 이력이 생긴 Provider만 여기에 표시됩니다.');
+    const rows = keys.map(key => {
+      const provider = findProviderEntry(registry, key) || null;
+      const total = summary.providers[key] || emptyUsageBucket(key);
+      const month = summary.providersMonth[key] || emptyUsageBucket(key);
+      const providerKey = normalizeProvider(provider?.provider || total.provider || '');
+      const support = quotaSupportInfo(provider || total);
+      const hasKey = Boolean(providerRuntimeApiKey(provider, conf));
+      const quota = quotaSnapshots?.providers?.[key] || null;
+      const allowanceLine = providerAllowanceLine(provider || total, key, summary, quota);
+      const quotaButton = support.checkable
+        ? `<button type="button" data-usage-quota-provider="${escHtml(key)}" ${hasKey ? '' : 'disabled'}>할당량 체크</button>`
+        : '';
+      const status = [
+        provider ? '등록됨' : '기록만 있음',
+        hasKey ? 'API Key 있음' : providerKey && !['ollama', 'lmstudio', 'vllm'].includes(providerKey) ? 'API Key 없음' : '',
+      ].filter(Boolean).join(' / ');
+      return `
+        <tr>
+          <td>
+            <b>${escHtml(provider?.name || total.providerName || key)}</b>
+            <div class="et-note">${escHtml(providerKey || '-')} / ${escHtml(key)}</div>
+          </td>
+          <td>${escHtml(status || '-')}</td>
+          <td>${formatUsageTokens(month.totalTokens)}<div class="et-note">입력 ${formatUsageTokens(month.inputTokens)} / 출력 ${formatUsageTokens(month.outputTokens)}</div></td>
+          <td>${escHtml(formatUsageBucketCost(month))}</td>
+          <td>
+            <div class="et-note">${escHtml(support.label)}</div>
+            ${allowanceLine ? `<div class="et-note">${escHtml(allowanceLine)}</div>` : ''}
+            ${quotaButton}
+          </td>
+        </tr>`;
+    }).join('');
+    return `
+      <table class="et-table">
+        <thead><tr><th>Provider</th><th>상태</th><th>이번 달 토큰</th><th>이번 달 비용</th><th>할당량</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div class="et-note" style="margin-top:10px">OpenAI/Anthropic/Vertex의 조직 사용량/비용 API는 별도 Admin 또는 IAM 권한이 필요해서 기본 API Key만으로는 조회하지 않습니다.</div>`;
+  }
+
+  function formatQuotaNumber(value, unit = '') {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return '-';
+    if (unit === 'usd') return formatUsageUsd(n);
+    return `${n.toLocaleString('ko-KR')}${unit && !['credits'].includes(unit) ? ` ${unit}` : ''}`;
+  }
+
+  function formatQuotaSnapshotLine(snapshot) {
+    if (!snapshot) return '';
+    const parts = [];
+    if (snapshot.remaining !== null && snapshot.remaining !== undefined) parts.push(`남음 ${formatQuotaNumber(snapshot.remaining, snapshot.unit)}`);
+    if (snapshot.used !== null && snapshot.used !== undefined) parts.push(`사용 ${formatQuotaNumber(snapshot.used, snapshot.unit)}`);
+    if (snapshot.limit !== null && snapshot.limit !== undefined) parts.push(`한도 ${formatQuotaNumber(snapshot.limit, snapshot.unit)}`);
+    if (snapshot.resetAt) parts.push(`리셋 ${formatDateShort(snapshot.resetAt)}`);
+    if (!parts.length && snapshot.message) parts.push(snapshot.message);
+    return `${parts.join(' / ')}${snapshot.checkedAt ? ` · ${formatDateShort(snapshot.checkedAt)}` : ''}`;
+  }
+
+  function renderUsageRecentEvents(events) {
+    const list = Array.isArray(events) ? events : [];
+    if (!list.length) return emptyState('아직 저장된 API 사용량이 없습니다.');
+    return `
+      <table class="et-table">
+        <thead><tr><th>시간</th><th>Provider / 모델</th><th>Agent</th><th>토큰</th><th>비용</th><th>근거</th></tr></thead>
+        <tbody>${list.slice(0, 24).map(event => `
+          <tr>
+            <td>${escHtml(formatDateShort(event.at))}</td>
+            <td>${escHtml(event.providerId || event.provider || '-')}<div class="et-note">${escHtml(event.model || '-')}</div></td>
+            <td>${escHtml(event.agentName || event.agentId || event.endpointKind || '-')}</td>
+            <td>${formatUsageTokens(event.totalTokens)}<div class="et-note">입력 ${formatUsageTokens(event.inputTokens)} / 출력 ${formatUsageTokens(event.outputTokens)}</div></td>
+            <td>${escHtml(formatUsageUsd(event.costUsd))}</td>
+            <td>${escHtml(usageSourceLabel(event))}</td>
+          </tr>`).join('')}</tbody>
+      </table>`;
+  }
+
   function renderRunLogPanel(logs) {
     if (!logs.length) return `<section class="et-panel">${emptyState('아직 저장된 Run Log가 없습니다.')}</section>`;
     return `
@@ -11592,6 +13037,7 @@
       { value: 'agents', label: '에이전트' },
       { value: 'references', label: '참고 자료' },
       { value: 'state', label: '관리상태' },
+      { value: 'usage', label: '사용량' },
       { value: 'runs', label: 'Run Log' },
     ];
     return `<div class="et-menu-anchor"><button type="button" id="et-dashboard-menu-toggle" class="et-menu-toggle" aria-haspopup="menu" aria-expanded="false">메뉴</button><nav id="et-dashboard-menu-popover" class="et-dashboard-menu" data-open="false" aria-label="에로스 타워 메뉴">${options.map(option => `<button type="button" class="et-menu-button" data-tab-target="${escHtml(option.value)}" data-dashboard-menu-button="${escHtml(option.value)}" data-active="${option.value === active ? 'true' : 'false'}">${escHtml(option.label)}</button>`).join('')}</nav></div>`;
@@ -11857,6 +13303,166 @@
     return normalizeModelOptions(models, conf.model, conf.providerPreset);
   }
 
+  function quotaProviderRuntime(provider, conf) {
+    return {
+      ...conf,
+      ...provider,
+      provider: normalizeProvider(provider?.provider || conf?.provider),
+      providerId: provider?.id || conf?.activeProviderId || '',
+      baseUrl: normalizeUrl(provider?.baseUrl || conf?.baseUrl || ''),
+      apiKey: provider?.apiKey || conf?.providerKeys?.[provider?.provider] || conf?.apiKey || '',
+      extraHeaders: provider?.extraHeaders || conf?.extraHeaders || '',
+      timeoutMs: conf?.timeoutMs || DEFAULT_CONFIG.timeoutMs,
+    };
+  }
+
+  async function readQuotaJson(runtime, url, label) {
+    const res = await fetchWithTimeout(url, {
+      method: 'GET',
+      headers: await buildApiHeaders(runtime, false),
+    }, runtime.timeoutMs, label);
+    if (!res.ok) {
+      const text = await readResponseTextWithTimeout(res, runtime.timeoutMs, label).catch(() => '');
+      throw new Error(`${label} ${res.status}: ${text.slice(0, 220)}`);
+    }
+    return readResponseJsonWithTimeout(res, runtime.timeoutMs, label);
+  }
+
+  function originFromApiBase(baseUrl, fallback = '') {
+    const raw = normalizeUrl(baseUrl || fallback || '');
+    if (!raw) return '';
+    try {
+      const url = new URL(raw);
+      return `${url.protocol}//${url.host}`;
+    } catch (_) {
+      return raw.replace(/\/api(?:\/v\d+(?:\w+)?)?$/i, '');
+    }
+  }
+
+  async function readQuotaJsonWith(runtime, url, label, options = {}) {
+    const res = await fetchWithTimeout(url, {
+      method: options.method || 'GET',
+      headers: options.headers || await buildApiHeaders(runtime, false),
+      body: options.body,
+    }, runtime.timeoutMs, label);
+    if (!res.ok) {
+      const text = await readResponseTextWithTimeout(res, runtime.timeoutMs, label).catch(() => '');
+      throw new Error(`${label} ${res.status}: ${text.slice(0, 220)}`);
+    }
+    return readResponseJsonWithTimeout(res, runtime.timeoutMs, label);
+  }
+
+  async function fetchNanoGptQuota(runtime) {
+    const origin = originFromApiBase(runtime.baseUrl, 'https://nano-gpt.com');
+    const key = runtime.apiKey || '';
+    const headers = { Accept: 'application/json', 'x-api-key': key, Authorization: `Bearer ${key}` };
+    const balance = await readQuotaJsonWith(runtime, `${origin}/api/check-balance`, 'nanogpt balance', { method: 'POST', headers });
+    let subscription = null;
+    try {
+      subscription = await readQuotaJsonWith(runtime, `${origin}/api/subscription/v1/usage`, 'nanogpt subscription usage', { method: 'GET', headers });
+    } catch (err) {
+      subscription = { error: err.message };
+    }
+    const usd = numberOrNull(balance?.usd_balance ?? balance?.usdBalance ?? balance?.balance ?? balance?.data?.usd_balance);
+    const used = numberOrNull(subscription?.current_usage ?? subscription?.usage ?? subscription?.used ?? subscription?.data?.current_usage ?? subscription?.data?.usage);
+    const limit = numberOrNull(subscription?.limit ?? subscription?.monthly_limit ?? subscription?.daily_limit ?? subscription?.data?.limit ?? subscription?.data?.monthly_limit);
+    const remaining = limit !== null && used !== null ? Math.max(0, limit - used) : numberOrNull(subscription?.remaining ?? subscription?.data?.remaining);
+    const planName = cleanString(subscription?.plan ?? subscription?.plan_name ?? subscription?.data?.plan ?? subscription?.data?.plan_name, '');
+    return normalizeQuotaSnapshot({
+      provider: runtime.provider,
+      providerId: runtime.providerId,
+      checkedAt: nowIso(),
+      billingKind: subscription?.error ? 'balance' : 'monthly-allowance',
+      unit: limit !== null || used !== null ? 'requests' : 'usd',
+      planName,
+      limit,
+      used,
+      remaining,
+      source: 'provider-api',
+      message: [
+        usd !== null ? `잔액 ${formatUsageUsd(usd)}` : '',
+        subscription?.error ? `구독 사용량 조회 실패: ${subscription.error}` : '',
+      ].filter(Boolean).join(' / '),
+      details: { balance, subscription },
+    });
+  }
+
+  async function checkProviderQuota(provider, conf) {
+    const runtime = quotaProviderRuntime(provider, conf);
+    const providerKey = normalizeProvider(runtime.provider);
+    if (!runtime.apiKey && !['ollama', 'lmstudio', 'vllm'].includes(providerKey)) throw new Error('API Key가 저장된 Provider만 할당량을 조회할 수 있습니다.');
+    if (providerKey === 'ollama' || providerKey === 'lmstudio' || providerKey === 'vllm') {
+      return { provider: providerKey, message: '로컬 Provider는 API 할당량/과금 조회 대상이 아닙니다.', details: null };
+    }
+    if (providerKey === 'openrouter') {
+      const data = await readQuotaJson(runtime, buildApiUrl(runtime.baseUrl || 'https://openrouter.ai/api/v1', '/credits'), 'openrouter credits');
+      const payload = data?.data || data || {};
+      const totalCredits = numberOrNull(payload.total_credits ?? payload.totalCredits ?? payload.limit);
+      const totalUsage = numberOrNull(payload.total_usage ?? payload.totalUsage ?? payload.usage);
+      const remaining = totalCredits !== null && totalUsage !== null ? totalCredits - totalUsage : numberOrNull(payload.remaining ?? payload.limit_remaining);
+      const snapshot = await saveQuotaSnapshot({
+        provider: providerKey,
+        providerId: runtime.providerId,
+        checkedAt: nowIso(),
+        billingKind: 'balance',
+        unit: 'usd',
+        limit: totalCredits,
+        used: totalUsage,
+        remaining,
+        source: 'provider-api',
+        message: `OpenRouter 크레딧 조회 완료`,
+        details: payload,
+      });
+      return {
+        provider: providerKey,
+        message: `OpenRouter 크레딧: 사용 ${formatUsageUsd(totalUsage)} / 총 ${formatUsageUsd(totalCredits)}${remaining !== null ? ` / 남음 ${formatUsageUsd(remaining)}` : ''}`,
+        details: payload,
+        snapshot,
+      };
+    }
+    if (providerKey === 'deepseek') {
+      const base = normalizeUrl(runtime.baseUrl || 'https://api.deepseek.com').replace(/\/v1$/i, '');
+      const data = await readQuotaJson(runtime, `${base}/user/balance`, 'deepseek balance');
+      const balances = Array.isArray(data?.balance_infos) ? data.balance_infos : Array.isArray(data?.data?.balance_infos) ? data.data.balance_infos : [];
+      const lines = balances.map(item => `${item.currency || item.currency_code || 'balance'} ${item.total_balance ?? item.granted_balance ?? item.topped_up_balance ?? '-'}`).join(' / ');
+      const first = balances[0] || {};
+      const total = numberOrNull(first.total_balance ?? first.granted_balance ?? first.topped_up_balance);
+      const snapshot = await saveQuotaSnapshot({
+        provider: providerKey,
+        providerId: runtime.providerId,
+        checkedAt: nowIso(),
+        billingKind: 'balance',
+        unit: first.currency || first.currency_code || '',
+        remaining: total,
+        source: 'provider-api',
+        message: lines ? `DeepSeek 잔액: ${lines}` : '',
+        details: data,
+      });
+      return {
+        provider: providerKey,
+        message: lines ? `DeepSeek 잔액: ${lines}` : 'DeepSeek 잔액 응답을 받았지만 표시할 balance_infos가 없습니다.',
+        details: data,
+        snapshot,
+      };
+    }
+    if (providerKey === 'nanogpt') {
+      const snapshot = await fetchNanoGptQuota(runtime);
+      await saveQuotaSnapshot(snapshot);
+      return {
+        provider: providerKey,
+        message: snapshot.message || formatQuotaSnapshotLine(snapshot) || 'NanoGPT 사용량 조회 완료.',
+        details: snapshot.details,
+        snapshot,
+      };
+    }
+    const support = quotaSupportInfo(runtime);
+    return {
+      provider: providerKey,
+      message: `${provider?.name || providerKey}는 플러그인에서 바로 조회 가능한 표준 할당량 API가 없습니다. (${support.label})`,
+      details: null,
+    };
+  }
+
   function setupDashboardHandlers(conf, context, state = null) {
     const $ = id => document.getElementById(id);
     const setStatusNode = (id, text, kind = 'info') => {
@@ -11872,6 +13478,7 @@
     const setReferenceStatus = (text, kind = 'info') => setLocalStatus('et-reference-status', text, kind);
     const setRecoveryStatus = (text, kind = 'info') => setLocalStatus('et-recovery-status', text, kind);
     const setCbsStatus = (text, kind = 'info') => setLocalStatus('et-cbs-status', text, kind);
+    const setUsageStatus = (text, kind = 'info') => setLocalStatus('et-usage-status', text, kind);
     const setAgentStatus = (agentId, text, kind = 'info') => setLocalStatus(`et-agent-status-${agentId}`, text, kind);
 
     const saveCurrent = async (statusSetter = setMainStatus, message = '설정 저장 완료. 다음 요청부터 적용됩니다.') => {
@@ -11960,6 +13567,30 @@
       }, 'et-reference-status');
     });
 
+    document.querySelectorAll('[data-usage-quota-provider]').forEach(button => {
+      if (button.getAttribute('data-wired') === 'true') return;
+      button.setAttribute('data-wired', 'true');
+      button.addEventListener('click', async event => {
+        const providerId = event.currentTarget.getAttribute('data-usage-quota-provider') || '';
+        await withBusy(event.currentTarget, async () => {
+          const next = readDashboardConfigFromUI(conf);
+          const provider = findProviderEntry(next.providerRegistry, providerId);
+          if (!provider) throw new Error(`${providerId} Provider를 찾지 못했습니다.`);
+          setUsageStatus(`${provider.name || provider.id} 할당량을 확인하는 중...`, 'info');
+          const result = await checkProviderQuota(provider, next);
+          setUsageStatus(result.message || '할당량 확인 완료.', 'success');
+        }, 'et-usage-status').catch(err => setUsageStatus(`할당량 확인 실패: ${err.message}`, 'error'));
+      });
+    });
+
+    $('et-reset-usage')?.addEventListener('click', async event => {
+      if (!confirm('에로스 타워 API 사용량 기록을 초기화할까요? Provider 설정과 Run Log는 삭제하지 않습니다.')) return;
+      await withBusy(event.currentTarget, async () => {
+        await Storage.remove(STORAGE.usage);
+        setUsageStatus('사용량 기록을 초기화했습니다. 창을 다시 열면 표가 비워집니다.', 'success');
+      }, 'et-usage-status').catch(err => setUsageStatus(`사용량 초기화 실패: ${err.message}`, 'error'));
+    });
+
     document.querySelectorAll('.et-toggle').forEach(button => {
       if (button.getAttribute('data-wired') === 'true') return;
       button.setAttribute('data-wired', 'true');
@@ -12015,9 +13646,10 @@
         const freshState = await loadState(freshContext.scope, freshContext.mode, nextConf);
         syncSessionDiagnostics(freshState, freshContext, nextConf);
         const canonicalSync = syncCanonicalLoreLedger(freshState, freshContext.canonicalSources);
+        const identitySync = syncCanonicalIdentityState(freshState, freshContext.canonicalSources);
         const cbsSync = syncCbsDiagnostics(freshState, freshContext, nextConf);
         await saveState(freshContext.scope, freshState, nextConf);
-        setCbsStatus(`CBS 재인덱싱 완료. Lore 추가 ${canonicalSync.added || 0}, 갱신 ${canonicalSync.revised || 0}, CBS 변수 ${cbsSync.candidates || 0}개`, 'success');
+        setCbsStatus(`CBS 재인덱싱 완료. Lore 추가 ${canonicalSync.added || 0}, 갱신 ${canonicalSync.revised || 0}, Identity ${identitySync ? '갱신' : '유지'}, CBS 변수 ${cbsSync.candidates || 0}개`, 'success');
       }, 'et-cbs-status').catch(err => setCbsStatus(`CBS 재인덱싱 실패: ${err.message}`, 'error'));
     });
 
@@ -12834,6 +14466,15 @@
             conflicts: resolved._evidenceConflicts,
           };
         },
+
+        testIdentityGuard: () => {
+          const targetState = createDefaultState(context?.mode || 'rp');
+          targetState.canonicalIdentity = normalizeCanonicalIdentityState({
+            subjects: [{ name: 'Yeon-su', aliases: ['연수', 'yeonsu'], immutable: { gender: 'male/남성' }, evidence: [{ source: 'debug', quoteOrSummary: 'gender=male', certainty: 'established' }] }],
+          });
+          const resolved = resolveEvidenceCommit({ characters: [{ id: 'yeonsu', name: 'Yeon-su', gender: 'female', status: 'female disciple', role: 'girl', sourceRank: SOURCE_RANK.recent_chat }] }, targetState, {}, '', 1);
+          return { identity: targetState.canonicalIdentity, character: resolved.characters?.[0] || null, conflicts: resolved._evidenceConflicts || [] };
+        },
         testInjectionTrace: async () => {
           const targetState = createDefaultState(context?.mode || 'rp');
           targetState.turn = 4;
@@ -12853,19 +14494,28 @@
             referenceCharacterIds: ['ref-char'],
             referenceModuleIds: ['ref-module'],
             referencePluginKeys: ['ref-plugin', '☸에로스 타워 3.0'],
+            runtimeLorebookEntries: [{ key: ['runtime'], content: 'Currently active runtime lorebook entry.', alwaysActive: true }],
           };
           const targetCharacter = {
             id: 'main-char',
             name: 'Main Character',
             description: 'Main character description.',
-            lorebook: [{ key: ['main'], content: 'Main character lore.' }],
+            lorebook: {
+              type: 'risu',
+              ver: 1,
+              data: [
+                { key: ['main'], content: 'Main character lore.' },
+                { comment: '연수', content: '# OC 角色设定集：渊水 (Yeon-su)\n### 身份\n- 姓名：渊水（姓氏未知/孤儿）\n- 年龄：15岁（外在肉体）/ 20多岁（内在心理，现代韩国）\n- 性别：男\n- 性向：同性恋 (受 / Bottom)\n- 所属门派：清虚门\n- 身份/阶级：弟子（道士）\n### 核心行动准则\n渊水根据悲剧路线图采取预防性慈悲。', alwaysActive: true, insertorder: 100 },
+              ],
+            },
           };
           const targetChat = {
             id: 'chat-ref',
             name: 'Reference Test Chat',
-            localLore: [{ key: ['chat'], content: 'Chat lore entry.' }],
+            localLore: { type: 'risu', ver: 1, data: [{ key: ['chat'], content: 'Chat lore entry.' }] },
             chatLorebook: [{ key: ['chat-extra'], content: 'Chat lorebook alias entry.' }],
             postHistoryInstructions: 'Chat global note should be canonical.',
+            modules: ['chat-module'],
           };
           const targetDb = {
             characters: [{
@@ -12880,6 +14530,10 @@
               name: 'Reference Module',
               description: 'Reference module description.',
               lorebook: [{ key: ['module'], content: 'Reference module lore.' }],
+            }, {
+              id: 'chat-module',
+              name: 'Chat Attached Module',
+              lorebook: { type: 'risu', ver: 1, data: [{ comment: 'module-risu', content: 'Chat-attached module Risu export lore should be canonical.', alwaysActive: true }] },
             }],
             pluginV2: [{
               name: 'ref-plugin',
@@ -12906,6 +14560,8 @@
             }, {}),
             pluginContent: sources.find(source => source.kind === 'referencePlugin')?.content || '',
             paths: sources.map(source => source.path),
+            labels: sources.map(source => source.label),
+            pinnedControlFloor: buildMainControlFloorContext({ canonicalSources: sources }, 1800),
           };
         },
         testPromptToggleMode: () => {
