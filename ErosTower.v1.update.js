@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.11
+//@display-name ☸Eros Tower 1.1.12
 //@api 3.0
-//@version 1.1.11
+//@version 1.1.12
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -33,18 +33,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.11
+ * Eros Tower 1.1.12
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.11 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.12 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.11';
+  const VERSION = '1.1.12';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.11`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.12`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -61,10 +61,7 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const CURRENT_SCENE_TAIL_MESSAGES = 6;
-  const CURRENT_SCENE_TAIL_CHARS = 1800;
   const RECALL_KIND_SOFT_CAPS = Object.freeze({
-    sceneTail: 1,
     scene: 1,
     character: 4,
     relationship: 4,
@@ -78,8 +75,8 @@
     continuityRisk: 2,
   });
   const RECALL_PROTECTED_KINDS = Object.freeze([
-    'sceneTail',
     'scene',
+    'lore',
     'character',
     'relationship',
     'secret',
@@ -87,7 +84,7 @@
     'clue',
     'worldFront',
   ]);
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.11 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.12 analysis context';
   const GOOGLE_OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
   const GOOGLE_CLOUD_PLATFORM_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
   const PSYCHE_RECOMMENDED_MODELS = Object.freeze([
@@ -5154,6 +5151,16 @@
   function syncCanonicalLoreLedger(state, canonicalSources) {
     const sources = Array.isArray(canonicalSources) ? canonicalSources : [];
     state.loreLedger = Array.isArray(state.loreLedger) ? state.loreLedger : [];
+    if (!sources.length && state.loreLedger.some(item => item?.canonicalSource)) {
+      return {
+        added: 0,
+        revised: 0,
+        unchanged: state.loreLedger.filter(item => item?.canonicalSource).length,
+        removed: 0,
+        skipped: true,
+        reason: 'empty-canonical-source-list-preserved',
+      };
+    }
     const currentKeys = new Set();
     sources.forEach(source => {
       if (source?.hash) currentKeys.add(`hash:${source.hash}`);
@@ -5853,12 +5860,10 @@
 
   async function stagedRetrieveCandidates(agentId, state, queryTerms, profile, conf = null, context = null) {
     const signature = buildRecallQuerySignature(queryTerms, context, state);
-    const sceneTail = collectCurrentSceneTailCandidates(context, state, signature);
-    let candidates = mergeRecallCandidates(sceneTail.concat(rankStateCandidates(state, queryTerms, profile, signature)));
+    let candidates = rankStateCandidates(state, queryTerms, profile, signature);
     const stats = {
       profile: agentId,
       lexical: candidates.length,
-      sceneTail: sceneTail.length,
       embedded: 0,
       spread: 0,
       blocked: 0,
@@ -6328,18 +6333,14 @@
   }
 
   function buildRecallQuerySignature(queryTerms, context, state) {
-    const recentText = (Array.isArray(context?.messages) ? context.messages : [])
-      .slice(-CURRENT_SCENE_TAIL_MESSAGES)
-      .map(message => `${message?.role || ''}: ${message?.content || message?.data || ''}`)
-      .join('\n');
+    const currentUserText = getUserInput(context?.messages || []);
     const activeText = Object.values(state?.characters || {})
       .filter(item => /active|present|current/i.test(String(item?.status || item?.state || 'active')))
       .map(item => [item?.name, item?.id, item?.aliases].flat().join(' '))
       .join('\n');
     const text = [
       (Array.isArray(queryTerms) ? queryTerms : []).join(' '),
-      getUserInput(context?.messages || []),
-      recentText,
+      currentUserText,
       activeText,
     ].join('\n');
     const lower = text.toLowerCase();
@@ -6372,66 +6373,6 @@
       .map(item => item.trim().replace(/\s+/g, ' '))
       .filter(item => item.length >= 2 && item.length <= 32 && !stop.has(item)))
       .slice(0, limit);
-  }
-
-  function collectCurrentSceneTailCandidates(context, state, signature) {
-    const messages = (Array.isArray(context?.messages) ? context.messages : [])
-      .filter(message => message?.role === 'user' || message?.role === 'assistant')
-      .slice(-CURRENT_SCENE_TAIL_MESSAGES);
-    if (!messages.length) return [];
-    const body = messages.map(message => {
-      const role = message.role === 'user' ? 'User' : 'Assistant';
-      return `[${role}] ${String(message.content || message.data || '').replace(/\s+/g, ' ').trim()}`;
-    }).join('\n').slice(-CURRENT_SCENE_TAIL_CHARS);
-    if (!body.trim()) return [];
-    const item = {
-      id: `current-scene-tail-${hashString(body).slice(0, 12)}`,
-      summary: body,
-      source: 'recent_chat',
-      sourceRank: SOURCE_RANK.recent_chat,
-      importance: 10,
-      confidence: 0.98,
-      canonLevel: 'current',
-      status: 'current',
-      createdTurn: state?.turn || 0,
-      lastSeenTurn: state?.turn || 0,
-      activationKeys: signature?.entityAnchors || [],
-      anchor: true,
-    };
-    return [{
-      kind: 'sceneTail',
-      path: 'current.sceneTail',
-      item,
-      text: body,
-      turn: state?.turn || 0,
-      sourceRank: SOURCE_RANK.recent_chat,
-      importance: 10,
-      confidence: 0.98,
-      tier: 5,
-      memoryTier: 'hot',
-      heatScore: 100,
-      status: 'current',
-      axis: 'current-scene',
-      publicRef: 'current.sceneTail',
-      locator: {
-        source: 'recent_chat',
-        tailHash: hashString(body),
-        messageCount: messages.length,
-        turn: state?.turn || 0,
-      },
-      score: 220 + Math.round((signature?.currentWeight || 0.5) * 40),
-    }];
-  }
-
-  function mergeRecallCandidates(candidates) {
-    const map = new Map();
-    (Array.isArray(candidates) ? candidates : []).forEach(candidate => {
-      if (!candidate) return;
-      const key = `${candidate.kind || ''}:${candidate.path || ''}:${candidate.item?.id || candidate.item?.sourceId || ''}`;
-      const previous = map.get(key);
-      if (!previous || Number(candidate.score || 0) > Number(previous.score || 0)) map.set(key, candidate);
-    });
-    return Array.from(map.values()).sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
   }
 
   function applyRecallSignatureBoost(candidate, signature, currentTurn) {
@@ -6472,14 +6413,13 @@
     const status = String(candidate?.status || candidate?.item?.status || '').toLowerCase();
     let score = 0;
     if (signature.currentWeight >= signature.pastWeight) {
-      if (kind === 'sceneTail' || kind === 'scene') score += 30;
+      if (kind === 'scene') score += 30;
       if (kind === 'character' || kind === 'relationship') score += 12;
       if ((kind === 'memory' || kind === 'event') && age > 24) score -= Math.min(34, (age - 24) * 0.55);
       if (/archived|superseded|resolved|faded|ended|closed/.test(status)) score -= 18;
     }
     if (signature.pastWeight > signature.currentWeight + 0.08) {
       if (kind === 'memory' || kind === 'event' || kind === 'lore') score += 18;
-      if (kind === 'sceneTail' && age <= 2) score += 6;
     }
     return score;
   }
@@ -6796,7 +6736,7 @@
 
   function recallAxisForKind(kind) {
     const value = String(kind || '');
-    if (value === 'sceneTail' || value === 'scene') return 'current-scene';
+    if (value === 'scene') return 'current-scene';
     if (value === 'character' || value === 'relationship' || value === 'socialGraph') return 'cast';
     if (value === 'secret') return 'secret';
     if (value === 'foreshadowing' || value === 'clue' || value === 'promiseDebtConsequence') return 'plot';
@@ -6874,7 +6814,7 @@
 
   function isMustCarryCandidate(candidate) {
     const item = candidate?.item || {};
-    if (candidate?.kind === 'scene' || candidate?.kind === 'sceneTail') return true;
+    if (candidate?.kind === 'scene') return true;
     if (candidate?.kind === 'character' && /active|present|current/i.test(String(item.status || item.state || 'active'))) return true;
     if (candidate?.kind === 'lore') {
       const canonicalKind = String(item?.canonicalSource?.kind || '').toLowerCase();
@@ -6889,6 +6829,20 @@
     return false;
   }
 
+  function mustCarryCandidatePriority(candidate) {
+    const item = candidate?.item || {};
+    if (candidate?.kind === 'lore') {
+      const canonicalKind = String(item?.canonicalSource?.kind || '').toLowerCase();
+      if (canonicalKind === 'desc' || canonicalKind === 'firstmessage') return 1200;
+      if (item.alwaysActive || item.activationMode === 'always' || item?.canonicalSource?.meta?.alwaysActive) return 1100;
+      return 900;
+    }
+    if (candidate?.kind === 'scene') return 850;
+    if (candidate?.kind === 'character') return 760;
+    if (candidate?.kind === 'memory' && (item.anchor || normalizeMemoryLifecycleTier(item.memoryTier) === 'hot')) return 700;
+    return 500;
+  }
+
   function selectCandidates(candidates, limit, budget) {
     const selected = [];
     const selectedIds = new Set();
@@ -6899,7 +6853,10 @@
     const input = Array.isArray(candidates) ? candidates : [];
     const mustCarry = input
       .filter(isMustCarryCandidate)
-      .sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
+      .sort((a, b) => {
+        const priority = mustCarryCandidatePriority(b) - mustCarryCandidatePriority(a);
+        return priority || Number(b.score || 0) - Number(a.score || 0);
+      });
     const rest = input.filter(candidate => !isMustCarryCandidate(candidate));
     const sourceBucketForCandidate = candidate => String(
       candidate?.item?.sourceChunkHash
@@ -10225,19 +10182,34 @@
   function injectContext(messages, injection, budget) {
     if (!injection) return messages;
     const content = injection.slice(0, budget);
-    const clone = (Array.isArray(messages) ? messages : []).map(m => ({ ...m }));
-    let idx = -1;
+    const clone = (Array.isArray(messages) ? messages : [])
+      .filter(m => !(m?.role === 'system' && messageContainsErosInjection(m)))
+      .map(m => ({ ...m }));
+    const block = { role: 'system', content: `[${MAIN_INJECTION_TITLE}]\n${content}`, _erosTowerInjection: true };
+    let insertAt = -1;
     for (let i = clone.length - 1; i >= 0; i -= 1) {
-      if (clone[i]?.role === 'system') {
-        idx = i;
+      if (clone[i]?.role === 'user') {
+        insertAt = i;
         break;
       }
     }
-    if (idx >= 0) {
-      clone[idx].content = `${clone[idx].content || ''}\n\n---\n[${MAIN_INJECTION_TITLE}]\n${content}\n---`;
-      return clone;
+    if (insertAt < 0) {
+      for (let i = clone.length - 1; i >= 0; i -= 1) {
+        if (clone[i]?.role === 'system') {
+          insertAt = i + 1;
+          break;
+        }
+      }
     }
-    return [{ role: 'system', content: `[${MAIN_INJECTION_TITLE}]\n${content}` }, ...clone];
+    if (insertAt < 0) insertAt = clone.length;
+    return clone.slice(0, insertAt).concat(block, clone.slice(insertAt));
+  }
+
+  function messageContainsErosInjection(message) {
+    if (!message || typeof message !== 'object') return false;
+    if (message._erosTowerInjection === true) return true;
+    const content = stringifyContent(message.content || message.data);
+    return /^\s*\[Eros Tower [^\]]+ analysis context\]/.test(content);
   }
 
   function computeAutoCapInjectionBudget(messages, conf, requestedBudget) {
@@ -14486,6 +14458,23 @@
             briefingLength: briefing.length,
             traceCount: targetState.injectionTrace.length,
             firstTrace: targetState.injectionTrace[0] || null,
+          };
+        },
+        testInjectionPlacement: () => {
+          const prior = [
+            { role: 'system', content: 'Host lore/system message must remain intact.' },
+            { role: 'system', content: `[${MAIN_INJECTION_TITLE}]\nold injected block`, _erosTowerInjection: true },
+            { role: 'user', content: `User mentions ${MAIN_INJECTION_TITLE} literally; this user turn must remain.` },
+          ];
+          const injected = injectContext(prior, 'fresh injected block', 5000);
+          return {
+            count: injected.length,
+            hostSystemCount: injected.filter(message => message.role === 'system' && /Host lore\/system/.test(String(message.content || ''))).length,
+            oldInjectionCount: injected.filter(message => /old injected block/.test(String(message.content || ''))).length,
+            newInjectionCount: injected.filter(message => message._erosTowerInjection === true && /fresh injected block/.test(String(message.content || ''))).length,
+            userMentionCount: injected.filter(message => message.role === 'user' && String(message.content || '').includes(MAIN_INJECTION_TITLE)).length,
+            userIndex: injected.findIndex(message => message.role === 'user'),
+            injectionIndex: injected.findIndex(message => message._erosTowerInjection === true),
           };
         },
         testReferenceSources: () => {
