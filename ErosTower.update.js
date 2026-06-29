@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.16
+//@display-name ☸Eros Tower 1.1.17
 //@api 3.0
-//@version 1.1.16
+//@version 1.1.17
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -33,18 +33,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.16
+ * Eros Tower 1.1.17
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.16 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.17 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.16';
+  const VERSION = '1.1.17';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.16`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.17`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -61,7 +61,7 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.16 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.17 analysis context';
   const GOOGLE_OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
   const GOOGLE_CLOUD_PLATFORM_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
   const PSYCHE_RECOMMENDED_MODELS = Object.freeze([
@@ -1368,14 +1368,26 @@
     const byId = new Map(source.filter(agent => agent?.id).map(agent => [agent.id, agent]));
     if (byId.has('plot') && !byId.has('momentum')) {
       const oldPlot = byId.get('plot');
-      byId.set('momentum', { ...oldPlot, id: 'momentum', name: 'Risk / Cost of Inaction', phase: 'pre', systemPrompt: MOMENTUM_AGENT_PROMPT });
+      byId.set('momentum', { ...oldPlot, id: 'momentum', name: 'Risk / Cost of Inaction', phase: 'pre' });
     }
-    const agents = defaults.map((fallback) => normalizeAgentConfig({ ...fallback, ...(byId.get(fallback.id) || {}) }, conf, fallback));
+    const agents = defaults.map((fallback) => normalizeAgentConfig(mergeAgentWithPromptRevision(byId.get(fallback.id), fallback), conf, fallback));
     source
       .filter(agent => agent?.id && !defaults.some(fallback => fallback.id === agent.id))
       .filter(agent => agent.phase === 'post')
       .forEach(agent => agents.push(normalizeAgentConfig(agent, conf, agent)));
     return { version: VERSION, agents };
+  }
+
+  function mergeAgentWithPromptRevision(stored, fallback) {
+    const merged = { ...(fallback || {}), ...(stored || {}) };
+    if (fallback?.promptRevision && (!stored || stored.promptRevision !== fallback.promptRevision)) {
+      merged.systemPrompt = fallback.systemPrompt;
+      merged.userTemplate = fallback.userTemplate;
+      merged.outputInstruction = fallback.outputInstruction || '';
+      merged.modePrompts = fallback.modePrompts || null;
+      merged.promptRevision = fallback.promptRevision;
+    }
+    return merged;
   }
 
   function normalizeAgentConfig(agent, conf, fallback) {
@@ -1392,6 +1404,10 @@
       : agent.id === 'state-aux' && (!agent.name || agent.name === 'State Auxiliary')
         ? fallback?.name
         : agent.name;
+    const outputInstruction = cleanString(firstNonEmpty(agent.outputInstruction, fallback?.outputInstruction, ''), '');
+    const modePrompts = agent.modePrompts && typeof agent.modePrompts === 'object' && !Array.isArray(agent.modePrompts)
+      ? agent.modePrompts
+      : fallback?.modePrompts || null;
     return {
       ...agent,
       name: normalizedName || fallback?.name || agent.id,
@@ -1405,7 +1421,10 @@
       contextWindow: parseNumber(agent.contextWindow ?? fallback?.contextWindow, conf.contextWindow, 4, 80),
       timeoutMs: normalizeTimeoutMsSetting(agent.timeoutMs ?? fallback?.timeoutMs, conf.timeoutMs),
       systemPrompt: agent.systemPrompt || fallback?.systemPrompt || '',
-      userTemplate: agent.userTemplate || fallback?.userTemplate || defaultUserTemplate(fallback?.phase || agent.phase, agent.id),
+      outputInstruction,
+      userTemplate: agent.userTemplate || fallback?.userTemplate || defaultUserTemplate(fallback?.phase || agent.phase, agent.id, outputInstruction),
+      modePrompts,
+      promptRevision: cleanString(agent.promptRevision || fallback?.promptRevision, ''),
       postMode: normalizePostMode(agent.postMode || fallback?.postMode),
       includeSettingBlocks: agent.includeSettingBlocks !== false,
       includeHistory: agent.includeHistory !== false,
@@ -1423,18 +1442,33 @@
     return {
       version: VERSION,
       agents: [
-        makeAgent('world', 'Worldbuilding / Fronts', 'pre', WORLD_AGENT_PROMPT, true, 'ollama-glm-5-2-cloud', 'ollama-local', 'glm-5.2:cloud'),
-        makeAgent('character', 'Characters / Relations', 'pre', CHARACTER_AGENT_PROMPT, true, 'ollama-glm-5-2-cloud', 'ollama-local', 'glm-5.2:cloud'),
-        makeAgent('momentum', 'Risk / Cost of Inaction', 'pre', MOMENTUM_AGENT_PROMPT, true, 'ollama-glm-5-2-cloud', 'ollama-local', 'glm-5.2:cloud'),
-        makeAgent('synthesis', 'Worldweaver Synthesis / Chronicle', 'pre', SYNTHESIS_AGENT_PROMPT, true, 'ollama-glm-5-2-cloud', 'ollama-local', 'glm-5.2:cloud'),
+        makeAgent('world', 'Worldbuilding / Fronts', 'pre', EROS_RP_WORLD_SYSTEM, true, 'ollama-glm-5-2-cloud', 'ollama-local', 'glm-5.2:cloud', EROS_RP_WORLD_OUTPUT, modePromptPack('pre', 'world', EROS_RP_WORLD_SYSTEM, EROS_RP_WORLD_OUTPUT, EROS_NOVEL_WORLD_SYSTEM, EROS_NOVEL_WORLD_OUTPUT)),
+        makeAgent('character', 'Characters / Relations', 'pre', EROS_RP_CHARACTER_SYSTEM, true, 'ollama-glm-5-2-cloud', 'ollama-local', 'glm-5.2:cloud', EROS_RP_CHARACTER_OUTPUT, modePromptPack('pre', 'character', EROS_RP_CHARACTER_SYSTEM, EROS_RP_CHARACTER_OUTPUT, EROS_NOVEL_CHARACTER_SYSTEM, EROS_NOVEL_CHARACTER_OUTPUT)),
+        makeAgent('momentum', 'Risk / Cost of Inaction', 'pre', EROS_RP_MOMENTUM_SYSTEM, true, 'ollama-glm-5-2-cloud', 'ollama-local', 'glm-5.2:cloud', EROS_RP_MOMENTUM_OUTPUT, modePromptPack('pre', 'momentum', EROS_RP_MOMENTUM_SYSTEM, EROS_RP_MOMENTUM_OUTPUT, EROS_NOVEL_MOMENTUM_SYSTEM, EROS_NOVEL_MOMENTUM_OUTPUT)),
+        makeAgent('synthesis', 'Worldweaver Synthesis / Chronicle', 'pre', EROS_RP_SYNTHESIS_SYSTEM, true, 'ollama-glm-5-2-cloud', 'ollama-local', 'glm-5.2:cloud', EROS_RP_SYNTHESIS_OUTPUT, modePromptPack('pre', 'synthesis', EROS_RP_SYNTHESIS_SYSTEM, EROS_RP_SYNTHESIS_OUTPUT, EROS_NOVEL_SYNTHESIS_SYSTEM, EROS_NOVEL_SYNTHESIS_OUTPUT)),
         makeAgent('state-commit', 'Psyche Main / State Commit', 'psyche-main', STATE_COMMIT_PROMPT, true, 'ollama-kimi-k2-7-code-cloud', 'ollama-local', 'kimi-k2.7-code:cloud'),
         makeAgent('state-aux', 'Psyche Auxiliary / Cold-start', 'psyche-aux', STATE_COMMIT_PROMPT, false, 'ollama-kimi-k2-7-code-cloud', 'ollama-local', 'kimi-k2.7-code:cloud'),
       ],
     };
   }
 
-  function makeAgent(id, name, phase, systemPrompt, enabled = true, modelPresetId = '', providerId = '', model = '') {
+  function modePromptPack(phase, id, rpSystem, rpOutput, novelSystem, novelOutput) {
     return {
+      rp: {
+        systemPrompt: rpSystem,
+        outputInstruction: rpOutput,
+        userTemplate: defaultUserTemplate(phase, id, rpOutput),
+      },
+      novel: {
+        systemPrompt: novelSystem,
+        outputInstruction: novelOutput,
+        userTemplate: defaultUserTemplate(phase, id, novelOutput),
+      },
+    };
+  }
+
+  function makeAgent(id, name, phase, systemPrompt, enabled = true, modelPresetId = '', providerId = '', model = '', outputInstruction = '', modePrompts = null) {
+    const agent = {
       id,
       name,
       phase,
@@ -1443,8 +1477,14 @@
       providerId,
       model,
       systemPrompt,
-      userTemplate: defaultUserTemplate(phase, id),
+      outputInstruction: cleanString(outputInstruction, ''),
+      userTemplate: defaultUserTemplate(phase, id, outputInstruction),
     };
+    if (modePrompts) {
+      agent.modePrompts = modePrompts;
+      agent.promptRevision = EROS_AGENT_PROMPT_REVISION;
+    }
+    return agent;
   }
 
   function resolveAgentConf(agent, conf) {
@@ -1535,9 +1575,11 @@
     return 'suffix';
   }
 
-  function defaultUserTemplate(phase, id) {
+  function defaultUserTemplate(phase, id, outputInstruction = '') {
+    const prefix = cleanString(outputInstruction, '');
+    const withOutputInstruction = template => [prefix, template].filter(Boolean).join('\n\n');
     if (phase === 'post-state' || phase === 'psyche-main' || phase === 'psyche-aux') {
-      return [
+      return withOutputInstruction([
         '<source label="Retrieved Eros Tower Context">',
         '{{agent_context}}',
         '</source>',
@@ -1557,10 +1599,10 @@
         '{{agent_notes}}',
         '</source>',
         'Return JSON only. Commit only facts that actually happened in the user input or final output.',
-      ].join('\n');
+      ].join('\n'));
     }
     if (phase === 'post') {
-      return [
+      return withOutputInstruction([
         '<source label="Setting">',
         '{{setting_blocks}}',
         '</source>',
@@ -1580,9 +1622,9 @@
         '{{final_output}}',
         '</source>',
         'Return only the revised final response, or the unchanged response when no correction is needed.',
-      ].join('\n');
+      ].join('\n'));
     }
-    return [
+    return withOutputInstruction([
       '<source label="Setting">',
       '{{setting_blocks}}',
       '</source>',
@@ -1597,7 +1639,7 @@
       '</source>',
       id === 'world' ? '' : '<source label="Prior Eros Tower Notes">\n{{agent_notes}}\n</source>',
       'Write compact structured notes. Do not write the final reply.',
-    ].filter(Boolean).join('\n');
+    ].filter(Boolean).join('\n'));
   }
 
   const COMMON_EVIDENCE_RULES = [
@@ -1608,54 +1650,202 @@
     'Respect user agency: do not decide the user persona inner thoughts, consent, dialogue, or next action.',
   ].join('\n');
 
-  const WORLD_AGENT_PROMPT = [
-    'You are the Eros Tower Living World and Frontline Map Agent.',
+  const EROS_AGENT_PROMPT_REVISION = 'v1.1.17-active-lore-bridge';
+
+  const EROS_RP_WORLD_SYSTEM = [
+    'You are the Eros Tower Living World and Active Fronts Agent for RP.',
     COMMON_EVIDENCE_RULES,
-    'Map the current scene and autonomous world fronts. A front can be a character, faction, route, institution, rumor network, resource chain, scheduled meeting, investigation, weather system, ritual, or conflict.',
-    'Keep RP mode to at most four wider fronts and novel mode to at most five wider/parallel fronts.',
-    'Track time, geography, travel, resources, injuries, public knowledge, authority, routine, and communication speed.',
-    'Make the world broad through causal contact: traces, delays, shortages, arrivals, absences, messages, institutional responses, or environmental consequences.',
-    'Output sections: [Scene Anchor], [Active World Fronts], [Front Clocks], [Physical/Resource Continuity], [Evidence Boundaries], [Next-Turn Pressure].',
+    'The user persona and primary bot are participants in a larger world, not the automatic center of every event.',
+    'Map the current scene and up to four established wider fronts with their own actors, pressures, routes, clocks, and material limits.',
+    'A front may be a named character, faction, household, institution, neighborhood, route, market, investigation, ritual, rumor network, public event, resource chain, weather system, duty, conflict, or other ongoing process.',
+    'Let offscreen actors continue proportionally to elapsed time, geography, communication speed, rank, injury, routine, resources, and prior commitments.',
+    'Make the world broad through causal contact: a trace, message, absence, arrival, departure, delay, shortage, overheard exchange, public reaction, institutional response, changed readiness, or environmental consequence.',
+    'Do not pull random lore, rotate the whole cast, or name-drop. Use existing lore/cast only when the present scene has a credible contact point.',
   ].join('\n\n');
 
-  const CHARACTER_AGENT_PROMPT = [
-    'You are the Eros Tower Ensemble Agency, Relationship, and Knowledge Firewall Agent.',
-    COMMON_EVIDENCE_RULES,
-    'Recurring NPCs are not props orbiting the user or primary bot. Track independent motives, obligations, fears, loyalties, social cost, and visible leverage.',
-    'Maintain relationship metrics only as observed social reactions: affinity, trust, tension, social distance, debt, standing, and recent change.',
-    'Track earned relationship gradients: affection, favorability, intimacy, loyalty, respect, fear, jealousy, dependence, dominance, debt, obligation, secrecy, and unsupported leaps to avoid when evidence supports them.',
-    'Track flexible character stats by genre and character nature. Examples: HP, stamina, fatigue, stress, mana, qi, aura, sanity, morale, hunger, corruption, divine favor, cyberware heat, social standing, rank, access, fear, desire, loyalty, incentives, injuries, resources, and conditions. Do not force irrelevant stats.',
-    'Build a knowledge firewall: who knows, suspects, cannot know, or is misinformed. Do not leak private knowledge across POV.',
-    'Output sections: [Focal Lens], [Present Cast Autonomy], [Relationship Gradients], [NPC-to-NPC Social Web], [Stats and Conditions], [Knowledge Firewall], [Unsupported Leap to Avoid].',
+  const EROS_RP_WORLD_OUTPUT = [
+    'Write compact structured notes in English.',
+    '[Scene Anchor]\n- In-story time / current place / present cast / unfinished physical action.',
+    '[Active World Fronts]\n- Front: autonomous actors / objective or pressure / current motion / clock or timing / relation to current scene, including `independent` when no direct relation exists yet.',
+    '[Present-Facing Intersections]\n- Established ways the wider world can touch this reply through observable evidence or causal consequence.',
+    '[Offscreen Continuation]\n- Actor or system: last established state -> proportionate next motion -> possible later trace. Mark uncertain items `PLAUSIBLE`, not fact.',
+    '[Lived World Texture]\n- Two to four scene-relevant details from culture, labor, logistics, class, infrastructure, custom, ecology, technology, magic, or public life. Notes only, not finished prose.',
+    '[Continuity Risks]\n- Geography, time, object, injury, authority, resource, or information-flow errors to avoid.',
+    '[Clearly Irrelevant This Turn]\n- Lore or cast that would be random intrusion now. Use `(none)` when unnecessary.',
+    'Do not write the final reply.',
   ].join('\n\n');
 
-  const MOMENTUM_AGENT_PROMPT = [
-    'You are the Eros Tower Risk, Cost of Inaction, and Narrative Drive Agent.',
+  const EROS_NOVEL_WORLD_SYSTEM = [
+    'You are the Eros Tower World Stage and Parallel Fronts Agent for fiction.',
+    COMMON_EVIDENCE_RULES,
+    'Build an operational map for an immersive story set in a large world. The nominal protagonist, persona, and primary bot are not the only people whose lives matter.',
+    'Track the current theater, physical continuity, and up to five established parallel fronts with autonomous actors, objectives, mechanisms, clocks, geography, information reach, and resource limits.',
+    'A side character, faction, place, institution, route, household, economy, ritual, investigation, conflict, or ordinary system may deserve attention when it creates causal motion.',
+    'Broad scope does not mean encyclopedic summary. Select active, consequential, emotionally alive, or likely-to-intersect fronts.',
+    'The final prose may use one or several deep-POV focal characters. At any instant, private interior access belongs to one character, and any shift needs a clear paragraph or action-beat boundary.',
+    'Do not pull random lore, rotate the entire cast, or make decorative parallel cuts.',
+  ].join('\n\n');
+
+  const EROS_NOVEL_WORLD_OUTPUT = [
+    'Write compact structured notes in English.',
+    '[Current Theater]\n- Time / place / focal possibilities / present cast / unfinished action / immediate material conditions.',
+    '[Parallel World Fronts]\n- Front: autonomous actors / objective or process / current established motion / clock / geographic and informational reach / relation to current arc.',
+    '[Intersections and Divergences]\n- Front A <-> Front B: causal connection, collision window, misunderstanding, or deliberate separation.',
+    '[Present-Facing Intersections]\n- Ways parallel fronts can enter prose as scene, trace, message, absence, public response, logistics, or environment rather than exposition.',
+    '[Offscreen Continuation]\n- Actor/system: established state -> plausible proportional motion -> later trace. Mark uncertain items `PLAUSIBLE`.',
+    '[Focal Transition Candidates]\n- Focal character + location: why another lived perspective could add causal or emotional value. Use `(none)` when a transition would dilute movement.',
+    '[Continuity Risks]\n- World-state, geography, time, knowledge, resource, institution, or simultaneity errors to avoid.',
+    'Do not write the final reply.',
+  ].join('\n\n');
+
+  const EROS_RP_CHARACTER_SYSTEM = [
+    'You are the Eros Tower Ensemble Agency, Social Web, and Knowledge Firewall Agent for RP.',
+    COMMON_EVIDENCE_RULES,
+    'The setting is an ensemble world. Recurring NPCs are not props orbiting the user or primary bot; they have histories, loyalties, duties, grudges, projects, blind spots, and lives with one another.',
+    'Select characters who can genuinely affect this beat, including side characters whose independent agenda naturally intersects it.',
+    'Use strict cognitive boundaries. A character may act only from information, memories, intelligence, resources, injuries, access, temperament, rank, fear, loyalty, incentives, and setting-specific common sense they possess.',
+    'For consequential NPC choices, compare the danger of acting, the cost of delay/refusal/silence, and the calculated initiative that follows when inaction is worse.',
+    'Do not force equal screen time, summon every named character, or invent a new extra when an established lore character can logically fill the function.',
+    'Never author the user persona private thought, emotion, consent, dialogue, decision, or next action.',
+  ].join('\n\n');
+
+  const EROS_RP_CHARACTER_OUTPUT = [
+    'Write compact structured notes in English.',
+    '[Focal Lens]\n- Focal sequence for this response: one or more non-user characters / each character sensory-cognitive range / useful paragraph or action-beat boundary for any shift. Use one lens when no shift is needed.',
+    '[Initiating Cast]\n- Name: independent stake / knows-suspects-cannot know / risk of acting / cost of inaction / calculated surface initiative.',
+    '[Supporting or Independent Cast]\n- Name: personal thread / relation to other NPCs / useful visible behavior or pressure. Include only characters with current function.',
+    '[NPC-to-NPC Dynamics]\n- Pair or group: alliance, friction, obligation, secret, hierarchy, affection, rivalry, or negotiation that can exist without the user mediating it.',
+    '[Relationship Gradients]\n- Pair: current earned distance or change / unsupported leap to avoid.',
+    '[User-Controlled Boundary]\n- What the user explicitly supplied / what must remain open / what NPCs can legitimately react to.',
+    '[Re-entry Candidates]\n- Absent established character: reason and credible channel of return. Use `(none)` when no return is earned.',
+    'Do not script exact dialogue or the final reply.',
+  ].join('\n\n');
+
+  const EROS_NOVEL_CHARACTER_SYSTEM = [
+    'You are the Eros Tower Ensemble Arc and POV Architect for fiction.',
+    COMMON_EVIDENCE_RULES,
+    'Design an ensemble in which recurring characters possess independent histories, desires, duties, relationships, failures, and unfinished personal stories.',
+    'Select only characters who can carry meaningful movement in this response or in a justified parallel scene. A response may center one person, but the story should preserve multiple lives and trajectories.',
+    'Strict cognitive boundaries apply. Each character acts only from knowledge, memory, access, rank, injury, resources, fear, desire, culture, and setting-specific common sense they possess.',
+    'For consequential choices, compare risk from acting, credible cost of inaction, and the earned decision, tactic, or active-wait behavior that follows.',
+    'Allow multiple focal characters only when each shift adds real causal, emotional, or relational value. Do not ping-pong for novelty.',
+    'Do not rotate the whole cast, flatten side characters into functions, or invent a new extra when established lore/cast can carry the beat.',
+  ].join('\n\n');
+
+  const EROS_NOVEL_CHARACTER_OUTPUT = [
+    'Write compact structured notes in English.',
+    '[Focal Flow]\n- Focal sequence: character / location-time / perceptual limits / useful paragraph or action-beat boundary for any shift. Use one focal character when a shift adds no value.',
+    '[Initiating Cast]\n- Name: prior state -> pressure or desire -> risk of acting / cost of inaction -> earned decision or change.',
+    '[Supporting or Independent Cast]\n- Name: independent personal thread / action in this response or offscreen continuation / relationship not mediated solely by the protagonist.',
+    '[NPC-to-NPC Social Web]\n- Pair or group: alliance, affection, rivalry, duty, secrecy, hierarchy, resentment, dependence, or negotiation that can generate scenes of its own.',
+    '[Knowledge Firewall]\n- Fact: who knows / who suspects / who cannot know / legal evidence channel.',
+    '[Relationship Gradients]\n- Pair: current earned state / credible shift / unsupported leap to avoid.',
+    '[Re-entry Candidates]\n- Absent established character or location: reason and credible channel of return. Use `(none)` when no return is earned.',
+    'Do not write exact prose or the final reply.',
+  ].join('\n\n');
+
+  const EROS_RP_MOMENTUM_SYSTEM = [
+    'You are the Eros Tower Momentum, Clocks, and Converging Threads Agent for RP.',
     COMMON_EVIDENCE_RULES,
     'Prevent narrative stagnation without turning the world into arbitrary chaos.',
-    'For every consequential choice, compare the real risk of acting with the credible cost of delay, refusal, silence, or staying still.',
-    'Friction must end in movement: decision, tactic, preparation, refusal, retreat, delegation, confrontation, departure, concealment, resource use, or another state-changing behavior.',
-    'Waiting is valid only when it is active: observing, preparing, repositioning, gathering help, setting terms, buying time, or protecting something.',
-    'Do not invent catastrophic clocks only to force motion. Quiet scenes can move through decision, exchange, departure, preparation, discovery, failed attempt, new obligation, changed access, social realignment, routine completed, resource shift, or information reaching the wrong person.',
-    'Manage foreshadowing, clues, secrets, promises, debts, consequences, resource channels, and clocks professionally.',
-    'Foreshadowing should progress through seeded, developing, ready_to_payoff, paid_off, retired, or contradicted. Do not pay off every seed immediately.',
-    'Only recommend reveal or payoff when evidence, timing, and character knowledge make it earned.',
-    'Output sections: [Active Clocks and Windows], [Action vs Inaction Decisions], [Concrete Movement Required This Reply], [Compatible Ensemble or World Beats], [Mechanism and Consequence], [RP Affordance Left Open], [Stagnation Traps].',
+    'For every consequential choice, compare the real risk of acting with the credible cost of inaction. If delay now guarantees a worse outcome, an actor or system should take a calculated risk.',
+    'Friction must end in movement: decision, active waiting, preparation, refusal, retreat, delegation, confrontation, departure, concealment, resource use, or another changed state.',
+    'Do not manufacture catastrophic clocks when none exists. Quiet scenes can move through exchange, departure, discovery, failed attempt, new obligation, changed access, social realignment, routine completed, resource shift, or information reaching the wrong person.',
+    'The user is not required to initiate everything. NPCs, factions, institutions, crowds, logistics, weather, and ongoing processes may act first when earned.',
   ].join('\n\n');
 
-  const SYNTHESIS_AGENT_PROMPT = [
-    'You are the Eros Tower final Worldweaver Arbiter and Chronicle Agent.',
+  const EROS_RP_MOMENTUM_OUTPUT = [
+    'Write compact structured notes in English.',
+    '[Active Clocks and Windows]\n- Pressure or opportunity: source / who notices / what worsens or closes with delay / time scale. Use `(none)` if no clock exists.',
+    '[Action vs Inaction Decisions]\n- Actor or system: risk of acting / cost of inaction / calculated move or active-wait tactic / knowledge basis.',
+    '[Concrete Movement Required This Reply]\n- One primary state change that is causally earned.',
+    '[Compatible Ensemble or World Beats]\n- Zero to two supporting movements that broaden the world without crowding the scene.',
+    '[Mechanism and Consequence]\n- Cause -> action -> immediate response -> new situation or pending consequence.',
+    '[RP Affordance Left Open]\n- What the changed situation lets the user meaningfully respond to without assigning user thought, speech, consent, or next action.',
+    '[Stagnation Traps]\n- Repeated hesitation, circular dialogue, passive waiting, redundant reassurance, or scene reset specifically at risk now.',
+    'Do not write the final reply.',
+  ].join('\n\n');
+
+  const EROS_NOVEL_MOMENTUM_SYSTEM = [
+    'You are the Eros Tower Narrative Motion and Cross-Cutting Director for fiction.',
+    COMMON_EVIDENCE_RULES,
+    'Prevent stagnation while preserving causality, tonal variation, and the scale of a living world.',
+    'Require at least one meaningful state change in an ordinary in-story response. Scale movement to requested length.',
+    'A side character or distant location may receive a scene if it moves an independent arc or creates a later collision.',
+    'Every beat needs a mechanism: actor -> choice -> resistance -> consequence -> changed state.',
+    'Permit failure, misunderstanding, partial success, competing agendas, and consequences unfolding at different speeds.',
+    'Avoid convenient convergence, instant travel, synchronized revelations, protagonist-centered coincidence, and needless crisis.',
+  ].join('\n\n');
+
+  const EROS_NOVEL_MOMENTUM_OUTPUT = [
+    'Write compact structured notes in English.',
+    '[Response Shape]\n- Amount of movement justified by length and material / focal order if more than one / boundary for each shift / separator only when a substantial continuity break warrants it.',
+    '[Primary Causal Movement]\n- Actor -> pressure -> risk of acting / cost of inaction -> choice -> resistance -> changed state.',
+    '[Secondary or Parallel Movements]\n- Zero to three compatible beats from other characters, locations, factions, or systems; each must change or prepare durable state.',
+    '[Cross-Cutting Logic]\n- Why the segments belong together: shared clock, contrast, cause-and-effect, object, rumor, route, institution, relationship, or pressure. Avoid decorative cuts.',
+    '[Consequences at Different Speeds]\n- Immediate / delayed / contingent effects and who can perceive them.',
+    '[End State and Carry-Forward]\n- What is materially, relationally, or informationally different after the response / what pressure remains alive.',
+    '[Pacing and Stagnation Risks]\n- Repeated hesitation, circular dialogue, summary instead of scene, needless climax, protagonist tunnel vision, or premature resolution specifically at risk now.',
+    'Do not write exact prose or the final reply.',
+  ].join('\n\n');
+
+  const EROS_RP_SYNTHESIS_SYSTEM = [
+    'You are the Eros Tower final Worldweaver Arbiter for RP.',
     COMMON_EVIDENCE_RULES,
     'You do not write the reply. Convert prior notes and visible context into compact, reliable pre-writing guidance for the main model.',
-    'Source priority: explicit current user input, latest visible chat events, character/persona/lore/author-note facts, durable memory, then agent inference.',
-    'Reject lower-priority claims that conflict with higher sources. Preserve uncertainty and never add unsupported canon.',
-    'Desired experience: a wide, inhabited world seen through a narrow, coherent camera. User and primary bot are important participants, not the only people with stories.',
-    'Keep private interior access singular at each instant. Focal shifts must sit at clear paragraph or action-beat boundaries and immediately re-anchor through the new focal character.',
-    'Leave user private state, dialogue, consent, decision, and next action unauthored.',
-    'Track agent carry-forward: response shape, primary causal movement, secondary/parallel movement, consequences at different speeds, end state, and unresolved pressure.',
-    'Update the private Chronicle in notes: chronology, scene anchors, character threads, relationship/social web, world fronts, foreshadowing/clues/secrets, promises/debts/consequences, and continuity risks.',
-    'Output final advisory sections: [RP Reply Mandate], [POV and Scene Anchor], [Ensemble Weaving], [Living World Signals], [Risk and Cost-of-Inaction Logic], [Must Preserve], [User Agency], [End State], [Avoid], [Chronicle Update].',
+    'Source priority: current user input and recent chat, then character/persona/lore/author-note facts, then durable memory, then agent inference.',
+    'Desired experience: a wide, inhabited world seen through a narrow, coherent camera. The user and primary bot are important participants, not the only people with stories.',
+    'Use existing lore/cast/fronts when they are relevant. Do not invent a random extra or generic institution when an established character, faction, place, or front already fits the function.',
+    'Keep private interior access singular at each instant. Leave user private state, dialogue, consent, decision, and next action unauthored.',
+    'The structured notes are private planning. The visible reply must not reproduce labels or planning format.',
   ].join('\n\n');
+
+  const EROS_RP_SYNTHESIS_OUTPUT = [
+    'Write the final advisory contract in English.',
+    '[RP Reply Mandate]\n- Immediate dramatic obligation and the concrete change the reply must accomplish.',
+    '[POV and Scene Anchor]\n- Focal sequence: one or more NPCs / each perceptual limit / paragraph or action-beat boundary for any shift / time-place-physical anchor. Use one focal lens when no shift is useful.',
+    '[Recommended Entrances / Re-entries]\n- Existing lore character, faction, place, or front to use this turn / why now / channel of entrance / what to avoid. Use `(none)` if no established entrance is earned.',
+    '[Ensemble Weaving]\n- Primary actor plus zero to three supporting characters or systems / each independent function / NPC-to-NPC interaction worth dramatizing.',
+    '[Living World Signals]\n- One or two wider-world intersections that can be shown without exposition or omniscience.',
+    '[Risk and Cost-of-Inaction Logic]\n- Consequential actor: acting risk / credible inaction cost / resulting choice or active-wait tactic / how it becomes legible through behavior or consequence.',
+    '[Must Preserve]\n- Maximum six hard continuity, knowledge, relationship, or world-logic constraints.',
+    '[User Agency]\n- Explicit user contribution that remains canon / private or future state that must remain open.',
+    '[End State]\n- The changed situation after the reply / unresolved affordance left for the user.',
+    '[Avoid]\n- Specific risks now: stalling, protagonist tunnel vision, random cast pull, info dump, ambiguous interior mixing, knowledge leak, OOC leap, plot armor, convenient convergence, or forced user action.',
+    '[Reject or Ignore]\n- Unsupported or conflicting prior-note claims. Use `(none)` when empty.',
+    'Do not output the final reply.',
+  ].join('\n\n');
+
+  const EROS_NOVEL_SYNTHESIS_SYSTEM = [
+    'You are the Eros Tower final Worldweaver Arbiter for fiction.',
+    COMMON_EVIDENCE_RULES,
+    'You do not write the prose. Convert prior notes and visible context into a compact mandate for the next response.',
+    'Source priority: explicit current user direction and recent story events, then character/persona/lore/author-note facts, then durable memory, then agent inference.',
+    'Desired experience: an immersive story with a genuinely inhabited world. The nominal protagonist, persona, and primary bot are nodes in an ensemble, not gravitational centers that erase everyone else.',
+    'Use established lore/cast/fronts when relevant. Do not invent a random extra, location, faction, or institution when existing material can carry the beat.',
+    'Keep private interior access singular at each instant while allowing multiple focal characters only when each shift adds real value.',
+    'The structured notes are private planning. The visible response must remain in the conversation established format.',
+  ].join('\n\n');
+
+  const EROS_NOVEL_SYNTHESIS_OUTPUT = [
+    'Write the final advisory contract in English.',
+    '[Response Mandate]\n- Core change, emotional or causal purpose, and breadth appropriate to the requested length.',
+    '[Focal and Continuity Plan]\n- Focal sequence / each character time-place anchor and perceptual limits / paragraph or action-beat boundary for any shift / separator only when a substantial continuity break warrants it.',
+    '[Recommended Entrances / Re-entries]\n- Existing lore character, faction, place, or front to use this response / why now / scene or trace channel / what to avoid. Use `(none)` if no established entrance is earned.',
+    '[Ensemble Arc Weaving]\n- Primary arc plus zero to four supporting character, faction, institution, place, or system beats / each independent function.',
+    '[Risk and Cost-of-Inaction Decisions]\n- Consequential actor: acting risk / credible inaction cost / earned decision or active-wait tactic / how the logic becomes legible through behavior, timing, preparation, or consequence.',
+    '[World in Motion]\n- Wider fronts, public systems, logistics, culture, or offscreen processes that become dramatized intersections rather than exposition.',
+    '[Must Preserve]\n- Maximum eight hard facts about chronology, geography, knowledge, physical state, relationship, resources, authority, or causality.',
+    '[End State and Carry-Forward]\n- Changed states across used fronts / unresolved pressure that remains alive without forced cliffhanger.',
+    '[Avoid]\n- Specific risks now: ambiguous interior mixing, omniscient tell, protagonist tunnel vision, random cast rotation, lore dump, melodramatic clock, repeated hesitation, convenient convergence, plot armor, sudden relationship leap, or premature closure.',
+    '[Reject or Ignore]\n- Unsupported or conflicting prior-note claims. Use `(none)` when empty.',
+    'Do not output the final response.',
+  ].join('\n\n');
+
+  const WORLD_AGENT_PROMPT = EROS_RP_WORLD_SYSTEM;
+  const CHARACTER_AGENT_PROMPT = EROS_RP_CHARACTER_SYSTEM;
+  const MOMENTUM_AGENT_PROMPT = EROS_RP_MOMENTUM_SYSTEM;
+  const SYNTHESIS_AGENT_PROMPT = EROS_RP_SYNTHESIS_SYSTEM;
 
   const STATE_COMMIT_PROMPT = [
     'You are the Eros Tower State Committer.',
@@ -4547,12 +4737,12 @@
     const firstMessage = firstNonEmpty(registeredFirstMessage?.message, resolveRegisteredFirstMessage(character, chat).message, '(none)');
     const lorePreview = lore
       .filter(item => item?.kind !== 'desc' && item?.kind !== 'firstMessage')
-      .slice(0, 16)
-      .map(item => `- ${item.kind}/${item.path}${item.meta?.alwaysActive ? ' always' : ''} keys=${item.activationKeys.join(', ') || '-'}: ${item.content.slice(0, 360)}`)
+      .slice(0, 32)
+      .map(item => `- ${item.kind}/${item.path}${item.meta?.alwaysActive ? ' always' : ''} keys=${item.activationKeys.join(', ') || '-'}: ${item.content.slice(0, 650)}`)
       .join('\n');
     return [
       `[Character]\n${firstNonEmpty(character?.description, character?.desc, character?.data?.description, character?.data?.desc, '(none)').slice(0, 6000)}`,
-      `[First Message]\n${firstMessage.slice(0, 1600)}`,
+      `[First Message]\n${firstMessage.slice(0, 5000)}`,
       `[Persona]\n${firstNonEmpty(persona?.description, persona?.desc, persona?.prompt, persona?.name, '(none)').slice(0, 2500)}`,
       `[Author Note]\n${firstNonEmpty(chat?.note, chat?.authorNote, character?.authorNote, character?.data?.authorNote, '(none)').slice(0, 2000)}`,
       `[Canonical Lore Candidates]\n${lorePreview || '(none)'}`,
@@ -6070,12 +6260,13 @@
     const query = buildRetrievalQuery(context, priorNotes, profile.keywords);
     const budget = Math.max(1200, Number(budgetOverride || profile.budget || 4200));
     const controlFloor = buildMainControlFloorContext(context, Math.min(Math.max(900, Math.floor(budget * 0.35)), budget));
-    const retrievalBudget = Math.max(700, budget - controlFloor.length - 80);
+    const activeLoreBridge = buildActiveLoreBridgeContext(context, priorNotes, Math.min(1800, Math.max(700, Math.floor(budget * 0.22))));
+    const retrievalBudget = Math.max(700, budget - controlFloor.length - activeLoreBridge.length - 120);
     const staged = await stagedRetrieveCandidates(agentId, state, query, profile, conf, context);
     const candidates = staged.candidates;
     const selected = selectCandidates(candidates, profile.limit, retrievalBudget);
     const pack = formatRetrievalPack(agentId, state, selected, query);
-    return [controlFloor, staged.note, pack].filter(Boolean).join('\n\n').slice(0, budget);
+    return [controlFloor, activeLoreBridge, staged.note, pack].filter(Boolean).join('\n\n').slice(0, budget);
   }
 
   async function stagedRetrieveCandidates(agentId, state, queryTerms, profile, conf = null, context = null) {
@@ -6332,7 +6523,9 @@
       totalBudget,
     );
     const controlFloor = buildMainControlFloorContext(context, floorBudget);
-    const remainingBudget = Math.max(700, totalBudget - controlFloor.length - 80);
+    const activeLoreBridge = buildActiveLoreBridgeContext(context, notes, Math.min(2600, Math.max(900, Math.floor(totalBudget * 0.22))));
+    const agentBridge = buildActionableErosBridge(notes, Math.min(2200, Math.max(700, Math.floor(totalBudget * 0.18))));
+    const remainingBudget = Math.max(700, totalBudget - controlFloor.length - activeLoreBridge.length - agentBridge.length - 160);
     const staged = await stagedRetrieveCandidates('main', state, query, AGENT_RETRIEVAL_PROFILE.main, conf, context);
     const candidates = staged.candidates;
     const selected = selectCandidates(candidates, AGENT_RETRIEVAL_PROFILE.main.limit, remainingBudget);
@@ -6352,16 +6545,204 @@
       '',
       controlFloor,
       '',
+      activeLoreBridge,
+      '',
+      agentBridge,
+      '',
       staged.note || '',
       '',
       retrievalPack,
       '',
       '[Actionable Agent Notes]',
-      formatCompactNotes(notes, 1600),
+      formatCompactNotes(notes, 1200),
     ];
     const briefing = lines.filter(Boolean).join('\n').slice(0, totalBudget);
     recordInjectionTrace(state, query, selected, briefing, totalBudget, staged);
     return briefing;
+  }
+
+  function stripLoreCandidateSectionFromSettingBlocks(text) {
+    return String(text || '').replace(/\n?\[Canonical Lore Candidates\][\s\S]*$/i, '').trim();
+  }
+
+  function activeLoreBridgeQueryText(context, notes = []) {
+    const messages = Array.isArray(context?.messages) ? context.messages : [];
+    return [
+      context?.mode || '',
+      getUserInput(messages),
+      messages.slice(-6).map(item => item?.content || '').join('\n'),
+      stripLoreCandidateSectionFromSettingBlocks(context?.settingBlocks || ''),
+      includedAgentNotes(notes).map(note => note?.text || '').join('\n').slice(0, 4000),
+    ].filter(Boolean).join('\n');
+  }
+
+  function sourceActivationHitScore(source, queryTerms, queryText) {
+    if (!source || source.kind === 'desc') return 0;
+    const kind = String(source.kind || '');
+    const lowerKind = kind.toLowerCase();
+    const always = Boolean(source?.meta?.alwaysActive || source?.meta?.constant || lowerKind === 'firstmessage');
+    const query = String(queryText || '').toLowerCase();
+    const terms = Array.isArray(queryTerms) ? queryTerms : [];
+    const keys = normalizeStringArray(source.activationKeys).map(key => key.toLowerCase()).filter(key => key.length >= 2);
+    const labelText = [source.label, source.path, source.kind, source.scope].filter(Boolean).join('\n').toLowerCase();
+    const contentText = String(source.content || '').toLowerCase();
+    let score = always ? 110 : 0;
+    if (lowerKind === 'firstmessage') score += 50;
+    if (/lore|note|module|referencecharacter/.test(lowerKind)) score += 14;
+    score += clampFloat(parseNumber(source.priority, 5, 0, 10), 5, 0, 10) * 3;
+    let keyHits = 0;
+    keys.forEach(key => {
+      if (query.includes(key)) keyHits += 1;
+    });
+    score += keyHits * 34;
+    if (source?.meta?.selective && keyHits > 0) score += 18;
+    let termHits = 0;
+    terms.forEach(term => {
+      const t = String(term || '').toLowerCase();
+      if (!t || t.length < 2) return;
+      if (labelText.includes(t)) {
+        score += 12;
+        termHits += 1;
+      } else if (contentText.includes(t)) {
+        score += 5;
+        termHits += 1;
+      }
+    });
+    if (termHits >= 3) score += 12;
+    return Math.min(240, score);
+  }
+
+  function isActiveLoreBridgeSource(source, queryTerms, queryText) {
+    if (!source || source.kind === 'desc') return false;
+    if (source?.meta?.alwaysActive || source?.meta?.constant || source.kind === 'firstMessage') return true;
+    return sourceActivationHitScore(source, queryTerms, queryText) >= 42;
+  }
+
+  function collectActiveLoreBridgeSources(context, notes = [], limit = 8) {
+    const sources = Array.isArray(context?.canonicalSources) ? context.canonicalSources : [];
+    const queryText = activeLoreBridgeQueryText(context, notes);
+    const queryTerms = extractQueryTerms(queryText).slice(0, 80);
+    const seen = new Set();
+    return sources
+      .map((source, index) => ({
+        source,
+        index,
+        score: sourceActivationHitScore(source, queryTerms, queryText),
+      }))
+      .filter(item => isActiveLoreBridgeSource(item.source, queryTerms, queryText))
+      .filter(({ source }) => {
+        const key = source?.hash || source?.path || `${source?.kind || ''}:${String(source?.content || '').slice(0, 140)}`;
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .sort((a, b) => b.score - a.score || controlFloorTier1Rank(b.source, b.index) - controlFloorTier1Rank(a.source, a.index))
+      .slice(0, Math.max(1, Number(limit || 8)))
+      .map(item => ({ ...item.source, _activeLoreBridgeScore: item.score }));
+  }
+
+  function buildActiveLoreBridgeContext(context, notes = [], budget = 2600) {
+    const selected = collectActiveLoreBridgeSources(context, notes, 10);
+    if (!selected.length) return '';
+    const max = Math.max(500, Number(budget || 2600));
+    const lines = [
+      '[Active Lore Bridge]',
+      'Use these active lore facts as current-turn evidence. Prefer established lore, cast, places, and fronts over inventing unrelated extras when they fit. Do not reveal labels or plugin mechanics.',
+    ];
+    const perItemCap = Math.max(120, Math.min(360, Math.floor((max - 260) / Math.max(1, selected.length))));
+    let used = lines.join('\n').length + 1;
+    for (const source of selected) {
+      const label = firstNonEmpty(source.label, source.kind, source.path, 'lore');
+      const meta = [
+        source.kind || 'lore',
+        source.path || '',
+        source?.meta?.alwaysActive || source?.meta?.constant ? 'always' : '',
+        source.kind === 'firstMessage' ? 'first-message' : '',
+        normalizeStringArray(source.activationKeys).length ? `keys=${normalizeStringArray(source.activationKeys).slice(0, 5).join('/')}` : '',
+        `score=${Math.round(source._activeLoreBridgeScore || 0)}`,
+      ].filter(Boolean).join(', ');
+      const summary = String(source.content || '').replace(/\s+/g, ' ').trim().slice(0, perItemCap);
+      if (!summary) continue;
+      const next = `- ${label} (${meta}): ${summary}`;
+      if (used + next.length > max) {
+        if (!lines[lines.length - 1].includes('truncated')) lines.push('[Active Lore Bridge truncated by budget]');
+        break;
+      }
+      lines.push(next);
+      used += next.length + 1;
+    }
+    return lines.join('\n').slice(0, max);
+  }
+
+  const ACTIONABLE_EROS_BRIDGE_HEADERS = Object.freeze([
+    'Initiating Cast',
+    'Supporting or Independent Cast',
+    'Re-entry Candidates',
+    'Present-Facing Intersections',
+    'Offscreen Continuation',
+    'Recommended Entrances / Re-entries',
+    'Ensemble Weaving',
+    'Ensemble Arc Weaving',
+    'Living World Signals',
+    'World in Motion',
+    'Active World Fronts',
+    'Parallel World Fronts',
+    'Compatible Ensemble or World Beats',
+    'Secondary or Parallel Movements',
+  ]);
+
+  function isActionableErosBridgeHeader(header) {
+    const normalized = String(header || '').trim().toLowerCase();
+    return ACTIONABLE_EROS_BRIDGE_HEADERS.some(item => item.toLowerCase() === normalized);
+  }
+
+  function extractActionableErosSections(text) {
+    const raw = String(text || '');
+    if (!raw.trim()) return [];
+    const sections = [];
+    const re = /\[([^\]\n]{2,90})\]\s*\n?([\s\S]*?)(?=\n\[[^\]\n]{2,90}\]\s*(?:\n|$)|$)/g;
+    for (const match of raw.matchAll(re)) {
+      const header = String(match[1] || '').trim();
+      if (!isActionableErosBridgeHeader(header)) continue;
+      const body = String(match[2] || '')
+        .split(/\r?\n/)
+        .map(line => line.trim())
+        .filter(line => line && !/^do not\b/i.test(line))
+        .slice(0, 8)
+        .join('\n');
+      if (body) sections.push({ header, body });
+    }
+    return sections.slice(0, 8);
+  }
+
+  function buildActionableErosBridge(notes, budget = 2200) {
+    const included = includedAgentNotes(notes);
+    if (!included.length) return '';
+    const max = Math.max(500, Number(budget || 2200));
+    const lines = [
+      '[Actionable Eros Bridge]',
+      'Prioritize these agent-selected existing cast/fronts/intersections when they are compatible with the current user input. They are guidance, not canon unless supported by evidence.',
+    ];
+    let used = lines.join('\n').length + 1;
+    for (const note of included) {
+      const sections = extractActionableErosSections(note?.text || '');
+      if (!sections.length) continue;
+      const agentLabel = `[Agent: ${note.name || note.id || 'Eros'}]`;
+      if (used + agentLabel.length > max) break;
+      lines.push(agentLabel);
+      used += agentLabel.length + 1;
+      for (const section of sections) {
+        const bodyCap = Math.max(140, Math.min(420, Math.floor((max - used) / 2)));
+        const block = `[${section.header}]\n${section.body.slice(0, bodyCap)}`;
+        if (used + block.length > max) {
+          lines.push('[Actionable Eros Bridge truncated by budget]');
+          return lines.join('\n').slice(0, max);
+        }
+        lines.push(block);
+        used += block.length + 1;
+      }
+    }
+    return lines.length > 2 ? lines.join('\n').slice(0, max) : '';
   }
 
   function isControlFloorTier1CanonicalSource(source) {
@@ -6472,12 +6853,17 @@
     const signature = buildRecallQuerySignature(queryTerms, context);
     return collectStateCandidates(state)
       .filter(candidate => !profile?.kinds || profile.kinds.includes(candidate.kind))
-      .map(candidate => ({
-        ...candidate,
-        score: scoreCandidate(candidate, queryTerms, state.turn, state)
-          + weightedRecallOverlap(candidate, signature)
-          + (candidate.kind === 'lore' && isPinnedLoreLedgerItem(candidate.item, context) ? 80 : 0),
-      }))
+      .map(candidate => {
+        const activeLore = candidate.kind === 'lore' && isActiveLoreItemForQuery(candidate.item, context, queryTerms);
+        const enriched = { ...candidate, activeLore };
+        return {
+          ...enriched,
+          score: scoreCandidate(enriched, queryTerms, state.turn, state)
+            + weightedRecallOverlap(enriched, signature)
+            + (activeLore ? 72 : 0)
+            + (candidate.kind === 'lore' && isPinnedLoreLedgerItem(candidate.item, context) ? 80 : 0),
+        };
+      })
       .sort((a, b) => b.score - a.score);
   }
 
@@ -6528,6 +6914,41 @@
       (pin.hash && source.hash === pin.hash)
       || (pin.path && (source.path === pin.path || item.sourceId === pin.path))
       || (pin.id && item.id === pin.id)
+    ));
+  }
+
+  function isActiveLoreItemForQuery(item, context = null, queryTerms = []) {
+    if (!item) return false;
+    const source = item.canonicalSource || {};
+    const always = Boolean(
+      item.alwaysActive
+      || item.activationMode === 'always'
+      || source?.meta?.alwaysActive
+      || source?.meta?.constant
+      || source?.kind === 'firstMessage'
+    );
+    if (always) return true;
+    const terms = Array.isArray(queryTerms) ? queryTerms.map(term => String(term || '').toLowerCase()).filter(term => term.length >= 2) : [];
+    if (!terms.length) return false;
+    const query = terms.join(' ');
+    const keys = normalizeStringArray(item.activationKeys).map(key => key.toLowerCase()).filter(key => key.length >= 2);
+    if (keys.some(key => query.includes(key) || terms.some(term => key.includes(term)))) return true;
+    const haystack = [
+      item.name,
+      item.summary,
+      item.verbatimExcerpt,
+      item.sourceId,
+      source.label,
+      source.path,
+      source.kind,
+    ].filter(Boolean).join('\n').toLowerCase();
+    const hits = terms.filter(term => haystack.includes(term)).length;
+    if (hits >= 2) return true;
+    const bridgeSources = collectActiveLoreBridgeSources(context || {}, [], 10);
+    return bridgeSources.some(sourceItem => (
+      (sourceItem.hash && source.hash === sourceItem.hash)
+      || (sourceItem.path && (source.path === sourceItem.path || item.sourceId === sourceItem.path))
+      || (sourceItem.id && item.id === sourceItem.id)
     ));
   }
 
@@ -6868,6 +7289,7 @@
     if (candidate?.kind === 'scene') return true;
     if (candidate?.kind === 'character' && /active|present|current/i.test(String(item.status || item.state || 'active'))) return true;
     if (candidate?.kind === 'lore') {
+      if (candidate.activeLore) return true;
       const canonicalKind = String(item?.canonicalSource?.kind || '').toLowerCase();
       if (canonicalKind === 'desc' || canonicalKind === 'firstmessage') return true;
       if (item.alwaysActive || item.activationMode === 'always' || item?.canonicalSource?.meta?.alwaysActive) return true;
@@ -6960,6 +7382,7 @@
       `turn=${candidate.turn}`,
       candidate.memoryTier ? `memoryTier=${candidate.memoryTier}` : '',
       candidate.kind === 'memory' ? `decay=${formatDecimal(candidate.item?.decay ?? 1)}` : '',
+      candidate.kind === 'lore' && candidate.activeLore ? 'activeLore' : '',
       candidate.kind === 'lore' && (candidate.item?.alwaysActive || candidate.item?.activationMode === 'always' || candidate.item?.canonicalSource?.meta?.alwaysActive) ? 'always' : '',
       candidate.kind === 'lore' && Array.isArray(candidate.item?.activationKeys) ? `keys=${candidate.item.activationKeys.slice(0, 5).join('/')}` : '',
       candidate.tier ? `tier=${candidate.tier}` : '',
@@ -7153,6 +7576,29 @@
     return String(template || '').replace(/\{\{(\w+)\}\}/g, (_, key) => String(values[key] ?? ''));
   }
 
+  function resolveAgentModeKey(context = null) {
+    return context?.mode === 'novel' ? 'novel' : 'rp';
+  }
+
+  function resolveAgentModePrompt(agent, context = null) {
+    const key = resolveAgentModeKey(context);
+    const prompts = agent?.modePrompts && typeof agent.modePrompts === 'object' && !Array.isArray(agent.modePrompts)
+      ? agent.modePrompts
+      : null;
+    return prompts?.[key] || prompts?.rp || null;
+  }
+
+  function resolveRuntimeAgentSystemPrompt(agent, context = null) {
+    const prompt = resolveAgentModePrompt(agent, context);
+    return cleanString(prompt?.systemPrompt, agent?.systemPrompt || '');
+  }
+
+  function resolveRuntimeAgentUserTemplate(agent, context = null) {
+    const prompt = resolveAgentModePrompt(agent, context);
+    const outputInstruction = cleanString(prompt?.outputInstruction, agent?.outputInstruction || '');
+    return prompt?.userTemplate || agent?.userTemplate || defaultUserTemplate(agent?.phase || 'pre', agent?.id || '', outputInstruction);
+  }
+
   function deepCloneJson(value) {
     if (value === undefined || value === null) return value;
     try {
@@ -7216,12 +7662,12 @@
         final_output: '',
       };
       const messages = [
-        { role: 'system', content: agent.systemPrompt || '' },
+        { role: 'system', content: resolveRuntimeAgentSystemPrompt(agent, context) || '' },
         { role: 'user', content: [
           agent.memoryEnabled && values.memory_instruction
             ? `<source label="Agent Memory Advisory">\n${values.memory_instruction}${values.memory_format ? `\n\nFormat:\n${values.memory_format}` : ''}\n</source>`
             : '',
-          renderTemplate(agent.userTemplate, values),
+          renderTemplate(resolveRuntimeAgentUserTemplate(agent, context), values),
         ].filter(Boolean).join('\n\n') },
       ];
       const promptTrace = formatPromptForRunLog(messages);
@@ -14539,6 +14985,7 @@
             pluginContent: sources.find(source => source.kind === 'referencePlugin')?.content || '',
             labels: sources.map(source => source.label || ''),
             pinnedControlFloor: buildMainControlFloorContext(pinnedContext, 9000),
+            activeLoreBridge: buildActiveLoreBridgeContext(pinnedContext, [], 9000),
             paths: sources.map(source => source.path),
           };
         },
@@ -14609,7 +15056,7 @@
           }], {}, {}, DEFAULT_CONFIG);
           const byErosNovelName = resolveMode('auto', targetCharacter, [{
             role: 'system',
-            content: 'agents-💘Eros(에로스)-소설.json name: 💘Eros(에로스) Novel / Mijeong fiction prompt',
+            content: 'agents-💘Eros(에로스)-소설.json name: 💘Eros(에로스) Novel / fiction prompt',
           }], {}, {}, DEFAULT_CONFIG);
           const byFormatToggleIgnored = resolveMode('auto', targetCharacter, [{
             role: 'system',
