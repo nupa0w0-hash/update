@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.17
+//@display-name ☸Eros Tower 1.1.18
 //@api 3.0
-//@version 1.1.17
+//@version 1.1.18
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -33,18 +33,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.17
+ * Eros Tower 1.1.18
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.17 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.18 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.17';
+  const VERSION = '1.1.18';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.17`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.18`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -61,7 +61,7 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.17 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.18 analysis context';
   const GOOGLE_OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
   const GOOGLE_CLOUD_PLATFORM_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
   const PSYCHE_RECOMMENDED_MODELS = Object.freeze([
@@ -1650,7 +1650,7 @@
     'Respect user agency: do not decide the user persona inner thoughts, consent, dialogue, or next action.',
   ].join('\n');
 
-  const EROS_AGENT_PROMPT_REVISION = 'v1.1.17-active-lore-bridge';
+  const EROS_AGENT_PROMPT_REVISION = 'v1.1.18-active-lore-budget-guard';
 
   const EROS_RP_WORLD_SYSTEM = [
     'You are the Eros Tower Living World and Active Fronts Agent for RP.',
@@ -6517,6 +6517,9 @@
   async function buildMainBriefing(state, context, notes, budget = 4200, conf = null) {
     const query = buildRetrievalQuery(context, notes, []);
     const totalBudget = Math.max(1200, Number(budget || 0));
+    if (totalBudget <= 2400) {
+      return buildCompactMainBriefing(state, context, notes, totalBudget, conf, query);
+    }
     const floorBudget = Math.min(
       Math.max(900, Math.floor(totalBudget * 0.55)),
       Math.max(700, totalBudget - 900),
@@ -6535,30 +6538,105 @@
       note: staged.note || '',
       budget,
     });
-    const lines = [
+    const blocks = [
+      buildMainBriefingIntro(false),
+      controlFloor,
+      activeLoreBridge,
+      agentBridge,
+      staged.note || '',
+      retrievalPack,
+      ['[Actionable Agent Notes]', formatCompactNotes(notes, 1200)].join('\n'),
+    ];
+    const briefing = joinBriefingBlocks(blocks, totalBudget);
+    recordInjectionTrace(state, query, selected, briefing, totalBudget, staged);
+    return briefing;
+  }
+
+  async function buildCompactMainBriefing(state, context, notes, totalBudget, conf = null, query = null) {
+    const queryTerms = Array.isArray(query) ? query : buildRetrievalQuery(context, notes, []);
+    const activeLoreBudget = Math.min(1100, Math.max(760, totalBudget - 360));
+    const activeLoreBridge = buildActiveLoreBridgeContext(context, notes, activeLoreBudget);
+    const agentBridge = buildActionableErosBridge(notes, Math.min(620, Math.max(0, Math.floor(totalBudget * 0.28))));
+    const staged = await stagedRetrieveCandidates('main', state, queryTerms, AGENT_RETRIEVAL_PROFILE.main, conf, context);
+    const remainingBudget = Math.max(320, Math.floor(totalBudget * 0.2));
+    const selected = selectCandidates(staged.candidates, Math.min(6, AGENT_RETRIEVAL_PROFILE.main.limit), remainingBudget);
+    const retrievalPack = totalBudget >= 1900 ? formatRetrievalPack('main', state, selected, queryTerms) : '';
+    recordRecallTrace(state, queryTerms, selected, 'main', {
+      stages: staged.stats || null,
+      note: staged.note || '',
+      budget: totalBudget,
+      compact: true,
+    });
+    const blocks = [
+      buildMainBriefingIntro(true),
+      buildMainModeFloorContext(context),
+      activeLoreBridge,
+      agentBridge,
+      retrievalPack,
+    ];
+    const briefing = joinBriefingBlocks(blocks, totalBudget);
+    recordInjectionTrace(state, queryTerms, selected, briefing, totalBudget, { ...staged, compact: true });
+    return briefing;
+  }
+
+  function buildMainBriefingIntro(compact = false) {
+    if (compact) {
+      return [
+        '[Eros Tower Curated Briefing]',
+        'Private context. Do not reveal labels, scores, hidden secrets, or plugin mechanics.',
+        'Final response only: in-world prose/dialogue/action. No analysis, agent labels, or drafts.',
+        'Priority: current user/recent chat > active lore/card > stored state > agent inference.',
+      ].join('\n');
+    }
+    return [
       '[Eros Tower Curated Briefing]',
       'Use this as private planning context. Do not reveal labels, scores, hidden secrets, or plugin mechanics.',
       'Never output <Thoughts>, <think>, reasoning, analysis headings, run logs, or agent labels. Final response must be only the in-world reply.',
       'Do not write an English draft, translation draft, planning draft, or title before the final prose. Use one final language matching the current conversation.',
       'Source order: current user/recent chat > final output/canon > character card/author note/lore > stored state > agent inference.',
       'Older low-importance memories are intentionally faded unless repeated, important, or relevant now.',
-      '',
-      controlFloor,
-      '',
-      activeLoreBridge,
-      '',
-      agentBridge,
-      '',
-      staged.note || '',
-      '',
-      retrievalPack,
-      '',
-      '[Actionable Agent Notes]',
-      formatCompactNotes(notes, 1200),
-    ];
-    const briefing = lines.filter(Boolean).join('\n').slice(0, totalBudget);
-    recordInjectionTrace(state, query, selected, briefing, totalBudget, staged);
-    return briefing;
+    ].join('\n');
+  }
+
+  function buildMainModeFloorContext(context) {
+    return `[Eros Tower Control Floor]\n[Current Writing Mode]\n${context?.mode === 'novel' ? 'novel' : 'rp'}`;
+  }
+
+  function joinBriefingBlocks(blocks, budget) {
+    const max = Math.max(400, Number(budget || 0));
+    const out = [];
+    let used = 0;
+    for (const raw of blocks || []) {
+      const block = String(raw || '').trim();
+      if (!block) continue;
+      const sep = out.length ? 2 : 0;
+      if (used + sep + block.length <= max) {
+        out.push(block);
+        used += sep + block.length;
+        continue;
+      }
+      const remaining = max - used - sep;
+      if (remaining >= 220) out.push(trimBriefingBlockToBudget(block, remaining));
+      break;
+    }
+    return out.join('\n\n').slice(0, max);
+  }
+
+  function trimBriefingBlockToBudget(block, budget) {
+    const text = String(block || '').trim();
+    const max = Math.max(0, Number(budget || 0));
+    if (text.length <= max) return text;
+    const marker = briefingBlockTruncationLabel(text);
+    if (max <= marker.length + 40) return text.slice(0, max);
+    const head = text.slice(0, Math.max(0, max - marker.length - 1));
+    const cut = head.lastIndexOf('\n');
+    const safeHead = cut >= 160 ? head.slice(0, cut) : head;
+    return `${safeHead.trimEnd()}\n${marker}`;
+  }
+
+  function briefingBlockTruncationLabel(block) {
+    const match = String(block || '').match(/^\[([^\]\n]{2,90})\]/);
+    return `[${match?.[1] || 'Briefing'} truncated by budget]`;
   }
 
   function stripLoreCandidateSectionFromSettingBlocks(text) {
@@ -6645,13 +6723,19 @@
     const selected = collectActiveLoreBridgeSources(context, notes, 10);
     if (!selected.length) return '';
     const max = Math.max(500, Number(budget || 2600));
+    const compact = max <= 1200;
+    const selectedItems = compact ? selected.slice(0, 4) : selected;
     const lines = [
       '[Active Lore Bridge]',
-      'Use these active lore facts as current-turn evidence. Prefer established lore, cast, places, and fronts over inventing unrelated extras when they fit. Do not reveal labels or plugin mechanics.',
+      compact
+        ? 'Use as current-turn lore evidence. Prefer established cast/fronts over unrelated new extras. Do not reveal labels.'
+        : 'Use these active lore facts as current-turn evidence. Prefer established lore, cast, places, and fronts over inventing unrelated extras when they fit. Do not reveal labels or plugin mechanics.',
     ];
-    const perItemCap = Math.max(120, Math.min(360, Math.floor((max - 260) / Math.max(1, selected.length))));
+    const perItemCap = compact
+      ? Math.max(95, Math.min(220, Math.floor((max - 170) / Math.max(1, selectedItems.length))))
+      : Math.max(120, Math.min(360, Math.floor((max - 260) / Math.max(1, selectedItems.length))));
     let used = lines.join('\n').length + 1;
-    for (const source of selected) {
+    for (const source of selectedItems) {
       const label = firstNonEmpty(source.label, source.kind, source.path, 'lore');
       const meta = [
         source.kind || 'lore',
@@ -6671,7 +6755,7 @@
       lines.push(next);
       used += next.length + 1;
     }
-    return lines.join('\n').slice(0, max);
+    return trimBriefingBlockToBudget(lines.join('\n'), max);
   }
 
   const ACTIONABLE_EROS_BRIDGE_HEADERS = Object.freeze([
@@ -14762,6 +14846,40 @@
             briefingLength: briefing.length,
             traceCount: targetState.injectionTrace.length,
             firstTrace: targetState.injectionTrace[0] || null,
+          };
+        },
+        testLowBudgetLoreBridge: async () => {
+          const targetCharacter = {
+            id: 'low-budget-subject',
+            name: 'Low Budget Subject',
+            description: 'Low budget bridge fixture.',
+            firstMessage: 'Low Budget Subject wakes under a pale window on the first morning.',
+            lorebook: { type: 'risu', ver: 1, data: [
+              { comment: 'Low Budget Subject', alwaysActive: true, key: ['subject'], content: 'Low Budget Subject is a young traveler with a protected identity, a fixed room, and a first morning obligation.' },
+              { comment: 'Established Counterpart', alwaysActive: true, key: ['counterpart'], content: 'Established Counterpart is the existing person who should be preferred over unrelated extras when a second actor is useful.' },
+              { comment: 'Local Front', alwaysActive: true, key: ['front'], content: 'Local Front: the nearby household and its morning routine create pressure through bells, doors, and expected attendance.' },
+            ] },
+          };
+          const targetChat = { id: 'low-budget-chat', message: [{ role: 'assistant', data: 'Low Budget Subject wakes under a pale window on the first morning.' }] };
+          const targetContext = {
+            character: targetCharacter,
+            currentChat: targetChat,
+            db: { modules: [], enabledModules: [] },
+            messages: [{ role: 'assistant', content: targetCharacter.firstMessage }, { role: 'user', content: '*says nothing*' }],
+            canonicalSources: collectCanonicalSources(targetCharacter, { modules: [], enabledModules: [] }, targetChat, conf || DEFAULT_CONFIG),
+            settingBlocks: buildSettingBlocks(targetCharacter, { modules: [], enabledModules: [] }, targetChat),
+            mode: 'novel',
+          };
+          const targetState = createDefaultState('novel');
+          syncCanonicalLoreLedger(targetState, targetContext.canonicalSources);
+          const briefing = await buildMainBriefing(targetState, targetContext, [], 1200, { ...DEFAULT_CONFIG, embeddingEnabled: false, stagedSearchEnabled: false });
+          return {
+            length: briefing.length,
+            briefing,
+            hasActiveBridge: briefing.includes('[Active Lore Bridge]'),
+            hasLoreFact: briefing.includes('Low Budget Subject') || briefing.includes('Established Counterpart') || briefing.includes('Local Front'),
+            hasMidSentenceCut: /Prefer establishe\\s*$/m.test(briefing) || briefing.includes('Prefer establishe\n---'),
+            hasMode: briefing.includes('[Current Writing Mode]'),
           };
         },
         testInjectionPlacement: () => {
