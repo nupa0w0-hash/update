@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.15
+//@display-name ☸Eros Tower 1.1.16
 //@api 3.0
-//@version 1.1.15
+//@version 1.1.16
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -33,18 +33,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.15
+ * Eros Tower 1.1.16
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.15 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.16 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.15';
+  const VERSION = '1.1.16';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.15`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.16`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -61,7 +61,7 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.15 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.16 analysis context';
   const GOOGLE_OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
   const GOOGLE_CLOUD_PLATFORM_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
   const PSYCHE_RECOMMENDED_MODELS = Object.freeze([
@@ -2046,32 +2046,6 @@
       .filter(isPinnedIdentityLoreSource)
       .sort((a, b) => identitySourcePriority(b) - identitySourcePriority(a))
       .slice(0, 6);
-  }
-
-  function buildCurrentTurnCanonLock(context, budget = 2400) {
-    const identity = buildCanonicalIdentitySnapshot(context || {});
-    const pinned = selectPinnedIdentityLoreSources(context || {});
-    if (!identity.subjects.length && !pinned.length) return '';
-    const lines = ['[Current Turn Canon Lock]', 'Identity Baseline - Active Canon Snapshot'];
-    identity.subjects.forEach(subject => {
-      const bits = [];
-      if (subject.immutable?.gender) bits.push(`identity gender=${subject.immutable.gender}`);
-      if (subject.mutableBaseline?.affiliation) bits.push(`baseline affiliation=${subject.mutableBaseline.affiliation}`);
-      normalizeStringArray(subject.notes).forEach(note => bits.push(note));
-      lines.push(`- ${subject.name}${subject.aliases?.length ? ` / ${subject.aliases.join(' / ')}` : ''}: ${bits.join('; ') || 'identity baseline active'}`);
-    });
-    if (pinned.length) {
-      lines.push('[Pinned Identity Lore]');
-      const used = lines.join('\n').length;
-      const available = Math.max(360, Number(budget || 0) - used - (pinned.length * 36));
-      const perItemCap = Math.max(160, Math.min(900, Math.floor(available / Math.max(1, pinned.length))));
-      pinned.forEach(source => {
-        const label = source.label || source.kind || source.path || 'identity lore';
-        const summary = String(source.content || '').replace(/\s+/g, ' ').trim().slice(0, perItemCap);
-        lines.push(`- ${label}: ${summary}`);
-      });
-    }
-    return lines.join('\n').slice(0, Math.max(400, Number(budget || 0)));
   }
 
   function createDefaultAdaptiveQualityState() {
@@ -4571,12 +4545,17 @@
     const persona = getSelectedPersona(db);
     const lore = canonicalSources || collectCanonicalSources(character, db, chat);
     const firstMessage = firstNonEmpty(registeredFirstMessage?.message, resolveRegisteredFirstMessage(character, chat).message, '(none)');
+    const lorePreview = lore
+      .filter(item => item?.kind !== 'desc' && item?.kind !== 'firstMessage')
+      .slice(0, 16)
+      .map(item => `- ${item.kind}/${item.path}${item.meta?.alwaysActive ? ' always' : ''} keys=${item.activationKeys.join(', ') || '-'}: ${item.content.slice(0, 360)}`)
+      .join('\n');
     return [
       `[Character]\n${firstNonEmpty(character?.description, character?.desc, character?.data?.description, character?.data?.desc, '(none)').slice(0, 6000)}`,
-      `[First Message]\n${firstMessage.slice(0, 5000)}`,
+      `[First Message]\n${firstMessage.slice(0, 1600)}`,
       `[Persona]\n${firstNonEmpty(persona?.description, persona?.desc, persona?.prompt, persona?.name, '(none)').slice(0, 2500)}`,
       `[Author Note]\n${firstNonEmpty(chat?.note, chat?.authorNote, character?.authorNote, character?.data?.authorNote, '(none)').slice(0, 2000)}`,
-      `[Canonical Lore Candidates]\n${lore.length ? lore.slice(0, 32).map(item => `- ${item.kind}/${item.path}${item.meta?.alwaysActive ? ' always' : ''} keys=${item.activationKeys.join(', ') || '-'}: ${item.content.slice(0, 700)}`).join('\n') : '(none)'}`,
+      `[Canonical Lore Candidates]\n${lorePreview || '(none)'}`,
     ].join('\n\n');
   }
 
@@ -6385,27 +6364,53 @@
     return briefing;
   }
 
+  function isControlFloorTier1CanonicalSource(source) {
+    if (!source) return false;
+    if (source?.meta?.alwaysActive || source?.meta?.constant) return true;
+    return source?.kind === 'firstMessage';
+  }
+
+  function controlFloorTier1Rank(source, index = 0) {
+    let score = 0;
+    if (source?.kind === 'firstMessage') score += 120;
+    if (source?.meta?.alwaysActive) score += 80;
+    if (source?.meta?.constant) score += 70;
+    score += clampFloat(parseNumber(source?.priority, 5, 0, 10), 5, 0, 10);
+    return score - (index * 0.001);
+  }
+
+  function collectControlFloorTier1Sources(context, limit = 6) {
+    const seen = new Set();
+    return (Array.isArray(context?.canonicalSources) ? context.canonicalSources : [])
+      .map((source, index) => ({ source, index }))
+      .filter(item => isControlFloorTier1CanonicalSource(item.source))
+      .filter(({ source }) => {
+        const key = source?.hash || source?.path || `${source?.kind || ''}:${String(source?.content || '').slice(0, 120)}`;
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .sort((a, b) => controlFloorTier1Rank(b.source, b.index) - controlFloorTier1Rank(a.source, a.index))
+      .slice(0, Math.max(1, Number(limit || 6)))
+      .map(item => item.source);
+  }
+
   function buildMainControlFloorContext(context, budget = 3600) {
     const lines = [];
     lines.push(`[Current Writing Mode]\n${context?.mode === 'novel' ? 'novel' : 'rp'}`);
-    const canonLock = buildCurrentTurnCanonLock(context, Math.min(Math.max(900, Math.floor(Number(budget || 0) * 0.48)), Number(budget || 0) || 2400));
-    if (canonLock) lines.push(canonLock);
-    const firstMessage = String(context?.firstMessageInfo?.message || '').trim();
-    if (firstMessage) {
-      const firstCap = Math.min(2200, Math.max(600, Math.floor(Number(budget || 0) * 0.42)));
-      lines.push(`[Registered First Message]\n${firstMessage.slice(0, firstCap)}`);
-    }
-    const alwaysLore = (Array.isArray(context?.canonicalSources) ? context.canonicalSources : [])
-      .filter(source => source?.meta?.alwaysActive);
+    const alwaysLore = collectControlFloorTier1Sources(context, 6);
     if (alwaysLore.length) {
       lines.push('[Always-Active Lore Floor]');
-      const used = lines.join('\n').length;
-      const available = Math.max(480, Number(budget || 0) - used - (alwaysLore.length * 36));
-      const perItemCap = Math.max(120, Math.min(900, Math.floor(available / Math.max(1, alwaysLore.length))));
+      const floorBudget = Math.min(1200, Math.max(420, Math.floor(Number(budget || 0) * 0.36)));
+      const perItemCap = Math.max(100, Math.min(220, Math.floor((floorBudget - 120) / Math.max(1, alwaysLore.length))));
+      let used = '[Always-Active Lore Floor]\n'.length;
       alwaysLore.forEach(source => {
         const label = source.label || source.kind || source.path;
         const summary = String(source.content || '').replace(/\s+/g, ' ').trim().slice(0, perItemCap);
-        lines.push(`- ${label}: ${summary}`);
+        const next = `- ${label}: ${summary}`;
+        if (used + next.length > floorBudget && used > 0) return;
+        used += next.length + 1;
+        lines.push(next);
       });
     }
     const text = lines.length ? `[Eros Tower Control Floor]\n${lines.join('\n')}` : '';
