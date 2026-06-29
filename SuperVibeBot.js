@@ -1,13 +1,13 @@
 //@name SuperVibeBot
-//@display-name 🐸 SuperVibeBot v1.5.28
-//@version 1.5.28
+//@display-name 🐸 SuperVibeBot v1.5.29
+//@version 1.5.29
 //@api 3.0
 //@update-url https://github.com/nupa0w0-hash/supervibebot-update/releases/latest/download/SuperVibeBot.update.js
 //@arg api_key string "" "Google AI Studio API 키를 입력하세요 (Vertex AI, API Hub 또는 GitHub Copilot 연동 시 불필요)."
 //@arg disable_safety int 0 "안전 필터 비활성화 (1=OFF, 0=ON)"
 
 if (typeof risuai === "undefined") {
-    alert("⚠️ SuperVibeBot v1.5.28는 RisuAI Plugin API 3.0이 필요합니다.");
+    alert("⚠️ SuperVibeBot v1.5.29는 RisuAI Plugin API 3.0이 필요합니다.");
     throw new Error("API 3.0 required");
 }
 
@@ -164,9 +164,10 @@ async function safeCopyText(text, options = {}) {
 }
 
 /**
- * SuperVibeBot v1.5.28 Release Notes
+ * SuperVibeBot v1.5.29 Release Notes
  *
  * 🎉 Major Changes
+ * - Kero's actual chat execution parser now routes personality/scenario/성격/시나리오 targets to desc, not legacy fields
  * - Kero recent chat continuity now uses stable message ids, read-merge-write storage, and target-first global merge
  * - Invalid locale timestamps no longer sort as the newest conversation tail
  * - Legacy RisuAI personality/scenario targets now route to desc, and legacy lorebook activation fields are stripped on AI writes
@@ -9612,7 +9613,7 @@ function isKeroActionShapedObject(entry) {
 
 function getKeroGlobalSingleFieldPatchKeys(target) {
     const key = normalizeKeroActionTargetName(target);
-    if (key === 'desc') return ['desc', 'description', 'profile', 'characterDescription', 'character_description', 'descriptionText', 'description_text'];
+        if (key === 'desc') return ['desc', 'description', 'profile', 'characterDescription', 'character_description', 'descriptionText', 'description_text', 'personality', 'personalityText', 'personality_text', 'personality_prompt', 'personalityPrompt', '성격', 'scenario', 'scenarioText', 'scenario_text', 'scenario_prompt', 'scenarioPrompt', '시나리오'];
     if (key === 'globalNote') return ['globalNote', 'global_note', 'postHistoryInstructions', 'postHistory', 'post_history', 'post_history_instructions', 'instructions', 'systemPrompt', 'system_prompt'];
     if (key === 'background') return ['backgroundHTML', 'backgroundHtml', 'background_html', 'background', 'statusWindow', 'statusHtml', 'statusHTML', 'html', 'css', 'statusCss', 'statusCSS'];
     if (key === 'vars') return ['defaultVariables', 'variables', 'vars'];
@@ -10050,7 +10051,7 @@ function serializeKeroBulkChunks(chunks = []) {
 }
 
 function summarizeKeroBulkCompletedRanges(completedRanges = []) {
-    return normalizeKeroBulkRanges(completedRanges).reduce((acc, range) => {
+    const summary = normalizeKeroBulkRanges(completedRanges).reduce((acc, range) => {
         acc.ranges += 1;
         acc.count += Number(range.count || 0);
         acc.saved += Number(range.saved || range.count || 0);
@@ -10058,6 +10059,11 @@ function summarizeKeroBulkCompletedRanges(completedRanges = []) {
         acc.skipped += Number(range.skipped || 0);
         return acc;
     }, { ranges: 0, count: 0, saved: 0, created: 0, skipped: 0 });
+    summary.success = Number.isFinite(summary.saved) ? Math.max(0, Math.floor(summary.saved)) : 0;
+    if (!Number.isFinite(summary.created) || summary.created <= 0) {
+        summary.created = Math.max(0, summary.success - Math.max(0, Math.floor(Number(summary.skipped || 0))));
+    }
+    return summary;
 }
 
 function attachKeroActionPlanToMission(actions = []) {
@@ -12741,7 +12747,7 @@ function addSvbRuntimePluginMetadataSelfTest(checks) {
         const superVibeMetadata = buildPluginMetadataSummary([
             '//@name SuperVibeBot',
             '//@display-name 🐸 SuperVibeBot diagnostic',
-            '//@version 1.5.28',
+            '//@version 1.5.29',
             '//@api 3.0',
             `//@update-url ${SUPER_VIBE_BOT_RELEASE_UPDATE_URL}`
         ].join('\n'));
@@ -13868,6 +13874,62 @@ function resolveSvbRuntimeLocalFunction(localFunctions = {}, key, globalKey = ke
     return typeof globalValue === 'function' ? globalValue : null;
 }
 
+function addSvbRuntimeLocalActionParserSelfTest(checks, localFunctions = {}) {
+    const result = readSvbRuntimeValue('Kero internal action parser alias self test', () => {
+        const localNormalize = resolveSvbRuntimeLocalFunction(localFunctions, 'normalizeKeroActionTargetName');
+        const localParse = resolveSvbRuntimeLocalFunction(localFunctions, 'parseKeroAction');
+        if (typeof localNormalize !== 'function' || typeof localParse !== 'function') {
+            return { skipped: true };
+        }
+        const personalityParsed = localParse('@action {"type":"update","target":"personality","payload":{"personality":"diagnostic personality"}}');
+        const scenarioParsed = localParse('@action {"type":"update","target":"scenario","payload":{"scenario":"diagnostic scenario"}}');
+        const koreanParsed = localParse('@action {"type":"update","target":"성격","payload":{"성격":"diagnostic korean personality"}}');
+        const first = ensureArray(personalityParsed?.actions)[0] || {};
+        const second = ensureArray(scenarioParsed?.actions)[0] || {};
+        const third = ensureArray(koreanParsed?.actions)[0] || {};
+        return {
+            skipped: false,
+            normalizePersonality: localNormalize('personality'),
+            normalizeScenario: localNormalize('scenario'),
+            normalizeKoreanPersonality: localNormalize('성격'),
+            personalityTarget: first.target,
+            personalityDesc: safeString(first.payload?.desc || ''),
+            scenarioTarget: second.target,
+            scenarioDesc: safeString(second.payload?.desc || ''),
+            koreanTarget: third.target,
+            koreanDesc: safeString(third.payload?.desc || '')
+        };
+    });
+    if (!result.ok) {
+        checks.push(makeSvbRuntimeCheck(false, 'Kero internal action parser alias self test', result.error, 'error'));
+        return;
+    }
+    const value = result.value || {};
+    if (value.skipped) {
+        checks.push(makeSvbRuntimeCheck(true, 'Kero internal action parser alias self test', 'Kero UI local parser is not mounted in this diagnostic context', 'ok'));
+        return;
+    }
+    const problems = [];
+    if (value.normalizePersonality !== 'desc' || value.normalizeScenario !== 'desc' || value.normalizeKoreanPersonality !== 'desc') {
+        problems.push('legacy target alias did not normalize to desc');
+    }
+    if (value.personalityTarget !== 'character' || value.personalityDesc !== 'diagnostic personality') {
+        problems.push('personality payload did not become character.desc');
+    }
+    if (value.scenarioTarget !== 'character' || value.scenarioDesc !== 'diagnostic scenario') {
+        problems.push('scenario payload did not become character.desc');
+    }
+    if (value.koreanTarget !== 'character' || value.koreanDesc !== 'diagnostic korean personality') {
+        problems.push('Korean personality payload did not become character.desc');
+    }
+    checks.push(makeSvbRuntimeCheck(
+        problems.length === 0,
+        'Kero internal action parser alias self test',
+        problems.length ? `Problems: ${problems.join(' / ')}` : 'personality/scenario/성격 actions are applied through character.desc in the mounted Kero parser',
+        problems.length ? 'error' : 'ok'
+    ));
+}
+
 function runSvbRuntimeSelfCheck(options = {}) {
     const checks = [];
     const localFunctions = options.localFunctions || {};
@@ -13889,6 +13951,7 @@ function runSvbRuntimeSelfCheck(options = {}) {
     addSvbRuntimeFunctionCheck(checks, '도구 패널 열기 openKeroToolsPanel', () => runtimeFunction('openKeroToolsPanel'));
     addSvbRuntimeFunctionCheck(checks, '도구 이벤트 바인딩 bindKeroToolsEvents', () => runtimeFunction('bindKeroToolsEvents'));
     addSvbRuntimeActionParserSelfTest(checks);
+    addSvbRuntimeLocalActionParserSelfTest(checks, localFunctions);
     addSvbRuntimeSteeringQueueSelfTest(checks);
     addSvbRuntimeControlRoutingSelfTest(checks);
     addSvbRuntimeMissingImproveFallbackSelfTest(checks);
@@ -25550,6 +25613,16 @@ ${currentVars || '{}'}
             descriptiontext: 'desc',
             characterdescription: 'desc',
             desc: 'desc',
+            personality: 'desc',
+            personalitytext: 'desc',
+            personalityfield: 'desc',
+            personalityprompt: 'desc',
+            scenario: 'desc',
+            scenariotext: 'desc',
+            scenariofield: 'desc',
+            scenarioprompt: 'desc',
+            성격: 'desc',
+            시나리오: 'desc',
             globalnote: 'globalNote',
             posthistory: 'globalNote',
             posthistoryinstructions: 'globalNote',
@@ -25607,7 +25680,7 @@ ${currentVars || '{}'}
 
     function getKeroSingleFieldPatchKeys(target) {
         const key = normalizeKeroActionTargetName(target);
-        if (key === 'desc') return ['desc', 'description', 'profile', 'characterDescription', 'character_description', 'descriptionText', 'description_text'];
+        if (key === 'desc') return ['desc', 'description', 'profile', 'characterDescription', 'character_description', 'descriptionText', 'description_text', 'personality', 'personalityText', 'personality_text', 'personality_prompt', 'personalityPrompt', '성격', 'scenario', 'scenarioText', 'scenario_text', 'scenario_prompt', 'scenarioPrompt', '시나리오'];
         if (key === 'globalNote') return ['globalNote', 'global_note', 'postHistoryInstructions', 'postHistory', 'post_history', 'post_history_instructions', 'instructions', 'systemPrompt', 'system_prompt'];
         if (key === 'background') return ['backgroundHTML', 'backgroundHtml', 'background_html', 'background', 'statusWindow', 'statusHtml', 'statusHTML', 'html', 'css', 'statusCss', 'statusCSS'];
         if (key === 'vars') return ['defaultVariables', 'variables', 'vars'];
@@ -27732,10 +27805,22 @@ ${currentVars || '{}'}
         const label = getTargetLabel(target);
         const declaredCount = getKeroDeclaredCreateCount(req, payloads.length);
         const requestedCount = Math.max(payloads.length, declaredCount);
-        const needsCreateRemainder = ['lorebook', 'regex', 'trigger'].includes(target) && declaredCount > payloads.length;
-        const saveBatchLimit = adaptiveLimits.createSaveBatchLimit;
+        const isBulkManagedCreateTarget = ['lorebook', 'regex', 'trigger'].includes(target);
+        const needsCreateRemainder = isBulkManagedCreateTarget && declaredCount > payloads.length;
+        const largePayloadCreate = isBulkManagedCreateTarget && payloads.length > KERO_CREATE_BATCH_LIMIT;
+        const saveBatchLimit = largePayloadCreate
+            ? Math.max(1, Math.min(adaptiveLimits.createSaveBatchLimit, KERO_CREATE_BATCH_LIMIT))
+            : adaptiveLimits.createSaveBatchLimit;
         const chunks = chunkKeroPayloads(payloads, saveBatchLimit);
         const payloadCharSize = estimateKeroPayloadChars(payloads);
+        if (largePayloadCreate) {
+            addKeroWorkstreamEvent(
+                '대량 create 저장 경로 보정',
+                `${label} ${payloads.length}개 payload를 모델 재호출 없이 ${saveBatchLimit}개 이하 저장 청크로 처리합니다.`,
+                'action',
+                createProgressOptions
+            );
+        }
         updateKeroProgress(0, Math.max(1, chunks.length), `${label} ${payloads.length}개 생성 준비 중...`, createProgressOptions);
         if (payloads.length >= 20) {
             await addBotMessage(`⏳ ${label} ${payloads.length}개 생성 중... ${chunks.length > 1 ? `${saveBatchLimit}개씩 나눠서 저장할게.` : '완료되면 알려줄게.'}`);
@@ -30456,7 +30541,9 @@ ${steeringBlock ? `\n${steeringBlock}` : ''}`;
             openKeroToolsPanel,
             bindKeroToolsEvents,
             runKeroBulkCreate,
-            autoResumeKeroBulkJobsUntilSettled
+            autoResumeKeroBulkJobsUntilSettled,
+            parseKeroAction,
+            normalizeKeroActionTargetName
         });
 
         bindSafeClick(document.getElementById('kero-runtime-diagnostics-btn'), async () => {
@@ -40260,7 +40347,7 @@ function getBulkOutputHint(targetType) {
     return 'result는 항목 JSON 배열이어야 합니다.';
 }
 
-/* === RisuAI SuperVibeBot v1.5.28 Guide (Concise Version) === */
+/* === RisuAI SuperVibeBot v1.5.29 Guide (Concise Version) === */
 const RISUAI_GUIDE = {
     overview: `
 ## System Overview
@@ -45146,7 +45233,13 @@ async function translateSingleChunk(systemPrompt, userText, retries = 3, options
                     } catch (recoveryError) {
                         gatewayMessage = getFriendlyModelErrorMessage(recoveryError);
                         addKeroWorkstreamEvent('장시간 작업 복구 실패', gatewayMessage.replace(/\s+/g, ' ').slice(0, 600), 'error', attemptProgressOptions);
+                        addKeroWorkstreamEvent('동일 대형 요청 재시도 중단', '게이트웨이/하드 타임아웃 복구가 실패해 같은 원문을 다시 호출하지 않고 현재 작업을 경고로 넘깁니다.', 'warning', attemptProgressOptions);
+                        throw new Error(gatewayMessage);
                     }
+                }
+                if (recoveryDecision.retrySameRequest === false) {
+                    addKeroWorkstreamEvent('동일 대형 요청 재시도 중단', '복구 대상 타임아웃은 같은 원문 반복 호출 대신 작은 작업 단위로 재구성해야 합니다.', 'warning', attemptProgressOptions);
+                    throw new Error(gatewayMessage);
                 }
                 if (attempt === retries) {
                     throw new Error(gatewayMessage);
@@ -51422,7 +51515,7 @@ async function loadInitialSettings() {
 async function registerUIElements() {
     // 채팅 화면 메뉴에 버튼 추가 (플로팅 버튼 대신)
     await risuai.registerButton({
-        name: "SuperVibeBot v1.5.28",
+        name: "SuperVibeBot v1.5.29",
         icon: "🐸",
         iconType: "html",
         location: "chat"  // 채팅 메뉴에 배치 (화면 가림 방지)
@@ -51431,7 +51524,7 @@ async function registerUIElements() {
     });
 
     await risuai.registerSetting(
-        "SuperVibeBot v1.5.28 Settings",
+        "SuperVibeBot v1.5.29 Settings",
         async () => {
             await openSettingsWindow();
         },
@@ -51474,7 +51567,7 @@ function cleanup() {
 (async () => {
     try {
         Logger.info("=".repeat(50));
-        Logger.info("SuperVibeBot v1.5.28");
+        Logger.info("SuperVibeBot v1.5.29");
         Logger.info("RisuAI Plugin API 3.0");
         Logger.info("=".repeat(50));
         await loadInitialSettings();
