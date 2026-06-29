@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.12
+//@display-name ☸Eros Tower 1.1.13
 //@api 3.0
-//@version 1.1.12
+//@version 1.1.13
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -33,18 +33,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.12
+ * Eros Tower 1.1.13
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.12 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.13 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.12';
+  const VERSION = '1.1.13';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.12`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.13`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -84,7 +84,7 @@
     'clue',
     'worldFront',
   ]);
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.12 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.13 analysis context';
   const GOOGLE_OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
   const GOOGLE_CLOUD_PLATFORM_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
   const PSYCHE_RECOMMENDED_MODELS = Object.freeze([
@@ -1655,7 +1655,7 @@
     'You are the Eros Tower final Worldweaver Arbiter and Chronicle Agent.',
     COMMON_EVIDENCE_RULES,
     'You do not write the reply. Convert prior notes and visible context into compact, reliable pre-writing guidance for the main model.',
-    'Source priority: explicit current user input, latest visible chat events, character/persona/lore/author-note facts, durable memory, then agent inference.',
+    'Source priority: explicit current user input, active character/persona/lore/author-note facts and registered first message, latest visible chat events for continuity, durable memory, then agent inference.',
     'Reject lower-priority claims that conflict with higher sources. Preserve uncertainty and never add unsupported canon.',
     'Desired experience: a wide, inhabited world seen through a narrow, coherent camera. User and primary bot are important participants, not the only people with stories.',
     'Keep private interior access singular at each instant. Focal shifts must sit at clear paragraph or action-beat boundaries and immediately re-anchor through the new focal character.',
@@ -4353,14 +4353,14 @@
 
   function buildSettingBlocks(character, db, chat, canonicalSources = null, registeredFirstMessage = null) {
     const persona = getSelectedPersona(db);
-    const lore = canonicalSources || collectCanonicalSources(character, db, chat);
+    const lore = sortCanonicalSourcesForPrompt(canonicalSources || collectCanonicalSources(character, db, chat));
     const firstMessage = firstNonEmpty(registeredFirstMessage?.message, resolveRegisteredFirstMessage(character, chat).message, '(none)');
     return [
       `[Character]\n${firstNonEmpty(character?.description, character?.desc, character?.data?.description, character?.data?.desc, '(none)').slice(0, 6000)}`,
       `[First Message]\n${firstMessage.slice(0, 5000)}`,
       `[Persona]\n${firstNonEmpty(persona?.description, persona?.desc, persona?.prompt, persona?.name, '(none)').slice(0, 2500)}`,
       `[Author Note]\n${firstNonEmpty(chat?.note, chat?.authorNote, character?.authorNote, character?.data?.authorNote, '(none)').slice(0, 2000)}`,
-      `[Canonical Lore Candidates]\n${lore.length ? lore.slice(0, 32).map(item => `- ${item.kind}/${item.path}${item.meta?.alwaysActive ? ' always' : ''} keys=${item.activationKeys.join(', ') || '-'}: ${item.content.slice(0, 700)}`).join('\n') : '(none)'}`,
+      `[Canonical Lore Context]\n${lore.length ? lore.slice(0, 32).map(item => `- ${item.kind}/${item.path}${item.meta?.alwaysActive ? ' always' : ''} keys=${item.activationKeys.join(', ') || '-'}: ${item.content.slice(0, 700)}`).join('\n') : '(none)'}`,
     ].join('\n\n');
   }
 
@@ -5201,9 +5201,10 @@
   }
 
   function canonicalSourceToLoreEntry(source, turn) {
-    const alwaysActive = Boolean(source?.meta?.alwaysActive || source?.kind === 'desc' || source?.kind === 'firstMessage');
+    const alwaysActive = Boolean(source?.meta?.alwaysActive || source?.kind === 'activeLorebook' || source?.kind === 'desc' || source?.kind === 'firstMessage');
     const priority = parseNumber(source.priority, 5, 0, 10);
     const boostedPriority = alwaysActive ? Math.max(8, priority) : priority;
+    const activeCanonRank = (alwaysActive || isPinnedIdentityLoreSource(source)) ? Math.max(SOURCE_RANK.recent_chat + 2, SOURCE_RANK.character_card) : SOURCE_RANK.lorebook;
     return {
       id: source.id || `canon:${source.hash}`,
       name: source.label || source.kind || 'canonical lore',
@@ -5223,7 +5224,7 @@
       lastActivatedTurn: turn,
       lastSeenTurn: turn,
       confidence: 0.92,
-      sourceRank: SOURCE_RANK.lorebook,
+      sourceRank: activeCanonRank,
       evidence: `canonical:${source.kind}:${source.path}`,
       canonicalSource: {
         kind: source.kind,
@@ -6128,9 +6129,9 @@
       'Use this as private planning context. Do not reveal labels, scores, hidden secrets, or plugin mechanics.',
       'Never output <Thoughts>, <think>, reasoning, analysis headings, run logs, or agent labels. Final response must be only the in-world reply.',
       'Do not write an English draft, translation draft, planning draft, or title before the final prose. Use one final language matching the current conversation.',
-      'Source order: current user/recent chat > final output/canon > character card/author note/lore > stored state > agent inference.',
-      'Pinned identity lore is current canon. Do not turn background tags such as orphan, unknown surname, past life, or origin into a new opening scene/status when affiliation/role is already specified.',
-      'Gender and sexual position are separate. If pinned lore says male/man and bottom/uke/受, keep the character male; bottom is not female gender or a reason to feminize unless canon explicitly says so.',
+      'Source order: current user instruction > active character card/author note/lore and registered first message > latest visible chat continuity > stored state/memory > agent inference.',
+      'Pinned identity lore is active canon for this turn. Treat background/origin tags as biographical context, not as replacements for the current affiliation, role, or opening anchor supplied by active lore.',
+      'Gender and sexual position are separate facts. Male/man and bottom/uke/受 means male gender with bottom position unless canon explicitly says otherwise.',
       'Older low-importance memories are intentionally faded unless repeated, important, or relevant now.',
       '',
       controlFloor,
@@ -6152,7 +6153,7 @@
     lines.push('[Current Writing Mode] ' + normalizeMode(context?.mode || 'rp'));
     const identity = normalizeCanonicalIdentityState(state?.canonicalIdentity || buildCanonicalIdentityState(context?.canonicalSources || [], state?.turn || 0));
     if (identity.subjects.length) {
-      lines.push('[Identity Baseline - Protected]');
+      lines.push('[Identity Baseline - Active Canon Snapshot]');
       identity.subjects.slice(0, 6).forEach(subject => {
         const immutable = Object.entries(subject.immutable || {}).map(([key, value]) => `${key}=${value}`).join('; ');
         const aliases = normalizeStringArray(subject.aliases).filter(alias => alias && alias !== subject.name).slice(0, 5).join(', ');
@@ -6168,17 +6169,13 @@
         lines.push('[Mutable Baseline - Can Change By Later Canon]');
         mutableLines.slice(0, 6).forEach(line => lines.push(line));
       }
-      lines.push('- Identity guard: immutable identity fields outrank later memory/state commits unless the user or explicit final output retcons them.');
-    }
-    const firstMessage = String(context?.firstMessageInfo?.message || '').trim();
-    if (firstMessage) {
-      const firstCap = Math.min(2200, Math.max(600, Math.floor(Number(budget || 0) * 0.42)));
-      lines.push(`[Registered First Message]\n${firstMessage.slice(0, firstCap)}`);
+      lines.push('- Source priority: immutable identity fields come from active canon sources and rank above derived state unless the user or explicit final output retcons them.');
     }
     const alwaysLore = (Array.isArray(context?.canonicalSources) ? context.canonicalSources : [])
-      .filter(source => source?.meta?.alwaysActive)
-      .sort(compareCanonicalControlFloorSource);
-    const pinnedLore = alwaysLore.filter(isPinnedIdentityLoreSource).slice(0, 4);
+      .filter(isControlFloorLoreSource);
+    const sortedAlwaysLore = sortCanonicalSourcesForPrompt(alwaysLore);
+    const firstMessage = String(context?.firstMessageInfo?.message || '').trim();
+    const pinnedLore = sortedAlwaysLore.filter(isPinnedIdentityLoreSource).slice(0, 4);
     if (pinnedLore.length) {
       lines.push('[Pinned Identity Lore]');
       const used = lines.join('\n').length;
@@ -6190,13 +6187,17 @@
         const summary = String(source.content || '').replace(/\s+/g, ' ').trim().slice(0, perItemCap);
         lines.push(`- ${label}: ${facts ? `${facts} | ` : ''}${summary}`);
       });
-      lines.push('- Identity guard: treat current affiliation/status/role in pinned lore as present canon. Background labels such as orphan, unknown surname, past life, or origin do not replace the current scene role unless the registered first message explicitly says so.');
+      lines.push('- Source priority: current affiliation/status/role in pinned lore are present-turn canon; background labels such as orphan, unknown surname, past life, or origin remain biographical context.');
     }
-    if (alwaysLore.length) {
+    if (firstMessage) {
+      const firstCap = Math.min(2200, Math.max(600, Math.floor(Number(budget || 0) * 0.42)));
+      lines.push(`[Registered First Message]\n${firstMessage.slice(0, firstCap)}`);
+    }
+    if (sortedAlwaysLore.length) {
       lines.push('[Always-Active Lore Floor]');
       const used = lines.join('\n').length;
-      const available = Math.max(480, Number(budget || 0) - used - (alwaysLore.length * 36));
-      const restLore = alwaysLore.filter(source => !pinnedLore.some(pinned => pinned.id === source.id || pinned.hash === source.hash));
+      const available = Math.max(480, Number(budget || 0) - used - (sortedAlwaysLore.length * 36));
+      const restLore = sortedAlwaysLore.filter(source => !pinnedLore.some(pinned => pinned.id === source.id || pinned.hash === source.hash));
       const perItemCap = Math.max(140, Math.min(900, Math.floor(available / Math.max(1, restLore.length || 1))));
       restLore.forEach(source => {
         const label = source.label || source.kind || source.path;
@@ -6218,13 +6219,41 @@
     return String(a?.path || '').localeCompare(String(b?.path || ''));
   }
 
-  function isPinnedIdentityLoreSource(source) {
+  function isControlFloorLoreSource(source) {
     if (!source) return false;
-    if (source.kind === 'desc' || source.kind === 'firstMessage') return true;
-    const label = `${source.label || ''}\n${source.path || ''}`.toLowerCase();
-    const contentHead = String(source.content || '').slice(0, 1600);
-    return /연수|渊水|淵水|yeon[-\s]?su|主角|主人公|주인공|인물|人物|角色|设定|設定|프로필|profile|identity|身份|oc/.test(label)
-      || /#\s*OC|###\s*身份|姓名[:：]|性别[:：]|所属门派[:：]|核心行动准则|핵심|신원|정체성/.test(contentHead);
+    return Boolean(source?.meta?.alwaysActive || source.kind === 'activeLorebook' || source.kind === 'desc' || source.kind === 'firstMessage');
+  }
+
+  function isPrimaryIdentityProfileSource(source) {
+    if (!source) return false;
+    const label = String(source.label || '') + '\n' + String(source.path || '');
+    const head = String(source.content || '').slice(0, 1800);
+    return /yeon[-\s]?su|연수|渊水|淵水|identity|profile|oc|신원|정체성|角色设定集|角色設定集/i.test(label)
+      || /#\s*OC|角色设定集|角色設定集|姓名\s*[:：]|名前\s*[:：]|name\s*[:：]|이름\s*[:：]|성명\s*[:：]/i.test(head);
+  }
+
+  function canonicalSourcePromptWeight(source) {
+    if (!source) return 0;
+    let score = 0;
+    if (source.kind === 'activeLorebook') score += 1200;
+    if (isPrimaryIdentityProfileSource(source)) score += 900;
+    else if (isPinnedIdentityLoreSource(source)) score += 420;
+    if (source?.meta?.alwaysActive) score += 360;
+    if (source.kind === 'firstMessage') score += 320;
+    if (source.kind === 'desc') score += 300;
+    if (source.kind === 'globalNote') score += 240;
+    score += parseNumber(source.priority, 0, 0, 10) * 24;
+    score += Math.max(-80, Math.min(80, parseNumber(source?.meta?.insertOrder, 0, -999999, 999999) / 20));
+    return score;
+  }
+
+  function sortCanonicalSourcesForPrompt(sources) {
+    return (Array.isArray(sources) ? sources.slice() : []).sort((a, b) => {
+      const bp = canonicalSourcePromptWeight(b);
+      const ap = canonicalSourcePromptWeight(a);
+      if (bp !== ap) return bp - ap;
+      return compareCanonicalControlFloorSource(a, b);
+    });
   }
 
   function extractPinnedIdentityFacts(content) {
@@ -7037,6 +7066,8 @@
   }
 
   function inferSourceRank(item, fallback = SOURCE_RANK.stored_state) {
+    const explicit = Number(item?.sourceRank);
+    if (Number.isFinite(explicit)) return clampNumber(explicit, fallback, 0, 100);
     const source = String(item?.source || item?.evidenceSource || '').toLowerCase();
     if (/current/.test(source)) return SOURCE_RANK.current_user;
     if (/chat/.test(source)) return SOURCE_RANK.recent_chat;
@@ -7714,7 +7745,7 @@
   }
 
   function buildCanonicalIdentityState(canonicalSources, turn = 0) {
-    const sources = (Array.isArray(canonicalSources) ? canonicalSources : []).filter(isPinnedIdentityLoreSource).slice(0, 12);
+    const sources = sortCanonicalSourcesForPrompt(Array.isArray(canonicalSources) ? canonicalSources : []).filter(isPinnedIdentityLoreSource).slice(0, 12);
     const subjects = [];
     sources.forEach(source => {
       const profile = extractCanonicalIdentityProfile(source, turn);
@@ -7735,11 +7766,19 @@
   function isPinnedIdentityLoreSource(source) {
     if (!source) return false;
     if (source.kind === 'desc' || source.kind === 'firstMessage') return true;
-    const label = (String(source.label || '') + '\n' + String(source.path || '')).toLowerCase();
+    const label = String(source.label || '') + '\n' + String(source.path || '');
     const content = String(source.content || '').slice(0, 1800);
-    return /yeon[-\s]?su|identity|profile|oc|gender|sex|role|status/i.test(label)
-      || /#\s*OC|name\s*[:：]|gender\s*[:：]|sex\s*[:：]|sexuality\s*[:：]|position\s*[:：]|age\s*[:：]|role\s*[:：]|status\s*[:：]/i.test(content)
-      || /연수|성별|남성|여성|바텀|탑/.test(content);
+    const hasIdentityLabel = /yeon[-\s]?su|연수|渊水|淵水|identity|profile|oc|신원|정체성|身份|设定集|設定集/i.test(label);
+    const hasProfileHeader = /#\s*OC|角色设定集|角色設定集|캐릭터\s*설정|프로필|profile/i.test(content);
+    const hasNameField = /姓名\s*[:：]|名前\s*[:：]|name\s*[:：]|이름\s*[:：]|성명\s*[:：]/i.test(content);
+    const identityFieldHits = [
+      /性别\s*[:：]|性別\s*[:：]|성별\s*[:：]|gender\s*[:：]|sex\s*[:：]/i,
+      /性向\s*[:：]|sexuality\s*[:：]|position\s*[:：]|성향\s*[:：]|포지션\s*[:：]/i,
+      /年龄\s*[:：]|年齡\s*[:：]|나이\s*[:：]|age\s*[:：]/i,
+      /所属门派\s*[:：]|所屬門派\s*[:：]|소속\s*[:：]|affiliation\s*[:：]/i,
+      /身份\/阶级\s*[:：]|身份\s*[:：]|身分\s*[:：]|신분\s*[:：]|role\s*[:：]|status\s*[:：]/i,
+    ].reduce((count, rx) => count + (rx.test(content) ? 1 : 0), 0);
+    return hasIdentityLabel || hasProfileHeader || hasNameField || identityFieldHits >= 3;
   }
 
   function extractCanonicalIdentityProfile(source, turn = 0) {
@@ -7759,7 +7798,10 @@
     const rawName = field([/^(?:name|이름|성명|姓名|名前)\s*[:：]\s*(.+)$/i]) || (/yeon[-\s]?su|연수|渊水|淵水/i.test(text) ? 'Yeon-su' : '');
     const name = cleanIdentityName(rawName) || cleanIdentityName(firstNonEmpty(source?.label, source?.path, ''));
     if (!name || isGenericCharacterStateToken(name)) return null;
-    const aliases = uniqueStrings([rawName, name, 'Yeon-su', '연수', '渊水', '淵水'].concat(normalizeStringArray(source?.activationKeys)).map(cleanIdentityName).filter(Boolean)).slice(0, 16);
+    const aliasSeeds = [rawName, name].concat(normalizeStringArray(source?.activationKeys));
+    const sourceIdentityText = `${rawName}\n${name}\n${source?.label || ''}\n${source?.path || ''}\n${text.slice(0, 1400)}`;
+    if (/yeon[-\s]?su|연수|渊水|淵水/i.test(sourceIdentityText)) aliasSeeds.push('Yeon-su', '연수', '渊水', '淵水');
+    const aliases = uniqueStrings(aliasSeeds.map(cleanIdentityName).filter(Boolean)).slice(0, 16);
     const genderValue = field([/^(?:gender|sex|성별|性别|性別)\s*[:：]\s*(.+)$/i]) || text;
     const immutable = {};
     const gender = normalizeIdentityGender(genderValue);
@@ -7786,7 +7828,7 @@
   }
 
   function cleanIdentityName(value) {
-    return String(value || '').replace(/^[-*]\s*/, '').replace(/^(?:name|이름)\s*[:：]\s*/i, '').split(/[()（）]/)[0].replace(/[;；。].*$/, '').trim().slice(0, 80);
+    return String(value || '').replace(/^[-*]\s*/, '').replace(/^(?:name|이름|성명|姓名|名前)\s*[:：]\s*/i, '').split(/[()（）]/)[0].replace(/[;；。].*$/, '').trim().slice(0, 80);
   }
 
   function normalizeIdentityGender(value) {
@@ -10183,9 +10225,9 @@
     if (!injection) return messages;
     const content = injection.slice(0, budget);
     const clone = (Array.isArray(messages) ? messages : [])
-      .filter(m => !(m?.role === 'system' && messageContainsErosInjection(m)))
+      .filter(m => !messageContainsErosInjection(m))
       .map(m => ({ ...m }));
-    const block = { role: 'system', content: `[${MAIN_INJECTION_TITLE}]\n${content}`, _erosTowerInjection: true };
+    const block = { role: 'user', content: `[${MAIN_INJECTION_TITLE}]\n${content}`, _erosTowerInjection: true };
     let insertAt = -1;
     for (let i = clone.length - 1; i >= 0; i -= 1) {
       if (clone[i]?.role === 'user') {
@@ -14447,6 +14489,218 @@
           const resolved = resolveEvidenceCommit({ characters: [{ id: 'yeonsu', name: 'Yeon-su', gender: 'female', status: 'female disciple', role: 'girl', sourceRank: SOURCE_RANK.recent_chat }] }, targetState, {}, '', 1);
           return { identity: targetState.canonicalIdentity, character: resolved.characters?.[0] || null, conflicts: resolved._evidenceConflicts || [] };
         },
+        testLorebookOpeningPriority: async () => {
+          const yeonsuLore = {
+            comment: '연수',
+            alwaysActive: true,
+            insertorder: 100,
+            content: [
+              '# OC 角色设定集：渊水 (淵水 / Yeon-su)',
+              '',
+              '### 身份',
+              '- 姓名：渊水（姓氏未知/孤儿）',
+              '- 年龄：15岁（外在肉体）/ 20多岁（内在心理，现代韩国）',
+              '- 性别：男',
+              '- 性向：同性恋 (受 / Bottom)',
+              '- 种族：人类（穿越者）',
+              '- 所属门派：清虚门 (淸虛門)',
+              '- 身份/阶级：弟子（道士）',
+              '',
+              '### 外貌',
+              '- 衣着：标准的清虚门道袍（白蓝相间），始终保持得一尘不染。',
+              '',
+              '### 核心行动准则',
+              '渊水最核心的特征是“基于预知的预防性慈悲”。他深知等待着南宫墨夜的恐怖命运。',
+            ].join('\n'),
+          };
+          const namgungLore = {
+            comment: '주인공들',
+            alwaysActive: true,
+            insertorder: 199,
+            content: [
+              '### [主角团]',
+              '-主角(攻): 南宫 默夜 (南宮 默夜) | 柳',
+              '-性属性: 同性恋(gay) | 攻(TOP)',
+              '-[成长前]',
+              '-年龄: 14岁',
+              '-背景: 南宫世家的私生子。幼年时期作为乞丐流浪，后被南宫世家收留，但因私生子的身份在蔑视和冷眼中长大。',
+            ].join('\n'),
+          };
+          const genericLore = {
+            comment: 'Aster',
+            alwaysActive: true,
+            insertorder: 100,
+            content: [
+              '# OC Profile: Aster',
+              '- 姓名：阿斯特',
+              '- 年龄：17岁',
+              '- 性别：男',
+              '- 所属门派：灰塔',
+              '- 身份/阶级：学徒',
+            ].join('\n'),
+          };
+          const targetDb = { personas: [], modules: [], enabledModules: [], globalChatVariables: {} };
+          const targetCharacter = {
+            id: 'yeonsu-card',
+            name: '渊水',
+            firstMessage: '渊水在清虚门自己的房间里睁开眼，窗外传来晨钟声。',
+            lorebook: { type: 'risu', ver: 1, data: [yeonsuLore, namgungLore] },
+          };
+          const targetChat = {
+            id: 'opening-priority-chat',
+            name: 'Opening Priority Chat',
+            message: [
+              { role: 'assistant', data: '오염된 이전 출력: 연수는 남궁세가 외성의 잡역부 방에서 눈을 떴다.' },
+              { role: 'user', data: '첫 시작을 진행해.' },
+            ],
+          };
+          const targetConf = { ...DEFAULT_CONFIG, embeddingEnabled: false, runtimeLorebookEntries: [] };
+          const sources = collectCanonicalSources(targetCharacter, targetDb, targetChat, targetConf);
+          const targetState = createDefaultState('novel');
+          syncCanonicalIdentityState(targetState, sources);
+          const targetContext = {
+            character: targetCharacter,
+            db: targetDb,
+            currentChat: targetChat,
+            messages: normalizeStoredChatMessages(targetChat),
+            canonicalSources: sources,
+            firstMessageInfo: resolveRegisteredFirstMessage(targetCharacter, targetChat),
+            mode: 'novel',
+          };
+          const controlFloor = buildMainControlFloorContext(targetContext, 5000, targetState);
+          const briefing = await buildMainBriefing(targetState, targetContext, [], 5600, targetConf);
+          const sourceOrderLine = String(briefing.split('\n').find(line => line.startsWith('Source order:')) || '');
+          const genericSources = collectCanonicalSources({ id: 'generic-card', name: 'Aster', lorebook: [genericLore] }, targetDb, null, targetConf);
+          const genericState = createDefaultState('novel');
+          syncCanonicalIdentityState(genericState, genericSources);
+          const genericAliases = normalizeCanonicalIdentityState(genericState.canonicalIdentity).subjects.flatMap(subject => normalizeStringArray(subject.aliases));
+          return {
+            labels: sources.map(source => source.label),
+            pinnedLabels: sources.filter(isPinnedIdentityLoreSource).map(source => source.label),
+            identity: targetState.canonicalIdentity,
+            genericAliases,
+            sourceOrderLine,
+            positions: {
+              yeonsu: controlFloor.indexOf('渊水'),
+              qingxu: controlFloor.indexOf('清虚门'),
+              namgung: controlFloor.indexOf('南宫'),
+              corruptAssistant: briefing.indexOf('잡역부'),
+            },
+            controlFloor,
+            briefingHead: briefing.slice(0, 2400),
+          };
+        },
+        testLorebookPriorityFixture: async (lorebookPayload, opts = {}) => {
+          const parsed = typeof lorebookPayload === 'string' ? JSON.parse(lorebookPayload) : lorebookPayload;
+          const runtimeLorebookEntries = collectLoreArrays(parsed);
+          const priorGeneratedText = String(opts?.priorGeneratedText || '');
+          const priorMarker = firstNonEmpty(
+            opts?.priorGeneratedMarker,
+            (priorGeneratedText.match(/.{0,20}(?:남궁세가|잡역부|南宫世家|外城|渊水是被冷醒的).{0,40}/u) || [])[0],
+            priorGeneratedText.replace(/\s+/g, ' ').trim().slice(0, 80),
+          );
+          const targetDb = { personas: [], modules: [], enabledModules: [], globalChatVariables: {} };
+          const targetCharacter = {
+            id: 'fixture-yeonsu',
+            name: '渊水',
+            firstMessage: firstNonEmpty(opts?.firstMessage, '渊水在清虚门自己的房间里睁开眼，窗外传来晨钟声。'),
+            lorebook: [],
+          };
+          const targetChat = {
+            id: 'fixture-lore-priority-chat',
+            name: 'Fixture Lore Priority Chat',
+            message: priorGeneratedText
+              ? [
+                  { role: 'assistant', data: priorGeneratedText },
+                  { role: 'user', data: firstNonEmpty(opts?.userText, '첫 시작을 진행해.') },
+                ]
+              : [{ role: 'user', data: firstNonEmpty(opts?.userText, '첫 시작을 진행해.') }],
+          };
+          const targetConf = { ...DEFAULT_CONFIG, embeddingEnabled: false, stagedSearchEnabled: false, runtimeLorebookEntries };
+          const sources = collectCanonicalSources(targetCharacter, targetDb, targetChat, targetConf);
+          const targetState = createDefaultState('novel');
+          syncCanonicalLoreLedger(targetState, sources);
+          syncCanonicalIdentityState(targetState, sources);
+          if (priorGeneratedText) {
+            targetState.memoryLedger = normalizeMemoryEntries([{
+              id: 'prior-generated-opening',
+              summary: priorGeneratedText.slice(0, 1400),
+              source: 'final_output',
+              sourceRank: SOURCE_RANK.final_output,
+              importance: 10,
+              confidence: 0.98,
+              anchor: true,
+              lastSeenTurn: 1,
+            }], targetState, 1);
+          }
+          const targetContext = {
+            character: targetCharacter,
+            db: targetDb,
+            currentChat: targetChat,
+            messages: normalizeStoredChatMessages(targetChat),
+            requestMessages: normalizeStoredChatMessages(targetChat).filter(message => message.role === 'user').slice(-1),
+            canonicalSources: sources,
+            runtimeLorebookEntries,
+            firstMessageInfo: resolveRegisteredFirstMessage(targetCharacter, targetChat),
+            mode: 'novel',
+          };
+          const budget = parseNumber(opts?.budget, 22000, 2200, 48000);
+          const briefing = await buildMainBriefing(targetState, targetContext, [], budget, targetConf);
+          const indexOfAny = markers => markers.map(marker => marker ? briefing.indexOf(marker) : -1).find(index => index >= 0) ?? -1;
+          return {
+            sourceCount: sources.length,
+            runtimeLorebookEntries: runtimeLorebookEntries.length,
+            labels: sources.slice(0, 40).map(source => source.label),
+            pinnedLabels: sortCanonicalSourcesForPrompt(sources.filter(isPinnedIdentityLoreSource)).slice(0, 12).map(source => source.label),
+            identity: targetState.canonicalIdentity,
+            indexes: {
+              yeonsu: indexOfAny(['# OC 角色设定集：渊水', '渊水 (淵水 / Yeon-su)', 'baseline affiliation=清虚门/청허문', '渊水']),
+              qingxu: indexOfAny(['清虚门', '淸虛門', '청허문']),
+              disciple: indexOfAny(['弟子（道士）', 'baseline role=young Taoist disciple', '弟子']),
+              namgung: indexOfAny(['### [主角团]', '南宫 默夜', '南宮 默夜', '南宫世家']),
+              priorGenerated: priorMarker ? briefing.indexOf(priorMarker) : -1,
+            },
+            firstTrace: targetState.injectionTrace[0] || null,
+            briefing,
+          };
+        },
+        testIdentityAliasScope: () => {
+          const targetDb = { personas: [], modules: [], enabledModules: [], globalChatVariables: {} };
+          const conf = { ...DEFAULT_CONFIG, runtimeLorebookEntries: [] };
+          const genericSources = collectCanonicalSources({
+            id: 'generic-alias-card',
+            name: 'Aster',
+            lorebook: [{
+              comment: 'Aster',
+              alwaysActive: true,
+              content: [
+                '# OC Profile: Aster',
+                '- Name: Aster',
+                '- Gender: male',
+                '- Role: apprentice',
+              ].join('\n'),
+            }],
+          }, targetDb, null, conf);
+          const yeonsuSources = collectCanonicalSources({
+            id: 'yeonsu-alias-card',
+            name: '渊水',
+            lorebook: [{
+              comment: '연수',
+              alwaysActive: true,
+              content: [
+                '# OC 角色设定集：渊水 (淵水 / Yeon-su)',
+                '- 姓名：渊水',
+                '- 性别：男',
+                '- 所属门派：清虚门',
+                '- 身份/阶级：弟子（道士）',
+              ].join('\n'),
+            }],
+          }, targetDb, null, conf);
+          return {
+            generic: buildCanonicalIdentityState(genericSources, 0),
+            yeonsu: buildCanonicalIdentityState(yeonsuSources, 0),
+          };
+        },
         testInjectionTrace: async () => {
           const targetState = createDefaultState(context?.mode || 'rp');
           targetState.turn = 4;
@@ -14472,9 +14726,10 @@
             hostSystemCount: injected.filter(message => message.role === 'system' && /Host lore\/system/.test(String(message.content || ''))).length,
             oldInjectionCount: injected.filter(message => /old injected block/.test(String(message.content || ''))).length,
             newInjectionCount: injected.filter(message => message._erosTowerInjection === true && /fresh injected block/.test(String(message.content || ''))).length,
-            userMentionCount: injected.filter(message => message.role === 'user' && String(message.content || '').includes(MAIN_INJECTION_TITLE)).length,
-            userIndex: injected.findIndex(message => message.role === 'user'),
+            userMentionCount: injected.filter(message => message.role === 'user' && message._erosTowerInjection !== true && String(message.content || '').includes(MAIN_INJECTION_TITLE)).length,
+            userIndex: injected.findIndex(message => message.role === 'user' && message._erosTowerInjection !== true),
             injectionIndex: injected.findIndex(message => message._erosTowerInjection === true),
+            injectionRole: injected.find(message => message._erosTowerInjection === true)?.role || '',
           };
         },
         testReferenceSources: () => {
