@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.19
+//@display-name ☸Eros Tower 1.1.21
 //@api 3.0
-//@version 1.1.19
+//@version 1.1.21
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -29,22 +29,23 @@
 //@arg et_injection_budget int Max chars injected into main request. Default 22000
 //@arg et_extra_body_json string Extra JSON body merged into agent requests
 //@arg et_pipeline_json string Override Eros Tower pipeline JSON
+//@arg et_prompt_presets_json string Override Eros agent prompt preset JSON
 //@arg et_model_presets_json string Model presets JSON
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.19
+ * Eros Tower 1.1.21
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.19 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.21 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.19';
+  const VERSION = '1.1.21';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.19`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.21`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -61,7 +62,7 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.19 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.21 analysis context';
   const GOOGLE_OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
   const GOOGLE_CLOUD_PLATFORM_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
   const PSYCHE_RECOMMENDED_MODELS = Object.freeze([
@@ -72,6 +73,8 @@
   ]);
   const LEGACY_DEFAULT_TIMEOUT_MS = 120000;
   const DEFAULT_TIMEOUT_MS = 300 * 1000;
+  const PROMPT_PRESET_BUILTIN_ID = 'builtin-eros-agent';
+  const PROMPT_PRESET_TYPE_EROS = 'eros-agent';
 
   const DEFAULT_CONFIG = {
     enabled: true,
@@ -149,6 +152,8 @@
     providerRegistryJson: '',
     modelPresetsJson: '',
     pipelineJson: '',
+    promptPresetsJson: '',
+    activePromptPresetId: PROMPT_PRESET_BUILTIN_ID,
     providerPreset: 'ollama-local',
     activeProviderId: 'ollama-local',
     modelsPath: '/models',
@@ -790,6 +795,7 @@
       injectionBudget: cleanString(await getArg('et_injection_budget', ''), ''),
       extraBodyJson: cleanString(await getArg('et_extra_body_json', ''), ''),
       pipelineJson: cleanString(await getArg('et_pipeline_json', ''), ''),
+      promptPresetsJson: cleanString(await getArg('et_prompt_presets_json', ''), ''),
       modelPresetsJson: cleanString(await getArg('et_model_presets_json', ''), ''),
       providerKeysJson: cleanString(await getArg('et_provider_keys_json', ''), ''),
     };
@@ -905,6 +911,9 @@
       merged.modelOptions = activeProvider.modelOptions || [];
     }
     merged.modelPresets = parseModelPresets(merged.modelPresetsJson, merged);
+    merged.promptPresets = normalizePromptPresets(merged);
+    merged.activePromptPresetId = normalizeActivePromptPresetId(merged.activePromptPresetId, merged.promptPresets);
+    merged.promptPresetsJson = serializePromptPresets(merged.promptPresets);
     merged.modelOptions = normalizeModelOptions(merged.modelOptions, merged.model, merged.providerPreset);
     merged.pipeline = normalizePipeline(parsePipeline(merged.pipelineJson), merged);
     Runtime.debugLog = merged.debugLog === true;
@@ -1278,6 +1287,182 @@
     return defaultPipeline();
   }
 
+  function parsePromptPresets(raw) {
+    if (!raw) return [];
+    try {
+      const parsed = typeof raw === 'string' ? JSON.parse(String(raw)) : raw;
+      if (Array.isArray(parsed)) return parsed;
+      if (Array.isArray(parsed?.presets)) return parsed.presets;
+      if (parsed?.id || parsed?.agents) return [parsed];
+    } catch (err) {
+      log('prompt preset JSON ignored', err.message);
+    }
+    return [];
+  }
+
+  function defaultPromptPreset() {
+    const agents = {};
+    defaultPipeline().agents
+      .filter(agent => agent.phase === 'pre')
+      .forEach(agent => {
+        agents[agent.id] = promptPresetAgentPackFromAgent(agent);
+      });
+    return {
+      id: PROMPT_PRESET_BUILTIN_ID,
+      name: 'Eros Agent Default',
+      type: PROMPT_PRESET_TYPE_EROS,
+      locked: true,
+      agents,
+    };
+  }
+
+  function promptPresetAgentPackFromAgent(agent) {
+    const prompts = agent?.modePrompts && typeof agent.modePrompts === 'object' && !Array.isArray(agent.modePrompts)
+      ? agent.modePrompts
+      : {};
+    const fallback = {
+      systemPrompt: cleanString(agent?.systemPrompt, ''),
+      outputInstruction: cleanString(agent?.outputInstruction, ''),
+      userTemplate: cleanString(agent?.userTemplate, defaultUserTemplate(agent?.phase || 'pre', agent?.id || '', agent?.outputInstruction || '')),
+    };
+    const packFor = (mode) => {
+      const source = prompts?.[mode] || prompts?.rp || fallback;
+      const outputInstruction = cleanString(source?.outputInstruction, fallback.outputInstruction);
+      return {
+        systemPrompt: cleanString(source?.systemPrompt, fallback.systemPrompt),
+        outputInstruction,
+        userTemplate: cleanString(source?.userTemplate, defaultUserTemplate(agent?.phase || 'pre', agent?.id || '', outputInstruction)),
+      };
+    };
+    return {
+      rp: packFor('rp'),
+      novel: packFor('novel'),
+    };
+  }
+
+  function normalizePromptModePack(source, fallback, phase, agentId) {
+    const outputInstruction = cleanString(source?.outputInstruction, fallback?.outputInstruction || '');
+    return {
+      systemPrompt: cleanString(source?.systemPrompt, fallback?.systemPrompt || ''),
+      outputInstruction,
+      userTemplate: cleanString(source?.userTemplate, fallback?.userTemplate || defaultUserTemplate(phase || 'pre', agentId || '', outputInstruction)),
+    };
+  }
+
+  function promptPresetSourceForAgent(sourceAgents, agentId) {
+    if (!sourceAgents) return null;
+    if (Array.isArray(sourceAgents)) return sourceAgents.find(agent => agent?.id === agentId) || null;
+    return sourceAgents[agentId] || null;
+  }
+
+  function normalizePromptPreset(preset, idx = 0) {
+    if (!preset || typeof preset !== 'object') return null;
+    const builtin = defaultPromptPreset();
+    const rawId = cleanString(preset.id, '');
+    const id = rawId ? slug(rawId).slice(0, 96) : `eros-prompt-${idx + 1}`;
+    if (!id) return null;
+    const agents = {};
+    const sourceAgents = preset.agents || preset.agentPrompts || preset.modePrompts || {};
+    defaultPipeline().agents
+      .filter(agent => agent.phase === 'pre')
+      .forEach(agent => {
+        const fallback = builtin.agents[agent.id] || promptPresetAgentPackFromAgent(agent);
+        const source = promptPresetSourceForAgent(sourceAgents, agent.id) || {};
+        const sourceModes = source.modePrompts || source.prompts || source;
+        const rpSource = sourceModes.rp || sourceModes.roleplay || sourceModes.default || sourceModes;
+        const novelSource = sourceModes.novel || sourceModes.story || sourceModes.default || rpSource;
+        agents[agent.id] = {
+          rp: normalizePromptModePack(rpSource, fallback.rp, agent.phase, agent.id),
+          novel: normalizePromptModePack(novelSource, fallback.novel, agent.phase, agent.id),
+        };
+      });
+    return {
+      id,
+      name: cleanString(preset.name, id === PROMPT_PRESET_BUILTIN_ID ? 'Eros Agent Default' : `Eros Prompt ${idx + 1}`),
+      type: cleanString(preset.type, PROMPT_PRESET_TYPE_EROS),
+      locked: id === PROMPT_PRESET_BUILTIN_ID || preset.locked === true,
+      agents,
+    };
+  }
+
+  function normalizePromptPresets(conf = {}) {
+    const builtin = defaultPromptPreset();
+    const source = Array.isArray(conf.promptPresets)
+      ? conf.promptPresets
+      : parsePromptPresets(conf.promptPresetsJson);
+    const result = [builtin];
+    const seen = new Set([PROMPT_PRESET_BUILTIN_ID]);
+    source.forEach((item, idx) => {
+      const preset = normalizePromptPreset(item, idx);
+      if (!preset || !preset.id || preset.id === PROMPT_PRESET_BUILTIN_ID || seen.has(preset.id)) return;
+      seen.add(preset.id);
+      result.push({ ...preset, locked: false });
+    });
+    return result;
+  }
+
+  function serializePromptPresets(presets = []) {
+    const custom = (Array.isArray(presets) ? presets : [])
+      .filter(preset => preset?.id && preset.id !== PROMPT_PRESET_BUILTIN_ID)
+      .map(preset => ({
+        id: preset.id,
+        name: preset.name || preset.id,
+        type: preset.type || PROMPT_PRESET_TYPE_EROS,
+        agents: preset.agents || {},
+      }));
+    return custom.length
+      ? JSON.stringify({ version: VERSION, type: 'eros-prompt-presets', presets: custom }, null, 2)
+      : '';
+  }
+
+  function normalizeActivePromptPresetId(value, presets = []) {
+    const id = cleanString(value, PROMPT_PRESET_BUILTIN_ID);
+    return (Array.isArray(presets) ? presets : []).some(preset => preset?.id === id)
+      ? id
+      : PROMPT_PRESET_BUILTIN_ID;
+  }
+
+  function getActivePromptPreset(conf = {}) {
+    const presets = Array.isArray(conf.promptPresets) && conf.promptPresets.length
+      ? conf.promptPresets
+      : normalizePromptPresets(conf);
+    const id = normalizeActivePromptPresetId(conf.activePromptPresetId, presets);
+    return presets.find(preset => preset.id === id) || presets[0] || defaultPromptPreset();
+  }
+
+  function applyPromptPresetToAgent(agent, conf = {}) {
+    if (!agent || agent.phase !== 'pre') return agent;
+    const preset = getActivePromptPreset(conf);
+    if (!preset || preset.id === PROMPT_PRESET_BUILTIN_ID || preset.type !== PROMPT_PRESET_TYPE_EROS) return agent;
+    const pack = preset.agents?.[agent.id];
+    if (!pack) return agent;
+    const basePrompts = agent.modePrompts && typeof agent.modePrompts === 'object' && !Array.isArray(agent.modePrompts)
+      ? agent.modePrompts
+      : promptPresetAgentPackFromAgent(agent);
+    const nextPrompts = { ...basePrompts };
+    ['rp', 'novel'].forEach(mode => {
+      const fallback = basePrompts[mode] || basePrompts.rp || {};
+      const source = pack[mode] || pack.rp || {};
+      const outputInstruction = cleanString(source.outputInstruction, fallback.outputInstruction || agent.outputInstruction || '');
+      nextPrompts[mode] = {
+        systemPrompt: cleanString(source.systemPrompt, fallback.systemPrompt || agent.systemPrompt || ''),
+        outputInstruction,
+        userTemplate: cleanString(source.userTemplate, defaultUserTemplate(agent.phase || 'pre', agent.id || '', outputInstruction)),
+      };
+    });
+    const defaultMode = nextPrompts.rp || {};
+    const outputInstruction = cleanString(defaultMode.outputInstruction, agent.outputInstruction || '');
+    return {
+      ...agent,
+      systemPrompt: cleanString(defaultMode.systemPrompt, agent.systemPrompt || ''),
+      outputInstruction,
+      userTemplate: cleanString(defaultMode.userTemplate, defaultUserTemplate(agent.phase || 'pre', agent.id || '', outputInstruction)),
+      modePrompts: nextPrompts,
+      promptPresetId: preset.id,
+      promptRevision: `${agent.promptRevision || EROS_AGENT_PROMPT_REVISION}:preset:${preset.id}`,
+    };
+  }
+
   function pipelineFromAgentRows(parsed) {
     const rows = parsed?.pipeline?.rows || parsed?.rows;
     if (!Array.isArray(rows)) return null;
@@ -1370,7 +1555,7 @@
       const oldPlot = byId.get('plot');
       byId.set('momentum', { ...oldPlot, id: 'momentum', name: 'Risk / Cost of Inaction', phase: 'pre' });
     }
-    const agents = defaults.map((fallback) => normalizeAgentConfig(mergeAgentWithPromptRevision(byId.get(fallback.id), fallback), conf, fallback));
+    const agents = defaults.map((fallback) => applyPromptPresetToAgent(normalizeAgentConfig(mergeAgentWithPromptRevision(byId.get(fallback.id), fallback), conf, fallback), conf));
     source
       .filter(agent => agent?.id && !defaults.some(fallback => fallback.id === agent.id))
       .filter(agent => agent.phase === 'post')
@@ -1650,7 +1835,7 @@
     'Respect user agency: do not decide the user persona inner thoughts, consent, dialogue, or next action.',
   ].join('\n');
 
-  const EROS_AGENT_PROMPT_REVISION = 'v1.1.19-mobile-runlog-diet';
+  const EROS_AGENT_PROMPT_REVISION = 'v1.1.21-prompt-presets';
 
   const EROS_RP_WORLD_SYSTEM = [
     'You are the Eros Tower Living World and Active Fronts Agent for RP.',
@@ -11202,6 +11387,89 @@
     };
   }
 
+  function compactAgentTraceForRunLog(note, verbose = false) {
+    const source = note || {};
+    const status = source.error ? 'error' : source.skipped ? 'skipped' : 'ok';
+    const out = {
+      id: source.id || '',
+      name: source.name || '',
+      phase: source.phase || '',
+      role: source.role || '',
+      provider: source.provider || '',
+      providerId: source.providerId || '',
+      model: source.model || '',
+      ms: source.ms,
+      status,
+      skipped: source.skipped === true,
+      error: source.error || '',
+      includeInNotes: source.includeInNotes !== false,
+      memoryEnabled: source.memoryEnabled === true,
+    };
+    if (source.postMode) out.postMode = source.postMode;
+    if (source.changed !== undefined) out.changed = source.changed === true;
+    if (status !== 'ok') out.message = clipRunLogText(source.error || source.text || '', 700);
+    if (verbose) {
+      out.prompt = source.prompt ? clipRunLogText(source.prompt) : '';
+      out.rawOutput = source.rawOutput ? clipRunLogText(source.rawOutput) : '';
+      out.retrievalPreview = source.retrievalPreview ? clipRunLogText(source.retrievalPreview, 12000) : '';
+      out.text = source.text ? clipRunLogText(source.text, 12000) : '';
+      out.inputPreview = source.inputPreview ? clipRunLogText(source.inputPreview, 1600) : '';
+      out.outputPreview = source.outputPreview ? clipRunLogText(source.outputPreview, 1600) : '';
+    }
+    return out;
+  }
+
+  function compactQualityIssueForRunLog(issue) {
+    const source = issue || {};
+    return {
+      tag: source.tag || source.type || source.category || '',
+      severity: source.severity,
+      message: clipRunLogText(source.message || source.reason || source.label || '', 260),
+      evidence: normalizeStringArray(source.evidence || source.samples || source.examples).slice(0, 4).map(item => clipRunLogText(item, 180)),
+    };
+  }
+
+  function compactQualityRuleForRunLog(rule) {
+    const source = rule || {};
+    return {
+      id: source.id || '',
+      label: source.label || source.name || '',
+      category: source.category || '',
+      source: source.source || '',
+      changes: source.changes,
+    };
+  }
+
+  function compactQualityRegexForRunLog(qualityRegex) {
+    if (!qualityRegex || typeof qualityRegex !== 'object') return qualityRegex;
+    return {
+      applied: qualityRegex.applied || 0,
+      errors: normalizeStringArray(qualityRegex.errors).slice(0, 8).map(item => clipRunLogText(item, 500)),
+      appliedRules: (Array.isArray(qualityRegex.appliedRules) ? qualityRegex.appliedRules : []).slice(0, 24).map(compactQualityRuleForRunLog),
+      issuesBefore: (Array.isArray(qualityRegex.issuesBefore) ? qualityRegex.issuesBefore : []).slice(0, 16).map(compactQualityIssueForRunLog),
+      issuesAfter: (Array.isArray(qualityRegex.issuesAfter) ? qualityRegex.issuesAfter : []).slice(0, 16).map(compactQualityIssueForRunLog),
+      adaptive: qualityRegex.adaptive ? {
+        enabled: qualityRegex.adaptive.enabled !== false,
+        appliedRules: (Array.isArray(qualityRegex.adaptive.appliedRules) ? qualityRegex.adaptive.appliedRules : []).slice(0, 16).map(compactQualityRuleForRunLog),
+        agent: qualityRegex.adaptive.agent ? {
+          called: qualityRegex.adaptive.agent.called === true,
+          error: qualityRegex.adaptive.agent.error || '',
+          proposals: qualityRegex.adaptive.agent.proposals || 0,
+          accepted: normalizeStringArray(qualityRegex.adaptive.agent.accepted).slice(0, 16),
+          reason: qualityRegex.adaptive.agent.reason || '',
+        } : null,
+      } : null,
+    };
+  }
+
+  function compactPostPipelineResultForRunLog(result, verbose = false) {
+    if (!result || typeof result !== 'object') return result;
+    return {
+      changed: result.changed === true,
+      results: (Array.isArray(result.results) ? result.results : []).map(item => compactAgentTraceForRunLog(item, verbose)),
+    };
+  }
+
   function compactRunLogForStorage(run, conf = null) {
     const out = { ...(run || {}) };
     const verbose = shouldCaptureVerboseRunLog(conf);
@@ -11210,25 +11478,26 @@
       delete out.requestMessages;
     }
     if (Array.isArray(out.notes)) {
-      out.notes = out.notes.map(note => ({
-        ...(note || {}),
-        prompt: verbose && note?.prompt ? clipRunLogText(note.prompt) : '',
-        rawOutput: note?.rawOutput ? clipRunLogText(note.rawOutput, verbose ? MAX_RUN_LOG_TEXT_CHARS : 3000) : '',
-        retrievalPreview: note?.retrievalPreview ? clipRunLogText(note.retrievalPreview, verbose ? 12000 : 2500) : '',
-        text: note?.text ? clipRunLogText(note.text, verbose ? 12000 : 3600) : '',
-      }));
+      out.notes = out.notes.map(note => compactAgentTraceForRunLog(note, verbose));
     }
+    if (out.postPipelineResult) out.postPipelineResult = compactPostPipelineResultForRunLog(out.postPipelineResult, verbose);
+    if (out.qualityRegex) out.qualityRegex = compactQualityRegexForRunLog(out.qualityRegex);
     if (out.commitPromptPreview) out.commitPromptPreview = verbose ? clipRunLogText(out.commitPromptPreview, 24000) : '';
-    if (out.commitRawPreview) out.commitRawPreview = clipRunLogText(out.commitRawPreview, verbose ? 24000 : 3000);
+    if (out.commitRawPreview) out.commitRawPreview = verbose ? clipRunLogText(out.commitRawPreview, 24000) : '';
     if (out.rawFinalPreview) out.rawFinalPreview = clipRunLogText(out.rawFinalPreview, verbose ? 16000 : 4000);
     if (out.finalPreview) out.finalPreview = clipRunLogText(out.finalPreview, verbose ? 16000 : 4000);
     if (Array.isArray(out.coldStartResult?.results)) {
       out.coldStartResult = {
         ...out.coldStartResult,
         results: out.coldStartResult.results.map(item => ({
-          ...(item || {}),
+          hash: item?.hash || '',
+          changed: item?.changed === true,
+          fallback: item?.fallback === true,
+          counts: item?.counts || null,
+          error: item?.error || '',
+          agent: item?.agent || null,
           prompt: verbose && item?.prompt ? clipRunLogText(item.prompt, 20000) : '',
-          rawOutput: item?.rawOutput ? clipRunLogText(item.rawOutput, verbose ? 20000 : 3000) : '',
+          rawOutput: verbose && item?.rawOutput ? clipRunLogText(item.rawOutput, 20000) : '',
         })).slice(-12),
       };
     }
@@ -11988,6 +12257,7 @@
         <main>
           <section class="et-view" data-view="api" data-active="true">${renderApiPanel(conf)}</section>
           <section class="et-view" data-view="agents">${renderAgentPanel(conf)}</section>
+          <section class="et-view" data-view="prompts">${renderPromptPresetPanel(conf)}</section>
           <section class="et-view" data-view="references">${renderReferencePanel(conf, context)}</section>
           <section class="et-view" data-view="state">${renderStatePanel(conf, context, state, snapshots, backup)}</section>
           <section class="et-view" data-view="usage">${renderUsagePanel(conf, usageLedger, quotaSnapshots)}</section>
@@ -12232,6 +12502,79 @@
         </details>
       </section>`;
   }
+
+  function promptPresetOptions(presets = []) {
+    return (Array.isArray(presets) ? presets : []).map(preset => ({
+      value: preset.id,
+      label: `${preset.name || preset.id}${preset.id === PROMPT_PRESET_BUILTIN_ID ? ' (기본)' : ''}`,
+    }));
+  }
+
+  function renderPromptPresetPanel(conf) {
+    const presets = normalizePromptPresets(conf);
+    const activeId = normalizeActivePromptPresetId(conf.activePromptPresetId, presets);
+    const activePreset = presets.find(preset => preset.id === activeId) || presets[0] || defaultPromptPreset();
+    const runtimeJson = JSON.stringify({ version: VERSION, type: 'eros-prompt-presets-runtime', presets }, null, 2);
+    const agents = defaultPipeline().agents.filter(agent => agent.phase === 'pre');
+    return `
+      <section class="et-panel">
+        <h2>모드(프롬)</h2>
+        <div class="et-note">Eros 에이전트의 RP/소설 프롬프트 프리셋을 관리합니다. 기본 프리셋은 보존되며, 수정 저장 시 커스텀 프리셋으로 적용됩니다. 번역/품질/NSFW 계열 에이전트도 같은 프리셋 구조로 확장할 수 있게 분리했습니다.</div>
+        <textarea id="et-prompt-presets-json" style="display:none">${escHtml(runtimeJson)}</textarea>
+        <div class="et-row" style="margin-top:12px">
+          ${selectField('활성 프리셋', 'et-prompt-preset-active', activeId, promptPresetOptions(presets), 'et-prompt-preset-active')}
+          ${inputField('프리셋 이름', 'et-prompt-preset-name', 'text', activePreset.name || '', '예: Eros Agent Novel Custom')}
+        </div>
+        <div class="et-actions">
+          <button id="et-save-prompts">프롬프트 저장</button>
+          <button id="et-add-prompt-preset">새 프리셋</button>
+          <button id="et-rename-prompt-preset">이름 변경</button>
+          <button id="et-export-prompt-preset">익스포트</button>
+          <button id="et-import-prompt-preset">임포트</button>
+        </div>
+        <div id="et-prompt-status" class="et-status" data-kind="info"></div>
+      </section>
+      <section class="et-panel" style="margin-top:14px">
+        <h2>Eros 에이전트 프롬프트</h2>
+        <div class="et-note">각 에이전트는 RP와 소설 모드 프롬프트를 따로 가집니다. System은 에이전트의 역할, Output은 에이전트가 돌려줄 관리 노트 형식을 지시합니다.</div>
+        ${agents.map(agent => renderPromptPresetAgentEditor(agent, activePreset)).join('')}
+      </section>
+      <section class="et-panel" style="margin-top:14px">
+        <details class="et-section-toggle">
+          <summary>프리셋 JSON 임포트 / 익스포트</summary>
+          <div class="et-note" style="margin-top:10px">익스포트 버튼은 현재 편집 중인 프리셋을 클립보드로 복사합니다. 임포트는 아래 칸의 JSON을 읽어 현재 프리셋 목록에 추가합니다.</div>
+          ${textarea('임포트 JSON', 'et-prompt-preset-import-json', '', '{"presets":[...]} 또는 단일 preset JSON')}
+        </details>
+      </section>`;
+  }
+
+  function renderPromptPresetAgentEditor(agent, preset) {
+    const pack = preset?.agents?.[agent.id] || promptPresetAgentPackFromAgent(agent);
+    const rp = pack.rp || {};
+    const novel = pack.novel || pack.rp || {};
+    const label = escHtml(agent.name || agent.id);
+    const id = agent.id;
+    return `
+      <details class="et-agent-card et-prompt-agent-card">
+        <summary class="et-agent-summary">
+          <div>
+            <div class="et-agent-title">${label}</div>
+            <div class="et-agent-meta">Eros agent prompt preset / ${escHtml(id)}</div>
+          </div>
+        </summary>
+        <div class="et-collapsible-body">
+          <div class="et-row">
+            ${textarea('RP System', `et-prompt-${id}-rp-system`, rp.systemPrompt || '')}
+            ${textarea('소설 System', `et-prompt-${id}-novel-system`, novel.systemPrompt || '')}
+          </div>
+          <div class="et-row">
+            ${textarea('RP Output', `et-prompt-${id}-rp-output`, rp.outputInstruction || '')}
+            ${textarea('소설 Output', `et-prompt-${id}-novel-output`, novel.outputInstruction || '')}
+          </div>
+        </div>
+      </details>`;
+  }
+
   function renderAgentPanel(conf) {
     const agents = conf.pipeline?.agents || defaultPipeline().agents;
     const erosAgents = agents.filter(agent => agent.phase === 'pre');
@@ -13252,6 +13595,7 @@
       ${run.commitCounts ? renderCommitCounts(run.commitCounts) : ''}
       <h3>에로스 에이전트 Notes</h3>
       ${renderAgentTrace(notes)}
+      ${run.postPipelineResult ? `<h3>Post Agents</h3>${renderAgentTrace(run.postPipelineResult.results || [])}` : ''}
       <h3>최종 출력 미리보기</h3>
       <pre>${escHtml(run.finalPreview || run.userInputPreview || '(내용 없음)')}</pre>
       ${run.outputSanitized ? `<h3>정리 전 출력</h3><pre>${escHtml(run.rawFinalPreview || '')}</pre>` : ''}
@@ -13301,7 +13645,11 @@
           </div>
           <div class="et-note">${escHtml(meta || '-')}</div>
           ${note.role ? `<div class="et-note">${escHtml(note.role)}</div>` : ''}
+          ${note.postMode ? `<div class="et-note">post mode: ${escHtml(note.postMode)}${note.changed !== undefined ? ` / changed: ${note.changed ? 'yes' : 'no'}` : ''}</div>` : ''}
+          ${note.message ? `<div class="et-note">${escHtml(note.message)}</div>` : ''}
           ${note.text ? `<pre>${escHtml(String(note.text).slice(0, 2200))}</pre>` : ''}
+          ${note.inputPreview ? `<details><summary>Input Preview</summary><pre>${escHtml(note.inputPreview)}</pre></details>` : ''}
+          ${note.outputPreview ? `<details><summary>Output Preview</summary><pre>${escHtml(note.outputPreview)}</pre></details>` : ''}
           ${note.prompt ? `<details><summary>에이전트 프롬프트</summary><pre>${escHtml(note.prompt)}</pre></details>` : ''}
           ${note.rawOutput && note.rawOutput !== note.text ? `<details><summary>Raw Output</summary><pre>${escHtml(note.rawOutput)}</pre></details>` : ''}
           ${note.retrievalPreview ? `<details><summary>검색된 관리 자료</summary><pre>${escHtml(note.retrievalPreview)}</pre></details>` : ''}
@@ -13429,6 +13777,7 @@
     const options = [
       { value: 'api', label: 'API / Provider' },
       { value: 'agents', label: '에이전트' },
+      { value: 'prompts', label: '모드(프롬)' },
       { value: 'references', label: '참고 자료' },
       { value: 'state', label: '관리상태' },
       { value: 'usage', label: '사용량' },
@@ -13668,6 +14017,7 @@
     const clone = { ...conf };
     delete clone.providerKeys;
     delete clone.modelPresets;
+    delete clone.promptPresets;
     delete clone.pipeline;
     delete clone.providerRegistry;
     return clone;
@@ -13873,6 +14223,7 @@
     const setRecoveryStatus = (text, kind = 'info') => setLocalStatus('et-recovery-status', text, kind);
     const setCbsStatus = (text, kind = 'info') => setLocalStatus('et-cbs-status', text, kind);
     const setUsageStatus = (text, kind = 'info') => setLocalStatus('et-usage-status', text, kind);
+    const setPromptStatus = (text, kind = 'info') => setLocalStatus('et-prompt-status', text, kind);
     const setAgentStatus = (agentId, text, kind = 'info') => setLocalStatus(`et-agent-status-${agentId}`, text, kind);
 
     const saveCurrent = async (statusSetter = setMainStatus, message = '설정 저장 완료. 다음 요청부터 적용됩니다.') => {
@@ -14013,6 +14364,7 @@
     wireProviderCards(conf, setProviderStatus, saveCurrent);
     wireAgentSelectors(conf);
     wireAgentActionButtons(conf, setAgentStatus, saveCurrent);
+    wirePromptPresetHandlers(conf, setPromptStatus, saveCurrent);
 
     $('et-cbs-toggle-scope')?.addEventListener('change', event => {
       const kind = event.currentTarget.value;
@@ -14346,6 +14698,208 @@
     });
   }
 
+  function promptPresetListFromUI(conf) {
+    const node = document.getElementById('et-prompt-presets-json');
+    return normalizePromptPresets({
+      ...conf,
+      promptPresets: parsePromptPresets(node?.value || ''),
+      promptPresetsJson: '',
+    });
+  }
+
+  function promptPresetNextId(name, presets = []) {
+    const existing = new Set((Array.isArray(presets) ? presets : []).map(preset => preset?.id).filter(Boolean));
+    const root = slug(name || 'eros-prompt').slice(0, 54) || 'eros-prompt';
+    let serial = Date.now().toString(36);
+    let id = `${root}-${serial}`;
+    if (id === PROMPT_PRESET_BUILTIN_ID) id = `eros-prompt-${serial}`;
+    while (existing.has(id)) {
+      serial = `${Date.now().toString(36)}-${Math.floor(Math.random() * 1000)}`;
+      id = `${root}-${serial}`.slice(0, 96);
+    }
+    return id;
+  }
+
+  function writePromptPresetListToUI(presets, activeId) {
+    const normalized = normalizePromptPresets({ promptPresets: presets, promptPresetsJson: '' });
+    const active = normalizeActivePromptPresetId(activeId, normalized);
+    const json = document.getElementById('et-prompt-presets-json');
+    if (json) json.value = JSON.stringify({ version: VERSION, type: 'eros-prompt-presets-runtime', presets: normalized }, null, 2);
+    const select = document.getElementById('et-prompt-preset-active');
+    if (select) {
+      select.innerHTML = promptPresetOptions(normalized)
+        .map(option => `<option value="${escHtml(option.value)}" ${String(option.value) === String(active) ? 'selected' : ''}>${escHtml(option.label)}</option>`)
+        .join('');
+      select.value = active;
+    }
+    return normalized;
+  }
+
+  function setPromptPresetEditorFromPreset(preset) {
+    if (!preset) return;
+    const nameNode = document.getElementById('et-prompt-preset-name');
+    if (nameNode) nameNode.value = preset.name || '';
+    defaultPipeline().agents
+      .filter(agent => agent.phase === 'pre')
+      .forEach(agent => {
+        const pack = preset.agents?.[agent.id] || promptPresetAgentPackFromAgent(agent);
+        ['rp', 'novel'].forEach(mode => {
+          const source = pack[mode] || pack.rp || {};
+          const systemNode = document.getElementById(`et-prompt-${agent.id}-${mode}-system`);
+          const outputNode = document.getElementById(`et-prompt-${agent.id}-${mode}-output`);
+          if (systemNode) systemNode.value = source.systemPrompt || '';
+          if (outputNode) outputNode.value = source.outputInstruction || '';
+        });
+      });
+  }
+
+  function readPromptPresetEditorFromUI(conf, id = '', name = '') {
+    const presetId = cleanString(id, document.getElementById('et-prompt-preset-active')?.value || PROMPT_PRESET_BUILTIN_ID);
+    const presetName = cleanString(name, document.getElementById('et-prompt-preset-name')?.value || presetId);
+    const agents = {};
+    defaultPipeline().agents
+      .filter(agent => agent.phase === 'pre')
+      .forEach(agent => {
+        const modePack = {};
+        ['rp', 'novel'].forEach(mode => {
+          const systemPrompt = document.getElementById(`et-prompt-${agent.id}-${mode}-system`)?.value || '';
+          const outputInstruction = document.getElementById(`et-prompt-${agent.id}-${mode}-output`)?.value || '';
+          modePack[mode] = {
+            systemPrompt,
+            outputInstruction,
+            userTemplate: defaultUserTemplate('pre', agent.id, outputInstruction),
+          };
+        });
+        agents[agent.id] = modePack;
+      });
+    return normalizePromptPreset({
+      id: presetId,
+      name: presetName,
+      type: PROMPT_PRESET_TYPE_EROS,
+      agents,
+    }, 0);
+  }
+
+  function upsertPromptPreset(presets, preset) {
+    const list = Array.isArray(presets) ? presets.slice() : [];
+    if (!preset?.id) return list;
+    const idx = list.findIndex(item => item?.id === preset.id);
+    if (idx >= 0) list[idx] = preset;
+    else list.push(preset);
+    return list;
+  }
+
+  function readPromptPresetConfigFromUI(conf) {
+    if (!document.getElementById('et-prompt-presets-json')) {
+      const presets = normalizePromptPresets(conf);
+      const activePromptPresetId = normalizeActivePromptPresetId(conf.activePromptPresetId, presets);
+      return {
+        promptPresets: presets,
+        activePromptPresetId,
+        promptPresetsJson: serializePromptPresets(presets),
+      };
+    }
+    let presets = promptPresetListFromUI(conf);
+    let activeId = document.getElementById('et-prompt-preset-active')?.value || conf.activePromptPresetId || PROMPT_PRESET_BUILTIN_ID;
+    if (activeId !== PROMPT_PRESET_BUILTIN_ID) {
+      const edited = readPromptPresetEditorFromUI(conf, activeId);
+      presets = upsertPromptPreset(presets, { ...edited, locked: false });
+    }
+    presets = normalizePromptPresets({ promptPresets: presets, promptPresetsJson: '' });
+    activeId = normalizeActivePromptPresetId(activeId, presets);
+    return {
+      promptPresets: presets,
+      activePromptPresetId: activeId,
+      promptPresetsJson: serializePromptPresets(presets),
+    };
+  }
+
+  function wirePromptPresetHandlers(conf, setStatus, saveCurrent) {
+    const active = document.getElementById('et-prompt-preset-active');
+    if (!active || active.getAttribute('data-wired') === 'true') return;
+    active.setAttribute('data-wired', 'true');
+    active.addEventListener('change', event => {
+      const presets = promptPresetListFromUI(conf);
+      const preset = presets.find(item => item.id === event.currentTarget.value) || presets[0];
+      setPromptPresetEditorFromPreset(preset);
+      setStatus(`${preset?.name || preset?.id || '프리셋'} 프롬프트를 불러왔습니다. 저장하면 다음 요청부터 적용됩니다.`, 'info');
+    });
+
+    document.getElementById('et-save-prompts')?.addEventListener('click', async event => {
+      await withBusy(event.currentTarget, async () => {
+        let presets = promptPresetListFromUI(conf);
+        let activeId = active.value || PROMPT_PRESET_BUILTIN_ID;
+        if (activeId === PROMPT_PRESET_BUILTIN_ID) {
+          activeId = promptPresetNextId(document.getElementById('et-prompt-preset-name')?.value || 'Eros Agent Custom', presets);
+        }
+        const preset = { ...readPromptPresetEditorFromUI(conf, activeId), locked: false };
+        presets = upsertPromptPreset(presets, preset);
+        writePromptPresetListToUI(presets, activeId);
+        setPromptPresetEditorFromPreset(preset);
+        await saveCurrent(setStatus, `${preset.name || preset.id} 프롬프트 프리셋을 저장했습니다. 다음 요청부터 적용됩니다.`);
+      }, 'et-prompt-status');
+    });
+
+    document.getElementById('et-add-prompt-preset')?.addEventListener('click', async event => {
+      await withBusy(event.currentTarget, async () => {
+        let presets = promptPresetListFromUI(conf);
+        const baseName = document.getElementById('et-prompt-preset-name')?.value || 'Eros Agent Custom';
+        const id = promptPresetNextId(baseName, presets);
+        const preset = { ...readPromptPresetEditorFromUI(conf, id, `${baseName} Copy`), locked: false };
+        presets = upsertPromptPreset(presets, preset);
+        writePromptPresetListToUI(presets, id);
+        setPromptPresetEditorFromPreset(preset);
+        await saveCurrent(setStatus, `${preset.name || preset.id} 새 프리셋을 추가하고 활성화했습니다.`);
+      }, 'et-prompt-status');
+    });
+
+    document.getElementById('et-rename-prompt-preset')?.addEventListener('click', async event => {
+      await withBusy(event.currentTarget, async () => {
+        const activeId = active.value || PROMPT_PRESET_BUILTIN_ID;
+        if (activeId === PROMPT_PRESET_BUILTIN_ID) throw new Error('기본 프리셋은 이름을 바꾸지 않습니다. 새 프리셋으로 저장하세요.');
+        let presets = promptPresetListFromUI(conf);
+        const preset = { ...readPromptPresetEditorFromUI(conf, activeId), locked: false };
+        presets = upsertPromptPreset(presets, preset);
+        writePromptPresetListToUI(presets, activeId);
+        await saveCurrent(setStatus, `${preset.name || preset.id} 이름과 프롬프트를 저장했습니다.`);
+      }, 'et-prompt-status');
+    });
+
+    document.getElementById('et-export-prompt-preset')?.addEventListener('click', async event => {
+      await withBusy(event.currentTarget, async () => {
+        const activeId = active.value || PROMPT_PRESET_BUILTIN_ID;
+        const preset = readPromptPresetEditorFromUI(conf, activeId);
+        await copyText(JSON.stringify({ version: VERSION, type: 'eros-prompt-presets', presets: [preset] }, null, 2));
+        setStatus(`${preset.name || preset.id} 프리셋 JSON을 클립보드로 복사했습니다.`, 'success');
+      }, 'et-prompt-status');
+    });
+
+    document.getElementById('et-import-prompt-preset')?.addEventListener('click', async event => {
+      await withBusy(event.currentTarget, async () => {
+        const text = document.getElementById('et-prompt-preset-import-json')?.value || '';
+        if (!text.trim()) throw new Error('임포트할 프리셋 JSON이 비어 있습니다.');
+        let presets = promptPresetListFromUI(conf);
+        const imported = parsePromptPresets(text)
+          .map((item, idx) => normalizePromptPreset(item, idx))
+          .filter(Boolean);
+        if (!imported.length) throw new Error('가져올 수 있는 프리셋이 없습니다.');
+        let firstImportedId = '';
+        imported.forEach(item => {
+          let preset = { ...item, locked: false };
+          if (preset.id === PROMPT_PRESET_BUILTIN_ID || presets.some(existing => existing.id === preset.id)) {
+            preset = { ...preset, id: promptPresetNextId(preset.name || preset.id, presets) };
+          }
+          presets = upsertPromptPreset(presets, preset);
+          if (!firstImportedId) firstImportedId = preset.id;
+        });
+        const normalized = writePromptPresetListToUI(presets, firstImportedId);
+        const activePreset = normalized.find(item => item.id === firstImportedId);
+        setPromptPresetEditorFromPreset(activePreset);
+        await saveCurrent(setStatus, `${activePreset?.name || firstImportedId} 프리셋을 임포트하고 활성화했습니다.`);
+      }, 'et-prompt-status');
+    });
+  }
+
   function readAgentConfigFromUI(conf, agentId) {
     const base = (conf.pipeline?.agents || defaultPipeline().agents).find(agent => agent.id === agentId)
       || defaultPipeline().agents.find(agent => agent.id === agentId)
@@ -14461,10 +15015,18 @@
       const scopeKey = $('et-cbs-scope-key')?.value || '';
       next = writeCbsToggleMapForScope(next, scopeKind, scopeKey, parseCbsToggleText(cbsTextNode.value || ''));
     }
+    const promptPresetConfig = readPromptPresetConfigFromUI(next);
+    next = {
+      ...next,
+      ...promptPresetConfig,
+    };
     const agents = (conf.pipeline?.agents || defaultPipeline().agents)
       .map(agent => readAgentConfigFromUI(next, agent.id));
     next.pipelineJson = JSON.stringify({ version: VERSION, agents }, null, 2);
     next.modelPresets = parseModelPresets(next.modelPresetsJson, next);
+    next.promptPresets = normalizePromptPresets(next);
+    next.activePromptPresetId = normalizeActivePromptPresetId(next.activePromptPresetId, next.promptPresets);
+    next.promptPresetsJson = serializePromptPresets(next.promptPresets);
     next.pipeline = normalizePipeline(parsePipeline(next.pipelineJson), next);
     next.providerKeys = parseProviderKeys(next.providerKeysJson, next.provider, next.apiKey);
     return next;
