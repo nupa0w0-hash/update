@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.25
+//@display-name ☸Eros Tower 1.1.26
 //@api 3.0
-//@version 1.1.25
+//@version 1.1.26
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -35,18 +35,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.25
+ * Eros Tower 1.1.26
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.25 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.26 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.25';
+  const VERSION = '1.1.26';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.25`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.26`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -63,7 +63,7 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.25 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.26 analysis context';
   const GOOGLE_OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
   const GOOGLE_CLOUD_PLATFORM_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
   const PSYCHE_RECOMMENDED_MODELS = Object.freeze([
@@ -12263,11 +12263,11 @@
     const cbsSync = syncCbsDiagnostics(state, context, conf);
     const notes = pendingRun?.notes || Runtime.lastRun?.notes || [];
     let postContext = contextWithAssistantOutput(context, finalContent);
-    const regexResult = await applyAdaptiveQualityOutput(finalContent, conf, state, postContext);
-    finalContent = sanitizeFinalOutput(regexResult.text);
-    postContext = contextWithAssistantOutput(context, finalContent);
     const postPipelineResult = await runPostPipeline(finalContent, conf, postContext, state, notes);
     finalContent = sanitizeFinalOutput(postPipelineResult.text);
+    postContext = contextWithAssistantOutput(context, finalContent);
+    const regexResult = await applyAdaptiveQualityOutput(finalContent, conf, state, postContext);
+    finalContent = sanitizeFinalOutput(regexResult.text);
     postContext = contextWithAssistantOutput(context, finalContent);
     const longMemorySync = syncChatLongMemoryLedger(state, postContext.messages, conf.contextWindow, conf.coldStartChunkSize);
     const memoryRecoverySync = runMemoryGardenRecovery(state, postContext.messages, conf, sessionSync);
