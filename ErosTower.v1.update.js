@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.28
+//@display-name ☸Eros Tower 1.1.29
 //@api 3.0
-//@version 1.1.28
+//@version 1.1.29
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -35,18 +35,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.28
+ * Eros Tower 1.1.29
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.28 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.29 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.28';
+  const VERSION = '1.1.29';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.28`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.29`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -63,7 +63,7 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.28 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.29 analysis context';
   const GOOGLE_OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
   const GOOGLE_CLOUD_PLATFORM_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
   const PSYCHE_RECOMMENDED_MODELS = Object.freeze([
@@ -731,6 +731,10 @@
     if (min !== null) out = Math.max(min, out);
     if (max !== null) out = Math.min(max, out);
     return out;
+  }
+
+  function normalizeTranslationRetryCount(value, fallback = 1) {
+    return Math.round(parseNumber(value, fallback, 0, 10));
   }
 
   function normalizeTimeoutMsSetting(value, fallback = DEFAULT_CONFIG.timeoutMs) {
@@ -1806,6 +1810,7 @@
       memoryFormat: cleanString(agent.memoryFormat || fallback?.memoryFormat, ''),
       sourceAgentId: cleanString(agent.sourceAgentId || fallback?.sourceAgentId, ''),
       sourceRow: Number.isFinite(Number(agent.sourceRow ?? fallback?.sourceRow)) ? Number(agent.sourceRow ?? fallback?.sourceRow) : undefined,
+      translationRetryCount: normalizeTranslationRetryCount(agent.translationRetryCount ?? fallback?.translationRetryCount, 1),
       translationPromptModeId: normalizeActiveTranslationPromptModeId(agent.translationPromptModeId || fallback?.translationPromptModeId || conf.activeTranslationPromptModeId, conf.translationPromptModes),
     };
   }
@@ -1824,6 +1829,7 @@
           ...makeAgent(TRANSLATION_AGENT_ID, '한국에서 오신 김번역씨 (번역 에이전트)', 'resident', '선택한 번역 프롬프트 모드를 사용합니다. 변환된 최종 텍스트만 출력합니다.', false, 'ollama-kimi-k2-7-code-cloud', 'ollama-local', 'kimi-k2.7-code:cloud'),
           postMode: 'polish',
           includePreviousNotes: false,
+          translationRetryCount: 1,
           translationPromptModeId: TRANSLATION_PROMPT_DEFAULT_ID,
         },
       ],
@@ -2029,6 +2035,10 @@
   ].join('\n');
 
   const EROS_AGENT_PROMPT_REVISION = 'v1.1.22-prompt-modes';
+  const PRE_AGENT_SOURCE_HANDLING = [
+    'Source Handling:',
+    'The final-response model receives Eros Tower source context separately. Use lore, memory, state, retrieved context, character cards, and chat history as shared working context for your active agent role, not as material to re-deliver.',
+  ].join('\n');
 
   const EROS_RP_WORLD_SYSTEM = [
     'You are the Eros Tower Living World and Active Fronts Agent for RP.',
@@ -7969,6 +7979,12 @@
     return cleanString(prompt?.systemPrompt, agent?.systemPrompt || '');
   }
 
+  function resolvePreAgentSystemPrompt(agent, context = null) {
+    const base = resolveRuntimeAgentSystemPrompt(agent, context);
+    if (base.includes('The final-response model receives Eros Tower source context separately.')) return base;
+    return [base, PRE_AGENT_SOURCE_HANDLING].filter(Boolean).join('\n\n');
+  }
+
   function resolveRuntimeAgentUserTemplate(agent, context = null) {
     const prompt = resolveAgentModePrompt(agent, context);
     const outputInstruction = cleanString(prompt?.outputInstruction, agent?.outputInstruction || '');
@@ -8001,6 +8017,12 @@
     return messages;
   }
 
+  function stripTranslationPrefillMessages(messages) {
+    const list = Array.isArray(messages) ? messages.slice() : [];
+    while (list.length && list[list.length - 1]?.role === 'assistant') list.pop();
+    return list;
+  }
+
   function buildTranslationAgentMessages(agent, current, conf, context, state, notes, agentContext = '') {
     const mode = getTranslationPromptMode(conf, agent?.translationPromptModeId);
     const agentConf = resolveAgentConf(agent, conf);
@@ -8020,13 +8042,29 @@
       final_output: String(current ?? ''),
     };
     const rendered = renderTranslationPromptTemplate(mode?.prompt || '', values);
-    const messages = parseChatMlMessages(rendered);
-    return messages.length
+    const messages = stripTranslationPrefillMessages(parseChatMlMessages(rendered));
+    return messages.length && messages.some(message => message.role === 'user')
       ? messages
       : [
         { role: 'system', content: mode?.prompt || agent?.systemPrompt || 'Translate the provided text into Korean. Output only the result.' },
         { role: 'user', content: String(current ?? '') },
       ];
+  }
+
+  async function callPostAgentWithTranslationRetry(agent, agentConf, messages) {
+    const maxRetries = agent?.id === TRANSLATION_AGENT_ID ? normalizeTranslationRetryCount(agent.translationRetryCount, 1) : 0;
+    let attempts = 0;
+    let rawOutput = '';
+    while (attempts <= maxRetries) {
+      attempts += 1;
+      rawOutput = await callAgent(agentConf, messages);
+      if (agent?.id !== TRANSLATION_AGENT_ID || String(rawOutput ?? '').trim()) {
+        return { rawOutput, attempts, retries: attempts - 1 };
+      }
+    }
+    const err = new Error(`translation-empty-output after ${attempts} attempt${attempts === 1 ? '' : 's'}`);
+    err.translationAttempts = attempts;
+    throw err;
   }
 
   function deepCloneJson(value) {
@@ -8101,7 +8139,7 @@
         final_output: '',
       };
       const messages = [
-        { role: 'system', content: resolveRuntimeAgentSystemPrompt(agent, context) || '' },
+        { role: 'system', content: resolvePreAgentSystemPrompt(agent, context) || '' },
         { role: 'user', content: [
           agent.memoryEnabled && values.memory_instruction
             ? `<source label="Agent Memory Advisory">\n${values.memory_instruction}${values.memory_format ? `\n\nFormat:\n${values.memory_format}` : ''}\n</source>`
@@ -8198,7 +8236,8 @@
       const startedAt = Date.now();
       const translationMode = agent.id === TRANSLATION_AGENT_ID ? getTranslationPromptMode(conf, agent.translationPromptModeId) : null;
       try {
-        const rawOutput = await callAgent(agentConf, messages);
+        const callResult = await callPostAgentWithTranslationRetry(agent, agentConf, messages);
+        const rawOutput = callResult.rawOutput;
         const next = applyPostAgentOutput(agent, current, rawOutput);
         if (String(next || '').trim()) current = next;
         results.push({
@@ -8212,6 +8251,8 @@
           postMode: normalizePostMode(agent.postMode),
           translationPromptModeId: translationMode?.id || '',
           translationPromptModeName: translationMode?.name || '',
+          attempts: callResult.attempts,
+          retries: callResult.retries,
           changed: current !== before,
           prompt: promptTrace,
           rawOutput: clipRunLogText(rawOutput),
@@ -8231,6 +8272,7 @@
           postMode: normalizePostMode(agent.postMode),
           translationPromptModeId: translationMode?.id || '',
           translationPromptModeName: translationMode?.name || '',
+          attempts: err.translationAttempts,
           error: err.message,
           prompt: promptTrace,
           rawOutput: '',
@@ -11549,6 +11591,8 @@
     };
     if (source.postMode) out.postMode = source.postMode;
     if (source.changed !== undefined) out.changed = source.changed === true;
+    if (source.attempts !== undefined) out.attempts = parseNumber(source.attempts, 0, 0, 99);
+    if (source.retries !== undefined) out.retries = parseNumber(source.retries, 0, 0, 99);
     if (status !== 'ok') out.message = clipRunLogText(source.error || source.text || '', 700);
     if (verbose) {
       out.prompt = source.prompt ? clipRunLogText(source.prompt) : '';
@@ -12802,6 +12846,7 @@
       const modelOptions = providerModelOptions(provider, selectedModel);
       const translationModes = conf.translationPromptModes || normalizeTranslationPromptModes(conf);
       const selectedTranslationPrompt = normalizeActiveTranslationPromptModeId(agent.translationPromptModeId || conf.activeTranslationPromptModeId, translationModes);
+      const translationRetryCount = normalizeTranslationRetryCount(agent.translationRetryCount ?? 1, 1);
       return `
         <details class="et-agent-card">
           <summary class="et-agent-summary">
@@ -12840,6 +12885,7 @@
               </div>` : ''}
               ${agent.id === TRANSLATION_AGENT_ID ? `<div class="et-row">
                 ${selectField('번역 프롬프트', `et-agent-translation-prompt-${agent.id}`, selectedTranslationPrompt, translationPromptModeOptions(translationModes), 'et-agent-translation-prompt', `data-agent-id="${escHtml(agent.id)}"`)}
+                ${inputField('빈 응답 재시도', `et-agent-translation-retry-count-${agent.id}`, 'number', String(translationRetryCount), '1', `min="0" max="10" step="1" class="et-agent-translation-retry-count" data-agent-id="${escHtml(agent.id)}"`)}
               </div>` : ''}              <div class="et-actions et-agent-actions">
                 <button class="et-agent-save" data-agent-id="${escHtml(agent.id)}">이 에이전트 저장</button>
                 <button class="et-agent-check" data-agent-id="${escHtml(agent.id)}">연결 확인</button>
@@ -13845,6 +13891,7 @@
           <div class="et-note">${escHtml(meta || '-')}</div>
           ${note.role ? `<div class="et-note">${escHtml(note.role)}</div>` : ''}
           ${note.postMode ? `<div class="et-note">post mode: ${escHtml(note.postMode)}${note.changed !== undefined ? ` / changed: ${note.changed ? 'yes' : 'no'}` : ''}</div>` : ''}
+          ${note.attempts ? `<div class="et-note">attempts: ${escHtml(note.attempts)}${note.retries ? ` / retries: ${escHtml(note.retries)}` : ''}</div>` : ''}
           ${note.message ? `<div class="et-note">${escHtml(note.message)}</div>` : ''}
           ${note.text ? `<pre>${escHtml(String(note.text).slice(0, 2200))}</pre>` : ''}
           ${note.inputPreview ? `<details><summary>Input Preview</summary><pre>${escHtml(note.inputPreview)}</pre></details>` : ''}
@@ -15321,6 +15368,7 @@
       contextWindow: parseNumber(value('et-agent-context-window', base.contextWindow ?? conf.contextWindow), base.contextWindow ?? conf.contextWindow, 4, 80),
       timeoutMs: timeoutSecondsToMs(value('et-agent-timeout-s', timeoutMsToSeconds(base.timeoutMs ?? conf.timeoutMs)), base.timeoutMs ?? conf.timeoutMs),
       postMode: normalizePostMode(value('et-agent-post-mode', base.postMode || 'suffix')),
+      translationRetryCount: normalizeTranslationRetryCount(value('et-agent-translation-retry-count', base.translationRetryCount ?? 1), base.translationRetryCount ?? 1),
       translationPromptModeId: normalizeActiveTranslationPromptModeId(value('et-agent-translation-prompt', base.translationPromptModeId || conf.activeTranslationPromptModeId), conf.translationPromptModes || normalizeTranslationPromptModes(conf)),
     };
   }
