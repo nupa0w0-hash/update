@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.24
+//@display-name ☸Eros Tower 1.1.25
 //@api 3.0
-//@version 1.1.24
+//@version 1.1.25
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -35,18 +35,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.24
+ * Eros Tower 1.1.25
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.24 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.25 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.24';
+  const VERSION = '1.1.25';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.24`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.25`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -63,7 +63,7 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.24 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.25 analysis context';
   const GOOGLE_OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
   const GOOGLE_CLOUD_PLATFORM_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
   const PSYCHE_RECOMMENDED_MODELS = Object.freeze([
@@ -12571,8 +12571,7 @@
           ${alerts.map(item => `
             <span class="et-alert-pill ${item.kind === 'error' ? 'bad' : 'warn'}" data-kind="${escHtml(item.kind || 'warn')}">${escHtml(item.message || item.label || '확인 필요')}</span>`).join('')}
         </div>
-      </section>
-      ${renderTranslationPromptModePanel(conf)}`;
+      </section>`;
   }
 
   function dashboardStyles() {
@@ -12824,7 +12823,8 @@
             ${textarea('임포트 JSON', 'et-prompt-preset-import-json', '', '{"presets":[...]} 또는 단일 prompt mode JSON')}
           </details>
         </div>
-      </section>`;
+      </section>
+      ${renderTranslationPromptModePanel(conf)}`;
   }
 
   function renderPromptPresetAgentEditor(agent, preset) {
