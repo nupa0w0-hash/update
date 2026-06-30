@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.30
+//@display-name ☸Eros Tower 1.1.31
 //@api 3.0
-//@version 1.1.30
+//@version 1.1.31
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -35,18 +35,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.30
+ * Eros Tower 1.1.31
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.30 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.31 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.30';
+  const VERSION = '1.1.31';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.30`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.31`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -63,7 +63,14 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.30 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.31 analysis context';
+  const PSYCHE_SOURCE_CHUNK_CHARS = 6000;
+  const PSYCHE_SOURCE_CHUNK_OVERLAP_CHARS = 360;
+  const PSYCHE_INGEST_SOURCE_CHARS = 7600;
+  const PSYCHE_COMPILED_SETTING_CHARS = 12000;
+  const PSYCHE_STATE_JSON_CHARS = 14000;
+  const PSYCHE_HISTORY_TOTAL_CHARS = 10000;
+  const PSYCHE_HISTORY_MESSAGE_CHARS = 1800;
   const GOOGLE_OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
   const GOOGLE_CLOUD_PLATFORM_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
   const PSYCHE_RECOMMENDED_MODELS = Object.freeze([
@@ -2306,6 +2313,33 @@
     'Use emotionalWeight from -10 to 10 and leakPressure from 0 to 100.',
   ].join('\n');
 
+  const PSYCHE_SOURCE_INGEST_PROMPT = [
+    'You are the Eros Tower Psyche Source Ingestor.',
+    'Convert one provided source chunk into compact durable retrieval units for continuity, lore, memory, state, and knowledge-boundary use.',
+    'Use only the source chunk and source metadata. Do not write story prose or a final reply.',
+    'Return JSON only. No markdown.',
+    'Allowed shape:',
+    '{',
+    '  "units": [{"id":"","type":"lore|memory|state|character|relationship|worldFront|secret|knowledge","name":"","summary":"","keywords":[],"aliases":[],"knownBy":[],"cannotKnow":[],"priority":5,"importance":5,"confidence":0.85,"canonLevel":"established","sourceRefs":[]}]',
+    '}',
+    'Prefer fewer high-value units over many shallow entries.',
+  ].join('\n');
+
+  function createDefaultPsycheIngestState() {
+    return {
+      version: 1,
+      lastRunAt: '',
+      lastChangedAt: '',
+      lastError: '',
+      processedChunks: 0,
+      failedChunks: 0,
+      sourceCount: 0,
+      chunkCount: 0,
+      unitCount: 0,
+      stats: {},
+    };
+  }
+
   function createDefaultState(mode = 'rp') {
     return {
       schemaVersion: VERSION,
@@ -2331,6 +2365,10 @@
       memoryLedger: [],
       secretLedger: [],
       loreLedger: [],
+      psycheSources: [],
+      psycheChunks: [],
+      psycheUnits: [],
+      psycheIngest: createDefaultPsycheIngestState(),
       plotThreads: {
         foreshadowing: [],
         clues: [],
@@ -2413,6 +2451,10 @@
     next.memoryLedger = normalizeMemoryEntries(Array.isArray(next.memoryLedger) ? next.memoryLedger : [], next, next.turn);
     next.secretLedger = normalizeSecretEntries(Array.isArray(next.secretLedger) ? next.secretLedger : [], next, next.turn, '', []);
     next.loreLedger = normalizeCommittedLedgerArray(Array.isArray(next.loreLedger) ? next.loreLedger : [], 'lore', next.turn);
+    next.psycheSources = normalizePsycheSources(next.psycheSources);
+    next.psycheChunks = normalizePsycheChunks(next.psycheChunks);
+    next.psycheUnits = normalizePsycheUnits(next.psycheUnits, next.turn);
+    next.psycheIngest = normalizePsycheIngestState(next.psycheIngest, next);
     next.plotThreads = { ...createDefaultState(mode).plotThreads, ...(next.plotThreads || {}) };
     next.plotThreads.resourceChannels = Array.isArray(next.plotThreads.resourceChannels) ? next.plotThreads.resourceChannels : [];
     next.knowledge = { units: [], ...(next.knowledge || {}) };
@@ -2442,6 +2484,162 @@
     refreshMemoryTiers(next, 'normalize');
     next.updatedAt = next.updatedAt || nowIso();
     return next;
+  }
+
+  function normalizePsycheIngestState(value, state = null) {
+    const raw = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    return {
+      ...createDefaultPsycheIngestState(),
+      ...raw,
+      version: 1,
+      lastRunAt: String(raw.lastRunAt || ''),
+      lastChangedAt: String(raw.lastChangedAt || ''),
+      lastError: String(raw.lastError || '').slice(0, 300),
+      processedChunks: parseNumber(raw.processedChunks, 0, 0, 999999),
+      failedChunks: parseNumber(raw.failedChunks, 0, 0, 999999),
+      sourceCount: Array.isArray(state?.psycheSources) ? state.psycheSources.length : parseNumber(raw.sourceCount, 0, 0, 999999),
+      chunkCount: Array.isArray(state?.psycheChunks) ? state.psycheChunks.length : parseNumber(raw.chunkCount, 0, 0, 999999),
+      unitCount: Array.isArray(state?.psycheUnits) ? state.psycheUnits.length : parseNumber(raw.unitCount, 0, 0, 999999),
+      stats: raw.stats && typeof raw.stats === 'object' && !Array.isArray(raw.stats) ? raw.stats : {},
+    };
+  }
+
+  function normalizePsycheSources(items) {
+    return (Array.isArray(items) ? items : []).map(normalizePsycheSource).filter(Boolean);
+  }
+
+  function normalizePsycheSource(item) {
+    if (!item || typeof item !== 'object') return null;
+    const id = slug(firstNonEmpty(item.id, item.sourceId, item.path, item.label, item.hash));
+    if (!id) return null;
+    const kind = cleanString(item.kind, 'source');
+    const priority = parseNumber(item.priority, item.alwaysActive ? 8 : 5, 0, 10);
+    return {
+      id,
+      kind,
+      path: String(item.path || ''),
+      label: firstNonEmpty(item.label, item.name, kind, id).slice(0, 160),
+      hash: String(item.hash || ''),
+      textHash: String(item.textHash || item.hash || ''),
+      rawHash: String(item.rawHash || ''),
+      length: parseNumber(item.length, 0, 0, 99999999),
+      summary: String(firstNonEmpty(item.summary, item.preview, '')).replace(/\s+/g, ' ').trim().slice(0, 900),
+      activationKeys: normalizeStringArray(item.activationKeys).slice(0, 32),
+      knownBy: normalizeStringArray(item.knownBy).slice(0, 32),
+      cannotKnow: normalizeStringArray(item.cannotKnow).slice(0, 32),
+      scope: String(item.scope || ''),
+      sourceRank: parseNumber(item.sourceRank, sourceRankForPsycheSourceKind(kind), 0, 100),
+      priority,
+      alwaysActive: Boolean(item.alwaysActive),
+      chunkCount: parseNumber(item.chunkCount, 0, 0, 999999),
+      status: ['active', 'missing', 'superseded'].includes(String(item.status || 'active')) ? String(item.status || 'active') : 'active',
+      firstSeenTurn: parseNumber(item.firstSeenTurn, 0, 0, 999999),
+      lastSeenTurn: parseNumber(item.lastSeenTurn, 0, 0, 999999),
+      updatedAt: String(item.updatedAt || ''),
+    };
+  }
+
+  function normalizePsycheChunks(items) {
+    return (Array.isArray(items) ? items : []).map(normalizePsycheChunk).filter(Boolean);
+  }
+
+  function normalizePsycheChunk(item) {
+    if (!item || typeof item !== 'object') return null;
+    const sourceId = slug(firstNonEmpty(item.sourceId, item.source, item.path));
+    const hash = String(firstNonEmpty(item.hash, item.textHash, item.id));
+    const index = parseNumber(item.index, 0, 0, 999999);
+    const id = firstNonEmpty(item.id, sourceId && hash ? `${sourceId}:chunk:${index}:${hash}` : '');
+    if (!id || !sourceId) return null;
+    const status = ['pending', 'absorbed', 'failed', 'superseded'].includes(String(item.status || 'pending')) ? String(item.status || 'pending') : 'pending';
+    return {
+      id,
+      sourceId,
+      sourceKind: String(item.sourceKind || ''),
+      sourcePath: String(item.sourcePath || ''),
+      sourceLabel: String(item.sourceLabel || '').slice(0, 160),
+      index,
+      start: parseNumber(item.start, 0, 0, 99999999),
+      end: parseNumber(item.end, 0, 0, 99999999),
+      length: parseNumber(item.length, 0, 0, 99999999),
+      hash,
+      rangeHash: String(item.rangeHash || ''),
+      priority: parseNumber(item.priority, 5, 0, 10),
+      sourceRank: parseNumber(item.sourceRank, sourceRankForPsycheSourceKind(item.sourceKind), 0, 100),
+      alwaysActive: Boolean(item.alwaysActive),
+      status,
+      attempts: parseNumber(item.attempts, 0, 0, 99),
+      retryAfterTurn: parseNumber(item.retryAfterTurn, 0, 0, 999999),
+      error: String(item.error || '').slice(0, 240),
+      absorbedAt: String(item.absorbedAt || ''),
+      createdTurn: parseNumber(item.createdTurn, 0, 0, 999999),
+      lastSeenTurn: parseNumber(item.lastSeenTurn, 0, 0, 999999),
+    };
+  }
+
+  function normalizePsycheUnits(items, turn = 0) {
+    return (Array.isArray(items) ? items : []).map(item => normalizePsycheUnit(item, turn)).filter(Boolean);
+  }
+
+  function normalizePsycheUnit(item, turn = 0) {
+    if (!item || typeof item !== 'object') return null;
+    const summary = firstNonEmpty(item.summary, item.fact, item.text, item.content, item.name);
+    if (!summary) return null;
+    const type = normalizePsycheUnitType(item.type || item.kind || item.route || 'knowledge');
+    const sourceKind = String(item.sourceKind || item.source || '');
+    const id = slug(firstNonEmpty(item.id, item.name, `${type}:${summary.slice(0, 80)}`));
+    if (!id) return null;
+    const priority = parseNumber(item.priority, parseNumber(item.importance, 5, 0, 10), 0, 10);
+    const importance = parseNumber(item.importance, priority || inferImportance(item, type), 0, 10);
+    const sourceRank = parseNumber(item.sourceRank, sourceRankForPsycheSourceKind(sourceKind || type), 0, 100);
+    return {
+      id,
+      type,
+      name: firstNonEmpty(item.name, item.title, '').slice(0, 160),
+      summary: String(summary).replace(/\s+/g, ' ').trim().slice(0, 900),
+      keywords: normalizeStringArray(item.keywords || item.activationKeys || item.keys).slice(0, 32),
+      aliases: normalizeStringArray(item.aliases).slice(0, 24),
+      knownBy: normalizeStringArray(item.knownBy || item.knowers || item.knows).slice(0, 32),
+      cannotKnow: normalizeStringArray(item.cannotKnow || item.privateTo || item.forbiddenTo).slice(0, 32),
+      sourceRefs: normalizeStringArray(item.sourceRefs).slice(0, 24),
+      sourceId: String(item.sourceId || ''),
+      sourceKind,
+      sourcePath: String(item.sourcePath || ''),
+      sourceLabel: String(item.sourceLabel || '').slice(0, 160),
+      sourceHash: String(item.sourceHash || ''),
+      chunkId: String(item.chunkId || ''),
+      chunkHash: String(item.chunkHash || ''),
+      sourceRank,
+      priority,
+      importance,
+      confidence: parseNumber(item.confidence, inferConfidence(item), 0, 1),
+      canonLevel: normalizeCanonLevel(item.canonLevel || item.certainty),
+      status: ['active', 'superseded', 'retired', 'disputed'].includes(String(item.status || 'active')) ? String(item.status || 'active') : 'active',
+      memoryTier: normalizeMemoryLifecycleTier(item.memoryTier) || inferMemoryLifecycleTier({ ...item, importance, sourceRank }, type, turn),
+      createdTurn: parseNumber(item.createdTurn, turn, 0, 999999),
+      lastSeenTurn: parseNumber(item.lastSeenTurn ?? item.turn, turn, 0, 999999),
+      updatedAt: String(item.updatedAt || ''),
+    };
+  }
+
+  function normalizePsycheUnitType(value) {
+    const raw = String(value || '').trim().toLowerCase();
+    if (/character|cast|persona/.test(raw)) return 'character';
+    if (/relation|bond|social/.test(raw)) return 'relationship';
+    if (/front|world|faction|place|location|setting/.test(raw)) return 'worldFront';
+    if (/secret|hidden/.test(raw)) return 'secret';
+    if (/memory|chat|event/.test(raw)) return 'memory';
+    if (/lore|rule|canon|source/.test(raw)) return 'lore';
+    if (/state|status|stat/.test(raw)) return 'state';
+    return 'knowledge';
+  }
+
+  function sourceRankForPsycheSourceKind(kind) {
+    const raw = String(kind || '').toLowerCase();
+    if (/firstmessage|desc|character|persona/.test(raw)) return SOURCE_RANK.character_card;
+    if (/author|note/.test(raw)) return SOURCE_RANK.author_note;
+    if (/chat|memory/.test(raw)) return SOURCE_RANK.memory;
+    if (/lore|module|reference|global|local/.test(raw)) return SOURCE_RANK.lorebook;
+    return SOURCE_RANK.stored_state;
   }
 
   function createDefaultCanonicalIdentity() {
@@ -5983,6 +6181,424 @@
     return uniqueStrings(found).slice(0, 32);
   }
 
+  function buildPsycheRuntimeSources(context = null, conf = null) {
+    const out = [];
+    const add = source => {
+      const text = String(source?.text ?? source?.content ?? '').trim();
+      if (!text || text === '(none)') return;
+      const kind = cleanString(source.kind, 'source');
+      const path = cleanString(source.path, `${kind}:${out.length}`);
+      const stableId = slug(firstNonEmpty(source.id, `${kind}:${path}`));
+      if (!stableId) return;
+      const hash = String(source.hash || hashString(`${kind}:${path}:${text}`));
+      out.push({
+        id: stableId,
+        kind,
+        path,
+        label: firstNonEmpty(source.label, source.name, kind, path).slice(0, 160),
+        text,
+        hash,
+        textHash: hash,
+        rawHash: String(source.rawHash || hashString(text)),
+        length: text.length,
+        summary: summarizeCanonicalContent(text, 900),
+        activationKeys: normalizeStringArray(source.activationKeys).slice(0, 32),
+        knownBy: normalizeStringArray(source.knownBy).slice(0, 32),
+        cannotKnow: normalizeStringArray(source.cannotKnow).slice(0, 32),
+        scope: String(source.scope || ''),
+        priority: parseNumber(source.priority, source.alwaysActive ? 8 : 5, 0, 10),
+        alwaysActive: Boolean(source.alwaysActive),
+        sourceRank: parseNumber(source.sourceRank, sourceRankForPsycheSourceKind(kind), 0, 100),
+        meta: source.meta || {},
+      });
+    };
+
+    (Array.isArray(context?.canonicalSources) ? context.canonicalSources : []).forEach(source => {
+      add({
+        id: firstNonEmpty(source.id, `canon:${source.kind}:${source.path}`),
+        kind: source.kind || 'lore',
+        path: source.path || source.sourceId || source.id || '',
+        label: source.label || source.kind || 'canonical source',
+        text: source.content || '',
+        hash: source.hash,
+        rawHash: source.rawHash,
+        activationKeys: source.activationKeys,
+        knownBy: source.knownBy,
+        cannotKnow: source.cannotKnow,
+        scope: source.scope,
+        priority: source.priority,
+        alwaysActive: Boolean(source?.meta?.alwaysActive || source?.meta?.constant || source?.kind === 'desc' || source?.kind === 'firstMessage'),
+        sourceRank: sourceRankForPsycheSourceKind(source.kind),
+        meta: source.meta || {},
+      });
+    });
+
+    const settingBlocks = String(context?.settingBlocks || '');
+    [
+      { label: 'Persona', kind: 'persona', path: 'setting:persona', priority: 7 },
+      { label: 'Author Note', kind: 'authorNote', path: 'setting:authorNote', priority: 7 },
+    ].forEach(item => {
+      add({
+        ...item,
+        text: extractSettingBlock(settingBlocks, item.label),
+        alwaysActive: true,
+        sourceRank: sourceRankForPsycheSourceKind(item.kind),
+      });
+    });
+
+    const built = buildLongMemoryChunks(context?.messages || [], conf?.contextWindow || DEFAULT_CONFIG.contextWindow, conf?.coldStartChunkSize || DEFAULT_CONFIG.coldStartChunkSize);
+    (built.chunks || []).forEach(chunk => {
+      add({
+        id: `chat:${chunk.rangeHash || chunk.hash}`,
+        kind: 'chatLongMemory',
+        path: `chat:${chunk.sourceStartIndex}-${chunk.sourceEndIndex}`,
+        label: `Older chat ${chunk.index + 1}`,
+        text: chunk.text || '',
+        hash: chunk.hash,
+        rawHash: chunk.rangeHash || chunk.hash,
+        activationKeys: ['chat', 'memory'],
+        priority: 4,
+        alwaysActive: false,
+        sourceRank: SOURCE_RANK.memory,
+        meta: {
+          index: chunk.index,
+          messageCount: chunk.messageCount,
+          sourceStartIndex: chunk.sourceStartIndex,
+          sourceEndIndex: chunk.sourceEndIndex,
+          rangeHash: chunk.rangeHash,
+        },
+      });
+    });
+
+    const seen = new Set();
+    return out.filter(source => {
+      const key = `${source.id}:${source.hash}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+
+  function splitPsycheSourceIntoChunkRefs(source) {
+    const text = String(source?.text || '');
+    if (!text.trim()) return [];
+    const target = PSYCHE_SOURCE_CHUNK_CHARS;
+    const overlap = Math.min(PSYCHE_SOURCE_CHUNK_OVERLAP_CHARS, Math.floor(target / 4));
+    const chunks = [];
+    let start = 0;
+    while (start < text.length) {
+      let end = Math.min(text.length, start + target);
+      if (end < text.length) {
+        const minBreak = Math.min(text.length, start + Math.floor(target * 0.55));
+        const window = text.slice(minBreak, end);
+        const candidates = [
+          window.lastIndexOf('\n\n'),
+          window.lastIndexOf('\n'),
+          window.lastIndexOf('. '),
+          window.lastIndexOf('。'),
+          window.lastIndexOf('! '),
+          window.lastIndexOf('? '),
+        ].filter(idx => idx >= 0);
+        if (candidates.length) end = minBreak + Math.max(...candidates) + 1;
+      }
+      const chunkText = text.slice(start, end).trim();
+      if (chunkText) {
+        const hash = hashString(chunkText);
+        chunks.push({
+          id: `${source.id}:chunk:${chunks.length}:${hash}`,
+          sourceId: source.id,
+          sourceKind: source.kind,
+          sourcePath: source.path,
+          sourceLabel: source.label,
+          index: chunks.length,
+          start,
+          end,
+          length: end - start,
+          hash,
+          rangeHash: hashString(`${source.id}:${start}:${end}:${source.hash}`),
+          priority: source.priority,
+          sourceRank: source.sourceRank,
+          alwaysActive: source.alwaysActive,
+        });
+      }
+      if (end >= text.length) break;
+      const nextStart = Math.max(0, end - overlap);
+      start = nextStart > start ? nextStart : end;
+    }
+    return chunks;
+  }
+
+  function syncPsycheSourceRegistry(state, context, conf) {
+    state.psycheSources = normalizePsycheSources(state.psycheSources);
+    state.psycheChunks = normalizePsycheChunks(state.psycheChunks);
+    state.psycheUnits = normalizePsycheUnits(state.psycheUnits, state.turn);
+    const previousSources = new Map(state.psycheSources.map(item => [item.id, item]));
+    const previousChunks = new Map(state.psycheChunks.map(item => [item.id, item]));
+    const sources = buildPsycheRuntimeSources(context, conf);
+    const currentSourceIds = new Set();
+    const currentSourceHashes = new Map();
+    const currentChunkIds = new Set();
+    let addedSources = 0;
+    let revisedSources = 0;
+    let addedChunks = 0;
+    let revisedChunks = 0;
+
+    sources.forEach(source => {
+      const chunks = splitPsycheSourceIntoChunkRefs(source);
+      currentSourceIds.add(source.id);
+      currentSourceHashes.set(source.id, source.hash);
+      const previous = previousSources.get(source.id);
+      const sourceRecord = normalizePsycheSource({
+        ...previous,
+        ...source,
+        text: undefined,
+        content: undefined,
+        chunkCount: chunks.length,
+        status: 'active',
+        firstSeenTurn: previous?.firstSeenTurn || state.turn || 0,
+        lastSeenTurn: state.turn || 0,
+        updatedAt: previous?.hash === source.hash ? previous?.updatedAt || nowIso() : nowIso(),
+      });
+      if (!previous) addedSources += 1;
+      else if (previous.hash !== sourceRecord.hash || previous.chunkCount !== sourceRecord.chunkCount) revisedSources += 1;
+      previousSources.set(source.id, sourceRecord);
+
+      chunks.forEach(ref => {
+        currentChunkIds.add(ref.id);
+        const old = previousChunks.get(ref.id);
+        const chunkRecord = normalizePsycheChunk({
+          ...old,
+          ...ref,
+          status: old?.status === 'absorbed' ? 'absorbed' : 'pending',
+          attempts: old?.attempts || 0,
+          retryAfterTurn: old?.retryAfterTurn || 0,
+          error: old?.error || '',
+          absorbedAt: old?.absorbedAt || '',
+          createdTurn: old?.createdTurn || state.turn || 0,
+          lastSeenTurn: state.turn || 0,
+        });
+        if (!old) addedChunks += 1;
+        else if (old.status !== chunkRecord.status || old.start !== chunkRecord.start || old.end !== chunkRecord.end) revisedChunks += 1;
+        previousChunks.set(ref.id, chunkRecord);
+      });
+    });
+
+    previousSources.forEach(source => {
+      if (!currentSourceIds.has(source.id) && source.status !== 'missing') {
+        source.status = 'missing';
+        source.updatedAt = nowIso();
+      }
+    });
+    previousChunks.forEach(chunk => {
+      if (!currentChunkIds.has(chunk.id) && chunk.status !== 'superseded') {
+        chunk.status = 'superseded';
+        chunk.error = '';
+      }
+    });
+    state.psycheUnits.forEach(unit => {
+      const currentHash = currentSourceHashes.get(unit.sourceId);
+      if (unit.sourceId && (!currentHash || (unit.sourceHash && currentHash !== unit.sourceHash))) {
+        unit.status = 'superseded';
+      }
+    });
+
+    state.psycheSources = Array.from(previousSources.values()).sort((a, b) => b.priority - a.priority || String(a.id).localeCompare(String(b.id)));
+    state.psycheChunks = Array.from(previousChunks.values()).sort((a, b) => b.priority - a.priority || a.index - b.index || String(a.id).localeCompare(String(b.id)));
+    state.psycheIngest = normalizePsycheIngestState({
+      ...state.psycheIngest,
+      sourceCount: state.psycheSources.length,
+      chunkCount: state.psycheChunks.length,
+      unitCount: state.psycheUnits.length,
+      stats: {
+        ...(state.psycheIngest?.stats || {}),
+        lastSync: { addedSources, revisedSources, addedChunks, revisedChunks, at: nowIso() },
+      },
+    }, state);
+    return {
+      sources: sources.length,
+      chunks: currentChunkIds.size,
+      addedSources,
+      revisedSources,
+      addedChunks,
+      revisedChunks,
+      activeSources: currentSourceIds.size,
+      activeChunks: currentChunkIds.size,
+    };
+  }
+
+  function resolvePsycheChunkText(chunk, context, conf) {
+    const sources = buildPsycheRuntimeSources(context, conf);
+    const source = sources.find(item => item.id === chunk?.sourceId);
+    if (!source) return '';
+    const start = parseNumber(chunk.start, 0, 0, source.text.length);
+    const end = parseNumber(chunk.end, source.text.length, start, source.text.length);
+    return String(source.text || '').slice(start, end).trim();
+  }
+
+  function markPsycheChunk(state, chunkId, ok, error = '', conf = null) {
+    const idx = (state.psycheChunks || []).findIndex(item => item.id === chunkId);
+    if (idx < 0) return;
+    const current = state.psycheChunks[idx];
+    if (ok) {
+      state.psycheChunks[idx] = {
+        ...current,
+        status: 'absorbed',
+        attempts: current.attempts || 0,
+        error: '',
+        absorbedAt: nowIso(),
+      };
+      return;
+    }
+    const attempts = parseNumber(current.attempts, 0, 0, 99) + 1;
+    const permanent = attempts >= parseNumber(conf?.coldStartMaxAttempts, DEFAULT_CONFIG.coldStartMaxAttempts, 1, 12);
+    const retryDelay = parseNumber(conf?.coldStartRetryDelayTurns, DEFAULT_CONFIG.coldStartRetryDelayTurns, 0, 80);
+    state.psycheChunks[idx] = {
+      ...current,
+      status: permanent ? 'superseded' : 'failed',
+      attempts,
+      retryAfterTurn: permanent ? 999999 : (state.turn || 0) + retryDelay,
+      error: String(error || 'unknown').slice(0, 240),
+    };
+  }
+
+  function normalizePsycheIngestUnits(parsed, chunk, source, turn) {
+    const units = Array.isArray(parsed?.units) ? parsed.units : [];
+    return units.map((unit, idx) => normalizePsycheUnit({
+      ...unit,
+      id: firstNonEmpty(unit?.id, `psyche:${chunk.hash}:${idx}:${unit?.name || unit?.summary || ''}`),
+      sourceId: chunk.sourceId,
+      sourceKind: chunk.sourceKind,
+      sourcePath: chunk.sourcePath,
+      sourceLabel: chunk.sourceLabel,
+      sourceHash: source?.hash || '',
+      chunkId: chunk.id,
+      chunkHash: chunk.hash,
+      sourceRank: unit?.sourceRank ?? chunk.sourceRank,
+      priority: unit?.priority ?? chunk.priority,
+      sourceRefs: uniqueStrings(normalizeStringArray(unit?.sourceRefs).concat([chunk.sourcePath, chunk.sourceId, chunk.id]).filter(Boolean)),
+      createdTurn: turn,
+      lastSeenTurn: turn,
+      updatedAt: nowIso(),
+    }, turn)).filter(Boolean);
+  }
+
+  function mergePsycheUnits(state, units) {
+    state.psycheUnits = normalizePsycheUnits(state.psycheUnits, state.turn);
+    upsertArrayById(state.psycheUnits, normalizePsycheUnits(units, state.turn), itemKey);
+    state.psycheIngest = normalizePsycheIngestState({
+      ...state.psycheIngest,
+      unitCount: state.psycheUnits.length,
+      lastChangedAt: units.length ? nowIso() : state.psycheIngest?.lastChangedAt,
+    }, state);
+  }
+
+  async function runPsycheSourceIngest(conf, context, state) {
+    if (!conf.autoMemoryEnabled || !conf.autoColdStartEnabled || !conf.stateApiEnabled) return { processed: 0, skipped: true, reason: 'disabled' };
+    const limit = parseNumber(conf.coldStartMaxChunksPerRun, DEFAULT_CONFIG.coldStartMaxChunksPerRun, 0, 12);
+    if (limit <= 0) return { processed: 0, skipped: true, reason: 'limit-zero' };
+    const agent = getPsycheMainAgent(conf);
+    if (!agent) return { processed: 0, skipped: true, reason: 'no-psyche-main' };
+    const agentConf = resolveAgentConf(agent, conf);
+    if (!canCallProvider(agentConf)) return { processed: 0, skipped: true, reason: 'provider-not-ready' };
+    state.psycheChunks = normalizePsycheChunks(state.psycheChunks);
+    const candidates = state.psycheChunks
+      .filter(chunk => ['pending', 'failed'].includes(chunk.status)
+        && parseNumber(chunk.retryAfterTurn, 0, 0, 999999) <= Number(state.turn || 0))
+      .sort((a, b) => Number(b.alwaysActive) - Number(a.alwaysActive)
+        || b.priority - a.priority
+        || sourceRankForPsycheSourceKind(b.sourceKind) - sourceRankForPsycheSourceKind(a.sourceKind)
+        || a.index - b.index)
+      .slice(0, limit);
+    if (!candidates.length) return { processed: 0, skipped: true, reason: 'no-pending-source-chunk' };
+    const sourceMap = new Map((state.psycheSources || []).map(source => [source.id, source]));
+    const results = [];
+    for (const chunk of candidates) {
+      const source = sourceMap.get(chunk.sourceId);
+      const text = resolvePsycheChunkText(chunk, context, conf);
+      if (!text) {
+        markPsycheChunk(state, chunk.id, false, 'source-unavailable', conf);
+        results.push({ id: chunk.id, sourceId: chunk.sourceId, error: 'source-unavailable' });
+        continue;
+      }
+      const messages = [
+        { role: 'system', content: PSYCHE_SOURCE_INGEST_PROMPT },
+        { role: 'user', content: [
+          '<source_metadata>',
+          compactJson({
+            id: chunk.sourceId,
+            kind: chunk.sourceKind,
+            path: chunk.sourcePath,
+            label: chunk.sourceLabel,
+            priority: chunk.priority,
+            alwaysActive: chunk.alwaysActive,
+            sourceRank: chunk.sourceRank,
+            sourceHash: source?.hash || '',
+            chunkId: chunk.id,
+            chunkIndex: chunk.index,
+          }),
+          '</source_metadata>',
+          '<source_chunk>',
+          text.slice(0, PSYCHE_INGEST_SOURCE_CHARS),
+          '</source_chunk>',
+        ].join('\n') },
+      ];
+      const promptTrace = formatPromptTraceForRunLog(messages, conf, Math.floor(MAX_RUN_LOG_TEXT_CHARS / 2));
+      const startedAt = Date.now();
+      try {
+        const raw = await callAgent(agentConf, messages);
+        const parsed = extractJsonObject(raw);
+        if (!parsed) throw new Error('json-parse-failed');
+        const units = normalizePsycheIngestUnits(parsed, chunk, source, state.turn);
+        mergePsycheUnits(state, units);
+        markPsycheChunk(state, chunk.id, true, '', conf);
+        results.push({
+          id: chunk.id,
+          sourceId: chunk.sourceId,
+          units: units.length,
+          ms: Date.now() - startedAt,
+          prompt: promptTrace,
+          rawOutput: clipRunLogText(raw, Math.floor(MAX_RUN_LOG_TEXT_CHARS / 2)),
+          agent: stateCommitAgentInfo(agent, agentConf),
+        });
+      } catch (err) {
+        markPsycheChunk(state, chunk.id, false, err.message, conf);
+        results.push({
+          id: chunk.id,
+          sourceId: chunk.sourceId,
+          ms: Date.now() - startedAt,
+          error: err.message,
+          prompt: promptTrace,
+          rawOutput: '',
+          agent: stateCommitAgentInfo(agent, agentConf),
+        });
+      }
+    }
+    const errors = results.filter(item => item.error).length;
+    state.psycheIngest = normalizePsycheIngestState({
+      ...state.psycheIngest,
+      lastRunAt: nowIso(),
+      lastError: errors ? results.find(item => item.error)?.error || '' : '',
+      processedChunks: parseNumber(state.psycheIngest?.processedChunks, 0, 0, 999999) + results.length - errors,
+      failedChunks: parseNumber(state.psycheIngest?.failedChunks, 0, 0, 999999) + errors,
+      stats: {
+        ...(state.psycheIngest?.stats || {}),
+        lastRun: {
+          processed: results.length,
+          errors,
+          units: results.reduce((sum, item) => sum + parseNumber(item.units, 0, 0, 999999), 0),
+          at: nowIso(),
+        },
+      },
+    }, state);
+    return {
+      processed: results.length,
+      extracted: results.filter(item => !item.error).length,
+      errors,
+      agent: stateCommitAgentInfo(agent, agentConf),
+      results,
+    };
+  }
+
   function syncCanonicalLoreLedger(state, canonicalSources) {
     const sources = Array.isArray(canonicalSources) ? canonicalSources : [];
     state.loreLedger = Array.isArray(state.loreLedger) ? state.loreLedger : [];
@@ -6448,6 +7064,7 @@
 
   async function runAutoColdStart(conf, context, state) {
     if (!conf.autoMemoryEnabled || !conf.autoColdStartEnabled || !conf.stateApiEnabled) return { processed: 0, skipped: true, reason: 'disabled' };
+    if (Array.isArray(state.psycheChunks) && state.psycheChunks.length) return { processed: 0, skipped: true, reason: 'superseded-by-psyche-source-ingest' };
     const limit = parseNumber(conf.coldStartMaxChunksPerRun, DEFAULT_CONFIG.coldStartMaxChunksPerRun, 0, 4);
     if (limit <= 0) return { processed: 0, skipped: true, reason: 'limit-zero' };
     const agent = getColdStartPsycheAgent(conf);
@@ -6473,9 +7090,6 @@
       const messages = [
         { role: 'system', content: COLD_START_PROMPT },
         { role: 'user', content: [
-          '<source label="Current Setting">',
-          context.settingBlocks.slice(0, 6000),
-          '</source>',
           '<source label="Older Chat Chunk">',
           chunkText.slice(0, 7000),
           '</source>',
@@ -6660,20 +7274,177 @@
     return users.length ? users[users.length - 1].content : '';
   }
 
-  function formatHistory(messages, windowSize) {
+  function formatHistory(messages, windowSize, options = {}) {
     const chat = (Array.isArray(messages) ? messages : [])
       .filter(m => m.role === 'user' || m.role === 'assistant')
       .slice(-Math.max(2, windowSize + 1), -1);
     if (!chat.length) return '(no previous chat history)';
-    return chat.map(m => `[${m.role === 'user' ? 'User' : 'Assistant'}] ${m.content}`).join('\n\n');
+    const maxTotal = parseNumber(options.maxTotal, PSYCHE_HISTORY_TOTAL_CHARS, 800, 120000);
+    const perMessage = parseNumber(options.perMessage, PSYCHE_HISTORY_MESSAGE_CHARS, 200, 20000);
+    const rows = [];
+    let used = 0;
+    for (let i = chat.length - 1; i >= 0; i -= 1) {
+      const m = chat[i];
+      const content = compactHistoryMessageContent(m.content, perMessage);
+      const row = `[${m.role === 'user' ? 'User' : 'Assistant'}] ${content}`;
+      if (used + row.length > maxTotal && rows.length) break;
+      rows.unshift(row);
+      used += row.length + 2;
+      if (used >= maxTotal) break;
+    }
+    return rows.join('\n\n') || '(no previous chat history)';
+  }
+
+  function compactHistoryMessageContent(content, perMessage = PSYCHE_HISTORY_MESSAGE_CHARS) {
+    const text = String(content || '').trim();
+    const max = Math.max(200, Number(perMessage || PSYCHE_HISTORY_MESSAGE_CHARS));
+    if (text.length <= max) return text;
+    const head = text.slice(0, Math.floor(max * 0.62)).trimEnd();
+    const tail = text.slice(Math.max(0, text.length - Math.floor(max * 0.26))).trimStart();
+    return `${head}\n[history middle omitted: ${text.length - head.length - tail.length} chars]\n${tail}`;
+  }
+
+  function buildCompiledSettingBlocks(state, context, notes = [], budget = PSYCHE_COMPILED_SETTING_CHARS) {
+    const max = Math.max(1600, Number(budget || PSYCHE_COMPILED_SETTING_CHARS));
+    const query = buildRetrievalQuery(context || { messages: [] }, notes, []);
+    const ranked = rankStateCandidates(state, query, AGENT_RETRIEVAL_PROFILE.main, context)
+      .filter(candidate => ['scene', 'character', 'relationship', 'worldFront', 'secret', 'memory', 'knowledge', 'lore', 'event', 'continuityRisk'].includes(candidate.kind));
+    const selected = selectCandidates(ranked, 30, Math.floor(max * 0.68));
+    const sourceFallback = selectPsycheSourceFallbacks(state, context, query, 10);
+    const lines = [
+      '[Current Writing Mode]',
+      currentWritingModeLabel(context),
+      '',
+      '[Scene State]',
+      summarizeLedgerText(state?.scene || {}, 'scene') || '(none)',
+    ];
+    if (sourceFallback.length) {
+      lines.push('', '[Source Registry]');
+      sourceFallback.forEach(source => lines.push(formatPsycheSourceFallbackLine(source)));
+    }
+    if (selected.length) {
+      lines.push('', '[Selected Psyche/State Units]');
+      selected.forEach(candidate => lines.push(formatCompiledCandidateLine(candidate)));
+    }
+    const persona = extractSettingBlock(context?.settingBlocks || '', 'Persona');
+    if (persona && persona !== '(none)') {
+      lines.push('', '[Persona]', summarizeCanonicalContent(persona, 800));
+    }
+    const text = lines.join('\n').trim();
+    return trimBriefingBlockToBudget(text, max);
+  }
+
+  function selectPsycheSourceFallbacks(state, context, queryTerms = [], limit = 10) {
+    const terms = Array.isArray(queryTerms) ? queryTerms.map(term => String(term || '').toLowerCase()).filter(Boolean) : [];
+    const query = terms.join(' ');
+    const currentSources = new Set((Array.isArray(context?.canonicalSources) ? context.canonicalSources : []).map(source => slug(firstNonEmpty(source.id, `${source.kind}:${source.path}`))));
+    return (state?.psycheSources || [])
+      .filter(source => source.status === 'active')
+      .filter(source => !currentSources.size || currentSources.has(source.id) || !/^canon/.test(source.id))
+      .map(source => {
+        const haystack = [source.label, source.kind, source.path, source.summary, ...(source.activationKeys || [])].join('\n').toLowerCase();
+        const hits = terms.filter(term => haystack.includes(term)).length;
+        return {
+          ...source,
+          _score: (source.alwaysActive ? 100 : 0)
+            + source.priority * 12
+            + source.sourceRank * 0.12
+            + hits * 16
+            + (query && source.activationKeys?.some(key => query.includes(String(key).toLowerCase())) ? 30 : 0),
+        };
+      })
+      .filter(source => source.alwaysActive || source._score >= 40 || !terms.length)
+      .sort((a, b) => b._score - a._score || String(a.id).localeCompare(String(b.id)))
+      .slice(0, Math.max(1, Number(limit || 10)));
+  }
+
+  function formatPsycheSourceFallbackLine(source) {
+    const meta = [
+      source.kind || 'source',
+      source.alwaysActive ? 'always' : '',
+      source.priority !== undefined ? `priority=${source.priority}` : '',
+      source.activationKeys?.length ? `keys=${source.activationKeys.slice(0, 5).join('/')}` : '',
+    ].filter(Boolean).join(', ');
+    return `- ${source.label || source.path || source.id} (${meta}): ${source.summary || '(no summary)'}`;
+  }
+
+  function formatCompiledCandidateLine(candidate) {
+    const item = candidate.item || {};
+    const summary = summarizeLedgerText(item, candidate.kind);
+    const meta = [
+      candidate.kind,
+      item.sourceLabel ? `source=${item.sourceLabel}` : '',
+      item.sourceKind ? `sourceKind=${item.sourceKind}` : '',
+      candidate.importance !== undefined ? `importance=${candidate.importance}` : '',
+      candidate.confidence !== undefined ? `confidence=${Number(candidate.confidence).toFixed(2)}` : '',
+      item.knownBy?.length ? `knownBy=${item.knownBy.slice(0, 4).join('/')}` : '',
+      item.cannotKnow?.length ? `cannotKnow=${item.cannotKnow.slice(0, 4).join('/')}` : '',
+    ].filter(Boolean).join(', ');
+    return `- ${candidate.path} (${meta}): ${summary}`;
+  }
+
+  function buildAgentStateJson(state, context, notes = [], maxChars = PSYCHE_STATE_JSON_CHARS) {
+    const max = Math.max(2000, Number(maxChars || PSYCHE_STATE_JSON_CHARS));
+    const query = buildRetrievalQuery(context || { messages: [] }, notes, []);
+    const selected = selectCandidates(rankStateCandidates(state, query, AGENT_RETRIEVAL_PROFILE['state-commit'], context), 36, Math.floor(max * 0.52))
+      .map(candidate => ({
+        kind: candidate.kind,
+        path: candidate.path,
+        score: Math.round(candidate.score || 0),
+        summary: summarizeLedgerText(candidate.item, candidate.kind),
+        sourceRank: candidate.sourceRank,
+        importance: candidate.importance,
+        confidence: Number(candidate.confidence || 0).toFixed(2),
+        turn: candidate.turn,
+      }));
+    const snapshot = {
+      schemaVersion: state?.schemaVersion || VERSION,
+      pluginVersion: VERSION,
+      mode: state?.mode || context?.mode || 'rp',
+      turn: state?.turn || 0,
+      scene: state?.scene || {},
+      activePerspective: state?.activePerspective || {},
+      canonicalIdentity: state?.canonicalIdentity || {},
+      counts: {
+        characters: Object.keys(state?.characters || {}).length,
+        relationships: (state?.relationships || []).length,
+        worldFronts: (state?.worldFronts || []).length,
+        memoryLedger: (state?.memoryLedger || []).length,
+        secretLedger: (state?.secretLedger || []).length,
+        loreLedger: (state?.loreLedger || []).length,
+        psycheSources: (state?.psycheSources || []).length,
+        psycheChunks: (state?.psycheChunks || []).length,
+        psycheUnits: (state?.psycheUnits || []).length,
+      },
+      psycheIngest: normalizePsycheIngestState(state?.psycheIngest, state),
+      memoryTiers: normalizeMemoryTierState(state?.memoryTiers),
+      selectedLedger: selected,
+      continuityRisks: (state?.continuityRisks || []).slice(-16),
+      evidenceConflicts: (state?.evidenceConflicts || []).slice(-10).map(item => ({
+        type: item.type,
+        detail: String(item.detail || '').slice(0, 240),
+        turn: item.turn,
+      })),
+    };
+    let text = JSON.stringify(snapshot, null, 2);
+    if (text.length <= max) return text;
+    snapshot.selectedLedger = snapshot.selectedLedger.slice(0, 18).map(item => ({ ...item, summary: String(item.summary || '').slice(0, 240) }));
+    snapshot.continuityRisks = snapshot.continuityRisks.slice(-8);
+    snapshot.evidenceConflicts = snapshot.evidenceConflicts.slice(-4);
+    text = JSON.stringify(snapshot, null, 2);
+    return text.length <= max ? text : JSON.stringify({
+      ...snapshot,
+      selectedLedger: snapshot.selectedLedger.slice(0, 8),
+      compacted: true,
+    }, null, 2);
   }
 
   async function buildAgentContextPackMaybeEmbedded(agentId, state, context, priorNotes = [], budgetOverride = null, conf = null) {
     const profile = AGENT_RETRIEVAL_PROFILE[agentId] || AGENT_RETRIEVAL_PROFILE.main;
     const query = buildRetrievalQuery(context, priorNotes, profile.keywords);
     const budget = Math.max(1200, Number(budgetOverride || profile.budget || 4200));
-    const controlFloor = buildMainControlFloorContext(context, Math.min(Math.max(900, Math.floor(budget * 0.35)), budget));
-    const activeLoreBridge = buildActiveLoreBridgeContext(context, priorNotes, Math.min(1800, Math.max(700, Math.floor(budget * 0.22))));
+    const controlFloor = buildMainControlFloorContext(context, Math.min(Math.max(900, Math.floor(budget * 0.35)), budget), state);
+    const activeLoreBridge = buildActiveLoreBridgeContext(context, priorNotes, Math.min(1800, Math.max(700, Math.floor(budget * 0.22))), state);
     const retrievalBudget = Math.max(700, budget - controlFloor.length - activeLoreBridge.length - 120);
     const staged = await stagedRetrieveCandidates(agentId, state, query, profile, conf, context);
     const candidates = staged.candidates;
@@ -6934,8 +7705,8 @@
     const floorBudget = capped
       ? Math.min(Math.max(900, Math.floor(totalBudget * 0.55)), Math.max(700, totalBudget - 900), totalBudget)
       : 3600;
-    const controlFloor = buildMainControlFloorContext(context, floorBudget);
-    const activeLoreBridge = buildActiveLoreBridgeContext(context, notes, capped ? Math.min(2600, Math.max(900, Math.floor(totalBudget * 0.22))) : 3600);
+    const controlFloor = buildMainControlFloorContext(context, floorBudget, state);
+    const activeLoreBridge = buildActiveLoreBridgeContext(context, notes, capped ? Math.min(2600, Math.max(900, Math.floor(totalBudget * 0.22))) : 3600, state);
     const preAgentNotes = buildPreAgentNotesSource(notes);
     const remainingBudget = capped
       ? Math.max(700, totalBudget - controlFloor.length - activeLoreBridge.length - preAgentNotes.length - 160)
@@ -7121,10 +7892,35 @@
       .map(item => ({ ...item.source, _activeLoreBridgeScore: item.score }));
   }
 
-  function buildActiveLoreBridgeContext(context, notes = [], budget = 2600) {
+  function buildActiveLoreBridgeContext(context, notes = [], budget = 2600, state = null) {
+    const max = Math.max(500, Number(budget || 2600));
+    if (state) {
+      const queryText = activeLoreBridgeQueryText(context, notes);
+      const queryTerms = extractQueryTerms(queryText).slice(0, 80);
+      const profile = { ...AGENT_RETRIEVAL_PROFILE.main, kinds: ['lore', 'knowledge', 'memory', 'worldFront', 'character', 'relationship', 'secret'], limit: 16 };
+      const ranked = rankStateCandidates(state, queryTerms, profile, context)
+        .filter(candidate => candidate.path.startsWith('psycheUnits.') || candidate.kind === 'lore' || candidate.activeLore || isMustCarryCandidate(candidate));
+      const compact = max <= 1200;
+      const selected = selectCandidates(ranked, compact ? 4 : 10, Math.max(500, max - 170));
+      if (selected.length) {
+        const lines = [
+          '[Active Lore Bridge]',
+          compact
+            ? 'Use as current-turn lore evidence. Prefer established cast/fronts over unrelated new extras. Do not reveal labels.'
+            : 'Use these active lore facts as current-turn evidence. Prefer established lore, cast, places, and fronts over inventing unrelated extras when they fit. Do not reveal labels or plugin mechanics.',
+        ];
+        const perItemCap = compact
+          ? Math.max(95, Math.min(220, Math.floor((max - 170) / Math.max(1, selected.length))))
+          : Math.max(120, Math.min(360, Math.floor((max - 260) / Math.max(1, selected.length))));
+        selected.forEach(candidate => {
+          const line = formatCompiledCandidateLine(candidate);
+          lines.push(line.length > perItemCap ? `${line.slice(0, perItemCap).trimEnd()}...` : line);
+        });
+        return trimBriefingBlockToBudget(lines.join('\n'), max);
+      }
+    }
     const selected = collectActiveLoreBridgeSources(context, notes, 10);
     if (!selected.length) return '';
-    const max = Math.max(500, Number(budget || 2600));
     const compact = max <= 1200;
     const selectedItems = compact ? selected.slice(0, 4) : selected;
     const lines = [
@@ -7191,9 +7987,28 @@
       .map(item => item.source);
   }
 
-  function buildMainControlFloorContext(context, budget = 3600) {
+  function buildMainControlFloorContext(context, budget = 3600, state = null) {
     const lines = [];
     lines.push(`[Current Writing Mode]\n${currentWritingModeLabel(context)}`);
+    if (state) {
+      const floorSources = selectPsycheSourceFallbacks(state, context, buildRetrievalQuery(context || { messages: [] }, [], []), 8)
+        .filter(source => source.alwaysActive || /desc|firstmessage|persona|author/i.test(source.kind));
+      if (floorSources.length) {
+        lines.push('[Always-Active Lore Floor]');
+        const floorBudget = Math.min(1200, Math.max(420, Math.floor(Number(budget || 0) * 0.36)));
+        const perItemCap = Math.max(100, Math.min(220, Math.floor((floorBudget - 120) / Math.max(1, floorSources.length))));
+        let used = '[Always-Active Lore Floor]\n'.length;
+        floorSources.forEach(source => {
+          const next = formatPsycheSourceFallbackLine(source);
+          const line = next.length > perItemCap ? `${next.slice(0, perItemCap).trimEnd()}...` : next;
+          if (used + line.length > floorBudget && used > 0) return;
+          used += line.length + 1;
+          lines.push(line);
+        });
+      }
+      const text = lines.length ? `[Eros Tower Control Floor]\n${lines.join('\n')}` : '';
+      return text.length > budget ? `${text.slice(0, Math.max(0, budget - 80))}\n[Control Floor truncated by budget]` : text;
+    }
     const alwaysLore = collectControlFloorTier1Sources(context, 6);
     if (alwaysLore.length) {
       lines.push('[Always-Active Lore Floor]');
@@ -7399,6 +8214,9 @@
     (state.loreLedger || [])
       .filter(item => !['inactive', 'superseded', 'archived'].includes(String(item?.status || '').toLowerCase()))
       .forEach(item => add('lore', `loreLedger.${itemKey(item)}`, item, { sourceRank: SOURCE_RANK.lorebook }));
+    (state.psycheUnits || [])
+      .filter(item => !['superseded', 'retired', 'archived'].includes(String(item?.status || '').toLowerCase()))
+      .forEach(item => add(candidateKindForPsycheUnit(item), `psycheUnits.${itemKey(item)}`, item, { sourceRank: item.sourceRank || sourceRankForPsycheSourceKind(item.sourceKind) }));
     (state.plotThreads?.foreshadowing || []).forEach(item => add('foreshadowing', `plotThreads.foreshadowing.${itemKey(item)}`, item));
     (state.plotThreads?.clues || []).forEach(item => add('clue', `plotThreads.clues.${itemKey(item)}`, item));
     (state.plotThreads?.secrets || []).forEach(item => add('secret', `plotThreads.secrets.${itemKey(item)}`, item));
@@ -7408,6 +8226,12 @@
     (state.continuityRisks || []).forEach((item, idx) => add('continuityRisk', `continuityRisks.${idx}`, { issue: item, importance: 7, certainty: 'established' }));
     (state.eventLog || []).forEach((item, idx) => add('event', `eventLog.${idx}`, item, { sourceRank: inferSourceRank(item, SOURCE_RANK.final_output) }));
     return out;
+  }
+
+  function candidateKindForPsycheUnit(unit) {
+    const type = normalizePsycheUnitType(unit?.type);
+    if (['character', 'relationship', 'worldFront', 'secret', 'memory', 'lore'].includes(type)) return type;
+    return 'knowledge';
   }
 
   function stringifyLedgerItem(item) {
@@ -8145,17 +8969,18 @@
   function buildTranslationAgentMessages(agent, current, conf, context, state, notes, agentContext = '') {
     const mode = getTranslationPromptMode(conf, agent?.translationPromptModeId);
     const agentConf = resolveAgentConf(agent, conf);
+    const settingView = buildCompiledSettingBlocks(state, context, notes, Math.floor(PSYCHE_COMPILED_SETTING_CHARS * 0.7));
     const values = {
       glossary: '',
-      lore: context?.settingBlocks || '',
+      lore: settingView,
       persona: extractSettingBlock(context?.settingBlocks || '', 'Persona'),
       username: firstNonEmpty(context?.userName, context?.username, ''),
       context: agent?.includeHistory === false ? '' : formatHistory(context?.messages || [], agentConf.contextWindow),
       content: String(current ?? ''),
       tnote: '',
-      setting_blocks: context?.settingBlocks || '',
+      setting_blocks: settingView,
       agent_context: agentContext || '',
-      state_json: JSON.stringify(state || {}, null, 2).slice(0, 12000),
+      state_json: buildAgentStateJson(state || createDefaultState(context?.mode || 'rp'), context, notes, PSYCHE_STATE_JSON_CHARS),
       user_input: agent?.includeUserInput === false ? '' : getUserInput(context?.messages || []),
       agent_notes: agent?.includePreviousNotes === false ? '(none)' : formatNotes(notes),
       final_output: String(current ?? ''),
@@ -8248,11 +9073,12 @@
         continue;
       }
       const agentContext = await buildAgentContextPackMaybeEmbedded(agent.id, state, context, notes, Math.floor(agentConf.contextWindow * 260), conf);
+      const settingView = buildCompiledSettingBlocks(state, context, notes, PSYCHE_COMPILED_SETTING_CHARS);
       const values = {
-        setting_blocks: context.settingBlocks,
+        setting_blocks: settingView,
         state_summary: agentContext,
         agent_context: agentContext,
-        state_json: JSON.stringify(state),
+        state_json: buildAgentStateJson(state, context, notes, PSYCHE_STATE_JSON_CHARS),
         chat_history: formatHistory(context.messages, agentConf.contextWindow),
         user_input: getUserInput(context.messages),
         agent_notes: formatNotes(notes),
@@ -8338,11 +9164,12 @@
         continue;
       }
       const agentContext = await buildAgentContextPackMaybeEmbedded(agent.id, state, context, notes, Math.floor(agentConf.contextWindow * 220), conf);
+      const settingView = buildCompiledSettingBlocks(state, context, notes, Math.floor(PSYCHE_COMPILED_SETTING_CHARS * 0.85));
       const values = {
-        setting_blocks: agent.includeSettingBlocks === false ? '' : context.settingBlocks,
+        setting_blocks: agent.includeSettingBlocks === false ? '' : settingView,
         state_summary: agentContext,
         agent_context: agentContext,
-        state_json: JSON.stringify(state, null, 2).slice(0, 12000),
+        state_json: buildAgentStateJson(state, context, notes, PSYCHE_STATE_JSON_CHARS),
         chat_history: agent.includeHistory === false ? '' : formatHistory(context.messages, agentConf.contextWindow),
         user_input: agent.includeUserInput === false ? '' : getUserInput(context.messages),
         agent_notes: agent.includePreviousNotes === false ? '(none)' : formatNotes(notes),
@@ -8431,11 +9258,12 @@
     const agentConf = resolveAgentConf(agent, conf);
     if (!canCallProvider(agentConf)) return { changed: false, reason: 'provider-not-ready' };
     const commitContext = await buildAgentContextPackMaybeEmbedded('state-commit', state, context, notes, 9000, conf);
+    const settingView = buildCompiledSettingBlocks(state, context, notes, PSYCHE_COMPILED_SETTING_CHARS);
     const values = {
-      setting_blocks: context.settingBlocks,
+      setting_blocks: settingView,
       state_summary: commitContext,
       agent_context: commitContext,
-      state_json: JSON.stringify(state, null, 2).slice(0, 16000),
+      state_json: buildAgentStateJson(state, context, notes, PSYCHE_STATE_JSON_CHARS),
       chat_history: formatHistory(context.messages, agentConf.contextWindow),
       user_input: getUserInput(context.messages),
       final_output: finalOutput,
@@ -11607,7 +12435,7 @@
   }
 
   function isIntentionalSkipReason(value) {
-    return /^(?:disabled|provider-not-ready|no-psyche-main|limit-zero|no-pending-chunk|no-delete|snapshot-ring-disabled|settings-only-no-session)$/i.test(String(value || '').trim());
+    return /^(?:disabled|provider-not-ready|no-psyche-main|limit-zero|no-pending-chunk|no-pending-source-chunk|superseded-by-psyche-source-ingest|no-delete|snapshot-ring-disabled|settings-only-no-session)$/i.test(String(value || '').trim());
   }
 
   function isActionableAgentNoteError(note) {
@@ -11805,6 +12633,20 @@
           changed: item?.changed === true,
           fallback: item?.fallback === true,
           counts: item?.counts || null,
+          error: item?.error || '',
+          agent: item?.agent || null,
+          prompt: verbose && item?.prompt ? clipRunLogText(item.prompt, 20000) : '',
+          rawOutput: verbose && item?.rawOutput ? clipRunLogText(item.rawOutput, 20000) : '',
+        })).slice(-12),
+      };
+    }
+    if (Array.isArray(out.psycheIngestResult?.results)) {
+      out.psycheIngestResult = {
+        ...out.psycheIngestResult,
+        results: out.psycheIngestResult.results.map(item => ({
+          id: item?.id || '',
+          sourceId: item?.sourceId || '',
+          units: item?.units || 0,
           error: item?.error || '',
           agent: item?.agent || null,
           prompt: verbose && item?.prompt ? clipRunLogText(item.prompt, 20000) : '',
@@ -12114,7 +12956,7 @@
       .map(note => `실패: ${note.name || note.id || '에이전트'} - ${shortAlertText(note.error, 78)}`);
   }
 
-  function summarizePreToast(notes, longMemorySync, memoryRecoverySync, coldStartResult, graphSync, sessionRewindSync = null) {
+  function summarizePreToast(notes, longMemorySync, memoryRecoverySync, coldStartResult, graphSync, sessionRewindSync = null, psycheIngestResult = null, psycheSourceSync = null) {
     const list = Array.isArray(notes) ? notes : [];
     const ok = list.filter(note => !note.error && !note.skipped).length;
     const errored = list.filter(note => note.error).length;
@@ -12125,6 +12967,8 @@
     if (memoryRecoverySync?.blocked) lines.push(`므네메 정원 보류: 메시지 ${Number(memoryRecoverySync.deletedCount || 0)}개 감소 확인 대기`);
     else if (memoryRecoverySync?.changed) lines.push(`므네메 정원 재정렬: 메시지 ${Number(memoryRecoverySync.deletedCount || 0)}개 삭제 / ${Number(memoryRecoverySync.isolatedChunks || 0)} chunk 격리 / 파생 ${Number(memoryRecoverySync.purgedDerived || 0)}개 정리`);
     if (longMemorySync) lines.push(`장기기억 ${Number(longMemorySync.added || 0)}개 추가 / ${Number(longMemorySync.total || 0)}개 유지`);
+    if (psycheSourceSync) lines.push(`Psyche sources ${Number(psycheSourceSync.activeSources || psycheSourceSync.sources || 0)} / chunks ${Number(psycheSourceSync.activeChunks || psycheSourceSync.chunks || 0)}`);
+    if (psycheIngestResult && !psycheIngestResult.skipped) lines.push(`Psyche ingest ${Number(psycheIngestResult.processed || 0)} / units ${Array.isArray(psycheIngestResult.results) ? psycheIngestResult.results.reduce((sum, item) => sum + Number(item.units || 0), 0) : 0} / errors ${Number(psycheIngestResult.errors || 0)}`);
     if (cold.processed || cold.extracted || cold.errors) lines.push(`Cold-start 처리 ${Number(cold.processed || 0)} / 추출 ${Number(cold.extracted || 0)} / 오류 ${Number(cold.errors || 0)}`);
     lines.push(`연관 그래프 ${graph.nodes} nodes / ${graph.edges} edges`);
     return lines;
@@ -12205,12 +13049,14 @@
     const cbsSync = syncCbsDiagnostics(state, context, conf);
     const longMemorySync = syncChatLongMemoryLedger(state, context.messages, conf.contextWindow, conf.coldStartChunkSize);
     const memoryRecoverySync = runMemoryGardenRecovery(state, context.messages, conf, sessionSync);
+    const psycheSourceSync = syncPsycheSourceRegistry(state, context, conf);
+    const psycheIngestResult = await runPsycheSourceIngest(conf, context, state);
     const coldStartResult = await runAutoColdStart(conf, context, state);
     const memoryTierSync = refreshMemoryTiers(state, 'pre-request');
     const graphBefore = refreshAssociationGraph(state, context, [], conf);
     const notes = await runPrePipeline(conf, context, state);
     const graphSync = refreshAssociationGraph(state, context, notes, conf);
-    const preToastLines = summarizePreToast(notes, longMemorySync, memoryRecoverySync, coldStartResult, graphSync, sessionRewindSync);
+    const preToastLines = summarizePreToast(notes, longMemorySync, memoryRecoverySync, coldStartResult, graphSync, sessionRewindSync, psycheIngestResult, psycheSourceSync);
     await showRunToast('에로스 타워 모델 응답 대기 중', ['전처리 완료. 메인 모델의 응답을 기다립니다.'].concat(preToastLines), notes.some(note => note.error) || memoryRecoverySync?.changed || sessionRewindSync?.changed ? 'warn' : 'info');
     const injectionBudget = parseNumber(conf.injectionBudget, DEFAULT_CONFIG.injectionBudget, 0, 40000);
     const injection = await buildMainInjection(state, context, notes, injectionBudget, conf);
@@ -12233,6 +13079,8 @@
       cbsSync,
       longMemorySync,
       memoryRecoverySync,
+      psycheSourceSync,
+      psycheIngestResult,
       memoryTierSync,
       coldStartResult,
       graphBefore,
@@ -12309,6 +13157,7 @@
     postContext = contextWithAssistantOutput(context, finalContent);
     const longMemorySync = syncChatLongMemoryLedger(state, postContext.messages, conf.contextWindow, conf.coldStartChunkSize);
     const memoryRecoverySync = runMemoryGardenRecovery(state, postContext.messages, conf, sessionSync);
+    const psycheSourceSync = syncPsycheSourceRegistry(state, postContext, conf);
     let commitResult = { changed: false, reason: 'not-run' };
     try {
       commitResult = await runStateCommit(conf, postContext, state, finalContent, notes);
@@ -12345,6 +13194,7 @@
       cbsSync,
       longMemorySync,
       memoryRecoverySync,
+      psycheSourceSync,
       memoryTierSync,
       graphSync,
       postPipelineResult,
@@ -13148,6 +13998,9 @@
     const memoryLedger = Array.isArray(state.memoryLedger) ? state.memoryLedger : [];
     const secretLedger = Array.isArray(state.secretLedger) ? state.secretLedger : [];
     const loreLedger = Array.isArray(state.loreLedger) ? state.loreLedger : [];
+    const psycheSources = Array.isArray(state.psycheSources) ? state.psycheSources : [];
+    const psycheChunks = Array.isArray(state.psycheChunks) ? state.psycheChunks : [];
+    const psycheUnits = Array.isArray(state.psycheUnits) ? state.psycheUnits : [];
     const canonicalSources = Array.isArray(context?.canonicalSources) ? context.canonicalSources : [];
     const evidenceConflicts = Array.isArray(state.evidenceConflicts) ? state.evidenceConflicts : [];
     const decayLog = Array.isArray(state.decayLog) ? state.decayLog : [];
@@ -13963,6 +14816,8 @@
       ${run.sessionSync ? `<div class="et-note">Session: ${escHtml(run.sessionSync.verdict || '-')}</div>` : ''}
       ${run.cbsSync ? `<div class="et-note">CBS: 변수 ${escHtml(run.cbsSync.candidates || 0)} / stripped ${escHtml(run.cbsSync.strippedEntries || 0)}</div>` : ''}
       ${run.longMemorySync ? `<div class="et-note">Long Memory: 추가 ${escHtml(run.longMemorySync.added || 0)} / 유지 ${escHtml(run.longMemorySync.unchanged || 0)}</div>` : ''}
+      ${run.psycheSourceSync ? `<div class="et-note">Psyche Sources: ${escHtml(run.psycheSourceSync.activeSources || run.psycheSourceSync.sources || 0)} / chunks ${escHtml(run.psycheSourceSync.activeChunks || run.psycheSourceSync.chunks || 0)}</div>` : ''}
+      ${run.psycheIngestResult ? `<div class="et-note">Psyche Ingest: ${escHtml(run.psycheIngestResult.processed || 0)} / units ${escHtml(Array.isArray(run.psycheIngestResult.results) ? run.psycheIngestResult.results.reduce((sum, item) => sum + Number(item.units || 0), 0) : 0)} / errors ${escHtml(run.psycheIngestResult.errors || 0)}${run.psycheIngestResult.reason ? ` / ${escHtml(run.psycheIngestResult.reason)}` : ''}</div>` : ''}
       ${run.memoryRecoverySync ? `<div class="et-note">므네메 정원: ${run.memoryRecoverySync.blocked ? '보류' : run.memoryRecoverySync.changed ? '재정렬' : '변경 없음'}${run.memoryRecoverySync.deletedCount ? ` / 삭제 ${escHtml(run.memoryRecoverySync.deletedCount)}` : ''}${run.memoryRecoverySync.isolatedChunks !== undefined ? ` / 격리 ${escHtml(run.memoryRecoverySync.isolatedChunks)}` : ''}${run.memoryRecoverySync.purgedDerived !== undefined ? ` / 파생정리 ${escHtml(run.memoryRecoverySync.purgedDerived)}` : ''}${run.memoryRecoverySync.reason ? ` / ${escHtml(run.memoryRecoverySync.reason)}` : ''}</div>` : ''}
       ${run.coldStartResult ? `<div class="et-note">Cold-start: 처리 ${escHtml(run.coldStartResult.processed || 0)} / 추출 ${escHtml(run.coldStartResult.extracted || 0)} / 오류 ${escHtml(run.coldStartResult.errors || 0)}${run.coldStartResult.agent ? ` / ${escHtml(run.coldStartResult.agent.name || '사이키')}: ${escHtml(run.coldStartResult.agent.model || '-')}` : ''}${run.coldStartResult.reason ? ` / ${escHtml(run.coldStartResult.reason)}` : ''}</div>` : ''}
       ${run.graphSync ? `<div class="et-note">Association Graph: 노드 ${escHtml(run.graphSync.nodes || 0)} / 엣지 ${escHtml(run.graphSync.edges || 0)}</div>` : ''}
