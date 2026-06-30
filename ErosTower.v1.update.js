@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.18
+//@display-name ☸Eros Tower 1.1.19
 //@api 3.0
-//@version 1.1.18
+//@version 1.1.19
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -33,18 +33,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.18
+ * Eros Tower 1.1.19
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.18 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.19 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.18';
+  const VERSION = '1.1.19';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.18`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.19`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -61,7 +61,7 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.18 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.19 analysis context';
   const GOOGLE_OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
   const GOOGLE_CLOUD_PLATFORM_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
   const PSYCHE_RECOMMENDED_MODELS = Object.freeze([
@@ -1650,7 +1650,7 @@
     'Respect user agency: do not decide the user persona inner thoughts, consent, dialogue, or next action.',
   ].join('\n');
 
-  const EROS_AGENT_PROMPT_REVISION = 'v1.1.18-active-lore-budget-guard';
+  const EROS_AGENT_PROMPT_REVISION = 'v1.1.19-mobile-runlog-diet';
 
   const EROS_RP_WORLD_SYSTEM = [
     'You are the Eros Tower Living World and Active Fronts Agent for RP.',
@@ -6069,7 +6069,7 @@
           'Return compact JSON only.',
         ].join('\n') },
       ];
-      const promptTrace = formatPromptForRunLog(messages, Math.floor(MAX_RUN_LOG_TEXT_CHARS / 2));
+      const promptTrace = formatPromptTraceForRunLog(messages, conf, Math.floor(MAX_RUN_LOG_TEXT_CHARS / 2));
       try {
         const raw = await callAgent(agentConf, messages);
         const commit = extractJsonObject(raw);
@@ -7702,6 +7702,15 @@
     return `${raw.slice(0, max)}\n...[truncated ${raw.length - max} chars]`;
   }
 
+  function shouldCaptureVerboseRunLog(conf = null) {
+    return conf?.debugLog === true;
+  }
+
+  function formatPromptTraceForRunLog(messages, conf = null, limit = MAX_RUN_LOG_TEXT_CHARS) {
+    if (!shouldCaptureVerboseRunLog(conf)) return '';
+    return formatPromptForRunLog(messages, limit);
+  }
+
   function formatPromptForRunLog(messages, limit = MAX_RUN_LOG_TEXT_CHARS) {
     const rows = (Array.isArray(messages) ? messages : []).map((message, idx) => {
       const role = String(message?.role || `message-${idx}`);
@@ -7754,7 +7763,7 @@
           renderTemplate(resolveRuntimeAgentUserTemplate(agent, context), values),
         ].filter(Boolean).join('\n\n') },
       ];
-      const promptTrace = formatPromptForRunLog(messages);
+      const promptTrace = formatPromptTraceForRunLog(messages, conf);
       const startedAt = Date.now();
       try {
         const rawOutput = await callAgent(agentConf, messages);
@@ -7837,7 +7846,7 @@
         { role: 'system', content: agent.systemPrompt || '' },
         { role: 'user', content: renderTemplate(agent.userTemplate, values) },
       ];
-      const promptTrace = formatPromptForRunLog(messages);
+      const promptTrace = formatPromptTraceForRunLog(messages, conf);
       const startedAt = Date.now();
       try {
         const rawOutput = await callAgent(agentConf, messages);
@@ -7916,7 +7925,7 @@
       { role: 'system', content: agent.systemPrompt || STATE_COMMIT_PROMPT },
       { role: 'user', content: renderTemplate(agent.userTemplate, values) },
     ];
-    const promptTrace = formatPromptForRunLog(messages);
+    const promptTrace = formatPromptTraceForRunLog(messages, conf);
     const raw = await callAgent(agentConf, messages);
     const commit = extractJsonObject(raw);
     if (!commit) return { changed: false, reason: 'json-parse-failed', raw: clipRunLogText(raw), prompt: promptTrace, agent: stateCommitAgentInfo(agent, agentConf) };
@@ -11071,7 +11080,7 @@
     const logKey = STORAGE.runLog(scope);
     const logs = await Storage.get(logKey, []);
     const list = Array.isArray(logs) ? logs : [];
-    const compactRun = compactRunLogForStorage(run);
+    const compactRun = compactRunLogForStorage(run, conf);
     const idx = list.findIndex(item => item?.id && item.id === compactRun.id);
     const next = idx >= 0
       ? list.map((item, itemIdx) => itemIdx === idx ? { ...item, ...compactRun } : item)
@@ -11183,28 +11192,43 @@
     };
   }
 
-  function compactRunLogForStorage(run) {
+  function summarizeRequestMessagesForRunLog(messages) {
+    const list = Array.isArray(messages) ? messages : [];
+    return {
+      count: list.length,
+      roles: list.map((message, idx) => String(message?.role || `message-${idx}`)).slice(-12),
+      chars: list.reduce((sum, message) => sum + stringifyContent(message?.content).length, 0),
+      lastPreview: list.length ? stringifyContent(list[list.length - 1]?.content).replace(/\s+/g, ' ').trim().slice(0, 700) : '',
+    };
+  }
+
+  function compactRunLogForStorage(run, conf = null) {
     const out = { ...(run || {}) };
+    const verbose = shouldCaptureVerboseRunLog(conf);
+    if (Array.isArray(out.requestMessages)) {
+      out.requestMessagesInfo = summarizeRequestMessagesForRunLog(out.requestMessages);
+      delete out.requestMessages;
+    }
     if (Array.isArray(out.notes)) {
       out.notes = out.notes.map(note => ({
         ...(note || {}),
-        prompt: note?.prompt ? clipRunLogText(note.prompt) : '',
-        rawOutput: note?.rawOutput ? clipRunLogText(note.rawOutput) : '',
-        retrievalPreview: note?.retrievalPreview ? clipRunLogText(note.retrievalPreview, 12000) : '',
-        text: note?.text ? clipRunLogText(note.text, 12000) : '',
+        prompt: verbose && note?.prompt ? clipRunLogText(note.prompt) : '',
+        rawOutput: note?.rawOutput ? clipRunLogText(note.rawOutput, verbose ? MAX_RUN_LOG_TEXT_CHARS : 3000) : '',
+        retrievalPreview: note?.retrievalPreview ? clipRunLogText(note.retrievalPreview, verbose ? 12000 : 2500) : '',
+        text: note?.text ? clipRunLogText(note.text, verbose ? 12000 : 3600) : '',
       }));
     }
-    if (out.commitPromptPreview) out.commitPromptPreview = clipRunLogText(out.commitPromptPreview, 24000);
-    if (out.commitRawPreview) out.commitRawPreview = clipRunLogText(out.commitRawPreview, 24000);
-    if (out.rawFinalPreview) out.rawFinalPreview = clipRunLogText(out.rawFinalPreview, 16000);
-    if (out.finalPreview) out.finalPreview = clipRunLogText(out.finalPreview, 16000);
+    if (out.commitPromptPreview) out.commitPromptPreview = verbose ? clipRunLogText(out.commitPromptPreview, 24000) : '';
+    if (out.commitRawPreview) out.commitRawPreview = clipRunLogText(out.commitRawPreview, verbose ? 24000 : 3000);
+    if (out.rawFinalPreview) out.rawFinalPreview = clipRunLogText(out.rawFinalPreview, verbose ? 16000 : 4000);
+    if (out.finalPreview) out.finalPreview = clipRunLogText(out.finalPreview, verbose ? 16000 : 4000);
     if (Array.isArray(out.coldStartResult?.results)) {
       out.coldStartResult = {
         ...out.coldStartResult,
         results: out.coldStartResult.results.map(item => ({
           ...(item || {}),
-          prompt: item?.prompt ? clipRunLogText(item.prompt, 20000) : '',
-          rawOutput: item?.rawOutput ? clipRunLogText(item.rawOutput, 20000) : '',
+          prompt: verbose && item?.prompt ? clipRunLogText(item.prompt, 20000) : '',
+          rawOutput: item?.rawOutput ? clipRunLogText(item.rawOutput, verbose ? 20000 : 3000) : '',
         })).slice(-12),
       };
     }
