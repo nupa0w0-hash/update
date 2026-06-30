@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.27
+//@display-name ☸Eros Tower 1.1.28
 //@api 3.0
-//@version 1.1.27
+//@version 1.1.28
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -35,18 +35,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.27
+ * Eros Tower 1.1.28
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.27 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.28 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.27';
+  const VERSION = '1.1.28';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.27`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.28`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -63,7 +63,7 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.27 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.28 analysis context';
   const GOOGLE_OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
   const GOOGLE_CLOUD_PLATFORM_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
   const PSYCHE_RECOMMENDED_MODELS = Object.freeze([
@@ -163,10 +163,6 @@
     cbsPersistStrip: true,
     maxAssociationEdges: 800,
     injectionBudget: 0,
-    autoCapEnabled: false,
-    mainContextTokens: 65536,
-    autoCapReserveTokens: 1800,
-    autoCapFillRatio: 0.82,
     stagedSearchEnabled: true,
     extraBodyJson: '',
     extraHeaders: '',
@@ -580,7 +576,6 @@
     dashboardVisible: false,
     uiRegistrations: [],
     lastEmbeddingCacheStats: null,
-    lastAutoCap: null,
     lastRunHealth: null,
     lastModeResolution: null,
     compressedStorageEnabled: DEFAULT_CONFIG.compressedStorageEnabled,
@@ -864,10 +859,6 @@
     merged.usageLogMax = parseNumber(merged.usageLogMax, DEFAULT_CONFIG.usageLogMax, 40, 2000);
     merged.bypassAuxRequests = parseBool(merged.bypassAuxRequests, DEFAULT_CONFIG.bypassAuxRequests) === true;
     merged.stateApiEnabled = parseBool(merged.stateApiEnabled, DEFAULT_CONFIG.stateApiEnabled) === true;
-    merged.autoCapEnabled = false;
-    merged.mainContextTokens = parseNumber(merged.mainContextTokens, DEFAULT_CONFIG.mainContextTokens, 4096, 200000);
-    merged.autoCapReserveTokens = parseNumber(merged.autoCapReserveTokens, DEFAULT_CONFIG.autoCapReserveTokens, 200, 16000);
-    merged.autoCapFillRatio = parseNumber(merged.autoCapFillRatio, DEFAULT_CONFIG.autoCapFillRatio, 0.25, 0.95);
     merged.stagedSearchEnabled = parseBool(merged.stagedSearchEnabled, DEFAULT_CONFIG.stagedSearchEnabled) === true;
     merged.qualityRegexEnabled = parseBool(merged.qualityRegexEnabled, DEFAULT_CONFIG.qualityRegexEnabled) === true;
     merged.adaptiveQualityEnabled = parseBool(merged.adaptiveQualityEnabled, DEFAULT_CONFIG.adaptiveQualityEnabled) === true;
@@ -4563,7 +4554,6 @@
         lastError: Runtime.lastError,
         lastScope: Runtime.lastScope,
         embeddingCacheStats: Runtime.lastEmbeddingCacheStats,
-        autoCap: Runtime.lastAutoCap,
       },
     };
   }
@@ -13790,7 +13780,6 @@
       <div class="et-note">요청: ${escHtml(run.userInputPreview || '-')}</div>
       ${run.modeResolution ? `<div class="et-note">Mode 판정: ${escHtml(run.modeResolution.mode || run.mode || '-')} / ${escHtml(run.modeResolution.source || '-')}</div>` : ''}
       <div class="et-note">출력 정리: ${run.outputSanitized ? '내부 태그 제거됨' : '변경 없음'} / 커밋: ${escHtml(run.commitReason || (run.commitCounts ? 'changed' : '-'))}</div>
-      ${run.autoCap ? `<div class="et-note">Auto-cap: ${escHtml(run.autoCap.reason || '-')} / 주입 ${escHtml(run.autoCap.charBudget || 0)} chars / 요청 추정 ${escHtml(run.autoCap.promptTokens || 0)} tokens</div>` : ''}
       ${run.bootstrapSync ? `<div class="et-note">현재 관점 bootstrap: 등장/보호 이름 ${escHtml(run.bootstrapSync.presentCast || 0)}개${run.bootstrapSync.bootstrapped ? ' / 캐릭터 카드 동기화' : ''}</div>` : ''}
       ${run.canonicalSync ? `<div class="et-note">Canonical Lore: 추가 ${escHtml(run.canonicalSync.added || 0)} / 갱신 ${escHtml(run.canonicalSync.revised || 0)} / 유지 ${escHtml(run.canonicalSync.unchanged || 0)}</div>` : ''}
       ${run.sessionSync ? `<div class="et-note">Session: ${escHtml(run.sessionSync.verdict || '-')}</div>` : ''}
@@ -15379,10 +15368,6 @@
       qualityRegexEnabled: conf.qualityRegexEnabled !== false,
       debugLog: conf.debugLog === true,
       injectionBudget: conf.injectionBudget,
-      autoCapEnabled: conf.autoCapEnabled !== false,
-      mainContextTokens: conf.mainContextTokens,
-      autoCapReserveTokens: conf.autoCapReserveTokens,
-      autoCapFillRatio: conf.autoCapFillRatio,
       stagedSearchEnabled: conf.stagedSearchEnabled !== false,
       autoMemoryEnabled: conf.autoMemoryEnabled !== false,
       autoColdStartEnabled: conf.autoColdStartEnabled !== false,
@@ -16026,7 +16011,7 @@
           syncCanonicalLoreLedger(targetState, targetContext.canonicalSources);
           const identity = buildCanonicalIdentitySnapshot(targetContext);
           targetState.canonicalIdentity = identity;
-          const briefing = await buildMainBriefing(targetState, targetContext, [], Number(opts?.budget || 22000), { ...DEFAULT_CONFIG, embeddingEnabled: false, stagedSearchEnabled: false });
+          const briefing = await buildMainBriefing(targetState, targetContext, [], Number(opts?.budget ?? 0), { ...DEFAULT_CONFIG, embeddingEnabled: false, stagedSearchEnabled: false });
           const primaryTerms = uniqueStrings(identity.subjects.flatMap(subject => [
             subject.name,
             ...(subject.aliases || []),
