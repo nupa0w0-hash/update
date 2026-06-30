@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.23
+//@display-name ☸Eros Tower 1.1.24
 //@api 3.0
-//@version 1.1.23
+//@version 1.1.24
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -35,18 +35,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.23
+ * Eros Tower 1.1.24
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.23 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.24 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.23';
+  const VERSION = '1.1.24';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.23`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.24`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -63,7 +63,7 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.23 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.24 analysis context';
   const GOOGLE_OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
   const GOOGLE_CLOUD_PLATFORM_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
   const PSYCHE_RECOMMENDED_MODELS = Object.freeze([
@@ -12571,7 +12571,8 @@
           ${alerts.map(item => `
             <span class="et-alert-pill ${item.kind === 'error' ? 'bad' : 'warn'}" data-kind="${escHtml(item.kind || 'warn')}">${escHtml(item.message || item.label || '확인 필요')}</span>`).join('')}
         </div>
-      </section>`;
+      </section>
+      ${renderTranslationPromptModePanel(conf)}`;
   }
 
   function dashboardStyles() {
@@ -12793,35 +12794,36 @@
     const runtimeJson = JSON.stringify({ version: VERSION, type: 'eros-prompt-presets-runtime', presets }, null, 2);
     const agents = defaultPipeline().agents.filter(agent => agent.phase === 'pre');
     return `
-      <section class="et-panel">
-        <h2>모드(프롬)</h2>
-        <div class="et-note">Eros 에이전트 프롬프트 모드를 관리합니다. 기본 작동 모드인 RP/소설은 기존 내장 프롬프트를 그대로 쓰고, 사용자가 추가한 프리셋은 별도 작동 모드로 추가되어 API 화면의 작동 모드에서 직접 선택합니다.</div>
-        <textarea id="et-prompt-presets-json" style="display:none">${escHtml(runtimeJson)}</textarea>
-        <div class="et-row" style="margin-top:12px">
-          ${selectField('편집할 프롬프트 모드', 'et-prompt-preset-active', activePreset.id || PROMPT_PRESET_BUILTIN_ID, promptPresetOptions(presets), 'et-prompt-preset-active')}
-          ${inputField('모드 이름', 'et-prompt-preset-name', 'text', activePreset.id === PROMPT_PRESET_BUILTIN_ID ? '' : activePreset.name || '', '예: Eros Agent Cinematic')}
+      <section class="et-panel et-agent-section" data-collapsed="true">
+        <div class="et-agent-section-head">
+          <div>
+            <h2>Eros 에이전트 모드 프롬프트</h2>
+            <div class="et-note">Eros 에이전트 프롬프트 모드를 관리합니다. 기본 작동 모드인 RP/소설은 기존 내장 프롬프트를 그대로 쓰고, 사용자가 추가한 프리셋은 별도 작동 모드로 추가되어 API 화면의 작동 모드에서 직접 선택합니다.</div>
+          </div>
+          <button type="button" class="et-section-collapse" data-section-collapse>펼치기</button>
         </div>
-        <div class="et-actions">
-          <button id="et-save-prompts">모드 저장</button>
-          <button id="et-add-prompt-preset">새 모드 추가</button>
-          <button id="et-rename-prompt-preset">이름 변경</button>
-          <button id="et-export-prompt-preset">익스포트</button>
-          <button id="et-import-prompt-preset">임포트</button>
+        <div class="et-agent-section-body">
+          <textarea id="et-prompt-presets-json" style="display:none">${escHtml(runtimeJson)}</textarea>
+          <div class="et-row" style="margin-top:12px">
+            ${selectField('편집할 프롬프트 모드', 'et-prompt-preset-active', activePreset.id || PROMPT_PRESET_BUILTIN_ID, promptPresetOptions(presets), 'et-prompt-preset-active')}
+            ${inputField('모드 이름', 'et-prompt-preset-name', 'text', activePreset.id === PROMPT_PRESET_BUILTIN_ID ? '' : activePreset.name || '', '예: Eros Agent Cinematic')}
+          </div>
+          <div class="et-actions">
+            <button id="et-save-prompts">모드 저장</button>
+            <button id="et-add-prompt-preset">새 모드 추가</button>
+            <button id="et-rename-prompt-preset">이름 변경</button>
+            <button id="et-export-prompt-preset">익스포트</button>
+            <button id="et-import-prompt-preset">임포트</button>
+          </div>
+          <div id="et-prompt-status" class="et-status" data-kind="info"></div>
+          <div class="et-note" style="margin-top:12px">커스텀 모드 하나는 각 Eros 에이전트별 System/Output 한 벌만 가집니다. 저장 후 API 화면의 작동 모드에서 해당 모드를 선택하면 이 프롬프트가 사용됩니다.</div>
+          ${agents.map(agent => renderPromptPresetAgentEditor(agent, activePreset)).join('')}
+          <details class="et-section-toggle">
+            <summary>프리셋 JSON 임포트 / 익스포트</summary>
+            <div class="et-note" style="margin-top:10px">익스포트 버튼은 현재 편집 중인 프롬프트 모드를 클립보드로 복사합니다. 임포트는 아래 칸의 JSON을 읽어 현재 모드 목록에 추가합니다.</div>
+            ${textarea('임포트 JSON', 'et-prompt-preset-import-json', '', '{"presets":[...]} 또는 단일 prompt mode JSON')}
+          </details>
         </div>
-        <div id="et-prompt-status" class="et-status" data-kind="info"></div>
-      </section>
-      <section class="et-panel" style="margin-top:14px">
-        <h2>Eros 에이전트 모드 프롬프트</h2>
-        <div class="et-note">커스텀 모드 하나는 각 Eros 에이전트별 System/Output 한 벌만 가집니다. 저장 후 API 화면의 작동 모드에서 해당 모드를 선택하면 이 프롬프트가 사용됩니다.</div>
-        ${agents.map(agent => renderPromptPresetAgentEditor(agent, activePreset)).join('')}
-      </section>
-      ${renderTranslationPromptModePanel(conf)}
-      <section class="et-panel" style="margin-top:14px">
-        <details class="et-section-toggle">
-          <summary>프리셋 JSON 임포트 / 익스포트</summary>
-          <div class="et-note" style="margin-top:10px">익스포트 버튼은 현재 편집 중인 프롬프트 모드를 클립보드로 복사합니다. 임포트는 아래 칸의 JSON을 읽어 현재 모드 목록에 추가합니다.</div>
-          ${textarea('임포트 JSON', 'et-prompt-preset-import-json', '', '{"presets":[...]} 또는 단일 prompt mode JSON')}
-        </details>
       </section>`;
   }
 
@@ -12860,28 +12862,35 @@
     const activeMode = modes.find(mode => mode.id === activeId) || modes[0] || { id: TRANSLATION_PROMPT_DEFAULT_ID, name: '범용(추천)', prompt: '' };
     const runtimeJson = JSON.stringify({ version: VERSION, type: 'translation-prompt-modes-runtime', modes }, null, 2);
     return `
-      <section class="et-panel" style="margin-top:14px">
-        <h2>번역 에이전트 프롬프트</h2>
-        <div class="et-note">번역 에이전트가 사용할 프롬프트 모드입니다. 내장 모드는 원본 프롬프트를 그대로 보존하며, 저장하면 사용자 지정 번역 프롬프트로 복사됩니다.</div>
-        <textarea id="et-translation-prompt-modes-json" style="display:none">${escHtml(runtimeJson)}</textarea>
-        <div class="et-row" style="margin-top:12px">
-          ${selectField('편집할 번역 프롬프트', 'et-translation-prompt-active', activeMode.id, translationPromptModeOptions(modes), 'et-translation-prompt-active')}
-          ${inputField('프롬프트 이름', 'et-translation-prompt-name', 'text', activeMode.locked ? '' : activeMode.name || '', '예: 중한 무협 보강')}
+      <section class="et-panel et-agent-section" data-collapsed="true" style="margin-top:14px">
+        <div class="et-agent-section-head">
+          <div>
+            <h2>김번역씨의 비밀(?)노트(번역 에이전트)</h2>
+            <div class="et-note">번역 에이전트가 사용할 프롬프트 모드입니다. 내장 모드는 원본 프롬프트를 그대로 보존하며, 저장하면 사용자 지정 번역 프롬프트로 복사됩니다.</div>
+          </div>
+          <button type="button" class="et-section-collapse" data-section-collapse>펼치기</button>
         </div>
-        ${textarea('Prompt', 'et-translation-prompt-content', activeMode.prompt || '', '', 'et-translation-prompt-content')}
-        <div class="et-actions">
-          <button id="et-save-translation-prompt">번역 프롬프트 저장</button>
-          <button id="et-add-translation-prompt">새 번역 프롬프트 추가</button>
-          <button id="et-rename-translation-prompt">이름 변경</button>
-          <button id="et-export-translation-prompt">익스포트</button>
-          <button id="et-import-translation-prompt">임포트</button>
+        <div class="et-agent-section-body">
+          <textarea id="et-translation-prompt-modes-json" style="display:none">${escHtml(runtimeJson)}</textarea>
+          <div class="et-row" style="margin-top:12px">
+            ${selectField('편집할 번역 프롬프트', 'et-translation-prompt-active', activeMode.id, translationPromptModeOptions(modes), 'et-translation-prompt-active')}
+            ${inputField('프롬프트 이름', 'et-translation-prompt-name', 'text', activeMode.locked ? '' : activeMode.name || '', '예: 중한 무협 보강')}
+          </div>
+          ${textarea('Prompt', 'et-translation-prompt-content', activeMode.prompt || '', '', 'et-translation-prompt-content')}
+          <div class="et-actions">
+            <button id="et-save-translation-prompt">번역 프롬프트 저장</button>
+            <button id="et-add-translation-prompt">새 번역 프롬프트 추가</button>
+            <button id="et-rename-translation-prompt">이름 변경</button>
+            <button id="et-export-translation-prompt">익스포트</button>
+            <button id="et-import-translation-prompt">임포트</button>
+          </div>
+          <div id="et-translation-prompt-status" class="et-status" data-kind="info"></div>
+          <details class="et-section-toggle">
+            <summary>번역 프롬프트 JSON 임포트 / 익스포트</summary>
+            <div class="et-note" style="margin-top:10px">익스포트는 현재 편집 중인 번역 프롬프트를 복사합니다. 임포트는 아래 JSON을 읽어 번역 프롬프트 목록에 추가합니다.</div>
+            ${textarea('임포트 JSON', 'et-translation-prompt-import-json', '', '{"modes":[...]} 또는 단일 translation prompt JSON')}
+          </details>
         </div>
-        <div id="et-translation-prompt-status" class="et-status" data-kind="info"></div>
-        <details class="et-section-toggle">
-          <summary>번역 프롬프트 JSON 임포트 / 익스포트</summary>
-          <div class="et-note" style="margin-top:10px">익스포트는 현재 편집 중인 번역 프롬프트를 복사합니다. 임포트는 아래 JSON을 읽어 번역 프롬프트 목록에 추가합니다.</div>
-          ${textarea('임포트 JSON', 'et-translation-prompt-import-json', '', '{"modes":[...]} 또는 단일 translation prompt JSON')}
-        </details>
       </section>`;
   }
 
