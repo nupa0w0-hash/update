@@ -1826,7 +1826,7 @@
         makeAgent('state-commit', 'Psyche Main / State Commit', 'psyche-main', STATE_COMMIT_PROMPT, true, 'ollama-kimi-k2-7-code-cloud', 'ollama-local', 'kimi-k2.7-code:cloud'),
         makeAgent('state-aux', 'Psyche Auxiliary / Cold-start', 'psyche-aux', STATE_COMMIT_PROMPT, false, 'ollama-kimi-k2-7-code-cloud', 'ollama-local', 'kimi-k2.7-code:cloud'),
         {
-          ...makeAgent(TRANSLATION_AGENT_ID, 'Translation Agent', 'resident', 'Use the selected translation prompt mode. Output only the transformed final text.', false, 'ollama-kimi-k2-7-code-cloud', 'ollama-local', 'kimi-k2.7-code:cloud'),
+          ...makeAgent(TRANSLATION_AGENT_ID, '한국에서 오신 김번역씨 (번역 에이전트)', 'resident', '선택한 번역 프롬프트 모드를 사용합니다. 변환된 최종 텍스트만 출력합니다.', false, 'ollama-kimi-k2-7-code-cloud', 'ollama-local', 'kimi-k2.7-code:cloud'),
           postMode: 'polish',
           includePreviousNotes: false,
           translationPromptModeId: TRANSLATION_PROMPT_DEFAULT_ID,
@@ -12894,7 +12894,7 @@
     return `
       ${renderAgentSection('에로스 에이전트', '메인 응답 전에 세계, 인물, 행동 압력, 종합 지침을 정리하는 에이전트입니다.', erosAgents, conf)}
       ${renderAgentSection('사이키 에이전트', `관리 자료를 담당합니다. 메인 출력과 최종 응답을 canon 상태로 커밋하고, 보조 에이전트는 필요할 때 cold-start 성격의 추출 작업을 맡습니다.<br>추천 모델: ${PSYCHE_RECOMMENDED_MODELS.map(escHtml).join(' · ')}`, psycheAgents, conf, { topMargin: true })}
-      ${renderAgentSection('입주민 에이전트', '최종 출력 이후 선택적으로 작동하는 입주민 에이전트입니다. 번역 에이전트는 여기에서 사용 여부와 프롬프트를 함께 선택합니다.', residentAgents, conf, { topMargin: true })}
+      ${renderAgentSection('입주민 에이전트', '선택적으로 켜서 메인 전후의 확장 작업을 맡길 수 있는 입주민 에이전트 영역입니다. 번역 에이전트는 여기에서 사용 여부와 프롬프트를 함께 선택합니다.', residentAgents, conf, { topMargin: true })}
       ${postAgents.length ? `<section class="et-panel" style="margin-top:14px">
         <h2>가져온 후처리 에이전트</h2>
         <div class="et-note">외부 pipeline에서 가져온 선택 후처리입니다. 켜진 경우에만 최종 응답 커밋 전에 실행합니다.</div>
@@ -15361,7 +15361,7 @@
         let modes = translationPromptModeListFromUI(conf);
         let activeId = active.value || TRANSLATION_PROMPT_DEFAULT_ID;
         const current = modes.find(mode => mode.id === activeId);
-        if (!current || current.locked) activeId = translationPromptNextId(document.getElementById('et-translation-prompt-name')?.value || 'Translation Agent Custom', modes);
+        if (!current || current.locked) activeId = translationPromptNextId(document.getElementById('et-translation-prompt-name')?.value || '김번역씨 사용자 지정', modes);
         const mode = { ...readTranslationPromptEditorFromUI(activeId), locked: false };
         modes = upsertTranslationPromptMode(modes, mode);
         writeTranslationPromptModeListToUI(modes, activeId);
@@ -15373,7 +15373,7 @@
     document.getElementById('et-add-translation-prompt')?.addEventListener('click', async event => {
       await withBusy(event.currentTarget, async () => {
         let modes = translationPromptModeListFromUI(conf);
-        const baseName = document.getElementById('et-translation-prompt-name')?.value || 'Translation Agent Custom';
+        const baseName = document.getElementById('et-translation-prompt-name')?.value || '김번역씨 사용자 지정';
         const id = translationPromptNextId(baseName, modes);
         const mode = { ...readTranslationPromptEditorFromUI(id, `${baseName} Copy`), locked: false };
         modes = upsertTranslationPromptMode(modes, mode);
