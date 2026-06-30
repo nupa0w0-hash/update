@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.26
+//@display-name ☸Eros Tower 1.1.27
 //@api 3.0
-//@version 1.1.26
+//@version 1.1.27
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -26,7 +26,7 @@
 //@arg et_embedding_model string Embedding model name.
 //@arg et_auto_memory_enabled string Enable automatic Eros memory engine. true/false
 //@arg et_auto_cold_start_enabled string Enable automatic long-memory cold start. true/false
-//@arg et_injection_budget int Max chars injected into main request. Default 22000
+//@arg et_injection_budget int Manual max chars injected into main request. 0/unset means unlimited.
 //@arg et_extra_body_json string Extra JSON body merged into agent requests
 //@arg et_pipeline_json string Override Eros Tower pipeline JSON
 //@arg et_prompt_presets_json string Override Eros agent prompt preset JSON
@@ -35,18 +35,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.26
+ * Eros Tower 1.1.27
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.26 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.27 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.26';
+  const VERSION = '1.1.27';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.26`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.27`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -63,7 +63,7 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.26 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.27 analysis context';
   const GOOGLE_OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
   const GOOGLE_CLOUD_PLATFORM_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
   const PSYCHE_RECOMMENDED_MODELS = Object.freeze([
@@ -162,8 +162,8 @@
     cbsDropUnresolvedConditionals: true,
     cbsPersistStrip: true,
     maxAssociationEdges: 800,
-    injectionBudget: 22000,
-    autoCapEnabled: true,
+    injectionBudget: 0,
+    autoCapEnabled: false,
     mainContextTokens: 65536,
     autoCapReserveTokens: 1800,
     autoCapFillRatio: 0.82,
@@ -794,6 +794,7 @@
     const stored = await Storage.get(STORAGE.config, {});
     const timeoutSecondsArg = cleanString(await getArg('et_timeout_s', ''), '');
     const legacyTimeoutMsArg = cleanString(await getArg('et_timeout_ms', ''), '');
+    const injectionBudgetArg = cleanString(await getArg('et_injection_budget', ''), '');
     const args = {
       enabled: parseBool(await getArg('et_enabled', ''), undefined),
       mode: cleanString(await getArg('et_mode', ''), ''),
@@ -817,7 +818,7 @@
       embeddingModel: cleanString(await getArg('et_embedding_model', ''), ''),
       autoMemoryEnabled: parseBool(await getArg('et_auto_memory_enabled', ''), undefined),
       autoColdStartEnabled: parseBool(await getArg('et_auto_cold_start_enabled', ''), undefined),
-      injectionBudget: cleanString(await getArg('et_injection_budget', ''), ''),
+      injectionBudget: injectionBudgetArg,
       extraBodyJson: cleanString(await getArg('et_extra_body_json', ''), ''),
       pipelineJson: cleanString(await getArg('et_pipeline_json', ''), ''),
       promptPresetsJson: cleanString(await getArg('et_prompt_presets_json', ''), ''),
@@ -852,7 +853,10 @@
     merged.maxTokens = parseNumber(merged.maxTokens, DEFAULT_CONFIG.maxTokens, 128, 16000);
     merged.contextWindow = parseNumber(merged.contextWindow, DEFAULT_CONFIG.contextWindow, 4, 80);
     merged.timeoutMs = normalizeTimeoutMsSetting(merged.timeoutMs, DEFAULT_CONFIG.timeoutMs);
-    merged.injectionBudget = parseNumber(merged.injectionBudget, DEFAULT_CONFIG.injectionBudget, 1200, 40000);
+    if (!injectionBudgetArg && Number(stored?.injectionBudget) === 22000 && parseBool(stored?.autoCapEnabled, true) === true) {
+      merged.injectionBudget = 0;
+    }
+    merged.injectionBudget = parseNumber(merged.injectionBudget, DEFAULT_CONFIG.injectionBudget, 0, 40000);
     merged.enabled = parseBool(merged.enabled, DEFAULT_CONFIG.enabled) === true;
     merged.debugLog = parseBool(merged.debugLog, DEFAULT_CONFIG.debugLog) === true;
     merged.runLogEnabled = parseBool(merged.runLogEnabled, DEFAULT_CONFIG.runLogEnabled) === true;
@@ -860,7 +864,7 @@
     merged.usageLogMax = parseNumber(merged.usageLogMax, DEFAULT_CONFIG.usageLogMax, 40, 2000);
     merged.bypassAuxRequests = parseBool(merged.bypassAuxRequests, DEFAULT_CONFIG.bypassAuxRequests) === true;
     merged.stateApiEnabled = parseBool(merged.stateApiEnabled, DEFAULT_CONFIG.stateApiEnabled) === true;
-    merged.autoCapEnabled = parseBool(merged.autoCapEnabled, DEFAULT_CONFIG.autoCapEnabled) === true;
+    merged.autoCapEnabled = false;
     merged.mainContextTokens = parseNumber(merged.mainContextTokens, DEFAULT_CONFIG.mainContextTokens, 4096, 200000);
     merged.autoCapReserveTokens = parseNumber(merged.autoCapReserveTokens, DEFAULT_CONFIG.autoCapReserveTokens, 200, 16000);
     merged.autoCapFillRatio = parseNumber(merged.autoCapFillRatio, DEFAULT_CONFIG.autoCapFillRatio, 0.25, 0.95);
@@ -6903,21 +6907,19 @@
     return an > 0 && bn > 0 ? dot / (Math.sqrt(an) * Math.sqrt(bn)) : 0;
   }
 
-  async function buildMainBriefing(state, context, notes, budget = 4200, conf = null) {
+  async function buildMainBriefing(state, context, notes, budget = 0, conf = null) {
     const query = buildRetrievalQuery(context, notes, []);
-    const totalBudget = Math.max(1200, Number(budget || 0));
-    if (totalBudget <= 2400) {
-      return buildCompactMainBriefing(state, context, notes, totalBudget, conf, query);
-    }
-    const floorBudget = Math.min(
-      Math.max(900, Math.floor(totalBudget * 0.55)),
-      Math.max(700, totalBudget - 900),
-      totalBudget,
-    );
+    const totalBudget = Math.max(0, Number(budget || 0));
+    const capped = totalBudget > 0;
+    const floorBudget = capped
+      ? Math.min(Math.max(900, Math.floor(totalBudget * 0.55)), Math.max(700, totalBudget - 900), totalBudget)
+      : 3600;
     const controlFloor = buildMainControlFloorContext(context, floorBudget);
-    const activeLoreBridge = buildActiveLoreBridgeContext(context, notes, Math.min(2600, Math.max(900, Math.floor(totalBudget * 0.22))));
-    const agentBridge = buildActionableErosBridge(notes, Math.min(2200, Math.max(700, Math.floor(totalBudget * 0.18))));
-    const remainingBudget = Math.max(700, totalBudget - controlFloor.length - activeLoreBridge.length - agentBridge.length - 160);
+    const activeLoreBridge = buildActiveLoreBridgeContext(context, notes, capped ? Math.min(2600, Math.max(900, Math.floor(totalBudget * 0.22))) : 3600);
+    const preAgentNotes = buildPreAgentNotesSource(notes);
+    const remainingBudget = capped
+      ? Math.max(700, totalBudget - controlFloor.length - activeLoreBridge.length - preAgentNotes.length - 160)
+      : AGENT_RETRIEVAL_PROFILE.main.budget;
     const staged = await stagedRetrieveCandidates('main', state, query, AGENT_RETRIEVAL_PROFILE.main, conf, context);
     const candidates = staged.candidates;
     const selected = selectCandidates(candidates, AGENT_RETRIEVAL_PROFILE.main.limit, remainingBudget);
@@ -6931,41 +6933,23 @@
       buildMainBriefingIntro(false),
       controlFloor,
       activeLoreBridge,
-      agentBridge,
       staged.note || '',
       retrievalPack,
-      ['[Actionable Agent Notes]', formatCompactNotes(notes, 1200)].join('\n'),
+      preAgentNotes,
     ];
-    const briefing = joinBriefingBlocks(blocks, totalBudget);
+    const briefing = capped ? joinBriefingBlocks(blocks, totalBudget) : joinBriefingBlocksUncapped(blocks);
     recordInjectionTrace(state, query, selected, briefing, totalBudget, staged);
     return briefing;
   }
 
-  async function buildCompactMainBriefing(state, context, notes, totalBudget, conf = null, query = null) {
-    const queryTerms = Array.isArray(query) ? query : buildRetrievalQuery(context, notes, []);
-    const activeLoreBudget = Math.min(1100, Math.max(760, totalBudget - 360));
-    const activeLoreBridge = buildActiveLoreBridgeContext(context, notes, activeLoreBudget);
-    const agentBridge = buildActionableErosBridge(notes, Math.min(620, Math.max(0, Math.floor(totalBudget * 0.28))));
-    const staged = await stagedRetrieveCandidates('main', state, queryTerms, AGENT_RETRIEVAL_PROFILE.main, conf, context);
-    const remainingBudget = Math.max(320, Math.floor(totalBudget * 0.2));
-    const selected = selectCandidates(staged.candidates, Math.min(6, AGENT_RETRIEVAL_PROFILE.main.limit), remainingBudget);
-    const retrievalPack = totalBudget >= 1900 ? formatRetrievalPack('main', state, selected, queryTerms) : '';
-    recordRecallTrace(state, queryTerms, selected, 'main', {
-      stages: staged.stats || null,
-      note: staged.note || '',
-      budget: totalBudget,
-      compact: true,
-    });
-    const blocks = [
-      buildMainBriefingIntro(true),
-      buildMainModeFloorContext(context),
-      activeLoreBridge,
-      agentBridge,
-      retrievalPack,
-    ];
-    const briefing = joinBriefingBlocks(blocks, totalBudget);
-    recordInjectionTrace(state, queryTerms, selected, briefing, totalBudget, { ...staged, compact: true });
-    return briefing;
+  function buildPreAgentNotesSource(notes) {
+    const text = formatNotes(notes);
+    if (!text || text === '(none)') return '';
+    return [
+      '<source label="Pre-Agent Notes">',
+      text,
+      '</source>',
+    ].join('\n');
   }
 
   function buildMainBriefingIntro(compact = false) {
@@ -6993,10 +6977,6 @@
       : context?.mode === 'novel' ? 'novel' : 'rp';
   }
 
-  function buildMainModeFloorContext(context) {
-    return `[Eros Tower Control Floor]\n[Current Writing Mode]\n${currentWritingModeLabel(context)}`;
-  }
-
   function joinBriefingBlocks(blocks, budget) {
     const max = Math.max(400, Number(budget || 0));
     const out = [];
@@ -7015,6 +6995,13 @@
       break;
     }
     return out.join('\n\n').slice(0, max);
+  }
+
+  function joinBriefingBlocksUncapped(blocks) {
+    return (Array.isArray(blocks) ? blocks : [])
+      .map(block => String(block || '').trim())
+      .filter(Boolean)
+      .join('\n\n');
   }
 
   function trimBriefingBlockToBudget(block, budget) {
@@ -7151,77 +7138,6 @@
       used += next.length + 1;
     }
     return trimBriefingBlockToBudget(lines.join('\n'), max);
-  }
-
-  const ACTIONABLE_EROS_BRIDGE_HEADERS = Object.freeze([
-    'Initiating Cast',
-    'Supporting or Independent Cast',
-    'Re-entry Candidates',
-    'Present-Facing Intersections',
-    'Offscreen Continuation',
-    'Recommended Entrances / Re-entries',
-    'Ensemble Weaving',
-    'Ensemble Arc Weaving',
-    'Living World Signals',
-    'World in Motion',
-    'Active World Fronts',
-    'Parallel World Fronts',
-    'Compatible Ensemble or World Beats',
-    'Secondary or Parallel Movements',
-  ]);
-
-  function isActionableErosBridgeHeader(header) {
-    const normalized = String(header || '').trim().toLowerCase();
-    return ACTIONABLE_EROS_BRIDGE_HEADERS.some(item => item.toLowerCase() === normalized);
-  }
-
-  function extractActionableErosSections(text) {
-    const raw = String(text || '');
-    if (!raw.trim()) return [];
-    const sections = [];
-    const re = /\[([^\]\n]{2,90})\]\s*\n?([\s\S]*?)(?=\n\[[^\]\n]{2,90}\]\s*(?:\n|$)|$)/g;
-    for (const match of raw.matchAll(re)) {
-      const header = String(match[1] || '').trim();
-      if (!isActionableErosBridgeHeader(header)) continue;
-      const body = String(match[2] || '')
-        .split(/\r?\n/)
-        .map(line => line.trim())
-        .filter(line => line && !/^do not\b/i.test(line))
-        .slice(0, 8)
-        .join('\n');
-      if (body) sections.push({ header, body });
-    }
-    return sections.slice(0, 8);
-  }
-
-  function buildActionableErosBridge(notes, budget = 2200) {
-    const included = includedAgentNotes(notes);
-    if (!included.length) return '';
-    const max = Math.max(500, Number(budget || 2200));
-    const lines = [
-      '[Actionable Eros Bridge]',
-      'Prioritize these agent-selected existing cast/fronts/intersections when they are compatible with the current user input. They are guidance, not canon unless supported by evidence.',
-    ];
-    let used = lines.join('\n').length + 1;
-    for (const note of included) {
-      const sections = extractActionableErosSections(note?.text || '');
-      if (!sections.length) continue;
-      const agentLabel = `[Agent: ${note.name || note.id || 'Eros'}]`;
-      if (used + agentLabel.length > max) break;
-      lines.push(agentLabel);
-      used += agentLabel.length + 1;
-      for (const section of sections) {
-        const bodyCap = Math.max(140, Math.min(420, Math.floor((max - used) / 2)));
-        const block = `[${section.header}]\n${section.body.slice(0, bodyCap)}`;
-        if (used + block.length > max) {
-          lines.push('[Actionable Eros Bridge truncated by budget]');
-          return lines.join('\n').slice(0, max);
-        }
-        lines.push(block);
-        used += block.length + 1;
-      }
-    }
-    return lines.length > 2 ? lines.join('\n').slice(0, max) : '';
   }
 
   function isControlFloorTier1CanonicalSource(source) {
@@ -8039,16 +7955,6 @@
       out[key].push(item);
     });
     return out;
-  }
-
-  function formatCompactNotes(notes, budget = 1600) {
-    const lines = [];
-    for (const note of includedAgentNotes(notes)) {
-      const line = `- ${note.name || note.id || 'agent'}: ${note.error ? `ERROR ${note.error}` : String(note.text || '').replace(/\s+/g, ' ').slice(0, 420)}`;
-      if (lines.join('\n').length + line.length > budget) break;
-      lines.push(line);
-    }
-    return lines.length ? lines.join('\n') : '(none)';
   }
 
   function renderTemplate(template, values) {
@@ -11051,7 +10957,8 @@
   
   function injectContext(messages, injection, budget) {
     if (!injection) return messages;
-    const content = injection.slice(0, budget);
+    const max = Number(budget || 0);
+    const content = max > 0 ? String(injection).slice(0, max) : String(injection);
     const clone = (Array.isArray(messages) ? messages : [])
       .map(m => {
         const item = { ...m };
@@ -11081,29 +10988,6 @@
     return text.replace(/\n{3,}/g, '\n\n').trim();
   }
 
-  function computeAutoCapInjectionBudget(messages, conf, requestedBudget) {
-    const hardCharBudget = parseNumber(requestedBudget, conf?.injectionBudget || DEFAULT_CONFIG.injectionBudget, 1200, 40000);
-    if (conf?.autoCapEnabled === false) return { charBudget: hardCharBudget, tokenBudget: estimateTokensApproxByChars(hardCharBudget), reason: 'disabled' };
-    const contextTokens = parseNumber(conf?.mainContextTokens, DEFAULT_CONFIG.mainContextTokens, 4096, 200000);
-    const reserveTokens = parseNumber(conf?.autoCapReserveTokens, DEFAULT_CONFIG.autoCapReserveTokens, 200, 16000);
-    const fillRatio = parseNumber(conf?.autoCapFillRatio, DEFAULT_CONFIG.autoCapFillRatio, 0.25, 0.95);
-    const promptTokens = estimateMessagesTokens(messages);
-    const availableTokens = Math.max(0, Math.floor((contextTokens - reserveTokens - promptTokens) * fillRatio));
-    const availableChars = Math.max(1200, availableTokens * 3);
-    const charBudget = Math.min(hardCharBudget, availableChars);
-    const result = {
-      charBudget,
-      tokenBudget: availableTokens,
-      promptTokens,
-      contextTokens,
-      reserveTokens,
-      hardCharBudget,
-      reason: availableChars < hardCharBudget ? 'auto-cap' : 'hard-budget',
-    };
-    Runtime.lastAutoCap = result;
-    return result;
-  }
-
   function estimateMessagesTokens(messages) {
     return (Array.isArray(messages) ? messages : []).reduce((sum, msg) => {
       return sum + 5 + estimateTokensApprox(stringifyContent(msg?.content));
@@ -11117,10 +11001,6 @@
     const asciiWords = (text.match(/[A-Za-z0-9_:-]+/g) || []).length;
     const punctuation = (text.match(/[^\sA-Za-z0-9_가-힣ㄱ-ㅎㅏ-ㅣ]/g) || []).length;
     return Math.ceil((korean * 0.72) + (asciiWords * 1.25) + (punctuation * 0.35) + Math.max(0, text.length - korean) / 6);
-  }
-
-  function estimateTokensApproxByChars(chars) {
-    return Math.ceil(Number(chars || 0) / 3);
   }
 
   function normalizeUsageTokenNumber(value) {
@@ -11519,7 +11399,7 @@
 
   async function buildMainInjection(state, context, notes, budget, conf = null) {
     if (conf?.recallTraceEnabled === false) state._suppressRecallTrace = true;
-    const briefing = await buildMainBriefing(state, context, notes, budget || 4200, conf);
+    const briefing = await buildMainBriefing(state, context, notes, Number.isFinite(Number(budget)) ? Number(budget) : DEFAULT_CONFIG.injectionBudget, conf);
     delete state._suppressRecallTrace;
     return briefing;
   }
@@ -12173,8 +12053,8 @@
     const graphSync = refreshAssociationGraph(state, context, notes, conf);
     const preToastLines = summarizePreToast(notes, longMemorySync, memoryRecoverySync, coldStartResult, graphSync, sessionRewindSync);
     await showRunToast('에로스 타워 모델 응답 대기 중', ['전처리 완료. 메인 모델의 응답을 기다립니다.'].concat(preToastLines), notes.some(note => note.error) || memoryRecoverySync?.changed || sessionRewindSync?.changed ? 'warn' : 'info');
-    const autoCap = computeAutoCapInjectionBudget(messages, conf, conf.injectionBudget);
-    const injection = await buildMainInjection(state, context, notes, autoCap.charBudget, conf);
+    const injectionBudget = parseNumber(conf.injectionBudget, DEFAULT_CONFIG.injectionBudget, 0, 40000);
+    const injection = await buildMainInjection(state, context, notes, injectionBudget, conf);
     await saveState(context.scope, state, conf);
     const run = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -12198,7 +12078,6 @@
       coldStartResult,
       graphBefore,
       graphSync,
-      autoCap,
       firstMessageInfo: context.firstMessageInfo,
       requestMessages: normalizeRequestMessages(messages),
       userInputPreview: getUserInput(context.messages).slice(0, 500),
@@ -12207,7 +12086,7 @@
     registerPendingRun(run);
     Runtime.lastScope = context.scope;
     await safeAppendRunLog(context.scope, run, conf);
-    return injectContext(messages, injection, autoCap.charBudget);
+    return injectContext(messages, injection, injectionBudget);
   }
 
   async function afterRequest(content, type) {
@@ -15980,6 +15859,24 @@
             firstTrace: targetState.injectionTrace[0] || null,
           };
         },
+        testPreAgentNotesInjection: async () => {
+          const marker = 'ET_PRE_AGENT_TAIL_MARKER_KEEP_EXACTLY';
+          const targetState = createDefaultState(context?.mode || 'rp');
+          const targetContext = context || { messages: [{ role: 'user', content: 'continue' }], character: { name: 'Sample Character' }, currentChat: { name: 'Debug Chat' } };
+          const notes = [{
+            id: 'world',
+            name: 'World Agent',
+            includeInNotes: true,
+            text: `[Scene Anchor]\n- Existing place and cast.\n\n[Continuity Risks]\n- Preserve this tail marker: ${marker}`,
+          }];
+          const briefing = await buildMainBriefing(targetState, targetContext, notes, 0, { ...DEFAULT_CONFIG, embeddingEnabled: false, stagedSearchEnabled: false });
+          return {
+            marker,
+            hasSource: briefing.includes('<source label="Pre-Agent Notes">'),
+            hasMarker: briefing.includes(marker),
+            hasLegacyActionableBridge: briefing.includes('[Actionable ' + 'Eros Bridge]') || briefing.includes('[Actionable ' + 'Agent Notes]'),
+          };
+        },
         testLowBudgetLoreBridge: async () => {
           const targetCharacter = {
             id: 'low-budget-subject',
@@ -16004,7 +15901,7 @@
           };
           const targetState = createDefaultState('novel');
           syncCanonicalLoreLedger(targetState, targetContext.canonicalSources);
-          const briefing = await buildMainBriefing(targetState, targetContext, [], 1200, { ...DEFAULT_CONFIG, embeddingEnabled: false, stagedSearchEnabled: false });
+          const briefing = await buildMainBriefing(targetState, targetContext, [], 0, { ...DEFAULT_CONFIG, embeddingEnabled: false, stagedSearchEnabled: false });
           return {
             length: briefing.length,
             briefing,
