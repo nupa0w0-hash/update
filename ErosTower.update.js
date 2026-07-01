@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.46
+//@display-name ☸Eros Tower 1.1.47
 //@api 3.0
-//@version 4.0.5
+//@version 4.0.6
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -26,7 +26,7 @@
 //@arg et_embedding_model string Embedding model name.
 //@arg et_auto_memory_enabled string Enable automatic Eros memory engine. true/false
 //@arg et_auto_cold_start_enabled string Enable automatic long-memory cold start. true/false
-//@arg et_injection_budget int Manual max chars injected into main request. 0/unset means unlimited.
+//@arg et_injection_budget int Manual max chars injected into main request. 0/unset means automatic budget.
 //@arg et_extra_body_json string Extra JSON body merged into agent requests
 //@arg et_pipeline_json string Override Eros Tower pipeline JSON
 //@arg et_prompt_presets_json string Override Eros agent prompt preset JSON
@@ -35,18 +35,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.46
+ * Eros Tower 1.1.47
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.46 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.47 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.46';
+  const VERSION = '1.1.47';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.46`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.47`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -63,7 +63,20 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.46 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.47 analysis context';
+  const MAIN_INJECTION_PLACEHOLDER_RE = /\{\{et\.(canonical|memory|state|characters|executive)\}\}/gi;
+  const AUTO_INJECTION_FALLBACK_CHARS = 22000;
+  const AUTO_INJECTION_MIN_CHARS = 3200;
+  const AUTO_INJECTION_MAX_CHARS = 32000;
+  const CANONICAL_PART_CAPS = Object.freeze({
+    foundation: 4000,
+    firstMessage: 4000,
+    desc: 4000,
+    globalNote: 3600,
+    alwaysActive: 3000,
+    selective: 1400,
+    default: 1800,
+  });
   const PSYCHE_SOURCE_CHUNK_CHARS = 6000;
   const PSYCHE_SOURCE_CHUNK_OVERLAP_CHARS = 360;
   const PSYCHE_INGEST_SOURCE_CHARS = 7600;
@@ -4799,6 +4812,12 @@
       'pluginV2',
       'pluginCustomStorage',
       'globalChatVariables',
+      'maxContext',
+      'maxResponse',
+      'maxTokens',
+      'maxOutputTokens',
+      'contextSize',
+      'mainMaxContext',
     ]), null);
     const charIndex = await safeCall(() => api.getCurrentCharacterIndex(), null);
     const chatIndex = await safeCall(() => api.getCurrentChatIndex(), null);
@@ -5914,6 +5933,355 @@
       .replace(/\n{3,}/g, '\n\n')
       .trim();
     return text.slice(0, 12000);
+  }
+
+  function canonicalSourceBaseId(source) {
+    return firstNonEmpty(source?.id, `canon:${source?.hash || hashString(`${source?.kind || ''}:${source?.path || ''}:${String(source?.content || '').slice(0, 240)}`)}`);
+  }
+
+  function isFoundationCanonicalSource(source) {
+    if (!source) return false;
+    const kind = String(source.kind || '');
+    if (['desc', 'firstMessage', 'globalNote', 'referenceCharacter', 'referenceModule'].includes(kind)) return true;
+    return Boolean(source?.meta?.constant || source?.meta?.foundation);
+  }
+
+  function canonicalPartCapForSource(source) {
+    const kind = String(source?.kind || '');
+    if (kind === 'desc') return CANONICAL_PART_CAPS.desc;
+    if (kind === 'firstMessage') return CANONICAL_PART_CAPS.firstMessage;
+    if (kind === 'globalNote') return CANONICAL_PART_CAPS.globalNote;
+    if (isFoundationCanonicalSource(source)) return CANONICAL_PART_CAPS.foundation;
+    if (source?.meta?.alwaysActive || source?.meta?.constant) return CANONICAL_PART_CAPS.alwaysActive;
+    if (source?.meta?.selective) return CANONICAL_PART_CAPS.selective;
+    return CANONICAL_PART_CAPS.default;
+  }
+
+  function splitCanonicalTextIntoParts(text, maxChars) {
+    const max = Math.max(480, Number(maxChars || CANONICAL_PART_CAPS.default));
+    const raw = String(text || '').replace(/\r\n/g, '\n').trim();
+    if (!raw) return [];
+    const blocks = raw.split(/\n{2,}/).map(block => block.trim()).filter(Boolean);
+    const parts = [];
+    let current = '';
+    const flush = () => {
+      const textPart = current.trim();
+      if (textPart) parts.push(textPart);
+      current = '';
+    };
+    const splitLong = value => {
+      let rest = String(value || '').trim();
+      const out = [];
+      while (rest.length > max) {
+        const windowText = rest.slice(0, max);
+        const cutCandidates = [
+          windowText.lastIndexOf('\n'),
+          windowText.lastIndexOf('. '),
+          windowText.lastIndexOf('! '),
+          windowText.lastIndexOf('? '),
+          windowText.lastIndexOf('。'),
+          windowText.lastIndexOf('！'),
+          windowText.lastIndexOf('？'),
+          windowText.lastIndexOf('; '),
+          windowText.lastIndexOf(', '),
+          windowText.lastIndexOf(' '),
+        ].filter(idx => idx >= Math.floor(max * 0.42));
+        const cut = cutCandidates.length ? Math.max(...cutCandidates) + 1 : max;
+        out.push(rest.slice(0, cut).trim());
+        rest = rest.slice(cut).trim();
+      }
+      if (rest) out.push(rest);
+      return out;
+    };
+    for (const block of blocks.length ? blocks : [raw]) {
+      if (block.length > max) {
+        flush();
+        splitLong(block).forEach(item => item && parts.push(item));
+        continue;
+      }
+      const next = current ? `${current}\n\n${block}` : block;
+      if (next.length <= max) current = next;
+      else {
+        flush();
+        current = block;
+      }
+    }
+    flush();
+    return parts.length ? parts : [raw.slice(0, max)];
+  }
+
+  function extractCanonicalTemporalHints(source) {
+    const text = [source?.label, source?.path, source?.content].filter(Boolean).join('\n');
+    const years = uniqueStrings((text.match(/\b\d{3,4}\b/g) || []).filter(year => Number(year) >= 1 && Number(year) <= 9999)).slice(0, 8);
+    const route = /future|미래|원래\s*루트|original|counterfactual|반사실|if\s+route/i.test(text)
+      ? (/counterfactual|반사실/i.test(text) ? 'counterfactual' : 'future')
+      : '';
+    return {
+      route: firstNonEmpty(source?.route, source?.meta?.route, route),
+      validYear: firstNonEmpty(source?.validYear, source?.meta?.validYear, years.length === 1 ? years[0] : ''),
+      validFrom: firstNonEmpty(source?.validFrom, source?.meta?.validFrom),
+      validTo: firstNonEmpty(source?.validTo, source?.meta?.validTo),
+      revealState: firstNonEmpty(source?.revealState, source?.meta?.revealState),
+      subjectHints: uniqueStrings(normalizeStringArray(source?.activationKeys).concat(firstNonEmpty(source?.label).split(/[\/,;|]/))).slice(0, 12),
+    };
+  }
+
+  function splitCanonicalSourceIntoUnits(source, conf = null) {
+    if (!source || !String(source.content || '').trim()) return [];
+    const baseId = canonicalSourceBaseId(source);
+    const cap = canonicalPartCapForSource(source, conf);
+    const parts = splitCanonicalTextIntoParts(source.content, cap);
+    const temporal = extractCanonicalTemporalHints(source);
+    const total = Math.max(1, parts.length);
+    const ids = parts.map((part, idx) => `${baseId}:p${idx + 1}-${hashString(part).slice(0, 6)}`);
+    return parts.map((part, idx) => {
+      const unitId = ids[idx];
+      return {
+        id: unitId,
+        baseId,
+        sourceId: firstNonEmpty(source.sourceId, source.path, baseId),
+        sourceHash: firstNonEmpty(source.hash, hashString(source.content)),
+        rawHash: source.rawHash || '',
+        kind: source.kind || 'canonical',
+        label: firstNonEmpty(source.label, source.kind, source.path, 'canonical source'),
+        path: source.path || '',
+        content: part,
+        sourceLength: String(source.content || '').length,
+        keys: normalizeStringArray(source.activationKeys),
+        activationKeys: normalizeStringArray(source.activationKeys),
+        priority: parseNumber(source.priority, 5, 0, 10),
+        foundation: isFoundationCanonicalSource(source),
+        alwaysActive: Boolean(source?.meta?.alwaysActive || source?.meta?.constant),
+        selective: Boolean(source?.meta?.selective),
+        knownBy: normalizeStringArray(source.knownBy),
+        cannotKnow: normalizeStringArray(source.cannotKnow),
+        route: temporal.route,
+        validYear: temporal.validYear,
+        validFrom: temporal.validFrom,
+        validTo: temporal.validTo,
+        revealState: temporal.revealState,
+        subjectHints: temporal.subjectHints,
+        meta: source.meta || {},
+        part: {
+          index: idx + 1,
+          total,
+          baseId,
+          siblingIds: ids.filter(id => id !== unitId),
+        },
+      };
+    });
+  }
+
+  function buildCanonicalUnits(context, conf = null) {
+    if (Array.isArray(context?.canonicalUnits) && context.canonicalUnits.length) return context.canonicalUnits;
+    const units = (Array.isArray(context?.canonicalSources) ? context.canonicalSources : [])
+      .flatMap(source => splitCanonicalSourceIntoUnits(source, conf));
+    if (context && typeof context === 'object') {
+      try { context.canonicalUnits = units; } catch (_) {}
+    }
+    return units;
+  }
+
+  function canonicalUnitTrace(unit, section, included = true) {
+    return {
+      id: unit.id,
+      baseId: unit.baseId,
+      kind: unit.kind,
+      label: unit.label,
+      path: unit.path,
+      section,
+      included,
+      charLength: String(unit.content || '').length,
+      sourceLength: unit.sourceLength || 0,
+      part: unit.part ? { index: unit.part.index, total: unit.part.total } : null,
+      priority: unit.priority,
+      foundation: Boolean(unit.foundation),
+      alwaysActive: Boolean(unit.alwaysActive),
+      selective: Boolean(unit.selective),
+      route: unit.route || '',
+      validYear: unit.validYear || '',
+      preview: String(unit.content || '').replace(/\s+/g, ' ').slice(0, 120),
+    };
+  }
+
+  function resetCanonicalInjectionTrace(context) {
+    if (context && typeof context === 'object') context._canonicalInjectionTrace = [];
+  }
+
+  function appendCanonicalInjectionTrace(context, units, section) {
+    if (!context || typeof context !== 'object') return;
+    const list = Array.isArray(context._canonicalInjectionTrace) ? context._canonicalInjectionTrace : [];
+    units.forEach(unit => list.push(canonicalUnitTrace(unit, section, true)));
+    context._canonicalInjectionTrace = list.slice(-40);
+  }
+
+  function canonicalUnitQueryScore(unit, queryTerms = [], queryText = '') {
+    const query = String(queryText || '').toLowerCase();
+    const terms = Array.isArray(queryTerms) ? queryTerms.map(term => String(term || '').toLowerCase()).filter(Boolean) : [];
+    const keys = normalizeStringArray(unit.activationKeys || unit.keys).map(key => key.toLowerCase()).filter(key => key.length >= 2);
+    const label = [unit.label, unit.path, unit.kind, unit.route, unit.validYear, ...normalizeStringArray(unit.subjectHints)].join('\n').toLowerCase();
+    const content = String(unit.content || '').toLowerCase();
+    let score = clampFloat(unit.priority, 5, 0, 10) * 8;
+    if (unit.foundation) score += 180;
+    if (unit.alwaysActive) score += 120;
+    if (unit.kind === 'firstMessage') score += 60;
+    if (unit.selective) score -= 12;
+    keys.forEach(key => {
+      if (query.includes(key) || terms.some(term => key.includes(term) || term.includes(key))) score += 46;
+    });
+    let contentHits = 0;
+    terms.forEach(term => {
+      if (term.length < 2) return;
+      if (label.includes(term)) score += 18;
+      else if (content.includes(term)) {
+        contentHits += 1;
+        score += 6;
+      }
+    });
+    if (contentHits >= 3) score += 16;
+    return score;
+  }
+
+  function canonicalUnitSortValue(unit, score = 0) {
+    return score
+      + (unit.foundation ? 800 : 0)
+      + (unit.alwaysActive ? 420 : 0)
+      + (unit.kind === 'firstMessage' ? 160 : 0)
+      + clampFloat(unit.priority, 5, 0, 10) * 12
+      - ((unit.part?.index || 1) - 1) * 0.01;
+  }
+
+  function canonicalUnitLine(unit, section = 'canonical') {
+    const attrs = [
+      `id="${xmlAttr(unit.id)}"`,
+      `kind="${xmlAttr(unit.kind)}"`,
+      unit.path ? `path="${xmlAttr(unit.path)}"` : '',
+      unit.part ? `part="${unit.part.index}/${unit.part.total}"` : '',
+      unit.priority !== undefined ? `priority="${unit.priority}"` : '',
+      unit.foundation ? 'foundation="true"' : '',
+      unit.alwaysActive ? 'always="true"' : '',
+      unit.route ? `route="${xmlAttr(unit.route)}"` : '',
+      unit.validYear ? `validYear="${xmlAttr(unit.validYear)}"` : '',
+      section ? `section="${xmlAttr(section)}"` : '',
+    ].filter(Boolean).join(' ');
+    return `<canon ${attrs}>\n${String(unit.content || '').trim()}\n</canon>`;
+  }
+
+  function xmlAttr(value) {
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .slice(0, 240);
+  }
+
+  function packCanonicalUnits(candidates, budget, options = {}) {
+    const max = Math.max(0, Number(budget || 0));
+    const headerCost = Number(options.headerCost || 0);
+    const limit = Math.max(1, Number(options.limit || 20));
+    const allowSibling = options.allowSibling !== false;
+    const allUnits = Array.isArray(options.allUnits) && options.allUnits.length
+      ? options.allUnits
+      : (Array.isArray(candidates) ? candidates.map(item => item.unit) : []);
+    const byId = new Map(allUnits.map(unit => [unit.id, unit]));
+    const sorted = (Array.isArray(candidates) ? candidates : [])
+      .slice()
+      .sort((a, b) => canonicalUnitSortValue(b.unit, b.score) - canonicalUnitSortValue(a.unit, a.score));
+    const selected = [];
+    const selectedIds = new Set();
+    let used = headerCost;
+    const tryAdd = (unit, score = 0, reason = '') => {
+      if (!unit || selectedIds.has(unit.id) || selected.length >= limit) return false;
+      const line = canonicalUnitLine(unit, reason || options.section || 'canonical');
+      const nextLen = line.length + 2;
+      if (max > 0 && used + nextLen > max && selected.length) return false;
+      selected.push({ unit, score, reason, line });
+      selectedIds.add(unit.id);
+      used += nextLen;
+      return true;
+    };
+    sorted.forEach(item => tryAdd(item.unit, item.score, item.reason));
+    if (allowSibling && selected.length < limit) {
+      const siblingCandidates = [];
+      selected.slice().forEach(item => {
+        normalizeStringArray(item.unit?.part?.siblingIds).forEach(id => {
+          const sibling = byId.get(id);
+          if (!sibling || selectedIds.has(sibling.id)) return;
+          const distance = Math.abs((sibling.part?.index || 1) - (item.unit.part?.index || 1));
+          siblingCandidates.push({ unit: sibling, score: Math.max(0, item.score - 24 - distance * 3), reason: 'sibling' });
+        });
+      });
+      siblingCandidates
+        .sort((a, b) => canonicalUnitSortValue(b.unit, b.score) - canonicalUnitSortValue(a.unit, a.score))
+        .forEach(item => tryAdd(item.unit, item.score, item.reason));
+    }
+    return selected;
+  }
+
+  function canonicalCandidateKey(unit) {
+    return unit?.id || `${unit?.baseId || ''}:${unit?.part?.index || 0}`;
+  }
+
+  function addCanonicalStageCandidates(target, seen, units, queryTerms, queryText, reason, minScore, bias = 0, predicate = null) {
+    (Array.isArray(units) ? units : []).forEach(unit => {
+      if (!unit || (predicate && !predicate(unit))) return;
+      const score = canonicalUnitQueryScore(unit, queryTerms, queryText);
+      if (score < minScore && !(unit.foundation || unit.alwaysActive)) return;
+      const key = canonicalCandidateKey(unit);
+      if (!key || seen.has(key)) return;
+      seen.add(key);
+      target.push({ unit, score: score + bias, reason });
+    });
+  }
+
+  function buildActiveStateBridgeText(state, context, queryTerms) {
+    if (!state) return '';
+    const profile = {
+      ...AGENT_RETRIEVAL_PROFILE.main,
+      kinds: ['scene', 'character', 'relationship', 'worldFront', 'secret', 'memory', 'knowledge', 'event', 'continuityRisk'],
+      limit: 16,
+    };
+    return rankStateCandidates(state, queryTerms, profile, context)
+      .slice(0, 12)
+      .map(candidate => [
+        candidate.kind,
+        candidate.path,
+        summarizeLedgerText(candidate.item, candidate.kind),
+      ].filter(Boolean).join(' '))
+      .join('\n');
+  }
+
+  function buildCanonicalStageCandidates(units, queryTerms, queryText, state = null, context = null) {
+    const candidates = [];
+    const seen = new Set();
+    const sourceUnits = Array.isArray(units) ? units : [];
+    addCanonicalStageCandidates(
+      candidates,
+      seen,
+      sourceUnits,
+      queryTerms,
+      queryText,
+      'foundation-always',
+      0,
+      1000,
+      unit => unit.foundation || unit.alwaysActive || unit.kind === 'firstMessage'
+    );
+    addCanonicalStageCandidates(candidates, seen, sourceUnits, queryTerms, queryText, 'trigger', 58, 700);
+    const bridgeText = buildActiveStateBridgeText(state, context, queryTerms);
+    if (bridgeText) {
+      const bridgeTerms = extractQueryTerms(bridgeText).slice(0, 100);
+      addCanonicalStageCandidates(candidates, seen, sourceUnits, bridgeTerms, bridgeText, 'active-memory-bridge', 62, 420);
+    }
+    const recursiveText = candidates
+      .slice(0, 10)
+      .map(item => [item.unit.label, item.unit.path, item.unit.content].filter(Boolean).join('\n').slice(0, 900))
+      .join('\n');
+    if (recursiveText) {
+      const recursiveTerms = extractQueryTerms(recursiveText).slice(0, 120);
+      addCanonicalStageCandidates(candidates, seen, sourceUnits, recursiveTerms, recursiveText, 'recursive', 72, 180);
+    }
+    return candidates;
   }
 
   function stripExtendedCanonicalCbs(text, resolver, conf = null) {
@@ -7365,7 +7733,8 @@
       source.priority !== undefined ? `priority=${source.priority}` : '',
       source.activationKeys?.length ? `keys=${source.activationKeys.slice(0, 5).join('/')}` : '',
     ].filter(Boolean).join(', ');
-    return `- ${source.label || source.path || source.id} (${meta}): ${source.summary || '(no summary)'}`;
+    const body = firstNonEmpty(source.content, source.text, source.summary, '(no summary)');
+    return `- ${source.label || source.path || source.id} (${meta}): ${String(body).replace(/\s+/g, ' ').trim().slice(0, 700)}`;
   }
 
   function formatCompiledCandidateLine(candidate) {
@@ -7443,8 +7812,8 @@
     const profile = AGENT_RETRIEVAL_PROFILE[agentId] || AGENT_RETRIEVAL_PROFILE.main;
     const query = buildRetrievalQuery(context, priorNotes, profile.keywords);
     const budget = Math.max(1200, Number(budgetOverride || profile.budget || 4200));
-    const controlFloor = buildMainControlFloorContext(context, Math.min(Math.max(900, Math.floor(budget * 0.35)), budget), state);
-    const activeLoreBridge = buildActiveLoreBridgeContext(context, priorNotes, Math.min(1800, Math.max(700, Math.floor(budget * 0.22))), state);
+    const controlFloor = buildMainControlFloorContext(context, Math.min(Math.max(900, Math.floor(budget * 0.35)), budget), state, conf);
+    const activeLoreBridge = buildActiveLoreBridgeContext(context, priorNotes, Math.min(1800, Math.max(700, Math.floor(budget * 0.22))), state, conf);
     const retrievalBudget = Math.max(700, budget - controlFloor.length - activeLoreBridge.length - 120);
     const staged = await stagedRetrieveCandidates(agentId, state, query, profile, conf, context);
     const candidates = staged.candidates;
@@ -7700,25 +8069,23 @@
 
   async function buildMainBriefing(state, context, notes, budget = 0, conf = null) {
     const query = buildRetrievalQuery(context, notes, []);
-    const totalBudget = Math.max(0, Number(budget || 0));
-    const capped = totalBudget > 0;
-    const floorBudget = capped
-      ? Math.min(Math.max(900, Math.floor(totalBudget * 0.55)), Math.max(700, totalBudget - 900), totalBudget)
-      : 3600;
-    const controlFloor = buildMainControlFloorContext(context, floorBudget, state);
-    const activeLoreBridge = buildActiveLoreBridgeContext(context, notes, capped ? Math.min(2600, Math.max(900, Math.floor(totalBudget * 0.22))) : 3600, state);
+    resetCanonicalInjectionTrace(context);
+    const budgetInfo = resolveMainInjectionBudget(context, budget, conf);
+    const totalBudget = Math.max(AUTO_INJECTION_MIN_CHARS, Number(budgetInfo.budget || AUTO_INJECTION_FALLBACK_CHARS));
+    const floorBudget = Math.min(Math.max(1200, Math.floor(totalBudget * 0.42)), Math.max(900, totalBudget - 1200), totalBudget);
+    const bridgeBudget = Math.min(Math.max(900, Math.floor(totalBudget * 0.24)), Math.max(700, totalBudget - floorBudget - 900));
+    const controlFloor = buildMainControlFloorContext(context, floorBudget, state, conf);
+    const activeLoreBridge = buildActiveLoreBridgeContext(context, notes, bridgeBudget, state, conf);
     const preAgentNotes = buildPreAgentNotesSource(notes);
-    const remainingBudget = capped
-      ? Math.max(700, totalBudget - controlFloor.length - activeLoreBridge.length - preAgentNotes.length - 160)
-      : AGENT_RETRIEVAL_PROFILE.main.budget;
+    const remainingBudget = Math.max(700, totalBudget - controlFloor.length - activeLoreBridge.length - preAgentNotes.length - 220);
     const staged = await stagedRetrieveCandidates('main', state, query, AGENT_RETRIEVAL_PROFILE.main, conf, context);
-    const candidates = staged.candidates;
+    const candidates = staged.candidates.filter(candidate => candidate.kind !== 'lore');
     const selected = selectCandidates(candidates, AGENT_RETRIEVAL_PROFILE.main.limit, remainingBudget);
     const retrievalPack = formatRetrievalPack('main', state, selected, query);
     recordRecallTrace(state, query, selected, 'main', {
       stages: staged.stats || null,
       note: staged.note || '',
-      budget,
+      budget: totalBudget,
     });
     const blocks = [
       buildMainBriefingIntro(false),
@@ -7728,8 +8095,12 @@
       retrievalPack,
       preAgentNotes,
     ];
-    const briefing = capped ? joinBriefingBlocks(blocks, totalBudget) : joinBriefingBlocksUncapped(blocks);
-    recordInjectionTrace(state, query, selected, briefing, totalBudget, staged);
+    const briefing = joinBriefingBlocks(blocks, totalBudget);
+    recordInjectionTrace(state, query, selected, briefing, totalBudget, {
+      ...staged,
+      budgetInfo,
+      canonicalTrace: Array.isArray(context?._canonicalInjectionTrace) ? context._canonicalInjectionTrace : [],
+    });
     return briefing;
   }
 
@@ -7737,9 +8108,9 @@
     const text = formatNotes(notes);
     if (!text || text === '(none)') return '';
     return [
-      '<source label="Pre-Agent Notes">',
+      '[Advisory Agent Notes]',
+      'Agent notes are proposals only. Canonical source units, current scene state, and knowledge boundaries override them.',
       text,
-      '</source>',
     ].join('\n');
   }
 
@@ -7768,6 +8139,41 @@
       : context?.mode === 'novel' ? 'novel' : 'rp';
   }
 
+  function resolveMainInjectionBudget(context = null, budget = 0, conf = null) {
+    const manual = Math.round(parseNumber(budget, 0, 0, 40000));
+    if (manual > 0) return { budget: manual, auto: false, reason: 'manual' };
+    const db = context?.db || {};
+    const maxContext = parseNumber(
+      db.maxContext ?? db.max_context ?? db.mainMaxContext ?? db.contextSize ?? db.maxContextSize,
+      0,
+      0,
+      2000000
+    );
+    const maxResponse = parseNumber(
+      db.maxResponse ?? db.max_response ?? db.maxResponseTokens ?? db.maxOutputTokens ?? db.maxTokens ?? conf?.maxTokens,
+      conf?.maxTokens || DEFAULT_CONFIG.maxTokens,
+      0,
+      200000
+    );
+    const messages = Array.isArray(context?.requestMessages) && context.requestMessages.length
+      ? context.requestMessages
+      : (Array.isArray(context?.messages) ? context.messages : []);
+    const existingTokens = estimateMessagesTokens(messages);
+    const safetyTokens = Math.max(600, Math.ceil(maxResponse * 0.24));
+    const remainingTokens = maxContext > 0 ? maxContext - maxResponse - existingTokens - safetyTokens : 0;
+    const fromContext = remainingTokens > 0 ? Math.floor(remainingTokens * 1.85) : 0;
+    const resolved = fromContext > 0 ? fromContext : AUTO_INJECTION_FALLBACK_CHARS;
+    return {
+      budget: Math.round(Math.max(AUTO_INJECTION_MIN_CHARS, Math.min(AUTO_INJECTION_MAX_CHARS, resolved))),
+      auto: true,
+      reason: fromContext > 0 ? 'context-window' : 'fallback',
+      maxContext,
+      maxResponse,
+      existingTokens,
+      remainingTokens,
+    };
+  }
+
   function joinBriefingBlocks(blocks, budget) {
     const max = Math.max(400, Number(budget || 0));
     const out = [];
@@ -7786,13 +8192,6 @@
       break;
     }
     return out.join('\n\n').slice(0, max);
-  }
-
-  function joinBriefingBlocksUncapped(blocks) {
-    return (Array.isArray(blocks) ? blocks : [])
-      .map(block => String(block || '').trim())
-      .filter(Boolean)
-      .join('\n\n');
   }
 
   function trimBriefingBlockToBudget(block, budget) {
@@ -7892,140 +8291,98 @@
       .map(item => ({ ...item.source, _activeLoreBridgeScore: item.score }));
   }
 
-  function buildActiveLoreBridgeContext(context, notes = [], budget = 2600, state = null) {
+  function buildActiveLoreBridgeContext(context, notes = [], budget = 2600, state = null, conf = null) {
     const max = Math.max(500, Number(budget || 2600));
+    const compact = max <= 1200;
+    const queryText = activeLoreBridgeQueryText(context, notes);
+    const queryTerms = extractQueryTerms(queryText).slice(0, 80);
+    const header = [
+      '[Active Canonical Bridge]',
+      compact
+        ? 'Current-turn canonical source parts. Prefer these over unrelated new extras. Do not reveal labels.'
+        : 'Current-turn canonical source parts. Use as evidence for lore, cast, places, and fronts when they fit. State and agent notes may help selection but do not override these sources.',
+    ];
+    const units = buildCanonicalUnits(context, conf);
+    const candidates = buildCanonicalStageCandidates(
+      units.filter(unit => unit.kind !== 'desc'),
+      queryTerms,
+      queryText,
+      state,
+      context
+    );
+    const selected = packCanonicalUnits(candidates, Math.max(420, max - header.join('\n').length - 2), {
+      limit: compact ? 4 : 10,
+      section: 'active-canonical',
+      allowSibling: true,
+      allUnits: units,
+    });
+    if (selected.length) {
+      appendCanonicalInjectionTrace(context, selected.map(item => item.unit), 'active-canonical');
+      return trimBriefingBlockToBudget(header.concat(selected.map(item => item.line)).join('\n'), max);
+    }
+
     if (state) {
-      const queryText = activeLoreBridgeQueryText(context, notes);
-      const queryTerms = extractQueryTerms(queryText).slice(0, 80);
       const profile = { ...AGENT_RETRIEVAL_PROFILE.main, kinds: ['lore', 'knowledge', 'memory', 'worldFront', 'character', 'relationship', 'secret'], limit: 16 };
       const ranked = rankStateCandidates(state, queryTerms, profile, context)
         .filter(candidate => candidate.path.startsWith('psycheUnits.') || candidate.kind === 'lore' || candidate.activeLore || isMustCarryCandidate(candidate));
-      const compact = max <= 1200;
-      const selected = selectCandidates(ranked, compact ? 4 : 10, Math.max(500, max - 170));
-      if (selected.length) {
+      const stateSelected = selectCandidates(ranked, compact ? 3 : 6, Math.max(500, max - 220));
+      if (stateSelected.length) {
         const lines = [
-          '[Active Lore Bridge]',
-          compact
-            ? 'Use as current-turn lore evidence. Prefer established cast/fronts over unrelated new extras. Do not reveal labels.'
-            : 'Use these active lore facts as current-turn evidence. Prefer established lore, cast, places, and fronts over inventing unrelated extras when they fit. Do not reveal labels or plugin mechanics.',
+          '[State Bridge Overlay]',
+          'Fallback advisory state bridge. Use only when no canonical source part is available.',
         ];
-        const perItemCap = compact
-          ? Math.max(95, Math.min(220, Math.floor((max - 170) / Math.max(1, selected.length))))
-          : Math.max(120, Math.min(360, Math.floor((max - 260) / Math.max(1, selected.length))));
-        selected.forEach(candidate => {
-          const line = formatCompiledCandidateLine(candidate);
-          lines.push(line.length > perItemCap ? `${line.slice(0, perItemCap).trimEnd()}...` : line);
-        });
+        stateSelected.forEach(candidate => lines.push(formatCompiledCandidateLine(candidate)));
         return trimBriefingBlockToBudget(lines.join('\n'), max);
       }
     }
-    const selected = collectActiveLoreBridgeSources(context, notes, 10);
-    if (!selected.length) return '';
-    const compact = max <= 1200;
-    const selectedItems = compact ? selected.slice(0, 4) : selected;
+    return '';
+  }
+
+  function buildMainControlFloorContext(context, budget = 3600, state = null, conf = null) {
+    const max = Math.max(700, Number(budget || 3600));
     const lines = [
-      '[Active Lore Bridge]',
-      compact
-        ? 'Use as current-turn lore evidence. Prefer established cast/fronts over unrelated new extras. Do not reveal labels.'
-        : 'Use these active lore facts as current-turn evidence. Prefer established lore, cast, places, and fronts over inventing unrelated extras when they fit. Do not reveal labels or plugin mechanics.',
+      '[Eros Tower Control Floor]',
+      `[Current Writing Mode]\n${currentWritingModeLabel(context)}`,
     ];
-    const perItemCap = compact
-      ? Math.max(95, Math.min(220, Math.floor((max - 170) / Math.max(1, selectedItems.length))))
-      : Math.max(120, Math.min(360, Math.floor((max - 260) / Math.max(1, selectedItems.length))));
-    let used = lines.join('\n').length + 1;
-    for (const source of selectedItems) {
-      const label = firstNonEmpty(source.label, source.kind, source.path, 'lore');
-      const meta = [
-        source.kind || 'lore',
-        source.path || '',
-        source?.meta?.alwaysActive || source?.meta?.constant ? 'always' : '',
-        source.kind === 'firstMessage' ? 'first-message' : '',
-        normalizeStringArray(source.activationKeys).length ? `keys=${normalizeStringArray(source.activationKeys).slice(0, 5).join('/')}` : '',
-        `score=${Math.round(source._activeLoreBridgeScore || 0)}`,
-      ].filter(Boolean).join(', ');
-      const summary = String(source.content || '').replace(/\s+/g, ' ').trim().slice(0, perItemCap);
-      if (!summary) continue;
-      const next = `- ${label} (${meta}): ${summary}`;
-      if (used + next.length > max) {
-        if (!lines[lines.length - 1].includes('truncated')) lines.push('[Active Lore Bridge truncated by budget]');
-        break;
-      }
-      lines.push(next);
-      used += next.length + 1;
+    const units = buildCanonicalUnits(context, conf);
+    const queryText = [
+      getUserInput(context?.messages || []),
+      (Array.isArray(context?.messages) ? context.messages : []).slice(-4).map(item => item.content).join('\n'),
+    ].join('\n');
+    const queryTerms = extractQueryTerms(queryText).slice(0, 60);
+    const canonicalCandidates = units
+      .filter(unit => unit.foundation || unit.alwaysActive || unit.kind === 'firstMessage')
+      .map(unit => ({
+        unit,
+        score: canonicalUnitQueryScore(unit, queryTerms, queryText),
+        reason: unit.foundation ? 'foundation' : 'always',
+      }));
+    const canonicalHeader = [
+      '[Canonical Foundation]',
+      'Source parts below are direct canonical evidence. Use them before state summaries or agent notes.',
+    ];
+    const selected = packCanonicalUnits(canonicalCandidates, Math.max(500, Math.floor(max * 0.72) - canonicalHeader.join('\n').length), {
+      limit: max <= 1600 ? 4 : 8,
+      section: 'canonical-foundation',
+      allowSibling: true,
+      allUnits: units,
+    });
+    if (selected.length) {
+      lines.push(...canonicalHeader, ...selected.map(item => item.line));
+      appendCanonicalInjectionTrace(context, selected.map(item => item.unit), 'canonical-foundation');
     }
-    return trimBriefingBlockToBudget(lines.join('\n'), max);
-  }
 
-  function isControlFloorTier1CanonicalSource(source) {
-    if (!source) return false;
-    if (source?.meta?.alwaysActive || source?.meta?.constant) return true;
-    return source?.kind === 'firstMessage';
-  }
-
-  function controlFloorTier1Rank(source, index = 0) {
-    let score = 0;
-    if (source?.kind === 'firstMessage') score += 120;
-    if (source?.meta?.alwaysActive) score += 80;
-    if (source?.meta?.constant) score += 70;
-    score += clampFloat(parseNumber(source?.priority, 5, 0, 10), 5, 0, 10);
-    return score - (index * 0.001);
-  }
-
-  function collectControlFloorTier1Sources(context, limit = 6) {
-    const seen = new Set();
-    return (Array.isArray(context?.canonicalSources) ? context.canonicalSources : [])
-      .map((source, index) => ({ source, index }))
-      .filter(item => isControlFloorTier1CanonicalSource(item.source))
-      .filter(({ source }) => {
-        const key = source?.hash || source?.path || `${source?.kind || ''}:${String(source?.content || '').slice(0, 120)}`;
-        if (!key || seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      })
-      .sort((a, b) => controlFloorTier1Rank(b.source, b.index) - controlFloorTier1Rank(a.source, a.index))
-      .slice(0, Math.max(1, Number(limit || 6)))
-      .map(item => item.source);
-  }
-
-  function buildMainControlFloorContext(context, budget = 3600, state = null) {
-    const lines = [];
-    lines.push(`[Current Writing Mode]\n${currentWritingModeLabel(context)}`);
-    if (state) {
-      const floorSources = selectPsycheSourceFallbacks(state, context, buildRetrievalQuery(context || { messages: [] }, [], []), 8)
+    const remaining = max - lines.join('\n').length;
+    if (state && remaining >= 420) {
+      const floorSources = selectPsycheSourceFallbacks(state, context, buildRetrievalQuery(context || { messages: [] }, [], []), 4)
         .filter(source => source.alwaysActive || /desc|firstmessage|persona|author/i.test(source.kind));
       if (floorSources.length) {
-        lines.push('[Always-Active Lore Floor]');
-        const floorBudget = Math.min(1200, Math.max(420, Math.floor(Number(budget || 0) * 0.36)));
-        const perItemCap = Math.max(100, Math.min(220, Math.floor((floorBudget - 120) / Math.max(1, floorSources.length))));
-        let used = '[Always-Active Lore Floor]\n'.length;
-        floorSources.forEach(source => {
-          const next = formatPsycheSourceFallbackLine(source);
-          const line = next.length > perItemCap ? `${next.slice(0, perItemCap).trimEnd()}...` : next;
-          if (used + line.length > floorBudget && used > 0) return;
-          used += line.length + 1;
-          lines.push(line);
-        });
+        lines.push('[State Registry Overlay]');
+        lines.push('Advisory registry view only. Do not override canonical source parts above.');
+        floorSources.slice(0, 4).forEach(source => lines.push(formatPsycheSourceFallbackLine(source)));
       }
-      const text = lines.length ? `[Eros Tower Control Floor]\n${lines.join('\n')}` : '';
-      return text.length > budget ? `${text.slice(0, Math.max(0, budget - 80))}\n[Control Floor truncated by budget]` : text;
     }
-    const alwaysLore = collectControlFloorTier1Sources(context, 6);
-    if (alwaysLore.length) {
-      lines.push('[Always-Active Lore Floor]');
-      const floorBudget = Math.min(1200, Math.max(420, Math.floor(Number(budget || 0) * 0.36)));
-      const perItemCap = Math.max(100, Math.min(220, Math.floor((floorBudget - 120) / Math.max(1, alwaysLore.length))));
-      let used = '[Always-Active Lore Floor]\n'.length;
-      alwaysLore.forEach(source => {
-        const label = source.label || source.kind || source.path;
-        const summary = String(source.content || '').replace(/\s+/g, ' ').trim().slice(0, perItemCap);
-        const next = `- ${label}: ${summary}`;
-        if (used + next.length > floorBudget && used > 0) return;
-        used += next.length + 1;
-        lines.push(next);
-      });
-    }
-    const text = lines.length ? `[Eros Tower Control Floor]\n${lines.join('\n')}` : '';
-    return text.length > budget ? `${text.slice(0, Math.max(0, budget - 80))}\n[Control Floor truncated by budget]` : text;
+    return trimBriefingBlockToBudget(lines.join('\n'), max);
   }
 
   function recordRecallTrace(state, queryTerms, selected, profile, meta = {}) {
@@ -8656,10 +9013,12 @@
       at: nowIso(),
       turn: state.turn || 0,
       budget,
+      budgetInfo: staged?.budgetInfo || null,
       charLength: text.length,
       queryTerms: (Array.isArray(queryTerms) ? queryTerms : []).slice(0, 16),
       stageNote: String(staged?.note || '').slice(0, 120),
       stages: staged?.stats || null,
+      canonical: Array.isArray(staged?.canonicalTrace) ? staged.canonicalTrace.slice(0, 24) : [],
       included,
     }].concat(Array.isArray(state.injectionTrace) ? state.injectionTrace : []).slice(0, MAX_INJECTION_TRACE);
   }
@@ -11952,13 +12311,37 @@
     if (!injection) return messages;
     const max = Number(budget || 0);
     const content = max > 0 ? String(injection).slice(0, max) : String(injection);
+    const block = formatMainInjectionBlock(content);
+    let placeholderInserted = false;
     const clone = (Array.isArray(messages) ? messages : [])
       .map(m => {
         const item = { ...m };
-        if (item.role === 'system') item.content = stripExistingErosInjectionBlock(item.content);
+        item.content = stripExistingErosInjectionBlock(item.content);
+        if (typeof item.content === 'string' && MAIN_INJECTION_PLACEHOLDER_RE.test(item.content)) {
+          MAIN_INJECTION_PLACEHOLDER_RE.lastIndex = 0;
+          item.content = item.content.replace(MAIN_INJECTION_PLACEHOLDER_RE, () => {
+            if (placeholderInserted) return '';
+            placeholderInserted = true;
+            return block;
+          });
+        }
+        MAIN_INJECTION_PLACEHOLDER_RE.lastIndex = 0;
         return item;
       })
       .filter(m => !(m.role === 'system' && !String(m.content || '').trim()));
+    if (placeholderInserted) return clone;
+    let userIdx = -1;
+    for (let i = clone.length - 1; i >= 0; i -= 1) {
+      if (clone[i]?.role === 'user') {
+        userIdx = i;
+        break;
+      }
+    }
+    if (userIdx >= 0) {
+      if (userIdx > 0) clone[userIdx - 1] = { ...clone[userIdx - 1], cachePoint: true };
+      clone[userIdx].content = `${block}\n\n${clone[userIdx].content || ''}`.trim();
+      return clone;
+    }
     let idx = -1;
     for (let i = clone.length - 1; i >= 0; i -= 1) {
       if (clone[i]?.role === 'system') {
@@ -11967,17 +12350,21 @@
       }
     }
     if (idx >= 0) {
-      clone[idx].content = `${clone[idx].content || ''}\n\n---\n[${MAIN_INJECTION_TITLE}]\n${content}\n---`;
+      clone[idx].content = `${clone[idx].content || ''}\n\n${block}`;
       return clone;
     }
-    return [{ role: 'system', content: `[${MAIN_INJECTION_TITLE}]\n${content}` }, ...clone];
+    return [{ role: 'system', content: block }, ...clone];
+  }
+
+  function formatMainInjectionBlock(content) {
+    return `---\n[${MAIN_INJECTION_TITLE}]\n${String(content || '').trim()}\n---`;
   }
 
   function stripExistingErosInjectionBlock(value) {
     let text = String(value || '');
-    const escapedTitle = MAIN_INJECTION_TITLE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    text = text.replace(new RegExp(`\\n*---\\s*\\n\\[${escapedTitle}\\]\\n[\\s\\S]*?\\n---\\s*(?=\\n|$)`, 'g'), '\n');
-    text = text.replace(new RegExp(`^\\s*\\[${escapedTitle}\\]\\n[\\s\\S]*$`, 'g'), '');
+    const titlePattern = 'Eros Tower [^\\]\\n]{1,32} analysis context';
+    text = text.replace(new RegExp(`\\n*---\\s*\\n\\[${titlePattern}\\]\\n[\\s\\S]*?\\n---\\s*(?=\\n|$)`, 'g'), '\n');
+    text = text.replace(new RegExp(`^\\s*\\[${titlePattern}\\]\\n[\\s\\S]*$`, 'g'), '');
     return text.replace(/\n{3,}/g, '\n\n').trim();
   }
 
@@ -14120,6 +14507,7 @@
     const referenceModuleSources = sources.filter(source => /^referenceModule/.test(String(source?.kind || '')));
     const referencePluginSources = sources.filter(source => source?.kind === 'referencePlugin');
     const latestTrace = Array.isArray(injectionTrace) && injectionTrace.length ? injectionTrace[0] : null;
+    const injectedCanonical = Array.isArray(latestTrace?.canonical) ? latestTrace.canonical : [];
     const injectedLore = (latestTrace?.included || []).filter(item => item.kind === 'lore');
     const injectedMemory = (latestTrace?.included || []).filter(item => item.kind === 'memory');
     const byKind = sources.reduce((acc, source) => {
@@ -14147,6 +14535,7 @@
         ${statBox('참고 플러그인', referencePluginSources.length)}
         ${statBox('Lore Ledger', lore.length)}
         ${statBox('장기기억 chunk', longChunks.length)}
+        ${statBox('Recent Canon', injectedCanonical.length)}
         ${statBox('최근 주입 Lore', injectedLore.length)}
         ${statBox('최근 주입 기억', injectedMemory.length)}
         ${statBox('채팅 범위', shortKey(context?.chatId || context?.scope || '-'))}
@@ -14173,6 +14562,7 @@
           <h3>대체 주입 상태</h3>
           <div class="et-note">최근 주입 trace: ${escHtml(latestTrace ? formatDateShort(latestTrace.at) : '-')}</div>
           <div class="et-note">첫메세지: ${expandableText(String(context?.firstMessageInfo?.message || '').replace(/\s+/g, ' ').trim() || '-', 260)}</div>
+          <div class="et-note">Recent Canonical: ${expandableText(injectedCanonical.slice(0, 12).map(item => `${item.kind}:${item.label || item.path || item.id} ${item.part ? `p${item.part.index}/${item.part.total}` : ''} ${item.section || ''}`).join(' / ') || '-', 320)}</div>
           <div class="et-note">최근 Lore 주입: ${expandableText(injectedLore.map(item => `${item.path} score ${item.score}`).join(' / ') || '-', 260)}</div>
           <div class="et-note">최근 기억 주입: ${expandableText(injectedMemory.map(item => `${item.path} score ${item.score}`).join(' / ') || '-', 260)}</div>
           <h3>Ledger 요약</h3>
@@ -14250,9 +14640,14 @@
           <span class="et-badge">${escHtml(trace.charLength || 0)} chars</span>
         </div>
         <div class="et-note">query: ${expandableText((trace.queryTerms || []).join(', '), 220)}</div>
+        ${trace.budgetInfo ? `<div class="et-note">budget: ${expandableText(compactJson(trace.budgetInfo), 260)}</div>` : ''}
+        ${(trace.canonical || []).slice(0, 10).map(item => `
+          <div class="et-note">[canon:${escHtml(item.id)}] ${escHtml(item.kind)} · ${escHtml(item.section || '-')} · ${escHtml(item.part ? `p${item.part.index}/${item.part.total}` : '-')} · ${expandableText(item.preview || item.label || item.path || '', 180)}</div>
+        `).join('')}
         ${(trace.included || []).slice(0, 12).map(item => `
           <div class="et-note">[${escHtml(item.id)}] ${escHtml(item.kind)} · score ${escHtml(item.score)} · ${escHtml(item.memoryTier || '-')} · ${expandableText(item.preview || item.path || '', 180)}</div>
         `).join('')}
+        ${(trace.canonical || []).length > 10 ? `<details><summary>Canonical trace full</summary><pre>${escHtml(compactJson(trace.canonical))}</pre></details>` : ''}
         ${(trace.included || []).length > 12 ? `<details><summary>주입 근거 전체보기</summary><pre>${escHtml(compactJson(trace.included))}</pre></details>` : ''}
       </div>`).join('') : emptyState('아직 메인 주입 trace가 없습니다.');
     return `
@@ -16906,7 +17301,8 @@
           const briefing = await buildMainBriefing(targetState, targetContext, notes, 0, { ...DEFAULT_CONFIG, embeddingEnabled: false, stagedSearchEnabled: false });
           return {
             marker,
-            hasSource: briefing.includes('<source label="Pre-Agent Notes">'),
+            hasAdvisoryNotes: briefing.includes('[Advisory Agent Notes]'),
+            hasSourceWrapper: briefing.includes('<source label="Pre-Agent Notes">'),
             hasMarker: briefing.includes(marker),
             hasLegacyActionableBridge: briefing.includes('[Actionable ' + 'Eros Bridge]') || briefing.includes('[Actionable ' + 'Agent Notes]'),
           };
@@ -16939,7 +17335,7 @@
           return {
             length: briefing.length,
             briefing,
-            hasActiveBridge: briefing.includes('[Active Lore Bridge]'),
+            hasActiveBridge: briefing.includes('[Active Canonical Bridge]'),
             hasLoreFact: briefing.includes('Low Budget Subject') || briefing.includes('Established Counterpart') || briefing.includes('Local Front'),
             hasMidSentenceCut: /Prefer establishe\\s*$/m.test(briefing) || briefing.includes('Prefer establishe\n---'),
             hasMode: briefing.includes('[Current Writing Mode]'),
@@ -16958,18 +17354,51 @@
           ];
           const injected = injectContext(original, 'fresh Eros context', 4000);
           const systemMessages = injected.filter(item => item.role === 'system');
-          const carrier = systemMessages.find(item => String(item.content || '').includes(`[${MAIN_INJECTION_TITLE}]`)) || null;
+          const carrier = injected.find(item => String(item.content || '').includes(`[${MAIN_INJECTION_TITLE}]`)) || null;
           return {
             hostSystemCount: systemMessages.filter(item => String(item.content || '').includes('Host lore/system message must remain intact.')).length,
             oldInjectionCount: injected.filter(item => String(item.content || '').includes('old Eros context must be removed')).length,
-            newInjectionCount: systemMessages.reduce((sum, item) => sum + (String(item.content || '').match(new RegExp(`\\[${MAIN_INJECTION_TITLE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\]`, 'g')) || []).length, 0),
+            newInjectionCount: injected.reduce((sum, item) => sum + (String(item.content || '').match(/fresh Eros context/g) || []).length, 0),
             userMentionCount: injected.filter(item => item.role === 'user' && String(item.content || '').includes(MAIN_INJECTION_TITLE)).length,
-            carrierCount: systemMessages.filter(item => String(item.content || '').includes(`[${MAIN_INJECTION_TITLE}]`)).length,
+            carrierCount: injected.filter(item => String(item.content || '').includes(`[${MAIN_INJECTION_TITLE}]`)).length,
             carrierRole: carrier?.role || '',
             injectionRole: carrier?.role || '',
             carrierText: carrier?.content || '',
             injectionIndex: injected.findIndex(item => item === carrier),
             userIndex: injected.findIndex(item => item.role === 'user'),
+            previousCachePoint: Boolean(injected[injected.findIndex(item => item.role === 'user') - 1]?.cachePoint),
+          };
+        },
+        testPlaceholderInjection: () => {
+          const original = [
+            { role: 'system', content: 'Host system with {{et.canonical}} placeholder.' },
+            { role: 'user', content: 'Continue.' },
+          ];
+          const injected = injectContext(original, 'placeholder Eros context', 4000);
+          return {
+            systemHasInjection: String(injected[0]?.content || '').includes('placeholder Eros context'),
+            systemHasPlaceholder: String(injected[0]?.content || '').includes('{{et.canonical}}'),
+            userHasInjection: String(injected[1]?.content || '').includes('placeholder Eros context'),
+            count: injected.reduce((sum, item) => sum + (String(item.content || '').match(/placeholder Eros context/g) || []).length, 0),
+          };
+        },
+        testCanonicalUnitSplit: () => {
+          const source = {
+            id: 'debug-canon',
+            kind: 'globalLore',
+            label: 'Debug Canon',
+            content: ['Alpha fact one.', 'Beta fact two.', 'Gamma fact three.'.repeat(900)].join('\n\n'),
+            meta: { alwaysActive: true },
+            priority: 8,
+          };
+          const targetContext = { canonicalSources: [source] };
+          const units = buildCanonicalUnits(targetContext, DEFAULT_CONFIG);
+          return {
+            count: units.length,
+            ids: units.map(unit => unit.id),
+            siblingCounts: units.map(unit => unit.part?.siblingIds?.length || 0),
+            hasContent: units.every(unit => String(unit.content || '').trim().length > 0),
+            firstLine: canonicalUnitLine(units[0], 'debug').slice(0, 220),
           };
         },
         testIdentityGuard: () => {
