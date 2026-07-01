@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.38
+//@display-name ☸Eros Tower 1.1.39
 //@api 3.0
-//@version 1.1.38
+//@version 1.1.39
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -35,18 +35,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.38
+ * Eros Tower 1.1.39
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.38 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.39 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.38';
+  const VERSION = '1.1.39';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.38`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.39`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -63,7 +63,7 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.38 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.39 analysis context';
   const AUTO_MAIN_BRIEFING_CHARS = 36000;
   const PSYCHE_SOURCE_CHUNK_CHARS = 16000;
   const PSYCHE_SOURCE_CHUNK_OVERLAP_CHARS = 1200;
@@ -7914,13 +7914,15 @@
         const nodeId = candidateNodeId(candidate);
         const spreadActivation = spread.get(nodeId) || 0;
         const weaveActivation = weaveSpread.get(psycheWeaveNodeIdForCandidate(candidate)) || 0;
+        const clusterActivation = psycheWeaveClusterScore(candidate, state) / 48;
         const semantic = working.find(item => item.path === candidate.path)?.semanticScore;
         return {
           ...candidate,
           semanticScore: semantic ?? candidate.semanticScore,
           spreadActivation,
           weaveActivation,
-          score: Number(candidate.score || 0) + Math.min(52, spreadActivation * 52) + Math.min(44, weaveActivation * 44),
+          clusterActivation,
+          score: Number(candidate.score || 0) + Math.min(52, spreadActivation * 52) + Math.min(44, weaveActivation * 44) + Math.min(34, clusterActivation * 34),
         };
       })
       .sort((a, b) => b.score - a.score);
@@ -8466,6 +8468,8 @@
         lineId: item.lineId || candidateTraceId(item),
         memoryTier: item.memoryTier || normalizeMemoryLifecycleTier(item.item?.memoryTier),
         heatScore: item.heatScore ?? item.item?.heatScore,
+        weaveActivation: item.weaveActivation !== undefined ? Number(item.weaveActivation || 0).toFixed(3) : undefined,
+        clusterActivation: item.clusterActivation !== undefined ? Number(item.clusterActivation || 0).toFixed(3) : undefined,
         sourceRank: item.sourceRank,
         importance: item.importance,
         confidence: Number(item.confidence || 0).toFixed(2),
@@ -8682,11 +8686,12 @@
     const mustCarryScore = isMustCarryCandidate(candidate) ? 34 : 0;
     const graphScore = associationActivationScore(candidate, state);
     const weaveScore = psycheWeaveActivationScore(candidate, state);
+    const clusterScore = psycheWeaveClusterScore(candidate, state);
     const boundaryPenalty = knowledgeBoundaryPenalty(candidate, state);
     const decay = parseNumber(candidate.item?.decay, candidate.kind === 'memory' ? calculateMemoryDecay(candidate.item, age) : 1, 0, 1);
     const decayScore = candidate.kind === 'memory' ? (decay - 1) * 34 : 0;
     const fadedPenalty = /faded/i.test(candidate.status) ? -22 : 0;
-    return matchScore + sourceScore + importanceScore + confidenceScore + recencyScore + tierScore + memoryTierScore + heatScore + lifecycleScore + activationScore + stabilityScore + affinityScore + mustCarryScore + graphScore + weaveScore + boundaryPenalty + decayScore + fadedPenalty;
+    return matchScore + sourceScore + importanceScore + confidenceScore + recencyScore + tierScore + memoryTierScore + heatScore + lifecycleScore + activationScore + stabilityScore + affinityScore + mustCarryScore + graphScore + weaveScore + clusterScore + boundaryPenalty + decayScore + fadedPenalty;
   }
 
   function associationActivationScore(candidate, state) {
@@ -9234,6 +9239,36 @@
     if (!node || node.blockedForPerspective) return 0;
     const roleBonus = node.role === 'source-lore' || node.role === 'canonical-lore' ? 6 : 0;
     return Math.min(58, parseNumber(node.activation, 0, 0, 1) * 50 + roleBonus);
+  }
+
+  function psycheWeaveClusterScore(candidate, state) {
+    const weave = normalizePsycheWeave(state?.psycheWeave);
+    if (!weave.nodes.length || !weave.clusters.length) return 0;
+    const nodeId = psycheWeaveNodeIdForCandidate(candidate);
+    const node = weave.nodes.find(item => item.id === nodeId);
+    if (!node || node.blockedForPerspective) return 0;
+    const connectedAnchors = new Map();
+    (weave.edges || []).forEach(edge => {
+      if (edge.from !== nodeId && edge.to !== nodeId) return;
+      const otherId = edge.from === nodeId ? edge.to : edge.from;
+      const other = weave.nodes.find(item => item.id === otherId);
+      if (!other || !/anchor$/.test(String(other.role || '')) || other.blockedForPerspective) return;
+      connectedAnchors.set(otherId, Math.max(connectedAnchors.get(otherId) || 0, clampNumber(edge.weight, 0, 0, 1)));
+    });
+    let best = 0;
+    (weave.clusters || []).forEach(cluster => {
+      const direct = connectedAnchors.get(cluster.id) || 0;
+      const topLink = (Array.isArray(cluster.topLinks) ? cluster.topLinks : []).some(link => link?.path === candidate.path) ? 0.42 : 0;
+      const relation = Math.max(direct, topLink);
+      if (!relation) return;
+      const activation = clampNumber(cluster.activation, 0, 0, 1);
+      const roleFit = cluster.roles?.includes(node.role) || cluster.roles?.includes(node.kind) ? 0.08 : 0;
+      best = Math.max(best, (activation * 34) + (relation * 16) + roleFit * 40);
+    });
+    if (!best) return 0;
+    const boundary = knowledgeBoundaryPenalty(candidate, state);
+    if (boundary <= -100) return 0;
+    return Math.min(48, best);
   }
 
   function buildPsycheWeaveBriefing(state, selected, queryTerms, budget = 2200) {
@@ -15318,7 +15353,7 @@
         </div>
         <div class="et-note">query: ${expandableText((trace.queryTerms || []).join(', '), 220)}</div>
         ${(trace.included || []).slice(0, 12).map(item => `
-          <div class="et-note">[${escHtml(item.id)}] ${escHtml(item.kind)} · score ${escHtml(item.score)} · ${escHtml(item.memoryTier || '-')} · ${expandableText(item.preview || item.path || '', 180)}</div>
+          <div class="et-note">[${escHtml(item.id)}] ${escHtml(item.kind)} · score ${escHtml(item.score)} · ${escHtml(item.memoryTier || '-')} · weave ${escHtml(item.weaveActivation || '-')} · cluster ${escHtml(item.clusterActivation || '-')} · ${expandableText(item.preview || item.path || '', 180)}</div>
         `).join('')}
         ${(trace.included || []).length > 12 ? `<details><summary>주입 근거 전체보기</summary><pre>${escHtml(compactJson(trace.included))}</pre></details>` : ''}
       </div>`).join('') : emptyState('아직 메인 주입 trace가 없습니다.');
