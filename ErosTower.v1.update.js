@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.34
+//@display-name ☸Eros Tower 1.1.35
 //@api 3.0
-//@version 1.1.34
+//@version 1.1.35
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -35,18 +35,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.34
+ * Eros Tower 1.1.35
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.34 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.35 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.34';
+  const VERSION = '1.1.35';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.34`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.35`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -63,7 +63,7 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.34 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.35 analysis context';
   const AUTO_MAIN_BRIEFING_CHARS = 36000;
   const PSYCHE_SOURCE_CHUNK_CHARS = 16000;
   const PSYCHE_SOURCE_CHUNK_OVERLAP_CHARS = 1200;
@@ -160,7 +160,7 @@
     autoColdStartEnabled: true,
     agentRoutingMode: 'custom',
     coldStartChunkSize: 12,
-    coldStartMaxChunksPerRun: 16,
+    coldStartMaxChunksPerRun: 3,
     coldStartRetryDelayTurns: 4,
     coldStartMaxAttempts: 3,
     associationGraphEnabled: true,
@@ -911,10 +911,10 @@
     merged.autoColdStartEnabled = true;
     merged.agentRoutingMode = 'custom';
     merged.coldStartChunkSize = parseNumber(merged.coldStartChunkSize, DEFAULT_CONFIG.coldStartChunkSize, 4, 24);
-    if (Number(stored?.coldStartMaxChunksPerRun) > 0 && Number(stored?.coldStartMaxChunksPerRun) <= 4) {
+    if (Number(stored?.coldStartMaxChunksPerRun) === 16) {
       merged.coldStartMaxChunksPerRun = DEFAULT_CONFIG.coldStartMaxChunksPerRun;
     }
-    merged.coldStartMaxChunksPerRun = parseNumber(merged.coldStartMaxChunksPerRun, DEFAULT_CONFIG.coldStartMaxChunksPerRun, 0, 64);
+    merged.coldStartMaxChunksPerRun = parseNumber(merged.coldStartMaxChunksPerRun, DEFAULT_CONFIG.coldStartMaxChunksPerRun, 0, 16);
     merged.coldStartRetryDelayTurns = parseNumber(merged.coldStartRetryDelayTurns, DEFAULT_CONFIG.coldStartRetryDelayTurns, 0, 80);
     merged.coldStartMaxAttempts = parseNumber(merged.coldStartMaxAttempts, DEFAULT_CONFIG.coldStartMaxAttempts, 1, 12);
     merged.associationGraphEnabled = parseBool(merged.associationGraphEnabled, DEFAULT_CONFIG.associationGraphEnabled) === true;
@@ -6579,7 +6579,7 @@
 
   async function runPsycheSourceIngest(conf, context, state) {
     if (!conf.autoMemoryEnabled || !conf.autoColdStartEnabled || !conf.stateApiEnabled) return { processed: 0, skipped: true, reason: 'disabled' };
-    const limit = parseNumber(conf.coldStartMaxChunksPerRun, DEFAULT_CONFIG.coldStartMaxChunksPerRun, 0, 64);
+    const limit = parseNumber(conf.coldStartMaxChunksPerRun, DEFAULT_CONFIG.coldStartMaxChunksPerRun, 0, 16);
     if (limit <= 0) return { processed: 0, skipped: true, reason: 'limit-zero' };
     const agent = getPsycheMainAgent(conf);
     if (!agent) return { processed: 0, skipped: true, reason: 'no-psyche-main' };
@@ -7180,7 +7180,7 @@
   async function runAutoColdStart(conf, context, state) {
     if (!conf.autoMemoryEnabled || !conf.autoColdStartEnabled || !conf.stateApiEnabled) return { processed: 0, skipped: true, reason: 'disabled' };
     if (Array.isArray(state.psycheChunks) && state.psycheChunks.length) return { processed: 0, skipped: true, reason: 'superseded-by-psyche-source-ingest' };
-    const limit = parseNumber(conf.coldStartMaxChunksPerRun, DEFAULT_CONFIG.coldStartMaxChunksPerRun, 0, 64);
+    const limit = parseNumber(conf.coldStartMaxChunksPerRun, DEFAULT_CONFIG.coldStartMaxChunksPerRun, 0, 16);
     if (limit <= 0) return { processed: 0, skipped: true, reason: 'limit-zero' };
     const agent = getColdStartPsycheAgent(conf);
     if (!agent) return { processed: 0, skipped: true, reason: 'no-psyche-agent' };
