@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.48
+//@display-name ☸Eros Tower 1.1.49
 //@api 3.0
-//@version 1.1.48
+//@version 1.1.49
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -35,18 +35,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.48
+ * Eros Tower 1.1.49
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.48 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.49 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.48';
+  const VERSION = '1.1.49';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.48`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.49`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -63,7 +63,7 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.48 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.49 analysis context';
   const MAIN_INJECTION_PLACEHOLDER_RE = /\{\{et\.(canonical|memory|state|characters|executive)\}\}/gi;
   const AUTO_INJECTION_FALLBACK_CHARS = 22000;
   const AUTO_INJECTION_MIN_CHARS = 3200;
@@ -1946,7 +1946,12 @@
   }
 
   function pipelineAgents(conf) {
-    return Array.isArray(conf?.pipeline?.agents) ? conf.pipeline.agents : defaultPipeline().agents;
+    try {
+      return normalizePipeline(conf?.pipeline, conf || {}).agents;
+    } catch (_) {
+      const stored = Array.isArray(conf?.pipeline?.agents) ? conf.pipeline.agents.filter(Boolean) : [];
+      return stored.length ? stored : defaultPipeline().agents;
+    }
   }
 
   function isPsycheAgent(agent) {
@@ -8291,6 +8296,17 @@
     if (!source || source.kind === 'desc') return false;
     if (source?.meta?.alwaysActive || source?.meta?.constant || source.kind === 'firstMessage') return true;
     return sourceActivationHitScore(source, queryTerms, queryText) >= 42;
+  }
+
+  function controlFloorTier1Rank(source, index = 0) {
+    if (!source) return 0;
+    const kind = String(source.kind || '').toLowerCase();
+    const priority = clampFloat(source.priority, source?.meta?.alwaysActive ? 8 : 5, 0, 10);
+    return (isFoundationCanonicalSource(source) ? 800 : 0)
+      + (source?.meta?.alwaysActive || source?.meta?.constant ? 420 : 0)
+      + (kind === 'firstmessage' ? 160 : 0)
+      + priority * 12
+      - Math.max(0, Number(index || 0)) * 0.01;
   }
 
   function collectActiveLoreBridgeSources(context, notes = [], limit = 8) {
