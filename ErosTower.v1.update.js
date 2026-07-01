@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.47
+//@display-name ☸Eros Tower 1.1.48
 //@api 3.0
-//@version 1.1.47
+//@version 1.1.48
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -35,18 +35,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.47
+ * Eros Tower 1.1.48
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.47 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.48 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.47';
+  const VERSION = '1.1.48';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.47`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.48`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -63,7 +63,7 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.47 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.48 analysis context';
   const MAIN_INJECTION_PLACEHOLDER_RE = /\{\{et\.(canonical|memory|state|characters|executive)\}\}/gi;
   const AUTO_INJECTION_FALLBACK_CHARS = 22000;
   const AUTO_INJECTION_MIN_CHARS = 3200;
@@ -4933,7 +4933,7 @@
   function normalizeRequestMessages(messages) {
     return (Array.isArray(messages) ? messages : [])
       .filter(msg => msg && (msg.role === 'user' || msg.role === 'assistant' || msg.role === 'system'))
-      .map(msg => ({ role: msg.role, content: stringifyContent(msg.content), promptInfo: msg.promptInfo || msg.data?.promptInfo || null }))
+      .map(msg => ({ role: msg.role, content: messageText(msg), promptInfo: msg.promptInfo || msg.data?.promptInfo || null }))
       .filter(msg => msg.content.trim());
   }
 
@@ -4976,6 +4976,31 @@
     return String(value);
   }
 
+  function messageText(message) {
+    if (!message) return '';
+    const fromContent = stringifyContent(message.content);
+    if (fromContent.trim()) return fromContent;
+    const fromParts = stringifyContent(message.parts);
+    if (fromParts.trim()) return fromParts;
+    return firstNonEmpty(message.text, message.data?.text, message.data?.content);
+  }
+
+  function setMessageText(message, text) {
+    const item = { ...(message || {}) };
+    const nextText = String(text || '');
+    if (Array.isArray(item.parts)) {
+      const parts = item.parts.map(part => (part && typeof part === 'object') ? { ...part } : part);
+      const textIdx = parts.findIndex(part => part && typeof part === 'object' && Object.prototype.hasOwnProperty.call(part, 'text'));
+      if (textIdx >= 0) parts[textIdx] = { ...parts[textIdx], text: nextText };
+      else parts.unshift({ text: nextText });
+      item.parts = parts;
+      if (Object.prototype.hasOwnProperty.call(item, 'content')) item.content = nextText;
+      return item;
+    }
+    item.content = nextText;
+    return item;
+  }
+
   function normalizeStoredChatMessages(chat) {
     const raw = Array.isArray(chat?.message) ? chat.message : [];
     return raw.map((item, index) => {
@@ -4985,7 +5010,7 @@
         : ['assistant', 'char', 'character', 'bot', 'ai', 'model'].includes(roleRaw) ? 'assistant' : '';
       const content = typeof item?.data === 'string' || typeof item?.data === 'number'
         ? String(item.data)
-        : stringifyContent(item?.content);
+        : messageText(item);
       return role && content.trim() ? {
         role,
         content: content.trim(),
@@ -9411,7 +9436,7 @@
   function formatPromptForRunLog(messages, limit = MAX_RUN_LOG_TEXT_CHARS) {
     const rows = (Array.isArray(messages) ? messages : []).map((message, idx) => {
       const role = String(message?.role || `message-${idx}`);
-      const content = stringifyContent(message?.content);
+      const content = messageText(message);
       return `### ${role}\n${content}`;
     });
     return clipRunLogText(rows.join('\n\n'), limit);
@@ -9419,7 +9444,7 @@
 
   async function runPrePipeline(conf, context, state) {
     const notes = [];
-    const agents = (conf.pipeline?.agents || []).filter(a => a.enabled !== false && a.phase === 'pre');
+    const agents = pipelineAgents(conf).filter(a => a.enabled !== false && a.phase === 'pre');
     for (const agent of agents) {
       const agentConf = resolveAgentConf(agent, conf);
       if (!canCallProvider(agentConf)) {
@@ -12315,20 +12340,21 @@
     let placeholderInserted = false;
     const clone = (Array.isArray(messages) ? messages : [])
       .map(m => {
-        const item = { ...m };
-        item.content = stripExistingErosInjectionBlock(item.content);
-        if (typeof item.content === 'string' && MAIN_INJECTION_PLACEHOLDER_RE.test(item.content)) {
+        let item = { ...m };
+        const stripped = stripExistingErosInjectionBlock(messageText(item));
+        item = setMessageText(item, stripped);
+        if (MAIN_INJECTION_PLACEHOLDER_RE.test(stripped)) {
           MAIN_INJECTION_PLACEHOLDER_RE.lastIndex = 0;
-          item.content = item.content.replace(MAIN_INJECTION_PLACEHOLDER_RE, () => {
+          item = setMessageText(item, stripped.replace(MAIN_INJECTION_PLACEHOLDER_RE, () => {
             if (placeholderInserted) return '';
             placeholderInserted = true;
             return block;
-          });
+          }));
         }
         MAIN_INJECTION_PLACEHOLDER_RE.lastIndex = 0;
         return item;
       })
-      .filter(m => !(m.role === 'system' && !String(m.content || '').trim()));
+      .filter(m => !(m.role === 'system' && !messageText(m).trim()));
     if (placeholderInserted) return clone;
     let userIdx = -1;
     for (let i = clone.length - 1; i >= 0; i -= 1) {
@@ -12339,7 +12365,7 @@
     }
     if (userIdx >= 0) {
       if (userIdx > 0) clone[userIdx - 1] = { ...clone[userIdx - 1], cachePoint: true };
-      clone[userIdx].content = `${block}\n\n${clone[userIdx].content || ''}`.trim();
+      clone[userIdx] = setMessageText(clone[userIdx], `${block}\n\n${messageText(clone[userIdx]) || ''}`.trim());
       return clone;
     }
     let idx = -1;
@@ -12350,7 +12376,7 @@
       }
     }
     if (idx >= 0) {
-      clone[idx].content = `${clone[idx].content || ''}\n\n${block}`;
+      clone[idx] = setMessageText(clone[idx], `${messageText(clone[idx]) || ''}\n\n${block}`.trim());
       return clone;
     }
     return [{ role: 'system', content: block }, ...clone];
@@ -12370,7 +12396,7 @@
 
   function estimateMessagesTokens(messages) {
     return (Array.isArray(messages) ? messages : []).reduce((sum, msg) => {
-      return sum + 5 + estimateTokensApprox(stringifyContent(msg?.content));
+      return sum + 5 + estimateTokensApprox(messageText(msg));
     }, 0);
   }
 
@@ -17380,6 +17406,19 @@
             systemHasPlaceholder: String(injected[0]?.content || '').includes('{{et.canonical}}'),
             userHasInjection: String(injected[1]?.content || '').includes('placeholder Eros context'),
             count: injected.reduce((sum, item) => sum + (String(item.content || '').match(/placeholder Eros context/g) || []).length, 0),
+          };
+        },
+        testProviderPartsInjection: () => {
+          const original = [
+            { role: 'user', parts: [{ text: 'system: host prompt\n\n{{et.canonical}}\n\nuser: continue' }] },
+          ];
+          const injected = injectContext(original, 'parts Eros context', 4000);
+          const text = messageText(injected[0]);
+          return {
+            hasInjection: text.includes('parts Eros context'),
+            hasPlaceholder: text.includes('{{et.canonical}}'),
+            contentField: injected[0].content || '',
+            partsText: injected[0].parts?.[0]?.text || '',
           };
         },
         testCanonicalUnitSplit: () => {
