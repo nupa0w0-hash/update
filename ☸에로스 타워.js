@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.49
+//@display-name ☸Eros Tower 1.1.50
 //@api 3.0
-//@version 1.1.49
+//@version 1.1.50
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -35,18 +35,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.49
+ * Eros Tower 1.1.50
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.49 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.50 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.49';
+  const VERSION = '1.1.50';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.49`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.50`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -63,11 +63,33 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.49 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.50 analysis context';
   const MAIN_INJECTION_PLACEHOLDER_RE = /\{\{et\.(canonical|memory|state|characters|executive)\}\}/gi;
   const AUTO_INJECTION_FALLBACK_CHARS = 22000;
   const AUTO_INJECTION_MIN_CHARS = 3200;
   const AUTO_INJECTION_MAX_CHARS = 32000;
+  const SYSTEM_PATCH_NOTES = Object.freeze([
+    {
+      version: '1.1.50',
+      kind: 'tooling',
+      summary: 'Added Run Log diagnostic export as Markdown and JSON without storing heavier logs.',
+    },
+    {
+      version: '1.1.49',
+      kind: 'fix',
+      summary: 'Fixed missing controlFloorTier1Rank and normalized empty pipeline configs back to built-in agents.',
+    },
+    {
+      version: '1.1.48',
+      kind: 'fix',
+      summary: 'Fixed provider-native parts[].text injection so Vertex/Gemini main requests retain Eros context.',
+    },
+    {
+      version: '1.1.47',
+      kind: 'engine',
+      summary: 'Restored P0 canonical full-content source visibility and main injection trace.',
+    },
+  ]);
   const CANONICAL_PART_CAPS = Object.freeze({
     foundation: 4000,
     firstMessage: 4000,
@@ -4802,6 +4824,361 @@
         embeddingCacheStats: Runtime.lastEmbeddingCacheStats,
       },
     };
+  }
+
+  function redactDiagnosticText(value, limit = 1200) {
+    const text = String(value ?? '');
+    return text
+      .replace(/("?(?:api[_-]?key|authorization|access[_-]?token|refresh[_-]?token|private[_-]?key|client[_-]?secret)"?\s*[:=]\s*)("[^"]+"|[^\s,}]+)/gi, '$1[REDACTED]')
+      .slice(0, Math.max(0, Number(limit || 1200)));
+  }
+
+  function diagnosticProviderSummary(conf) {
+    return (Array.isArray(conf?.providerRegistry) ? conf.providerRegistry : []).map(provider => ({
+      id: provider.id || '',
+      name: provider.name || '',
+      provider: provider.provider || '',
+      preset: provider.preset || '',
+      baseUrl: provider.baseUrl ? redactDiagnosticText(provider.baseUrl, 240) : '',
+      chatPath: provider.chatPath || '',
+      modelsPath: provider.modelsPath || '',
+      defaultModel: provider.defaultModel || '',
+      hasApiKey: Boolean(providerRuntimeApiKey(provider, conf)),
+      modelOptions: Array.isArray(provider.modelOptions) ? provider.modelOptions.slice(0, 40) : [],
+    }));
+  }
+
+  function diagnosticPipelineSummary(conf) {
+    return pipelineAgents(conf).map(agent => ({
+      id: agent.id || '',
+      name: agent.name || '',
+      phase: agent.phase || '',
+      enabled: agent.enabled !== false,
+      providerId: agent.providerId || '',
+      model: agent.model || '',
+      maxTokens: agent.maxTokens,
+      contextWindow: agent.contextWindow,
+      postMode: agent.postMode || '',
+      translationRetryCount: agent.translationRetryCount,
+    }));
+  }
+
+  function compactDiagnosticAgentTrace(note) {
+    return {
+      id: note?.id || '',
+      name: note?.name || '',
+      phase: note?.phase || '',
+      provider: note?.provider || '',
+      providerId: note?.providerId || '',
+      model: note?.model || '',
+      ms: note?.ms,
+      skipped: note?.skipped === true,
+      error: redactDiagnosticText(note?.error || '', 600),
+      message: redactDiagnosticText(note?.message || '', 600),
+      postMode: note?.postMode || '',
+      changed: note?.changed,
+      attempts: note?.attempts,
+      retries: note?.retries,
+      textPreview: redactDiagnosticText(note?.text || note?.outputPreview || '', 1400),
+      inputPreview: redactDiagnosticText(note?.inputPreview || '', 900),
+      retrievalPreview: redactDiagnosticText(note?.retrievalPreview || '', 900),
+    };
+  }
+
+  function compactDiagnosticRun(run) {
+    const notes = Array.isArray(run?.notes) ? run.notes : [];
+    return {
+      id: run?.id || '',
+      type: run?.type || '',
+      status: run?.status || '',
+      startedAt: run?.startedAt || '',
+      completedAt: run?.completedAt || '',
+      mode: run?.mode || '',
+      modeResolution: run?.modeResolution || null,
+      provider: run?.provider || '',
+      model: run?.model || '',
+      agentSummary: runAgentSummary(run || {}),
+      errors: normalizeStringArray(run?.errors).map(item => redactDiagnosticText(item, 600)).slice(0, 12),
+      commitReason: redactDiagnosticText(run?.commitReason || '', 600),
+      commitAgent: run?.commitAgent || null,
+      commitCounts: run?.commitCounts || null,
+      outputSanitized: run?.outputSanitized === true,
+      userInputPreview: redactDiagnosticText(run?.userInputPreview || '', 800),
+      finalPreview: redactDiagnosticText(run?.finalPreview || '', 1400),
+      rawFinalPreview: redactDiagnosticText(run?.rawFinalPreview || '', 1400),
+      canonicalSync: run?.canonicalSync || null,
+      cbsSync: run?.cbsSync || null,
+      sessionSync: run?.sessionSync || null,
+      longMemorySync: run?.longMemorySync || null,
+      memoryRecoverySync: run?.memoryRecoverySync || null,
+      psycheSourceSync: run?.psycheSourceSync || null,
+      psycheIngestResult: run?.psycheIngestResult || null,
+      coldStartResult: run?.coldStartResult || null,
+      graphSync: run?.graphSync || null,
+      qualityRegex: run?.qualityRegex || null,
+      requestMessagesInfo: run?.requestMessagesInfo || null,
+      notes: notes.map(compactDiagnosticAgentTrace).slice(0, 12),
+      postPipelineResult: run?.postPipelineResult || null,
+    };
+  }
+
+  function diagnosticEventKey(event) {
+    return [event.kind, event.severity, event.runId, event.message].join('|');
+  }
+
+  function pushDiagnosticEvent(events, event) {
+    if (!event?.message) return;
+    const clean = {
+      severity: event.severity || 'info',
+      kind: event.kind || 'event',
+      at: event.at || '',
+      runId: event.runId || '',
+      message: redactDiagnosticText(event.message, 900),
+      detail: redactDiagnosticText(event.detail || '', 1400),
+    };
+    if (!events.some(item => diagnosticEventKey(item) === diagnosticEventKey(clean))) events.push(clean);
+  }
+
+  function collectRunDiagnosticEvents(logs, diagnostics) {
+    const events = [];
+    (Array.isArray(logs) ? logs : []).slice(0, 20).forEach(run => {
+      const at = run.completedAt || run.startedAt || '';
+      normalizeStringArray(run.errors).forEach(error => pushDiagnosticEvent(events, {
+        severity: 'error',
+        kind: 'run-error',
+        at,
+        runId: run.id || '',
+        message: error,
+      }));
+      if (run.commitReason && !isIntentionalSkipReason(run.commitReason)) {
+        pushDiagnosticEvent(events, {
+          severity: /^fallback:/i.test(String(run.commitReason)) ? 'warn' : 'info',
+          kind: 'commit-reason',
+          at,
+          runId: run.id || '',
+          message: run.commitReason,
+        });
+      }
+      (Array.isArray(run.notes) ? run.notes : []).forEach(note => {
+        if (note.error) pushDiagnosticEvent(events, {
+          severity: 'error',
+          kind: 'agent-error',
+          at,
+          runId: run.id || '',
+          message: `${note.name || note.id || 'agent'}: ${note.error}`,
+        });
+        else if (note.skipped && !isIntentionalSkipReason(note.text || note.message || '')) pushDiagnosticEvent(events, {
+          severity: 'warn',
+          kind: 'agent-skipped',
+          at,
+          runId: run.id || '',
+          message: `${note.name || note.id || 'agent'} skipped`,
+          detail: note.text || note.message || '',
+        });
+      });
+      if (run.psycheIngestResult?.errors) pushDiagnosticEvent(events, {
+        severity: 'warn',
+        kind: 'psyche-ingest',
+        at,
+        runId: run.id || '',
+        message: `Psyche ingest errors: ${run.psycheIngestResult.errors}`,
+      });
+      if (run.coldStartResult?.errors) pushDiagnosticEvent(events, {
+        severity: 'warn',
+        kind: 'cold-start',
+        at,
+        runId: run.id || '',
+        message: `Cold-start errors: ${run.coldStartResult.errors}`,
+      });
+      if (run.outputSanitized) pushDiagnosticEvent(events, {
+        severity: 'info',
+        kind: 'output-sanitized',
+        at,
+        runId: run.id || '',
+        message: 'Final output was sanitized before returning to chat.',
+      });
+    });
+    if (diagnostics?.runtime?.lastError) pushDiagnosticEvent(events, {
+      severity: 'error',
+      kind: 'runtime-last-error',
+      at: diagnostics.at || '',
+      message: diagnostics.runtime.lastError,
+    });
+    if (diagnostics?.storageHealth?.lastStorageError) pushDiagnosticEvent(events, {
+      severity: 'error',
+      kind: 'storage-error',
+      at: diagnostics.at || '',
+      message: diagnostics.storageHealth.lastStorageError,
+    });
+    return events.slice(0, 80);
+  }
+
+  function inferDiagnosticHints(packageData) {
+    const text = (() => {
+      try {
+        return JSON.stringify({
+          diagnostics: packageData.diagnostics || {},
+          events: packageData.events || [],
+          runs: packageData.runs || [],
+        }).slice(0, 180000);
+      } catch (_) {
+        return '';
+      }
+    })();
+    const hints = [];
+    if (/controlFloorTier1Rank is not defined/i.test(text)) hints.push('Detected old 1.1.48 runtime error. Update to 1.1.49 or later and reload the plugin.');
+    if (/0\/0 pre/i.test(text) || packageData.runs?.some(run => Array.isArray(run.notes) && run.notes.length === 0)) hints.push('Pre-agent count is zero in at least one run. Check whether the pipeline is empty, disabled, or not normalized.');
+    if (/json-parse-failed/i.test(text)) hints.push('State commit or source ingest returned unparsable JSON. Check the commit agent raw output and model reliability.');
+    if (/provider-not-ready|API key\/base URL missing|base URL missing|api key missing/i.test(text)) hints.push('At least one agent provider is not callable. Verify provider id, base URL, model, and key presence.');
+    if (!Array.isArray(packageData.diagnostics?.injectionTrace) || !packageData.diagnostics.injectionTrace.length) hints.push('No recent main injection trace is stored. Verify that the latest main request actually contains the Eros Tower analysis context.');
+    return uniqueStrings(hints).slice(0, 12);
+  }
+
+  function buildRunLogDiagnosticPackage(conf, context, state, runLogs = [], snapshots = [], backup = null) {
+    const diagnostics = buildDiagnosticsReport(conf, context, state, snapshots, backup);
+    const logs = (Array.isArray(runLogs) ? runLogs : []).slice(0, MAX_RUN_LOGS);
+    const packageData = {
+      format: 'eros-tower-run-diagnostic',
+      version: VERSION,
+      exportedAt: nowIso(),
+      scope: context?.scope || Runtime.lastScope || '',
+      context: context ? {
+        character: displayCharacterName(context),
+        chat: displayChatName(context),
+        chatId: context.chatId || '',
+        mode: context.mode || '',
+        messageCount: Array.isArray(context.messages) ? context.messages.length : 0,
+        canonicalSources: Array.isArray(context.canonicalSources) ? context.canonicalSources.length : 0,
+        canonicalUnits: Array.isArray(context.canonicalUnits) ? context.canonicalUnits.length : 0,
+      } : null,
+      system: {
+        pluginLabel: PLUGIN_LABEL,
+        version: VERSION,
+        patchNotes: SYSTEM_PATCH_NOTES,
+        runLogCount: logs.length,
+        debugLogEnabled: conf?.debugLog === true,
+        runLogEnabled: conf?.runLogEnabled !== false,
+        stateApiEnabled: conf?.stateApiEnabled !== false,
+        embeddingEnabled: conf?.embeddingEnabled === true,
+      },
+      providers: diagnosticProviderSummary(conf),
+      pipeline: diagnosticPipelineSummary(conf),
+      diagnostics,
+      events: collectRunDiagnosticEvents(logs, diagnostics),
+      runs: logs.map(compactDiagnosticRun).slice(0, 24),
+    };
+    packageData.hints = inferDiagnosticHints(packageData);
+    return packageData;
+  }
+
+  function mdLine(value = '') {
+    return String(value ?? '').replace(/\r\n/g, '\n');
+  }
+
+  function mdBullet(value) {
+    const text = mdLine(value).replace(/\n+/g, ' ').trim();
+    return text ? `- ${text}` : '';
+  }
+
+  function buildRunLogDiagnosticMarkdown(packageData) {
+    const ctx = packageData.context || {};
+    const diag = packageData.diagnostics || {};
+    const counts = diag.ledgerCounts || {};
+    const latest = Array.isArray(packageData.runs) && packageData.runs.length ? packageData.runs[0] : null;
+    const lines = [
+      '# Eros Tower Diagnostic Report',
+      '',
+      `- Exported: ${packageData.exportedAt || '-'}`,
+      `- Plugin: ${packageData.system?.pluginLabel || PLUGIN_LABEL}`,
+      `- Scope: ${packageData.scope || '-'}`,
+      `- Character: ${ctx.character || '-'}`,
+      `- Chat: ${ctx.chat || '-'}`,
+      `- Mode: ${ctx.mode || '-'}`,
+      `- Messages: ${ctx.messageCount ?? '-'}`,
+      `- Canonical Sources / Units: ${ctx.canonicalSources ?? '-'} / ${ctx.canonicalUnits ?? '-'}`,
+      '',
+      '## System Patch Notes',
+      '',
+      ...(packageData.system?.patchNotes || []).map(note => mdBullet(`${note.version} [${note.kind}] ${note.summary}`)).filter(Boolean),
+      '',
+      '## Current Diagnostics',
+      '',
+      mdBullet(`State size: ${diag.stateSize || 0} chars`),
+      mdBullet(`Run Log enabled: ${packageData.system?.runLogEnabled ? 'yes' : 'no'}`),
+      mdBullet(`State API enabled: ${packageData.system?.stateApiEnabled ? 'yes' : 'no'}`),
+      mdBullet(`Debug Log enabled: ${packageData.system?.debugLogEnabled ? 'yes' : 'no'}`),
+      mdBullet(`Ledger counts: memory ${counts.memory || 0}, lore ${counts.lore || 0}, secret ${counts.secret || 0}, graph ${counts.graphNodes || 0}/${counts.graphEdges || 0}`),
+      mdBullet(`Runtime last error: ${diag.runtime?.lastError || '(none)'}`),
+      mdBullet(`Storage last error: ${diag.storageHealth?.lastStorageError || '(none)'}`),
+      '',
+      '## Diagnostic Hints',
+      '',
+      ...((packageData.hints || []).length ? packageData.hints.map(mdBullet).filter(Boolean) : ['- (none)']),
+      '',
+      '## Event Summary',
+      '',
+      ...((packageData.events || []).length
+        ? packageData.events.slice(0, 30).map(event => mdBullet(`[${event.severity}/${event.kind}] ${event.at || '-'} ${event.message}${event.detail ? ` / ${event.detail}` : ''}`)).filter(Boolean)
+        : ['- (none)']),
+      '',
+      '## Latest Run',
+      '',
+      latest ? [
+        mdBullet(`Time: ${latest.completedAt || latest.startedAt || '-'}`),
+        mdBullet(`Status: ${latest.status || '-'}`),
+        mdBullet(`Mode: ${latest.mode || '-'}`),
+        mdBullet(`Provider/model: ${latest.provider || '-'} / ${latest.model || '-'}`),
+        mdBullet(`Agent: ${latest.agentSummary || '-'}`),
+        mdBullet(`Commit: ${latest.commitReason || '-'}`),
+        mdBullet(`Errors: ${(latest.errors || []).join(' | ') || '(none)'}`),
+      ].filter(Boolean).join('\n') : '- (none)',
+      '',
+      '### Latest Run Details',
+      '',
+      '```json',
+      JSON.stringify(latest || {}, null, 2).slice(0, 16000),
+      '```',
+      '',
+      '## Recent Runs',
+      '',
+      ...((packageData.runs || []).slice(0, 12).map((run, idx) => mdBullet(`${idx + 1}. ${run.completedAt || run.startedAt || '-'} / ${run.status || '-'} / ${run.mode || '-'} / ${run.agentSummary || '-'} / commit ${run.commitReason || '-'}`)).filter(Boolean)),
+      '',
+      '## Providers',
+      '',
+      ...((packageData.providers || []).length
+        ? packageData.providers.map(provider => mdBullet(`${provider.id || '-'} / ${provider.provider || '-'} / ${provider.defaultModel || '-'} / key ${provider.hasApiKey ? 'present' : 'missing'}`)).filter(Boolean)
+        : ['- (none)']),
+      '',
+      '## Pipeline',
+      '',
+      ...((packageData.pipeline || []).length
+        ? packageData.pipeline.map(agent => mdBullet(`${agent.enabled ? 'on' : 'off'} / ${agent.phase || '-'} / ${agent.id || '-'} / ${agent.providerId || '-'} / ${agent.model || '-'}`)).filter(Boolean)
+        : ['- (none)']),
+      '',
+      '## Injection Trace',
+      '',
+      '```json',
+      JSON.stringify(diag.injectionTrace || [], null, 2).slice(0, 12000),
+      '```',
+      '',
+      '## Full Diagnostic JSON Preview',
+      '',
+      '```json',
+      JSON.stringify({
+        format: packageData.format,
+        version: packageData.version,
+        exportedAt: packageData.exportedAt,
+        diagnostics: packageData.diagnostics,
+        events: packageData.events,
+      }, null, 2).slice(0, 24000),
+      '```',
+      '',
+    ];
+    return lines.flat().join('\n');
+  }
+
+  function diagnosticTimestamp() {
+    return nowIso().replace(/[:.]/g, '-').replace(/T/, '_').replace(/Z$/, 'Z');
   }
 
   async function loadScopeAndContext(requestMessages, conf) {
@@ -15214,8 +15591,24 @@
   }
 
   function renderRunLogPanel(logs) {
-    if (!logs.length) return `<section class="et-panel">${emptyState('아직 저장된 Run Log가 없습니다.')}</section>`;
+    const controls = `
+      <section class="et-panel">
+        <div class="et-ops-head">
+          <div>
+            <h2>Run Log 진단 내보내기</h2>
+            <div class="et-note">현재 채팅의 실행 기록, 시스템 패치 메모, 오류, 주입 trace, Provider/Agent 요약을 묶어 문제 분석용 문서로 저장합니다.</div>
+          </div>
+          <div class="et-actions et-actions-inline">
+            <button type="button" id="et-download-run-diagnostic-md">진단 리포트 MD</button>
+            <button type="button" id="et-download-run-diagnostic-json">진단 패키지 JSON</button>
+            <button type="button" id="et-copy-run-diagnostic-md">MD 복사</button>
+          </div>
+        </div>
+        <div id="et-run-diagnostic-status" class="et-status" data-kind="info"></div>
+      </section>`;
+    if (!logs.length) return `${controls}<section class="et-panel">${emptyState('아직 저장된 Run Log가 없습니다.')}</section>`;
     return `
+      ${controls}
       <section class="et-panel">
         <h2>Run Log</h2>
         <table class="et-table">
@@ -15908,6 +16301,7 @@
     const setUsageStatus = (text, kind = 'info') => setLocalStatus('et-usage-status', text, kind);
     const setPromptStatus = (text, kind = 'info') => setLocalStatus('et-prompt-status', text, kind);
     const setTranslationPromptStatus = (text, kind = 'info') => setLocalStatus('et-translation-prompt-status', text, kind);
+    const setRunDiagnosticStatus = (text, kind = 'info') => setLocalStatus('et-run-diagnostic-status', text, kind);
     const setAgentStatus = (agentId, text, kind = 'info') => setLocalStatus(`et-agent-status-${agentId}`, text, kind);
 
     const saveCurrent = async (statusSetter = setMainStatus, message = '설정 저장 완료. 다음 요청부터 적용됩니다.') => {
@@ -15971,6 +16365,51 @@
       Runtime.dashboardVisible = false;
       Runtime.runProgressHiddenByUser = false;
       await api.hideContainer?.();
+    });
+
+    const buildFreshRunDiagnosticPackage = async () => {
+      const latestConf = await getConfig();
+      const freshContext = context?.noSession
+        ? context
+        : await safeCall(() => loadScopeAndContext([], latestConf), context);
+      const activeContext = freshContext || context;
+      const latestState = activeContext?.noSession
+        ? (state || createDefaultState(activeContext?.mode || latestConf.mode || 'rp'))
+        : await loadState(activeContext.scope, activeContext.mode, latestConf);
+      const runLogs = activeContext?.noSession
+        ? []
+        : await Storage.get(STORAGE.runLog(activeContext.scope), []);
+      const ring = activeContext?.noSession ? [] : await loadStateSnapshots(activeContext.scope);
+      const backup = activeContext?.noSession ? null : await Storage.get(STORAGE.backup(activeContext.scope), null);
+      return buildRunLogDiagnosticPackage(latestConf, activeContext, latestState, runLogs, ring, backup);
+    };
+
+    $('et-download-run-diagnostic-md')?.addEventListener('click', async event => {
+      await withBusy(event.currentTarget, async () => {
+        setRunDiagnosticStatus('진단 리포트를 생성하는 중입니다.', 'info');
+        const packageData = await buildFreshRunDiagnosticPackage();
+        const text = buildRunLogDiagnosticMarkdown(packageData);
+        await downloadTextFile(`eros-tower-diagnostic-${diagnosticTimestamp()}.md`, text, 'text/markdown;charset=utf-8');
+        setRunDiagnosticStatus('진단 리포트 MD를 다운로드했습니다.', 'success');
+      }, 'et-run-diagnostic-status');
+    });
+
+    $('et-download-run-diagnostic-json')?.addEventListener('click', async event => {
+      await withBusy(event.currentTarget, async () => {
+        setRunDiagnosticStatus('진단 패키지를 생성하는 중입니다.', 'info');
+        const packageData = await buildFreshRunDiagnosticPackage();
+        await downloadTextFile(`eros-tower-diagnostic-${diagnosticTimestamp()}.json`, JSON.stringify(packageData, null, 2), 'application/json;charset=utf-8');
+        setRunDiagnosticStatus('진단 패키지 JSON을 다운로드했습니다.', 'success');
+      }, 'et-run-diagnostic-status');
+    });
+
+    $('et-copy-run-diagnostic-md')?.addEventListener('click', async event => {
+      await withBusy(event.currentTarget, async () => {
+        setRunDiagnosticStatus('진단 리포트를 생성하는 중입니다.', 'info');
+        const packageData = await buildFreshRunDiagnosticPackage();
+        await copyText(buildRunLogDiagnosticMarkdown(packageData));
+        setRunDiagnosticStatus('진단 리포트 MD를 클립보드에 복사했습니다.', 'success');
+      }, 'et-run-diagnostic-status');
     });
 
     $('et-save')?.addEventListener('click', async event => {
@@ -17180,6 +17619,25 @@
       area.select();
       document.execCommand('copy');
       area.remove();
+    }
+  }
+
+  async function downloadTextFile(filename, text, mime = 'text/plain;charset=utf-8') {
+    const safeName = String(filename || `eros-tower-${diagnosticTimestamp()}.txt`)
+      .replace(/[\\/:*?"<>|]+/g, '-')
+      .slice(0, 180);
+    try {
+      const blob = new Blob([String(text ?? '')], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = safeName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+    } catch (_) {
+      await copyText(String(text ?? ''));
     }
   }
 
