@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.35
+//@display-name ☸Eros Tower 1.1.36
 //@api 3.0
-//@version 1.1.35
+//@version 1.1.36
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -35,18 +35,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.35
+ * Eros Tower 1.1.36
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.35 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.36 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.35';
+  const VERSION = '1.1.36';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.35`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.36`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -63,11 +63,12 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.35 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.36 analysis context';
   const AUTO_MAIN_BRIEFING_CHARS = 36000;
   const PSYCHE_SOURCE_CHUNK_CHARS = 16000;
   const PSYCHE_SOURCE_CHUNK_OVERLAP_CHARS = 1200;
   const PSYCHE_INGEST_SOURCE_CHARS = 18000;
+  const PSYCHE_INGEST_BATCH_CHARS = 120000;
   const PSYCHE_COMPILED_SETTING_CHARS = 12000;
   const PSYCHE_STATE_JSON_CHARS = 14000;
   const PSYCHE_HISTORY_TOTAL_CHARS = 10000;
@@ -160,7 +161,7 @@
     autoColdStartEnabled: true,
     agentRoutingMode: 'custom',
     coldStartChunkSize: 12,
-    coldStartMaxChunksPerRun: 3,
+    coldStartMaxChunksPerRun: 256,
     coldStartRetryDelayTurns: 4,
     coldStartMaxAttempts: 3,
     associationGraphEnabled: true,
@@ -911,10 +912,10 @@
     merged.autoColdStartEnabled = true;
     merged.agentRoutingMode = 'custom';
     merged.coldStartChunkSize = parseNumber(merged.coldStartChunkSize, DEFAULT_CONFIG.coldStartChunkSize, 4, 24);
-    if (Number(stored?.coldStartMaxChunksPerRun) === 16) {
+    if (Number(stored?.coldStartMaxChunksPerRun) > 0 && Number(stored?.coldStartMaxChunksPerRun) <= 16) {
       merged.coldStartMaxChunksPerRun = DEFAULT_CONFIG.coldStartMaxChunksPerRun;
     }
-    merged.coldStartMaxChunksPerRun = parseNumber(merged.coldStartMaxChunksPerRun, DEFAULT_CONFIG.coldStartMaxChunksPerRun, 0, 16);
+    merged.coldStartMaxChunksPerRun = parseNumber(merged.coldStartMaxChunksPerRun, DEFAULT_CONFIG.coldStartMaxChunksPerRun, 0, 512);
     merged.coldStartRetryDelayTurns = parseNumber(merged.coldStartRetryDelayTurns, DEFAULT_CONFIG.coldStartRetryDelayTurns, 0, 80);
     merged.coldStartMaxAttempts = parseNumber(merged.coldStartMaxAttempts, DEFAULT_CONFIG.coldStartMaxAttempts, 1, 12);
     merged.associationGraphEnabled = parseBool(merged.associationGraphEnabled, DEFAULT_CONFIG.associationGraphEnabled) === true;
@@ -2320,17 +2321,26 @@
 
   const PSYCHE_SOURCE_INGEST_PROMPT = [
     'You are the Eros Tower Psyche Source Ingestor.',
-    'Convert one provided source chunk into compact durable retrieval units for continuity, lore, memory, state, and knowledge-boundary use.',
+    'Convert the provided source chunk or source chunk batch into compact durable retrieval units for continuity, lore, memory, state, and knowledge-boundary use.',
     'Do not collapse a lorebook entry into one general summary. Extract every concrete named character, faction, place, object, rule, secret, relationship, timeline fact, resource, system, custom, and knowledge boundary as its own usable unit when present.',
     'For roster-like lore with many minor/supporting characters, create separate character or relationship units for each distinct actor instead of summarizing the roster as a group.',
     'For world-setting lore, split laws, institutions, geography, culture, economy, magic/technology rules, ranks, taboos, and public systems into separate lore/knowledge/worldFront units.',
     'For secrets or hidden information, preserve owners, knowers, suspecters, cannotKnow, reveal gates, and risks. Do not flatten a secret into public lore.',
-    'Use only the source chunk and source metadata. Do not write story prose or a final reply.',
+    'Use only the provided source chunks and source metadata. Do not write story prose or a final reply.',
     'Return JSON only. No markdown.',
-    'Allowed shape:',
+    'Allowed single-chunk shape:',
     '{',
     '  "units": [{"id":"","type":"lore|memory|state|character|relationship|worldFront|secret|knowledge","name":"","summary":"","keywords":[],"aliases":[],"knownBy":[],"cannotKnow":[],"sourceClass":"foundation|always-active|selective|contextual","loreStability":"fixed|persistent|triggered|contextual","retention":"fixed|persistent|triggered|contextual","priority":5,"importance":5,"confidence":0.85,"canonLevel":"established","sourceRefs":[]}]',
     '}',
+    'Allowed batch shape:',
+    '{',
+    '  "chunks": [{"chunkId":"","complete":true,"remainingHint":"","units":[{"id":"","type":"lore|memory|state|character|relationship|worldFront|secret|knowledge","name":"","summary":"","keywords":[],"aliases":[],"knownBy":[],"cannotKnow":[],"sourceClass":"foundation|always-active|selective|contextual","loreStability":"fixed|persistent|triggered|contextual","retention":"fixed|persistent|triggered|contextual","priority":5,"importance":5,"confidence":0.85,"canonLevel":"established","sourceRefs":[]}]}]',
+    '}',
+    'In batch mode, preserve each unit under the correct chunkId. Do not merge unrelated chunks into a single vague unit.',
+    'If one source chunk contains dozens or hundreds of roster entries, emit separate units for as many distinct entries as fit in the response. Do not replace them with a single roster summary.',
+    'If a chunk cannot be fully covered in one response, set that chunk block to "complete": false and include "remainingHint" with what still needs extraction.',
+    'If previousUnits are provided for a chunk, continue extracting missing units from the same source instead of repeating those units.',
+    'There is no fixed maximum number of units per chunk. Dense simulation rosters and large world settings should produce as many separate units as the source requires.',
     'Prefer complete coverage of distinct source facts over aggressive compression. Keep each unit compact, but do not omit minor entries solely because they are minor.',
     'Mark immutable foundations, always-active context, selective triggers, and contextual facts with sourceClass/loreStability/retention when the source supports it.',
   ].join('\n');
@@ -6532,7 +6542,8 @@
       return;
     }
     const attempts = parseNumber(current.attempts, 0, 0, 99) + 1;
-    const permanent = attempts >= parseNumber(conf?.coldStartMaxAttempts, DEFAULT_CONFIG.coldStartMaxAttempts, 1, 12);
+    const partialCoverage = /^partial-source-coverage/i.test(String(error || ''));
+    const permanent = !partialCoverage && attempts >= parseNumber(conf?.coldStartMaxAttempts, DEFAULT_CONFIG.coldStartMaxAttempts, 1, 12);
     const retryDelay = parseNumber(conf?.coldStartRetryDelayTurns, DEFAULT_CONFIG.coldStartRetryDelayTurns, 0, 80);
     state.psycheChunks[idx] = {
       ...current,
@@ -6543,11 +6554,10 @@
     };
   }
 
-  function normalizePsycheIngestUnits(parsed, chunk, source, turn) {
-    const units = Array.isArray(parsed?.units) ? parsed.units : [];
-    return units.map((unit, idx) => normalizePsycheUnit({
+  function normalizePsycheUnitsForChunk(units, chunk, source, turn) {
+    return (Array.isArray(units) ? units : []).map((unit, idx) => normalizePsycheUnit({
       ...unit,
-      id: firstNonEmpty(unit?.id, `psyche:${chunk.hash}:${idx}:${unit?.name || unit?.summary || ''}`),
+      id: `psyche:${chunk.hash}:${hashString([unit?.type || unit?.kind || '', unit?.name || '', unit?.summary || unit?.fact || unit?.text || ''].join('\n')).slice(0, 16)}`,
       sourceId: chunk.sourceId,
       sourceKind: chunk.sourceKind,
       sourcePath: chunk.sourcePath,
@@ -6567,6 +6577,168 @@
     }, turn)).filter(Boolean);
   }
 
+  function normalizePsycheIngestUnits(parsed, chunk, source, turn) {
+    return normalizePsycheUnitsForChunk(parsed?.units, chunk, source, turn);
+  }
+
+  function findPsycheBatchItemForUnit(unit, batch, fallbackIndex = 0) {
+    const list = Array.isArray(batch) ? batch : [];
+    const byChunkId = new Map(list.map(item => [String(item?.chunk?.id || ''), item]).filter(([id]) => id));
+    const refs = normalizeStringArray(unit?.sourceRefs);
+    const chunkId = firstNonEmpty(
+      unit?.chunkId,
+      unit?.sourceChunkId,
+      unit?.chunk_id,
+      refs.find(ref => byChunkId.has(String(ref || '')))
+    );
+    if (chunkId && byChunkId.has(String(chunkId))) return byChunkId.get(String(chunkId));
+    const sourceId = firstNonEmpty(unit?.sourceId, unit?.source_id);
+    if (sourceId) {
+      const found = list.find(item => item?.chunk?.sourceId === sourceId || item?.source?.id === sourceId);
+      if (found) return found;
+    }
+    const sourcePath = firstNonEmpty(unit?.sourcePath, unit?.source_path);
+    if (sourcePath) {
+      const found = list.find(item => item?.chunk?.sourcePath === sourcePath || item?.source?.path === sourcePath);
+      if (found) return found;
+    }
+    return list[Math.max(0, Math.min(list.length - 1, Number(fallbackIndex || 0)))] || null;
+  }
+
+  function normalizePsycheBatchIngestUnits(parsed, batch, turn) {
+    const chunkBlocks = Array.isArray(parsed?.chunks)
+      ? parsed.chunks
+      : Array.isArray(parsed?.results)
+        ? parsed.results
+        : [];
+    if (chunkBlocks.length) {
+      return chunkBlocks.flatMap((block, idx) => {
+        const item = findPsycheBatchItemForUnit(block, batch, idx);
+        if (!item) return [];
+        return normalizePsycheUnitsForChunk(block?.units, item.chunk, item.source, turn);
+      });
+    }
+    return (Array.isArray(parsed?.units) ? parsed.units : []).flatMap((unit, idx) => {
+      const item = findPsycheBatchItemForUnit(unit, batch, idx);
+      if (!item) return [];
+      return normalizePsycheUnitsForChunk([unit], item.chunk, item.source, turn);
+    });
+  }
+
+  function psycheBatchCompletionMap(parsed, batch) {
+    const out = new Map();
+    (Array.isArray(batch) ? batch : []).forEach(item => {
+      if (!item?.chunk?.id) return;
+      const dense = /dense|long/i.test(psycheChunkDensityHint(item.text));
+      out.set(item.chunk.id, { complete: !dense, remainingHint: '' });
+    });
+    const chunkBlocks = Array.isArray(parsed?.chunks)
+      ? parsed.chunks
+      : Array.isArray(parsed?.results)
+        ? parsed.results
+        : [];
+    chunkBlocks.forEach((block, idx) => {
+      const item = findPsycheBatchItemForUnit(block, batch, idx);
+      if (!item?.chunk?.id) return;
+      const dense = /dense|long/i.test(psycheChunkDensityHint(item.text));
+      const explicitlyComplete = block?.complete === true || block?.coverageComplete === true || /complete|done|covered/i.test(String(block?.status || block?.coverage || ''));
+      const explicitlyIncomplete = block?.complete === false
+        || block?.coverageComplete === false
+        || /incomplete|partial|continue/i.test(String(block?.status || block?.coverage || ''));
+      out.set(item.chunk.id, {
+        complete: explicitlyIncomplete ? false : dense ? explicitlyComplete : true,
+        remainingHint: String(block?.remainingHint || block?.remaining || block?.next || '').slice(0, 220),
+      });
+    });
+    return out;
+  }
+
+  function resolvePsycheIngestBatchChars(conf, agentConf) {
+    const contextBased = Math.floor(parseNumber(agentConf?.contextWindow, conf?.contextWindow || DEFAULT_CONFIG.contextWindow, 4, 80) * 2500);
+    return Math.max(PSYCHE_INGEST_SOURCE_CHARS, Math.min(240000, Math.max(PSYCHE_INGEST_BATCH_CHARS, contextBased)));
+  }
+
+  function buildPsycheIngestBatches(items, conf, agentConf) {
+    const max = resolvePsycheIngestBatchChars(conf, agentConf);
+    const batches = [];
+    let current = [];
+    let used = 0;
+    (Array.isArray(items) ? items : []).forEach(item => {
+      const size = String(item?.text || '').length + JSON.stringify(item?.previousUnits || []).length + 1100;
+      if (current.length && used + size > max) {
+        batches.push(current);
+        current = [];
+        used = 0;
+      }
+      current.push(item);
+      used += size;
+    });
+    if (current.length) batches.push(current);
+    return batches;
+  }
+
+  function psycheChunkDensityHint(text) {
+    const source = String(text || '');
+    if (!source.trim()) return 'empty';
+    const lines = source.split(/\n+/).map(line => line.trim()).filter(Boolean);
+    const listed = lines.filter(line => (
+      /^[-*\d]+[.)\s]/.test(line)
+      || /^[^\s:]{1,40}\s*:/.test(line)
+      || /[,;]\s*[^\s,;]{1,32}\s*:/.test(line)
+    )).length;
+    if (listed >= 80) return 'very-dense-roster-or-catalog';
+    if (listed >= 25) return 'dense-roster-or-multi-entry-lore';
+    if (source.length >= 12000) return 'long-world-setting-or-large-lore';
+    if (source.length >= 6000) return 'medium-lore';
+    return 'normal';
+  }
+
+  function existingPsycheUnitsForChunk(state, chunkId, limit = 80) {
+    return (Array.isArray(state?.psycheUnits) ? state.psycheUnits : [])
+      .filter(unit => unit?.chunkId === chunkId && !['superseded', 'retired', 'archived'].includes(String(unit?.status || '').toLowerCase()))
+      .slice(-Math.max(1, Number(limit || 80)))
+      .map(unit => ({
+        type: unit.type,
+        name: unit.name,
+        summary: String(unit.summary || '').slice(0, 180),
+      }));
+  }
+
+  function formatPsycheIngestBatchUserContent(batch) {
+    const chunks = (Array.isArray(batch) ? batch : []).map(({ chunk, source, text, previousUnits }) => ({
+      id: chunk.id,
+      sourceId: chunk.sourceId,
+      kind: chunk.sourceKind,
+      path: chunk.sourcePath,
+      label: chunk.sourceLabel,
+      priority: chunk.priority,
+      alwaysActive: chunk.alwaysActive,
+      sourceRank: chunk.sourceRank,
+      sourceHash: source?.hash || '',
+      chunkId: chunk.id,
+      chunkIndex: chunk.index,
+      chunkTotal: source?.chunkCount || 0,
+      sourceClass: chunk.sourceClass || source?.sourceClass || '',
+      loreStability: chunk.loreStability || source?.loreStability || '',
+      retention: chunk.retention || source?.retention || '',
+      length: String(text || '').length,
+      previousError: chunk.error || '',
+      densityHint: psycheChunkDensityHint(text),
+      previousUnits: Array.isArray(previousUnits) ? previousUnits : [],
+    }));
+    const parts = [
+      '<source_batch_metadata>',
+      compactJson({ batch: true, chunkCount: chunks.length, chunks }),
+      '</source_batch_metadata>',
+    ];
+    (Array.isArray(batch) ? batch : []).forEach(({ chunk, text }) => {
+      parts.push(`<source_chunk chunkId="${chunk.id}" sourceId="${chunk.sourceId}">`);
+      parts.push(String(text || ''));
+      parts.push('</source_chunk>');
+    });
+    return parts.join('\n');
+  }
+
   function mergePsycheUnits(state, units) {
     state.psycheUnits = normalizePsycheUnits(state.psycheUnits, state.turn);
     upsertArrayById(state.psycheUnits, normalizePsycheUnits(units, state.turn), itemKey);
@@ -6579,12 +6751,16 @@
 
   async function runPsycheSourceIngest(conf, context, state) {
     if (!conf.autoMemoryEnabled || !conf.autoColdStartEnabled || !conf.stateApiEnabled) return { processed: 0, skipped: true, reason: 'disabled' };
-    const limit = parseNumber(conf.coldStartMaxChunksPerRun, DEFAULT_CONFIG.coldStartMaxChunksPerRun, 0, 16);
+    const limit = parseNumber(conf.coldStartMaxChunksPerRun, DEFAULT_CONFIG.coldStartMaxChunksPerRun, 0, 512);
     if (limit <= 0) return { processed: 0, skipped: true, reason: 'limit-zero' };
     const agent = getPsycheMainAgent(conf);
     if (!agent) return { processed: 0, skipped: true, reason: 'no-psyche-main' };
     const agentConf = resolveAgentConf(agent, conf);
-    if (!canCallProvider(agentConf)) return { processed: 0, skipped: true, reason: 'provider-not-ready' };
+    const ingestAgentConf = {
+      ...agentConf,
+      maxTokens: Math.max(parseNumber(agentConf.maxTokens, conf.maxTokens, 128, 16000), 12000),
+    };
+    if (!canCallProvider(ingestAgentConf)) return { processed: 0, skipped: true, reason: 'provider-not-ready' };
     state.psycheChunks = normalizePsycheChunks(state.psycheChunks);
     const sourceMap = new Map((state.psycheSources || []).map(source => [source.id, source]));
     const candidates = state.psycheChunks
@@ -6598,6 +6774,7 @@
       .slice(0, limit);
     if (!candidates.length) return { processed: 0, skipped: true, reason: 'no-pending-source-chunk' };
     const results = [];
+    const pendingItems = [];
     for (const chunk of candidates) {
       const source = sourceMap.get(chunk.sourceId);
       const text = resolvePsycheChunkText(chunk, context, conf);
@@ -6606,76 +6783,103 @@
         results.push({ id: chunk.id, sourceId: chunk.sourceId, error: 'source-unavailable' });
         continue;
       }
-      const messages = [
-        { role: 'system', content: PSYCHE_SOURCE_INGEST_PROMPT },
-        { role: 'user', content: [
-          '<source_metadata>',
-          compactJson({
-            id: chunk.sourceId,
-            kind: chunk.sourceKind,
-            path: chunk.sourcePath,
-            label: chunk.sourceLabel,
-            priority: chunk.priority,
-            alwaysActive: chunk.alwaysActive,
-            sourceRank: chunk.sourceRank,
-            sourceHash: source?.hash || '',
-            chunkId: chunk.id,
-            chunkIndex: chunk.index,
-            chunkTotal: source?.chunkCount || 0,
-            sourceClass: chunk.sourceClass || source?.sourceClass || '',
-            loreStability: chunk.loreStability || source?.loreStability || '',
-            retention: chunk.retention || source?.retention || '',
-          }),
-          '</source_metadata>',
-          '<source_chunk>',
-          text.slice(0, PSYCHE_INGEST_SOURCE_CHARS),
-          '</source_chunk>',
-        ].join('\n') },
-      ];
-      const promptTrace = formatPromptTraceForRunLog(messages, conf, Math.floor(MAX_RUN_LOG_TEXT_CHARS / 2));
-      const startedAt = Date.now();
-      try {
-        const raw = await callAgent(agentConf, messages);
-        const parsed = extractJsonObject(raw);
-        if (!parsed) throw new Error('json-parse-failed');
-        const units = normalizePsycheIngestUnits(parsed, chunk, source, state.turn);
-        mergePsycheUnits(state, units);
-        markPsycheChunk(state, chunk.id, true, '', conf);
-        results.push({
-          id: chunk.id,
-          sourceId: chunk.sourceId,
-          units: units.length,
-          ms: Date.now() - startedAt,
-          prompt: promptTrace,
-          rawOutput: clipRunLogText(raw, Math.floor(MAX_RUN_LOG_TEXT_CHARS / 2)),
-          agent: stateCommitAgentInfo(agent, agentConf),
-        });
-      } catch (err) {
-        markPsycheChunk(state, chunk.id, false, err.message, conf);
-        results.push({
-          id: chunk.id,
-          sourceId: chunk.sourceId,
-          ms: Date.now() - startedAt,
-          error: err.message,
-          prompt: promptTrace,
-          rawOutput: '',
-          agent: stateCommitAgentInfo(agent, agentConf),
-        });
-      }
+      pendingItems.push({ chunk, source, text: text.slice(0, PSYCHE_INGEST_SOURCE_CHARS) });
     }
-    const errors = results.filter(item => item.error).length;
+    let apiCalls = 0;
+    let totalBatches = 0;
+    let queue = pendingItems;
+    const maxPasses = parseNumber(conf.coldStartMaxAttempts, DEFAULT_CONFIG.coldStartMaxAttempts, 1, 12);
+    for (let pass = 0; queue.length && pass < maxPasses; pass += 1) {
+      const batches = buildPsycheIngestBatches(queue.map(item => ({
+        ...item,
+        previousUnits: existingPsycheUnitsForChunk(state, item.chunk.id, 160),
+      })), conf, ingestAgentConf);
+      totalBatches += batches.length;
+      const retryItems = [];
+      for (const batch of batches) {
+        const messages = [
+          { role: 'system', content: PSYCHE_SOURCE_INGEST_PROMPT },
+          { role: 'user', content: formatPsycheIngestBatchUserContent(batch) },
+        ];
+        const promptTrace = formatPromptTraceForRunLog(messages, conf, Math.floor(MAX_RUN_LOG_TEXT_CHARS / 2));
+        const startedAt = Date.now();
+        apiCalls += 1;
+        try {
+          const raw = await callAgent(ingestAgentConf, messages);
+          const parsed = extractJsonObject(raw);
+          if (!parsed) throw new Error('json-parse-failed');
+          const units = normalizePsycheBatchIngestUnits(parsed, batch, state.turn);
+          const completion = psycheBatchCompletionMap(parsed, batch);
+          mergePsycheUnits(state, units);
+          const unitCounts = new Map();
+          units.forEach(unit => unitCounts.set(unit.chunkId, (unitCounts.get(unit.chunkId) || 0) + 1));
+          const rawOutput = clipRunLogText(raw, Math.floor(MAX_RUN_LOG_TEXT_CHARS / 2));
+          batch.forEach((item, idx) => {
+            const unitCount = unitCounts.get(item.chunk.id) || 0;
+            const done = completion.get(item.chunk.id)?.complete !== false && unitCount > 0;
+            const remainingHint = completion.get(item.chunk.id)?.remainingHint || '';
+            const canContinue = !done && unitCount > 0 && pass + 1 < maxPasses;
+            const chunkError = done ? '' : (unitCount ? `partial-source-coverage${remainingHint ? `: ${remainingHint}` : ''}` : 'no-units-extracted');
+            const error = done || canContinue ? '' : chunkError;
+            markPsycheChunk(state, item.chunk.id, done, chunkError, conf);
+            if (canContinue) retryItems.push(item);
+            results.push({
+              id: item.chunk.id,
+              sourceId: item.chunk.sourceId,
+              units: unitCount,
+              ms: Date.now() - startedAt,
+              batchSize: batch.length,
+              apiCall: apiCalls,
+              pass: pass + 1,
+              complete: done,
+              willContinue: canContinue,
+              remainingHint,
+              error,
+              prompt: idx === 0 ? promptTrace : '',
+              rawOutput: idx === 0 ? rawOutput : '',
+              agent: stateCommitAgentInfo(agent, ingestAgentConf),
+            });
+          });
+        } catch (err) {
+          batch.forEach((item, idx) => {
+            markPsycheChunk(state, item.chunk.id, false, err.message, conf);
+            results.push({
+              id: item.chunk.id,
+              sourceId: item.chunk.sourceId,
+              ms: Date.now() - startedAt,
+              batchSize: batch.length,
+              apiCall: apiCalls,
+              pass: pass + 1,
+              error: err.message,
+              prompt: idx === 0 ? promptTrace : '',
+              rawOutput: '',
+              agent: stateCommitAgentInfo(agent, ingestAgentConf),
+            });
+          });
+        }
+      }
+      queue = retryItems;
+    }
+    const latestByChunk = new Map();
+    results.forEach(item => latestByChunk.set(item.id, item));
+    const latestResults = Array.from(latestByChunk.values());
+    const errors = latestResults.filter(item => item.error).length;
     state.psycheIngest = normalizePsycheIngestState({
       ...state.psycheIngest,
       lastRunAt: nowIso(),
-      lastError: errors ? results.find(item => item.error)?.error || '' : '',
-      processedChunks: parseNumber(state.psycheIngest?.processedChunks, 0, 0, 999999) + results.length - errors,
+      lastError: errors ? latestResults.find(item => item.error)?.error || '' : '',
+      processedChunks: parseNumber(state.psycheIngest?.processedChunks, 0, 0, 999999) + latestResults.length - errors,
       failedChunks: parseNumber(state.psycheIngest?.failedChunks, 0, 0, 999999) + errors,
       stats: {
         ...(state.psycheIngest?.stats || {}),
         lastRun: {
-          processed: results.length,
+          processed: latestResults.length,
+          attempts: results.length,
           errors,
           units: results.reduce((sum, item) => sum + parseNumber(item.units, 0, 0, 999999), 0),
+          apiCalls,
+          batchMode: true,
+          batches: totalBatches,
           ...psycheSourceCoverageStats(state),
           at: nowIso(),
         },
@@ -6683,11 +6887,15 @@
     }, state);
     const coverage = psycheSourceCoverageStats(state);
     return {
-      processed: results.length,
-      extracted: results.filter(item => !item.error).length,
+      processed: latestResults.length,
+      attempts: results.length,
+      extracted: latestResults.filter(item => !item.error).length,
       errors,
+      apiCalls,
+      batchMode: true,
+      batches: totalBatches,
       ...coverage,
-      agent: stateCommitAgentInfo(agent, agentConf),
+      agent: stateCommitAgentInfo(agent, ingestAgentConf),
       results,
     };
   }
@@ -7180,7 +7388,7 @@
   async function runAutoColdStart(conf, context, state) {
     if (!conf.autoMemoryEnabled || !conf.autoColdStartEnabled || !conf.stateApiEnabled) return { processed: 0, skipped: true, reason: 'disabled' };
     if (Array.isArray(state.psycheChunks) && state.psycheChunks.length) return { processed: 0, skipped: true, reason: 'superseded-by-psyche-source-ingest' };
-    const limit = parseNumber(conf.coldStartMaxChunksPerRun, DEFAULT_CONFIG.coldStartMaxChunksPerRun, 0, 16);
+    const limit = parseNumber(conf.coldStartMaxChunksPerRun, DEFAULT_CONFIG.coldStartMaxChunksPerRun, 0, 512);
     if (limit <= 0) return { processed: 0, skipped: true, reason: 'limit-zero' };
     const agent = getColdStartPsycheAgent(conf);
     if (!agent) return { processed: 0, skipped: true, reason: 'no-psyche-agent' };
@@ -13170,7 +13378,7 @@
       const incomplete = Number(psycheSourceSync.incompleteSources || 0);
       lines.push(`Psyche sources ${Number(psycheSourceSync.activeSources || psycheSourceSync.sources || 0)} / chunks ${absorbed}/${total}${incomplete ? ` / incomplete sources ${incomplete}` : ''}`);
     }
-    if (psycheIngestResult && !psycheIngestResult.skipped) lines.push(`Psyche ingest ${Number(psycheIngestResult.processed || 0)} / units ${Array.isArray(psycheIngestResult.results) ? psycheIngestResult.results.reduce((sum, item) => sum + Number(item.units || 0), 0) : 0} / errors ${Number(psycheIngestResult.errors || 0)}`);
+    if (psycheIngestResult && !psycheIngestResult.skipped) lines.push(`Psyche ingest ${Number(psycheIngestResult.processed || 0)} chunks / calls ${Number(psycheIngestResult.apiCalls || 0)} / units ${Array.isArray(psycheIngestResult.results) ? psycheIngestResult.results.reduce((sum, item) => sum + Number(item.units || 0), 0) : 0} / errors ${Number(psycheIngestResult.errors || 0)}`);
     if (cold.processed || cold.extracted || cold.errors) lines.push(`Cold-start 처리 ${Number(cold.processed || 0)} / 추출 ${Number(cold.extracted || 0)} / 오류 ${Number(cold.errors || 0)}`);
     lines.push(`연관 그래프 ${graph.nodes} nodes / ${graph.edges} edges`);
     return lines;
