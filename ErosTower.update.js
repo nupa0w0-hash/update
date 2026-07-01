@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.32
+//@display-name ☸Eros Tower 1.1.33
 //@api 3.0
-//@version 1.1.32
+//@version 1.1.33
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -26,7 +26,7 @@
 //@arg et_embedding_model string Embedding model name.
 //@arg et_auto_memory_enabled string Enable automatic Eros memory engine. true/false
 //@arg et_auto_cold_start_enabled string Enable automatic long-memory cold start. true/false
-//@arg et_injection_budget int Manual max chars injected into main request. 0/unset means unlimited.
+//@arg et_injection_budget int Manual max chars injected into main request. 0/unset means automatic structured briefing.
 //@arg et_extra_body_json string Extra JSON body merged into agent requests
 //@arg et_pipeline_json string Override Eros Tower pipeline JSON
 //@arg et_prompt_presets_json string Override Eros agent prompt preset JSON
@@ -35,18 +35,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.32
+ * Eros Tower 1.1.33
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.32 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.33 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.32';
+  const VERSION = '1.1.33';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.32`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.33`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -63,7 +63,8 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.32 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.33 analysis context';
+  const AUTO_MAIN_BRIEFING_CHARS = 36000;
   const PSYCHE_SOURCE_CHUNK_CHARS = 6000;
   const PSYCHE_SOURCE_CHUNK_OVERLAP_CHARS = 360;
   const PSYCHE_INGEST_SOURCE_CHARS = 7600;
@@ -2320,9 +2321,10 @@
     'Return JSON only. No markdown.',
     'Allowed shape:',
     '{',
-    '  "units": [{"id":"","type":"lore|memory|state|character|relationship|worldFront|secret|knowledge","name":"","summary":"","keywords":[],"aliases":[],"knownBy":[],"cannotKnow":[],"priority":5,"importance":5,"confidence":0.85,"canonLevel":"established","sourceRefs":[]}]',
+    '  "units": [{"id":"","type":"lore|memory|state|character|relationship|worldFront|secret|knowledge","name":"","summary":"","keywords":[],"aliases":[],"knownBy":[],"cannotKnow":[],"sourceClass":"foundation|always-active|selective|contextual","loreStability":"fixed|persistent|triggered|contextual","retention":"fixed|persistent|triggered|contextual","priority":5,"importance":5,"confidence":0.85,"canonLevel":"established","sourceRefs":[]}]',
     '}',
     'Prefer fewer high-value units over many shallow entries.',
+    'Mark immutable foundations, always-active context, selective triggers, and contextual facts with sourceClass/loreStability/retention when the source supports it.',
   ].join('\n');
 
   function createDefaultPsycheIngestState() {
@@ -2611,6 +2613,9 @@
       sourceRank,
       priority,
       importance,
+      sourceClass: cleanString(item.sourceClass, ''),
+      loreStability: cleanString(item.loreStability, ''),
+      retention: cleanString(item.retention, ''),
       confidence: parseNumber(item.confidence, inferConfidence(item), 0, 1),
       canonLevel: normalizeCanonLevel(item.canonLevel || item.certainty),
       status: ['active', 'superseded', 'retired', 'disputed'].includes(String(item.status || 'active')) ? String(item.status || 'active') : 'active',
@@ -5349,7 +5354,19 @@
     const lorePreview = lore
       .filter(item => item?.kind !== 'desc' && item?.kind !== 'firstMessage')
       .slice(0, 32)
-      .map(item => `- ${item.kind}/${item.path}${item.meta?.alwaysActive ? ' always' : ''} keys=${item.activationKeys.join(', ') || '-'}: ${item.content.slice(0, 650)}`)
+      .map(item => {
+        const meta = [
+          item.kind || 'lore',
+          item.path || '',
+          item.meta?.constant ? 'constant' : '',
+          item.meta?.alwaysActive ? 'always' : '',
+          item.meta?.selective ? 'selective' : '',
+          item.priority !== undefined ? `priority=${item.priority}` : '',
+          item.activationKeys?.length ? `keys=${item.activationKeys.slice(0, 6).join(', ')}` : '',
+          item.hash ? `hash=${String(item.hash).slice(0, 10)}` : '',
+        ].filter(Boolean).join(' / ');
+        return `- ${item.label || item.kind || item.path} (${meta})`;
+      })
       .join('\n');
     return [
       `[Character]\n${firstNonEmpty(character?.description, character?.desc, character?.data?.description, character?.data?.desc, '(none)').slice(0, 6000)}`,
@@ -6641,21 +6658,44 @@
     return { added, revised, unchanged, removed };
   }
 
+  function canonicalSourceClass(source) {
+    const kind = String(source?.kind || '').toLowerCase();
+    const meta = source?.meta || {};
+    if (meta.constant || kind === 'desc' || kind === 'firstmessage') return 'foundation';
+    if (meta.alwaysActive) return 'always-active';
+    if (meta.selective) return 'selective';
+    if (/reference|module/.test(kind)) return 'reference';
+    return 'scored';
+  }
+
+  function canonicalSourceRetention(source) {
+    const cls = canonicalSourceClass(source);
+    if (cls === 'foundation') return 'fixed';
+    if (cls === 'always-active') return 'persistent';
+    if (cls === 'selective') return 'triggered';
+    return 'contextual';
+  }
+
   function canonicalSourceToLoreEntry(source, turn) {
-    const alwaysActive = Boolean(source?.meta?.alwaysActive || source?.kind === 'desc' || source?.kind === 'firstMessage');
+    const alwaysActive = Boolean(source?.meta?.alwaysActive || source?.meta?.constant || source?.kind === 'desc' || source?.kind === 'firstMessage');
     const priority = parseNumber(source.priority, 5, 0, 10);
     const boostedPriority = alwaysActive ? Math.max(8, priority) : priority;
+    const sourceClass = canonicalSourceClass(source);
+    const retention = canonicalSourceRetention(source);
     return {
       id: source.id || `canon:${source.hash}`,
       name: source.label || source.kind || 'canonical lore',
-      summary: summarizeCanonicalContent(source.content, 700),
-      verbatimExcerpt: String(source.content || '').slice(0, 1400),
+      summary: summarizeCanonicalContent(source.content, sourceClass === 'foundation' ? 760 : 560),
+      verbatimExcerpt: String(source.content || '').slice(0, sourceClass === 'foundation' ? 900 : 520),
       source: 'lorebook',
       sourceId: source.path || source.sourceId || source.id || '',
       scope: source.scope || 'global',
       activationKeys: normalizeStringArray(source.activationKeys).slice(0, 16),
       priority: boostedPriority,
       importance: boostedPriority,
+      sourceClass,
+      loreStability: retention,
+      retention,
       canonLevel: 'established',
       alwaysActive,
       activationMode: alwaysActive ? 'always' : (source?.meta?.selective ? 'selective' : 'scored'),
@@ -7364,8 +7404,10 @@
       source.alwaysActive ? 'always' : '',
       source.priority !== undefined ? `priority=${source.priority}` : '',
       source.activationKeys?.length ? `keys=${source.activationKeys.slice(0, 5).join('/')}` : '',
+      source.chunkCount !== undefined ? `chunks=${source.chunkCount}` : '',
+      source.hash ? `hash=${String(source.hash).slice(0, 10)}` : '',
     ].filter(Boolean).join(', ');
-    return `- ${source.label || source.path || source.id} (${meta}): ${source.summary || '(no summary)'}`;
+    return `- ${source.label || source.path || source.id} (${meta})`;
   }
 
   function formatCompiledCandidateLine(candidate) {
@@ -7375,6 +7417,9 @@
       candidate.kind,
       item.sourceLabel ? `source=${item.sourceLabel}` : '',
       item.sourceKind ? `sourceKind=${item.sourceKind}` : '',
+      item.sourceClass ? `sourceClass=${item.sourceClass}` : '',
+      item.loreStability ? `stability=${item.loreStability}` : '',
+      item.retention ? `retention=${item.retention}` : '',
       candidate.importance !== undefined ? `importance=${candidate.importance}` : '',
       candidate.confidence !== undefined ? `confidence=${Number(candidate.confidence).toFixed(2)}` : '',
       item.knownBy?.length ? `knownBy=${item.knownBy.slice(0, 4).join('/')}` : '',
@@ -7700,17 +7745,16 @@
 
   async function buildMainBriefing(state, context, notes, budget = 0, conf = null) {
     const query = buildRetrievalQuery(context, notes, []);
-    const totalBudget = Math.max(0, Number(budget || 0));
-    const capped = totalBudget > 0;
-    const floorBudget = capped
+    const requestedBudget = Math.max(0, Number(budget || 0));
+    const totalBudget = requestedBudget > 0 ? requestedBudget : AUTO_MAIN_BRIEFING_CHARS;
+    const capped = true;
+    const floorBudget = requestedBudget > 0
       ? Math.min(Math.max(900, Math.floor(totalBudget * 0.55)), Math.max(700, totalBudget - 900), totalBudget)
-      : 3600;
+      : 4200;
     const controlFloor = buildMainControlFloorContext(context, floorBudget, state);
-    const activeLoreBridge = buildActiveLoreBridgeContext(context, notes, capped ? Math.min(2600, Math.max(900, Math.floor(totalBudget * 0.22))) : 3600, state);
+    const activeLoreBridge = buildActiveLoreBridgeContext(context, notes, requestedBudget > 0 ? Math.min(2600, Math.max(900, Math.floor(totalBudget * 0.22))) : 5600, state);
     const preAgentNotes = buildPreAgentNotesSource(notes);
-    const remainingBudget = capped
-      ? Math.max(700, totalBudget - controlFloor.length - activeLoreBridge.length - preAgentNotes.length - 160)
-      : AGENT_RETRIEVAL_PROFILE.main.budget;
+    const remainingBudget = Math.max(2200, totalBudget - controlFloor.length - activeLoreBridge.length - preAgentNotes.length - 160);
     const staged = await stagedRetrieveCandidates('main', state, query, AGENT_RETRIEVAL_PROFILE.main, conf, context);
     const candidates = staged.candidates;
     const selected = selectCandidates(candidates, AGENT_RETRIEVAL_PROFILE.main.limit, remainingBudget);
@@ -7718,7 +7762,7 @@
     recordRecallTrace(state, query, selected, 'main', {
       stages: staged.stats || null,
       note: staged.note || '',
-      budget,
+      budget: requestedBudget,
     });
     const blocks = [
       buildMainBriefingIntro(false),
@@ -7729,7 +7773,7 @@
       preAgentNotes,
     ];
     const briefing = capped ? joinBriefingBlocks(blocks, totalBudget) : joinBriefingBlocksUncapped(blocks);
-    recordInjectionTrace(state, query, selected, briefing, totalBudget, staged);
+    recordInjectionTrace(state, query, selected, briefing, requestedBudget, staged);
     return briefing;
   }
 
@@ -7904,7 +7948,7 @@
       const selected = selectCandidates(ranked, compact ? 4 : 10, Math.max(500, max - 170));
       if (selected.length) {
         const lines = [
-          '[Active Lore Bridge]',
+          '[Current Weave Briefing]',
           compact
             ? 'Use as current-turn lore evidence. Prefer established cast/fronts over unrelated new extras. Do not reveal labels.'
             : 'Use these active lore facts as current-turn evidence. Prefer established lore, cast, places, and fronts over inventing unrelated extras when they fit. Do not reveal labels or plugin mechanics.',
@@ -7924,7 +7968,7 @@
     const compact = max <= 1200;
     const selectedItems = compact ? selected.slice(0, 4) : selected;
     const lines = [
-      '[Active Lore Bridge]',
+      '[Current Weave Briefing]',
       compact
         ? 'Use as current-turn lore evidence. Prefer established cast/fronts over unrelated new extras. Do not reveal labels.'
         : 'Use these active lore facts as current-turn evidence. Prefer established lore, cast, places, and fronts over inventing unrelated extras when they fit. Do not reveal labels or plugin mechanics.',
@@ -7934,20 +7978,17 @@
       : Math.max(120, Math.min(360, Math.floor((max - 260) / Math.max(1, selectedItems.length))));
     let used = lines.join('\n').length + 1;
     for (const source of selectedItems) {
-      const label = firstNonEmpty(source.label, source.kind, source.path, 'lore');
-      const meta = [
-        source.kind || 'lore',
-        source.path || '',
-        source?.meta?.alwaysActive || source?.meta?.constant ? 'always' : '',
-        source.kind === 'firstMessage' ? 'first-message' : '',
-        normalizeStringArray(source.activationKeys).length ? `keys=${normalizeStringArray(source.activationKeys).slice(0, 5).join('/')}` : '',
-        `score=${Math.round(source._activeLoreBridgeScore || 0)}`,
-      ].filter(Boolean).join(', ');
-      const summary = String(source.content || '').replace(/\s+/g, ' ').trim().slice(0, perItemCap);
-      if (!summary) continue;
-      const next = `- ${label} (${meta}): ${summary}`;
+      const entry = canonicalSourceToLoreEntry(source, 0);
+      const nextLine = formatCompiledCandidateLine({
+        kind: 'lore',
+        path: `canonical.${entry.id}`,
+        item: entry,
+        importance: entry.importance,
+        confidence: entry.confidence,
+      });
+      const next = nextLine.length > perItemCap ? `${nextLine.slice(0, perItemCap).trimEnd()}...` : nextLine;
       if (used + next.length > max) {
-        if (!lines[lines.length - 1].includes('truncated')) lines.push('[Active Lore Bridge truncated by budget]');
+        if (!lines[lines.length - 1].includes('truncated')) lines.push('[Current Weave Briefing truncated by budget]');
         break;
       }
       lines.push(next);
@@ -8017,8 +8058,15 @@
       let used = '[Always-Active Lore Floor]\n'.length;
       alwaysLore.forEach(source => {
         const label = source.label || source.kind || source.path;
-        const summary = String(source.content || '').replace(/\s+/g, ' ').trim().slice(0, perItemCap);
-        const next = `- ${label}: ${summary}`;
+        const meta = [
+          source.kind || 'lore',
+          source?.meta?.constant ? 'constant' : '',
+          source?.meta?.alwaysActive ? 'always' : '',
+          source.kind === 'firstMessage' ? 'first-message' : '',
+          normalizeStringArray(source.activationKeys).length ? `keys=${normalizeStringArray(source.activationKeys).slice(0, 5).join('/')}` : '',
+          source.hash ? `hash=${String(source.hash).slice(0, 10)}` : '',
+        ].filter(Boolean).join(', ');
+        const next = `- ${label} (${meta})`;
         if (used + next.length > floorBudget && used > 0) return;
         used += next.length + 1;
         lines.push(next);
@@ -8256,13 +8304,15 @@
     const heatScore = clampFloat(candidate.heatScore, 0, 0, 100) * 0.22;
     const lifecycleScore = lifecycleBoost(candidate.status);
     const activationScore = candidate.kind === 'lore' ? loreActivationScore(candidate.item, queryTerms) : 0;
+    const stabilityScore = loreStabilityScore(candidate);
+    const affinityScore = characterAffinityScore(candidate, state);
     const mustCarryScore = isMustCarryCandidate(candidate) ? 34 : 0;
     const graphScore = associationActivationScore(candidate, state);
     const boundaryPenalty = knowledgeBoundaryPenalty(candidate, state);
     const decay = parseNumber(candidate.item?.decay, candidate.kind === 'memory' ? calculateMemoryDecay(candidate.item, age) : 1, 0, 1);
     const decayScore = candidate.kind === 'memory' ? (decay - 1) * 34 : 0;
     const fadedPenalty = /faded/i.test(candidate.status) ? -22 : 0;
-    return matchScore + sourceScore + importanceScore + confidenceScore + recencyScore + tierScore + memoryTierScore + heatScore + lifecycleScore + activationScore + mustCarryScore + graphScore + boundaryPenalty + decayScore + fadedPenalty;
+    return matchScore + sourceScore + importanceScore + confidenceScore + recencyScore + tierScore + memoryTierScore + heatScore + lifecycleScore + activationScore + stabilityScore + affinityScore + mustCarryScore + graphScore + boundaryPenalty + decayScore + fadedPenalty;
   }
 
   function associationActivationScore(candidate, state) {
@@ -8513,7 +8563,7 @@
   }
 
   function loreActivationScore(item, queryTerms) {
-    const alwaysActive = Boolean(item?.alwaysActive || item?.activationMode === 'always' || item?.canonicalSource?.meta?.alwaysActive);
+    const alwaysActive = Boolean(item?.alwaysActive || item?.activationMode === 'always' || item?.canonicalSource?.meta?.alwaysActive || item?.canonicalSource?.meta?.constant);
     let score = alwaysActive ? 24 : 0;
     const keys = normalizeStringArray(item?.activationKeys).map(key => key.toLowerCase());
     if (!keys.length || !Array.isArray(queryTerms) || !queryTerms.length) return score;
@@ -8523,15 +8573,77 @@
     return Math.min(alwaysActive ? 42 : 32, score);
   }
 
+  function loreStabilityScore(candidate) {
+    if (candidate?.kind !== 'lore' && !candidate?.item?.sourceClass && !candidate?.item?.loreStability && !candidate?.item?.retention) return 0;
+    const item = candidate.item || {};
+    const source = item.canonicalSource || {};
+    const meta = source.meta || {};
+    const cls = String(item.sourceClass || '').toLowerCase();
+    const stability = String(item.loreStability || item.retention || '').toLowerCase();
+    const sourceKind = String(source.kind || '').toLowerCase();
+    let score = 0;
+    if (cls === 'foundation' || stability === 'fixed' || meta.constant || sourceKind === 'desc' || sourceKind === 'firstmessage') score += 44;
+    else if (cls === 'always-active' || stability === 'persistent' || item.alwaysActive || item.activationMode === 'always' || meta.alwaysActive) score += 24;
+    if (item.activationMode === 'selective' && candidate.activeLore) score += 12;
+    return Math.min(64, score);
+  }
+
+  function isFoundationLoreItem(item) {
+    if (!item) return false;
+    const source = item.canonicalSource || {};
+    const kind = String(source.kind || '').toLowerCase();
+    const cls = String(item.sourceClass || '').toLowerCase();
+    const stability = String(item.loreStability || item.retention || '').toLowerCase();
+    return cls === 'foundation' || stability === 'fixed' || source?.meta?.constant || kind === 'desc' || kind === 'firstmessage';
+  }
+
+  function characterAffinityScore(candidate, state) {
+    if (!state) return 0;
+    const terms = currentFocusTerms(state);
+    if (!terms.length) return 0;
+    const haystack = [
+      candidate?.kind,
+      candidate?.path,
+      candidate?.text,
+      candidate?.item?.name,
+      candidate?.item?.summary,
+      candidate?.item?.sourceId,
+      candidate?.item?.sourceLabel,
+      candidate?.item?.sourcePath,
+    ].filter(Boolean).join('\n').toLowerCase();
+    let hits = 0;
+    terms.forEach(term => {
+      if (term && haystack.includes(term)) hits += 1;
+    });
+    return Math.min(56, hits * 14);
+  }
+
+  function currentFocusTerms(state) {
+    const scene = state?.scene || {};
+    const perspective = normalizeActivePerspective(state?.activePerspective);
+    const terms = []
+      .concat(normalizeStringArray(scene.presentCast))
+      .concat(normalizeStringArray(scene.location))
+      .concat(normalizeStringArray(scene.place))
+      .concat(normalizeStringArray(scene.currentPlace))
+      .concat(normalizeStringArray(perspective.protectedNames));
+    Object.values(state?.characters || {}).forEach(character => {
+      const status = String(character?.status || character?.state || '').toLowerCase();
+      if (/active|present|current|focal/.test(status)) terms.push(character.name, character.id);
+    });
+    return uniqueStrings(terms)
+      .map(term => String(term || '').trim().toLowerCase())
+      .filter(term => term.length >= 2)
+      .slice(0, 18);
+  }
+
   function isMustCarryCandidate(candidate) {
     const item = candidate?.item || {};
     if (candidate?.kind === 'scene') return true;
     if (candidate?.kind === 'character' && /active|present|current/i.test(String(item.status || item.state || 'active'))) return true;
     if (candidate?.kind === 'lore') {
-      if (candidate.activeLore) return true;
-      const canonicalKind = String(item?.canonicalSource?.kind || '').toLowerCase();
-      if (canonicalKind === 'desc' || canonicalKind === 'firstmessage') return true;
-      if (item.alwaysActive || item.activationMode === 'always' || item?.canonicalSource?.meta?.alwaysActive) return true;
+      if (isFoundationLoreItem(item)) return true;
+      if (candidate.activeLore && inferImportance(item, 'lore') >= 9) return true;
     }
     if (candidate?.kind === 'memory') {
       const tier = normalizeMemoryLifecycleTier(item.memoryTier) || String(item.memoryTier || '').toLowerCase();
@@ -8622,7 +8734,9 @@
       candidate.memoryTier ? `memoryTier=${candidate.memoryTier}` : '',
       candidate.kind === 'memory' ? `decay=${formatDecimal(candidate.item?.decay ?? 1)}` : '',
       candidate.kind === 'lore' && candidate.activeLore ? 'activeLore' : '',
-      candidate.kind === 'lore' && (candidate.item?.alwaysActive || candidate.item?.activationMode === 'always' || candidate.item?.canonicalSource?.meta?.alwaysActive) ? 'always' : '',
+      candidate.kind === 'lore' && (candidate.item?.alwaysActive || candidate.item?.activationMode === 'always' || candidate.item?.canonicalSource?.meta?.alwaysActive || candidate.item?.canonicalSource?.meta?.constant) ? 'always' : '',
+      candidate.item?.sourceClass ? `sourceClass=${candidate.item.sourceClass}` : '',
+      candidate.item?.loreStability ? `stability=${candidate.item.loreStability}` : '',
       candidate.kind === 'lore' && Array.isArray(candidate.item?.activationKeys) ? `keys=${candidate.item.activationKeys.slice(0, 5).join('/')}` : '',
       candidate.tier ? `tier=${candidate.tier}` : '',
       candidate.status ? `status=${candidate.status}` : '',
@@ -16939,7 +17053,7 @@
           return {
             length: briefing.length,
             briefing,
-            hasActiveBridge: briefing.includes('[Active Lore Bridge]'),
+            hasCurrentWeaveBriefing: briefing.includes('[Current Weave Briefing]'),
             hasLoreFact: briefing.includes('Low Budget Subject') || briefing.includes('Established Counterpart') || briefing.includes('Local Front'),
             hasMidSentenceCut: /Prefer establishe\\s*$/m.test(briefing) || briefing.includes('Prefer establishe\n---'),
             hasMode: briefing.includes('[Current Writing Mode]'),
