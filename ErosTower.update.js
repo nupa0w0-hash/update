@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.36
+//@display-name ☸Eros Tower 1.1.37
 //@api 3.0
-//@version 1.1.36
+//@version 1.1.37
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -35,18 +35,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.36
+ * Eros Tower 1.1.37
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.36 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.37 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.36';
+  const VERSION = '1.1.37';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.36`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.37`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -63,7 +63,7 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.36 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.37 analysis context';
   const AUTO_MAIN_BRIEFING_CHARS = 36000;
   const PSYCHE_SOURCE_CHUNK_CHARS = 16000;
   const PSYCHE_SOURCE_CHUNK_OVERLAP_CHARS = 1200;
@@ -2420,6 +2420,7 @@
         pruneStats: {},
         updatedAt: '',
       },
+      psycheWeave: createDefaultPsycheWeaveState(),
       recallTrace: [],
       activePerspective: {
         presentCast: [],
@@ -2483,6 +2484,7 @@
     next.memoryRecovery = normalizeMemoryRecoveryState(next.memoryRecovery);
     next.memoryTiers = normalizeMemoryTierState(next.memoryTiers);
     next.associationGraph = normalizeAssociationGraph(next.associationGraph);
+    next.psycheWeave = normalizePsycheWeave(next.psycheWeave);
     next.recallTrace = Array.isArray(next.recallTrace) ? next.recallTrace.slice(-MAX_RECALL_TRACE) : [];
     next.activePerspective = normalizeActivePerspective(next.activePerspective);
     pruneAutoLoreBootstrapCharacters(next);
@@ -3125,6 +3127,83 @@
     };
   }
 
+  function createDefaultPsycheWeaveState() {
+    return {
+      version: 1,
+      nodes: [],
+      edges: [],
+      clusters: [],
+      lastQueryTerms: [],
+      lastPropagationTurn: 0,
+      lastPropagationStage: '',
+      stats: {},
+      updatedAt: '',
+    };
+  }
+
+  function normalizePsycheWeave(value) {
+    const raw = value && typeof value === 'object' ? value : {};
+    return {
+      ...createDefaultPsycheWeaveState(),
+      ...raw,
+      version: 1,
+      nodes: (Array.isArray(raw.nodes) ? raw.nodes : []).map(normalizePsycheWeaveNode).filter(Boolean).slice(-900),
+      edges: (Array.isArray(raw.edges) ? raw.edges : []).map(normalizePsycheWeaveEdge).filter(Boolean).slice(-2600),
+      clusters: (Array.isArray(raw.clusters) ? raw.clusters : []).filter(item => item && typeof item === 'object').slice(0, 80),
+      lastQueryTerms: normalizeStringArray(raw.lastQueryTerms).slice(0, 60),
+      lastPropagationTurn: parseNumber(raw.lastPropagationTurn, 0, 0, 999999),
+      lastPropagationStage: String(raw.lastPropagationStage || ''),
+      stats: raw.stats && typeof raw.stats === 'object' ? raw.stats : {},
+      updatedAt: String(raw.updatedAt || ''),
+    };
+  }
+
+  function normalizePsycheWeaveNode(node) {
+    if (!node || typeof node !== 'object') return null;
+    const id = String(node.id || '').trim();
+    if (!id) return null;
+    return {
+      id,
+      path: String(node.path || ''),
+      kind: String(node.kind || ''),
+      role: String(node.role || node.kind || 'state').slice(0, 40),
+      label: String(node.label || '').slice(0, 180),
+      terms: normalizeStringArray(node.terms).slice(0, 64),
+      sourceId: String(node.sourceId || ''),
+      sourcePath: String(node.sourcePath || ''),
+      sourceClass: String(node.sourceClass || ''),
+      retention: String(node.retention || ''),
+      memoryTier: normalizeMemoryLifecycleTier(node.memoryTier) || String(node.memoryTier || ''),
+      importance: parseNumber(node.importance, 5, 0, 10),
+      confidence: clampNumber(node.confidence, 0.7, 0, 1),
+      baseActivation: clampNumber(node.baseActivation, node.activation ?? 0, 0, 1),
+      activation: clampNumber(node.activation, 0, 0, 1),
+      propagatedActivation: clampNumber(node.propagatedActivation, 0, 0, 1),
+      lastActivatedTurn: parseNumber(node.lastActivatedTurn, node.turn || 0, 0, 999999),
+      activationSources: normalizeStringArray(node.activationSources).slice(0, 12),
+      blockedForPerspective: Boolean(node.blockedForPerspective),
+      turn: parseNumber(node.turn, 0, 0, 999999),
+      preview: String(node.preview || '').slice(0, 260),
+    };
+  }
+
+  function normalizePsycheWeaveEdge(edge) {
+    if (!edge || typeof edge !== 'object') return null;
+    const from = String(edge.from || edge.src || '').trim();
+    const to = String(edge.to || edge.dst || '').trim();
+    if (!from || !to || from === to) return null;
+    return {
+      from,
+      to,
+      kind: String(edge.kind || edge.type || 'related').slice(0, 40),
+      weight: clampNumber(edge.weight, 0, 0, 1),
+      lastReinforcedTurn: parseNumber(edge.lastReinforcedTurn ?? edge.turn, 0, 0, 999999),
+      decay: clampNumber(edge.decay, 1, 0, 1),
+      shared: normalizeStringArray(edge.shared).slice(0, 10),
+      evidence: normalizeStringArray(edge.evidence).slice(0, 6),
+    };
+  }
+
   function normalizeActivePerspective(value) {
     const raw = value && typeof value === 'object' ? value : {};
     return {
@@ -3589,6 +3668,9 @@
     clean.associationGraph = normalizeAssociationGraph(clean.associationGraph);
     clean.associationGraph.nodes = clean.associationGraph.nodes.slice(0, 80);
     clean.associationGraph.edges = clean.associationGraph.edges.slice(0, 160);
+    clean.psycheWeave = normalizePsycheWeave(clean.psycheWeave);
+    clean.psycheWeave.nodes = clean.psycheWeave.nodes.slice(0, 120);
+    clean.psycheWeave.edges = clean.psycheWeave.edges.slice(0, 220);
     clean.evidenceConflicts = Array.isArray(clean.evidenceConflicts) ? clean.evidenceConflicts.slice(-24) : [];
     clean.decayLog = Array.isArray(clean.decayLog) ? clean.decayLog.slice(-16) : [];
     clean.governorLog = Array.isArray(clean.governorLog) ? clean.governorLog.slice(-16) : [];
@@ -7777,8 +7859,9 @@
     const staged = await stagedRetrieveCandidates(agentId, state, query, profile, conf, context);
     const candidates = staged.candidates;
     const selected = selectCandidates(candidates, profile.limit, retrievalBudget);
+    const weaveBridge = buildPsycheWeaveBriefing(state, selected, query, Math.min(1800, Math.max(650, Math.floor(budget * 0.18))));
     const pack = formatRetrievalPack(agentId, state, selected, query);
-    return [controlFloor, activeLoreBridge, staged.note, pack].filter(Boolean).join('\n\n').slice(0, budget);
+    return [controlFloor, activeLoreBridge, weaveBridge, staged.note, pack].filter(Boolean).join('\n\n').slice(0, budget);
   }
 
   async function stagedRetrieveCandidates(agentId, state, queryTerms, profile, conf = null, context = null) {
@@ -7788,6 +7871,7 @@
       lexical: candidates.length,
       embedded: 0,
       spread: 0,
+      weave: 0,
       blocked: 0,
     };
     if (!conf?.stagedSearchEnabled) {
@@ -7819,7 +7903,9 @@
       .slice(0, Math.max(6, profile?.limit || 20))
       .map(candidateNodeId);
     const spread = spreadAssociationActivation(state, seedIds, conf, `stage:${agentId}`);
+    const weaveSpread = spreadPsycheWeaveActivation(normalizePsycheWeave(state?.psycheWeave), seedIds.map(id => slug(`candidate:${id}`)), conf);
     stats.spread = spread.size;
+    stats.weave = weaveSpread.size;
     stats.blocked = blockedIds.size;
 
     candidates = candidates
@@ -7827,18 +7913,20 @@
       .map(candidate => {
         const nodeId = candidateNodeId(candidate);
         const spreadActivation = spread.get(nodeId) || 0;
+        const weaveActivation = weaveSpread.get(psycheWeaveNodeIdForCandidate(candidate)) || 0;
         const semantic = working.find(item => item.path === candidate.path)?.semanticScore;
         return {
           ...candidate,
           semanticScore: semantic ?? candidate.semanticScore,
           spreadActivation,
-          score: Number(candidate.score || 0) + Math.min(52, spreadActivation * 52),
+          weaveActivation,
+          score: Number(candidate.score || 0) + Math.min(52, spreadActivation * 52) + Math.min(44, weaveActivation * 44),
         };
       })
       .sort((a, b) => b.score - a.score);
 
     const note = [
-      `[Staged Retrieval: ${agentId}, lexical=${stats.lexical}, stageTop=${lexicalK}, spread=${stats.spread}, blocked=${stats.blocked}]`,
+      `[Staged Retrieval: ${agentId}, lexical=${stats.lexical}, stageTop=${lexicalK}, spread=${stats.spread}, weave=${stats.weave}, blocked=${stats.blocked}]`,
       embeddingNote,
     ].filter(Boolean).join('\n');
     return { candidates, note, stats };
@@ -8041,6 +8129,7 @@
     const staged = await stagedRetrieveCandidates('main', state, query, AGENT_RETRIEVAL_PROFILE.main, conf, context);
     const candidates = staged.candidates;
     const selected = selectCandidates(candidates, AGENT_RETRIEVAL_PROFILE.main.limit, remainingBudget);
+    const weaveBridge = buildPsycheWeaveBriefing(state, selected, query, requestedBudget > 0 ? Math.min(2600, Math.max(900, Math.floor(totalBudget * 0.18))) : 2600);
     const retrievalPack = formatRetrievalPack('main', state, selected, query);
     recordRecallTrace(state, query, selected, 'main', {
       stages: staged.stats || null,
@@ -8052,6 +8141,7 @@
       controlFloor,
       activeLoreBridge,
       staged.note || '',
+      weaveBridge,
       retrievalPack,
       preAgentNotes,
     ];
@@ -8591,11 +8681,12 @@
     const affinityScore = characterAffinityScore(candidate, state);
     const mustCarryScore = isMustCarryCandidate(candidate) ? 34 : 0;
     const graphScore = associationActivationScore(candidate, state);
+    const weaveScore = psycheWeaveActivationScore(candidate, state);
     const boundaryPenalty = knowledgeBoundaryPenalty(candidate, state);
     const decay = parseNumber(candidate.item?.decay, candidate.kind === 'memory' ? calculateMemoryDecay(candidate.item, age) : 1, 0, 1);
     const decayScore = candidate.kind === 'memory' ? (decay - 1) * 34 : 0;
     const fadedPenalty = /faded/i.test(candidate.status) ? -22 : 0;
-    return matchScore + sourceScore + importanceScore + confidenceScore + recencyScore + tierScore + memoryTierScore + heatScore + lifecycleScore + activationScore + stabilityScore + affinityScore + mustCarryScore + graphScore + boundaryPenalty + decayScore + fadedPenalty;
+    return matchScore + sourceScore + importanceScore + confidenceScore + recencyScore + tierScore + memoryTierScore + heatScore + lifecycleScore + activationScore + stabilityScore + affinityScore + mustCarryScore + graphScore + weaveScore + boundaryPenalty + decayScore + fadedPenalty;
   }
 
   function associationActivationScore(candidate, state) {
@@ -8640,6 +8731,386 @@
 
   function candidateNodeId(candidate) {
     return slug(`${candidate.kind}:${candidate.path}`);
+  }
+
+  function psycheWeaveNodeIdForSource(source) {
+    return slug(`source:${source?.id || source?.path || source?.hash || source?.label || 'source'}`);
+  }
+
+  function psycheWeaveNodeIdForCandidate(candidate) {
+    return slug(`candidate:${candidateNodeId(candidate)}`);
+  }
+
+  function psycheWeaveTextTerms(parts, limit = 64) {
+    const text = (Array.isArray(parts) ? parts : [parts]).filter(Boolean).join('\n').toLowerCase();
+    return uniqueStrings((text.match(/[a-z][a-z0-9_-]{2,}|[가-힣][가-힣a-z0-9_-]{1,}|[\u3040-\u30ff]{2,}|[\u4e00-\u9fff]{2,}/g) || [])
+      .map(term => term.trim())
+      .filter(term => term.length >= 2 && !/^(source|summary|status|turn|true|false|with|from|that|this|그리고|하지만|있는|없는|한다|했다)$/.test(term)))
+      .slice(0, limit);
+  }
+
+  function psycheWeaveTermsForCandidate(candidate) {
+    const item = candidate?.item || {};
+    return uniqueStrings([]
+      .concat(candidateTerms(candidate))
+      .concat(psycheWeaveTextTerms([
+        item.name,
+        item.summary,
+        item.sourceId,
+        item.sourceLabel,
+        item.sourcePath,
+        item.sourceClass,
+        item.retention,
+        normalizeStringArray(item.aliases).join(' '),
+        normalizeStringArray(item.keywords).join(' '),
+        normalizeStringArray(item.activationKeys).join(' '),
+        normalizeStringArray(item.knownBy).join(' '),
+        normalizeStringArray(item.cannotKnow).join(' '),
+      ], 64)))
+      .slice(0, 64);
+  }
+
+  function psycheWeaveRoleForCandidate(candidate) {
+    const path = String(candidate?.path || '');
+    const kind = String(candidate?.kind || '');
+    if (path.startsWith('psycheUnits.')) return `source-${kind}`;
+    if (kind === 'memory') return 'memory';
+    if (kind === 'lore') return 'canonical-lore';
+    if (kind === 'secret') return 'knowledge-boundary';
+    if (kind === 'relationship') return 'relation';
+    if (kind === 'worldFront') return 'world-front';
+    if (kind === 'character') return 'entity';
+    if (kind === 'scene') return 'scene';
+    return kind || 'state';
+  }
+
+  function psycheWeaveSourceKeyForCandidate(candidate) {
+    const item = candidate?.item || {};
+    return firstNonEmpty(item.sourceId, item.sourcePath, item.canonicalSource?.path, item.canonicalSource?.hash, item.chunkId, item.sourceHash);
+  }
+
+  function addPsycheWeaveEdge(edgeMap, edge) {
+    const normalized = normalizePsycheWeaveEdge(edge);
+    if (!normalized) return;
+    const key = edgeKey(normalized.from, normalized.to) + `:${normalized.kind}`;
+    const prev = edgeMap.get(key);
+    if (!prev) {
+      edgeMap.set(key, normalized);
+      return;
+    }
+    edgeMap.set(key, {
+      ...prev,
+      ...normalized,
+      weight: Math.max(prev.weight || 0, normalized.weight || 0),
+      shared: uniqueStrings([...(prev.shared || []), ...(normalized.shared || [])]).slice(0, 10),
+      evidence: uniqueStrings([...(prev.evidence || []), ...(normalized.evidence || [])]).slice(0, 6),
+      lastReinforcedTurn: Math.max(prev.lastReinforcedTurn || 0, normalized.lastReinforcedTurn || 0),
+    });
+  }
+
+  function syncPsycheWeave(state, context, notes, conf) {
+    if (!state || !conf?.associationGraphEnabled) return { nodes: 0, edges: 0, skipped: true };
+    const previous = normalizePsycheWeave(state.psycheWeave);
+    const previousNodes = new Map(previous.nodes.map(node => [node.id, node]));
+    const previousEdges = new Map(previous.edges.map(edge => [edgeKey(edge.from, edge.to) + `:${edge.kind}`, edge]));
+    const queryTerms = buildRetrievalQuery(context, notes, []).slice(0, 60);
+    const querySet = new Set(queryTerms.map(term => String(term || '').toLowerCase()).filter(Boolean));
+    const focusTerms = currentFocusTerms(state);
+    const focusSet = new Set(focusTerms);
+    const nodeMap = new Map();
+    const edgeMap = new Map();
+    const sourceLookup = new Map();
+
+    (state.psycheSources || [])
+      .filter(source => source && source.status !== 'missing')
+      .forEach(source => {
+        const id = psycheWeaveNodeIdForSource(source);
+        const terms = psycheWeaveTextTerms([source.label, source.kind, source.path, source.summary, normalizeStringArray(source.activationKeys).join(' ')], 64);
+        const queryHits = terms.filter(term => querySet.has(term)).length;
+        const focusHits = terms.filter(term => focusSet.has(term)).length;
+        const previousNode = previousNodes.get(id);
+        const baseActivation = Math.min(1,
+          (source.alwaysActive ? 0.42 : 0)
+          + (source.priority || 5) / 42
+          + (source.sourceRank || 50) / 420
+          + queryHits * 0.1
+          + focusHits * 0.16
+        );
+        const node = normalizePsycheWeaveNode({
+          id,
+          path: `psycheSources.${source.id}`,
+          kind: 'source',
+          role: source.sourceClass || (source.alwaysActive ? 'always-active-source' : 'source'),
+          label: source.label || source.path || source.id,
+          terms,
+          sourceId: source.id,
+          sourcePath: source.path,
+          sourceClass: source.sourceClass,
+          retention: source.retention,
+          importance: source.priority,
+          confidence: 0.92,
+          baseActivation,
+          activation: Math.max(baseActivation, (previousNode?.activation || 0) * 0.72),
+          lastActivatedTurn: queryHits || focusHits || source.alwaysActive ? state.turn : previousNode?.lastActivatedTurn || source.lastSeenTurn || 0,
+          activationSources: uniqueStrings([source.alwaysActive ? 'always-active' : '', queryHits ? 'query' : '', focusHits ? 'focus' : ''].filter(Boolean)),
+          turn: source.lastSeenTurn || state.turn,
+          preview: source.summary || source.path || source.label,
+        });
+        if (!node) return;
+        nodeMap.set(node.id, node);
+        [source.id, source.path, source.hash, source.textHash, source.rawHash].filter(Boolean).forEach(key => sourceLookup.set(String(key), node.id));
+      });
+
+    const candidates = collectStateCandidates(state)
+      .filter(candidate => !['inactive', 'superseded', 'archived', 'retired'].includes(String(candidate?.status || candidate?.item?.status || '').toLowerCase()));
+    candidates.forEach(candidate => {
+      const id = psycheWeaveNodeIdForCandidate(candidate);
+      const terms = psycheWeaveTermsForCandidate(candidate);
+      if (!terms.length && !summarizeLedgerText(candidate.item, candidate.kind)) return;
+      const queryHits = terms.filter(term => querySet.has(term)).length;
+      const focusHits = terms.filter(term => focusSet.has(term)).length;
+      const blocked = conf.associationHardBoundary !== false && knowledgeBoundaryPenalty(candidate, state) <= -100;
+      const previousNode = previousNodes.get(id);
+      const sourceClass = firstNonEmpty(candidate.item?.sourceClass, candidate.item?.canonicalSource?.meta?.constant ? 'foundation' : '');
+      const baseActivation = Math.min(1,
+        (isMustCarryCandidate(candidate) ? 0.28 : 0)
+        + queryHits * 0.11
+        + focusHits * 0.16
+        + clampNumber(candidate.importance, 5, 0, 10) / 58
+        + clampNumber(candidate.confidence, 0.7, 0, 1) / 9
+        + (sourceClass === 'foundation' ? 0.18 : 0)
+        + (candidate.kind === 'secret' ? 0.05 : 0)
+      );
+      const node = normalizePsycheWeaveNode({
+        id,
+        path: candidate.path,
+        kind: candidate.kind,
+        role: psycheWeaveRoleForCandidate(candidate),
+        label: summarizeLedgerText(candidate.item, candidate.kind).slice(0, 160),
+        terms,
+        sourceId: String(candidate.item?.sourceId || ''),
+        sourcePath: String(candidate.item?.sourcePath || candidate.item?.canonicalSource?.path || ''),
+        sourceClass,
+        retention: firstNonEmpty(candidate.item?.retention, candidate.item?.loreStability, ''),
+        memoryTier: candidate.memoryTier,
+        importance: candidate.importance,
+        confidence: candidate.confidence,
+        baseActivation,
+        activation: Math.max(baseActivation, (previousNode?.activation || 0) * 0.68),
+        lastActivatedTurn: queryHits || focusHits ? state.turn : previousNode?.lastActivatedTurn || candidate.turn,
+        activationSources: uniqueStrings([queryHits ? 'query' : '', focusHits ? 'focus' : '', isMustCarryCandidate(candidate) ? 'must-carry' : ''].filter(Boolean)),
+        blockedForPerspective: blocked,
+        turn: candidate.turn,
+        preview: summarizeLedgerText(candidate.item, candidate.kind),
+      });
+      if (!node) return;
+      nodeMap.set(node.id, node);
+      const sourceKey = psycheWeaveSourceKeyForCandidate(candidate);
+      const sourceNodeId = sourceKey ? sourceLookup.get(String(sourceKey)) : '';
+      if (sourceNodeId) {
+        addPsycheWeaveEdge(edgeMap, {
+          from: sourceNodeId,
+          to: id,
+          kind: 'provenance',
+          weight: candidate.path.startsWith('psycheUnits.') ? 0.9 : 0.72,
+          lastReinforcedTurn: state.turn,
+          shared: [String(sourceKey).slice(0, 80)],
+          evidence: ['source'],
+        });
+      }
+    });
+
+    const nodes = Array.from(nodeMap.values());
+    const termIndex = new Map();
+    nodes.forEach(node => {
+      if (node.blockedForPerspective) return;
+      node.terms.slice(0, 30).forEach(term => {
+        const key = String(term || '').toLowerCase();
+        if (!key || key.length < 2) return;
+        const list = termIndex.get(key) || [];
+        if (list.length < 80) list.push(node.id);
+        termIndex.set(key, list);
+      });
+    });
+    termIndex.forEach((ids, term) => {
+      if (ids.length < 2) return;
+      const limited = ids
+        .map(id => nodeMap.get(id))
+        .filter(Boolean)
+        .sort((a, b) => b.activation - a.activation)
+        .slice(0, 36);
+      for (let i = 0; i < limited.length; i += 1) {
+        for (let j = i + 1; j < limited.length; j += 1) {
+          const a = limited[i];
+          const b = limited[j];
+          const strong = querySet.has(term) || focusSet.has(term);
+          const sameSource = a.sourceId && b.sourceId && a.sourceId === b.sourceId;
+          const roleBridge = a.role !== b.role;
+          const weight = Math.min(1,
+            (strong ? 0.22 : 0.08)
+            + (sameSource ? 0.18 : 0)
+            + (roleBridge ? 0.05 : 0)
+            + ((a.activation + b.activation) / 10)
+          );
+          if (weight < 0.12) continue;
+          addPsycheWeaveEdge(edgeMap, {
+            from: a.id,
+            to: b.id,
+            kind: sameSource ? 'same-source' : strong ? 'active-term' : 'shared-term',
+            weight,
+            lastReinforcedTurn: state.turn,
+            shared: [term],
+            evidence: strong ? ['query-or-focus'] : ['term'],
+          });
+        }
+      }
+    });
+
+    previousEdges.forEach((edge, key) => {
+      if (!nodeMap.has(edge.from) || !nodeMap.has(edge.to)) return;
+      if (nodeMap.get(edge.from)?.blockedForPerspective || nodeMap.get(edge.to)?.blockedForPerspective) return;
+      const age = Math.max(0, Number(state.turn || 0) - parseNumber(edge.lastReinforcedTurn, state.turn, 0, 999999));
+      const decayed = clampNumber(edge.weight * Math.pow(parseNumber(conf.associationEdgeDecay, DEFAULT_CONFIG.associationEdgeDecay, 0.8, 1), age), 0, 0, 1);
+      if (decayed < 0.018 || edgeMap.has(key)) return;
+      edgeMap.set(key, normalizePsycheWeaveEdge({ ...edge, weight: decayed, decay: Math.pow(parseNumber(conf.associationEdgeDecay, DEFAULT_CONFIG.associationEdgeDecay, 0.8, 1), age) }));
+    });
+
+    const activeSeeds = Array.from(nodeMap.values())
+      .filter(node => !node.blockedForPerspective && node.activation >= parseNumber(conf.associationActivationFloor, DEFAULT_CONFIG.associationActivationFloor, 0.001, 0.4))
+      .sort((a, b) => b.activation - a.activation)
+      .slice(0, 48)
+      .map(node => node.id);
+    const propagated = spreadPsycheWeaveActivation({ nodes: Array.from(nodeMap.values()), edges: Array.from(edgeMap.values()) }, activeSeeds, conf);
+    nodeMap.forEach(node => {
+      const value = propagated.get(node.id) || 0;
+      if (value > node.activation) {
+        node.propagatedActivation = Number(value.toFixed(3));
+        node.activation = Number(value.toFixed(3));
+        node.activationSources = uniqueStrings((node.activationSources || []).concat('weave-spread')).slice(0, 12);
+      }
+    });
+
+    const nodeCap = Math.max(360, Math.min(1200, Math.floor(parseNumber(conf.maxAssociationEdges, DEFAULT_CONFIG.maxAssociationEdges, 80, 4000) * 0.42)));
+    const edgeCap = Math.max(600, Math.min(3200, parseNumber(conf.maxAssociationEdges, DEFAULT_CONFIG.maxAssociationEdges, 80, 4000)));
+    const finalNodes = Array.from(nodeMap.values())
+      .sort((a, b) => b.activation - a.activation || b.importance - a.importance || String(a.id).localeCompare(String(b.id)))
+      .slice(0, nodeCap);
+    const validIds = new Set(finalNodes.map(node => node.id));
+    const finalEdges = Array.from(edgeMap.values())
+      .filter(edge => validIds.has(edge.from) && validIds.has(edge.to))
+      .sort((a, b) => b.weight - a.weight)
+      .slice(0, edgeCap);
+    state.psycheWeave = normalizePsycheWeave({
+      version: 1,
+      nodes: finalNodes,
+      edges: finalEdges,
+      lastQueryTerms: queryTerms,
+      lastPropagationTurn: state.turn,
+      lastPropagationStage: notes && notes.length ? 'post-pre-agent' : 'pre-agent',
+      stats: {
+        sources: (state.psycheSources || []).length,
+        candidates: candidates.length,
+        activeSeeds: activeSeeds.length,
+        previousNodes: previous.nodes.length,
+        previousEdges: previous.edges.length,
+        sourceEdges: finalEdges.filter(edge => edge.kind === 'provenance').length,
+        termEdges: finalEdges.filter(edge => /term|same-source/.test(edge.kind)).length,
+      },
+      updatedAt: nowIso(),
+    });
+    return { nodes: state.psycheWeave.nodes.length, edges: state.psycheWeave.edges.length, queryTerms: queryTerms.slice(0, 12) };
+  }
+
+  function spreadPsycheWeaveActivation(weave, seedIds, conf = {}) {
+    const nodes = new Map((Array.isArray(weave?.nodes) ? weave.nodes : []).map(node => [node.id, node]));
+    const active = new Map();
+    const floor = parseNumber(conf.associationActivationFloor, DEFAULT_CONFIG.associationActivationFloor, 0.001, 0.4);
+    const decay = parseNumber(conf.associationPropagationDecay, DEFAULT_CONFIG.associationPropagationDecay, 0.1, 0.95);
+    const hops = parseNumber(conf.associationPropagationHops, DEFAULT_CONFIG.associationPropagationHops, 1, 6);
+    const adjacency = new Map();
+    (Array.isArray(weave?.edges) ? weave.edges : []).forEach(edge => {
+      if (!nodes.has(edge.from) || !nodes.has(edge.to)) return;
+      if (nodes.get(edge.from)?.blockedForPerspective || nodes.get(edge.to)?.blockedForPerspective) return;
+      if (!adjacency.has(edge.from)) adjacency.set(edge.from, []);
+      if (!adjacency.has(edge.to)) adjacency.set(edge.to, []);
+      adjacency.get(edge.from).push({ id: edge.to, weight: edge.weight });
+      adjacency.get(edge.to).push({ id: edge.from, weight: edge.weight });
+    });
+    (Array.isArray(seedIds) ? seedIds : []).forEach(id => {
+      const node = nodes.get(id);
+      if (!node || node.blockedForPerspective) return;
+      active.set(id, Math.max(active.get(id) || 0, clampNumber(node.activation || node.baseActivation, 0.35, 0, 1)));
+    });
+    let frontier = new Map(active);
+    for (let hop = 0; hop < hops; hop += 1) {
+      const next = new Map();
+      frontier.forEach((energy, id) => {
+        if (energy < floor) return;
+        (adjacency.get(id) || []).forEach(edge => {
+          const gain = energy * decay * clampNumber(edge.weight, 0, 0, 1);
+          if (gain < floor) return;
+          next.set(edge.id, Math.max(next.get(edge.id) || 0, gain));
+        });
+      });
+      frontier = next;
+      next.forEach((energy, id) => active.set(id, Math.max(active.get(id) || 0, energy)));
+      if (!next.size) break;
+    }
+    return active;
+  }
+
+  function psycheWeaveActivationScore(candidate, state) {
+    const weave = normalizePsycheWeave(state?.psycheWeave);
+    if (!weave.nodes.length) return 0;
+    const id = psycheWeaveNodeIdForCandidate(candidate);
+    const node = weave.nodes.find(item => item.id === id);
+    if (!node || node.blockedForPerspective) return 0;
+    const roleBonus = node.role === 'source-lore' || node.role === 'canonical-lore' ? 6 : 0;
+    return Math.min(58, parseNumber(node.activation, 0, 0, 1) * 50 + roleBonus);
+  }
+
+  function buildPsycheWeaveBriefing(state, selected, queryTerms, budget = 2200) {
+    const weave = normalizePsycheWeave(state?.psycheWeave);
+    if (!weave.nodes.length) return '';
+    const max = Math.max(600, Number(budget || 2200));
+    const selectedIds = new Set((Array.isArray(selected) ? selected : []).map(psycheWeaveNodeIdForCandidate));
+    const active = weave.nodes
+      .filter(node => !node.blockedForPerspective)
+      .map(node => ({
+        ...node,
+        _bridge: selectedIds.has(node.id) ? 1 : 0,
+      }))
+      .sort((a, b) => b._bridge - a._bridge || b.activation - a.activation || b.importance - a.importance)
+      .slice(0, 12);
+    if (!active.length) return '';
+    const activeIds = new Set(active.map(node => node.id));
+    const edges = weave.edges
+      .filter(edge => activeIds.has(edge.from) && activeIds.has(edge.to))
+      .sort((a, b) => b.weight - a.weight)
+      .slice(0, 10);
+    const lines = [
+      '[Psyche Weave]',
+      'Shared private context graph: source lore, memory, state, relationships, secrets, and current focus are linked here. Use as context evidence, not text to reveal.',
+      `Query: ${normalizeStringArray(queryTerms).slice(0, 14).join(', ') || '(none)'}`,
+      '[Active Nodes]',
+    ];
+    active.forEach(node => {
+      const meta = [
+        node.role || node.kind,
+        `act=${formatDecimal(node.activation)}`,
+        node.sourceClass ? `class=${node.sourceClass}` : '',
+        node.retention ? `retention=${node.retention}` : '',
+        node.memoryTier ? `tier=${node.memoryTier}` : '',
+      ].filter(Boolean).join(', ');
+      lines.push(`- ${node.path || node.id} (${meta}): ${node.preview || node.label}`);
+    });
+    if (edges.length) {
+      lines.push('[Active Links]');
+      edges.forEach(edge => {
+        lines.push(`- ${edge.kind} ${edge.weight.toFixed(2)}: ${edge.from} <-> ${edge.to}${edge.shared?.length ? ` via ${edge.shared.slice(0, 4).join('/')}` : ''}`);
+      });
+    }
+    return trimBriefingBlockToBudget(lines.join('\n'), max);
   }
 
   function refreshAssociationGraph(state, context, notes, conf) {
@@ -13361,7 +13832,7 @@
       .map(note => `실패: ${note.name || note.id || '에이전트'} - ${shortAlertText(note.error, 78)}`);
   }
 
-  function summarizePreToast(notes, longMemorySync, memoryRecoverySync, coldStartResult, graphSync, sessionRewindSync = null, psycheIngestResult = null, psycheSourceSync = null) {
+  function summarizePreToast(notes, longMemorySync, memoryRecoverySync, coldStartResult, graphSync, sessionRewindSync = null, psycheIngestResult = null, psycheSourceSync = null, psycheWeaveSync = null) {
     const list = Array.isArray(notes) ? notes : [];
     const ok = list.filter(note => !note.error && !note.skipped).length;
     const errored = list.filter(note => note.error).length;
@@ -13380,19 +13851,21 @@
     }
     if (psycheIngestResult && !psycheIngestResult.skipped) lines.push(`Psyche ingest ${Number(psycheIngestResult.processed || 0)} chunks / calls ${Number(psycheIngestResult.apiCalls || 0)} / units ${Array.isArray(psycheIngestResult.results) ? psycheIngestResult.results.reduce((sum, item) => sum + Number(item.units || 0), 0) : 0} / errors ${Number(psycheIngestResult.errors || 0)}`);
     if (cold.processed || cold.extracted || cold.errors) lines.push(`Cold-start 처리 ${Number(cold.processed || 0)} / 추출 ${Number(cold.extracted || 0)} / 오류 ${Number(cold.errors || 0)}`);
+    if (psycheWeaveSync && !psycheWeaveSync.skipped) lines.push(`Psyche Weave ${Number(psycheWeaveSync.nodes || 0)} nodes / ${Number(psycheWeaveSync.edges || 0)} edges`);
     lines.push(`연관 그래프 ${graph.nodes} nodes / ${graph.edges} edges`);
     return lines;
   }
 
-  function summarizeCommitToast(commitResult, regexResult, graphSync, sessionRewindSync = null) {
+  function summarizeCommitToast(commitResult, regexResult, graphSync, sessionRewindSync = null, psycheWeaveSync = null) {
     const graph = graphToastCounts(graphSync);
     const counts = commitResult?.counts || {};
     const total = Object.values(counts).reduce((sum, value) => sum + (Number(value) || 0), 0);
     const lines = [
       commitResult?.changed ? `관리상태 커밋 ${total || '반영됨'}` : `관리상태 변경 없음 (${commitResult?.reason || 'empty'})`,
       `문학 품질 후처리 ${Number(regexResult?.applied || 0)}개 적용`,
+      psycheWeaveSync && !psycheWeaveSync.skipped ? `Psyche Weave ${Number(psycheWeaveSync.nodes || 0)} nodes / ${Number(psycheWeaveSync.edges || 0)} edges` : '',
       `연관 그래프 ${graph.nodes} nodes / ${graph.edges} edges`,
-    ];
+    ].filter(Boolean);
     if (sessionRewindSync?.changed) lines.splice(1, 0, `세션 복구: ${Number(sessionRewindSync.previousCount || 0)} -> ${Number(sessionRewindSync.targetCount || 0)}`);
     if (!commitResult?.changed && commitResult?.reason && /error|fail|timeout|json|parse|api|401|403|404|429|500|502|503|504/i.test(String(commitResult.reason))) {
       lines.splice(1, 0, `사이키 커밋 경고: ${shortAlertText(commitResult.reason, 82)}`);
@@ -13464,9 +13937,11 @@
     const coldStartResult = await runAutoColdStart(conf, context, state);
     const memoryTierSync = refreshMemoryTiers(state, 'pre-request');
     const graphBefore = refreshAssociationGraph(state, context, [], conf);
+    const weaveBefore = syncPsycheWeave(state, context, [], conf);
     const notes = await runPrePipeline(conf, context, state);
     const graphSync = refreshAssociationGraph(state, context, notes, conf);
-    const preToastLines = summarizePreToast(notes, longMemorySync, memoryRecoverySync, coldStartResult, graphSync, sessionRewindSync, psycheIngestResult, psycheSourceSync);
+    const psycheWeaveSync = syncPsycheWeave(state, context, notes, conf);
+    const preToastLines = summarizePreToast(notes, longMemorySync, memoryRecoverySync, coldStartResult, graphSync, sessionRewindSync, psycheIngestResult, psycheSourceSync, psycheWeaveSync);
     await showRunToast('에로스 타워 모델 응답 대기 중', ['전처리 완료. 메인 모델의 응답을 기다립니다.'].concat(preToastLines), notes.some(note => note.error) || memoryRecoverySync?.changed || sessionRewindSync?.changed ? 'warn' : 'info');
     const injectionBudget = parseNumber(conf.injectionBudget, DEFAULT_CONFIG.injectionBudget, 0, 40000);
     const injection = await buildMainInjection(state, context, notes, injectionBudget, conf);
@@ -13494,7 +13969,9 @@
       memoryTierSync,
       coldStartResult,
       graphBefore,
+      weaveBefore,
       graphSync,
+      psycheWeaveSync,
       firstMessageInfo: context.firstMessageInfo,
       requestMessages: normalizeRequestMessages(messages),
       userInputPreview: getUserInput(context.messages).slice(0, 500),
@@ -13582,8 +14059,9 @@
     }
     const memoryTierSync = refreshMemoryTiers(state, 'post-commit');
     const graphSync = refreshAssociationGraph(state, postContext, notes, conf);
+    const psycheWeaveSync = syncPsycheWeave(state, postContext, notes, conf);
     const postSessionSync = syncSessionDiagnostics(state, postContext, conf);
-    await showRunToast('에로스 타워 관리상태 완료', summarizeCommitToast(commitResult, regexResult, graphSync, sessionRewindSync), commitResult.changed || sessionRewindSync?.changed ? 'success' : 'info', 2600);
+    await showRunToast('에로스 타워 관리상태 완료', summarizeCommitToast(commitResult, regexResult, graphSync, sessionRewindSync, psycheWeaveSync), commitResult.changed || sessionRewindSync?.changed ? 'success' : 'info', 2600);
     await saveState(context.scope, state, conf);
     const run = {
       ...(pendingRun || Runtime.lastRun || {}),
@@ -13607,6 +14085,7 @@
       psycheSourceSync,
       memoryTierSync,
       graphSync,
+      psycheWeaveSync,
       postPipelineResult,
       commitPromptPreview: String(commitResult.prompt || '').slice(0, 2400),
       commitRawPreview: String(commitResult.raw || '').slice(0, 1200),
@@ -14424,6 +14903,7 @@
     const coldStart = normalizeColdStartState(state.coldStart);
     const memoryRecovery = normalizeMemoryRecoveryState(state.memoryRecovery);
     const associationGraph = normalizeAssociationGraph(state.associationGraph);
+    const psycheWeave = normalizePsycheWeave(state.psycheWeave);
     const recallTrace = Array.isArray(state.recallTrace) ? state.recallTrace : [];
     const adaptiveQuality = normalizeAdaptiveQualityState(state.adaptiveQuality);
     const memoryTiers = normalizeMemoryTierState(state.memoryTiers);
@@ -14444,13 +14924,14 @@
         ${statBox('Cold-start', `${coldStart.extracted}/${coldStart.chunksTotal}`)}
         ${statBox('므네메 복구', memoryRecovery.lastDeletedCount ? `${memoryRecovery.lastDeletedCount}삭제/${memoryRecovery.lastIsolatedChunks}격리` : '대기')}
         ${statBox('Graph', `${associationGraph.nodes.length}/${associationGraph.edges.length}`)}
+        ${statBox('Psyche Weave', `${psycheWeave.nodes.length}/${psycheWeave.edges.length}`)}
         ${statBox('문학 품질', `${adaptiveQuality.rules.filter(rule => rule.enabled !== false).length}/${adaptiveQuality.issueLog.length}`)}
         ${statBox('Hot/Warm 기억', `${memoryTiers.counts.hot || 0}/${memoryTiers.counts.warm || 0}`)}
         ${statBox('Disputed', memoryTiers.counts.disputed || 0)}
         ${statBox('주입 Trace', injectionTrace.length)}
       </div>
       ${collapsiblePanel('로어북 / 장기기억 대체 상태', renderLoreMemoryControlStatus(canonicalSources, loreLedger, memoryLedger, injectionTrace, context), 'style="margin-top:14px"')}
-      ${collapsiblePanel('자동 기억 엔진', renderAutoMemoryStatus(coldStart, memoryRecovery, associationGraph, recallTrace, state.activePerspective), 'style="margin-top:14px"')}
+      ${collapsiblePanel('자동 기억 엔진', renderAutoMemoryStatus(coldStart, memoryRecovery, associationGraph, recallTrace, state.activePerspective, psycheWeave), 'style="margin-top:14px"')}
       ${collapsiblePanel('기억 계층 / 주입 근거', renderMemoryTierStatus(memoryTiers, injectionTrace), 'style="margin-top:14px"')}
       ${collapsiblePanel('관계 / 비밀 / 복선 / 전선 맵', renderStateVisualTools(relationships, secretLedger, foreshadowing, clues, fronts), 'style="margin-top:14px"')}
       ${collapsiblePanel('문학 품질 적응 엔진', renderAdaptiveQualityStatus(adaptiveQuality), 'style="margin-top:14px"')}
@@ -14584,9 +15065,10 @@
       </div>`;
   }
 
-  function renderAutoMemoryStatus(coldStart, memoryRecovery, associationGraph, recallTrace, activePerspective) {
+  function renderAutoMemoryStatus(coldStart, memoryRecovery, associationGraph, recallTrace, activePerspective, psycheWeave = null) {
     const failed = Array.isArray(coldStart.failed) ? coldStart.failed : [];
     const recovery = normalizeMemoryRecoveryState(memoryRecovery);
+    const weave = normalizePsycheWeave(psycheWeave);
     const graphTerms = normalizeStringArray(associationGraph.lastQueryTerms).slice(0, 12).join(', ');
     const recentTrace = (Array.isArray(recallTrace) ? recallTrace : []).slice(-5).reverse();
     return `
@@ -14601,6 +15083,8 @@
         ${statBox('파생 정리', recovery.lastPurgedDerived || 0)}
         ${statBox('노드', associationGraph.nodes.length)}
         ${statBox('엣지', associationGraph.edges.length)}
+        ${statBox('Weave 노드', weave.nodes.length)}
+        ${statBox('Weave 엣지', weave.edges.length)}
         ${statBox('전파', associationGraph.lastPropagationStage || '-')}
         ${statBox('현재 관점', normalizeActivePerspective(activePerspective).presentCast.join(', ') || '-')}
       </div>
@@ -14622,6 +15106,7 @@
           <h3>Graph / Cold-start</h3>
           <div class="et-note">최근 질의어: ${expandableText(graphTerms || '-', 220)}</div>
           <div class="et-note">전파 단계: ${escHtml(associationGraph.lastPropagationStage || '-')} / turn ${escHtml(associationGraph.lastPropagationTurn || 0)}</div>
+          <div class="et-note">Psyche Weave: ${escHtml(weave.lastPropagationStage || '-')} / turn ${escHtml(weave.lastPropagationTurn || 0)} / ${expandableText(compactJson(weave.stats || {}), 220)}</div>
           <div class="et-note">prune: ${expandableText(compactJson(associationGraph.pruneStats || {}), 220)}</div>
           <div class="et-note">마지막 추출: ${escHtml(formatDateShort(coldStart.lastRunAt) || '-')}</div>
           <div class="et-note">므네메 정원: ${escHtml(recovery.lastReason || '-')} / 마지막 ${escHtml(formatDateShort(recovery.lastRunAt) || '-')}</div>
@@ -15230,6 +15715,7 @@
       ${run.psycheIngestResult ? `<div class="et-note">Psyche Ingest: ${escHtml(run.psycheIngestResult.processed || 0)} / units ${escHtml(Array.isArray(run.psycheIngestResult.results) ? run.psycheIngestResult.results.reduce((sum, item) => sum + Number(item.units || 0), 0) : 0)} / errors ${escHtml(run.psycheIngestResult.errors || 0)}${run.psycheIngestResult.reason ? ` / ${escHtml(run.psycheIngestResult.reason)}` : ''}</div>` : ''}
       ${run.memoryRecoverySync ? `<div class="et-note">므네메 정원: ${run.memoryRecoverySync.blocked ? '보류' : run.memoryRecoverySync.changed ? '재정렬' : '변경 없음'}${run.memoryRecoverySync.deletedCount ? ` / 삭제 ${escHtml(run.memoryRecoverySync.deletedCount)}` : ''}${run.memoryRecoverySync.isolatedChunks !== undefined ? ` / 격리 ${escHtml(run.memoryRecoverySync.isolatedChunks)}` : ''}${run.memoryRecoverySync.purgedDerived !== undefined ? ` / 파생정리 ${escHtml(run.memoryRecoverySync.purgedDerived)}` : ''}${run.memoryRecoverySync.reason ? ` / ${escHtml(run.memoryRecoverySync.reason)}` : ''}</div>` : ''}
       ${run.coldStartResult ? `<div class="et-note">Cold-start: 처리 ${escHtml(run.coldStartResult.processed || 0)} / 추출 ${escHtml(run.coldStartResult.extracted || 0)} / 오류 ${escHtml(run.coldStartResult.errors || 0)}${run.coldStartResult.agent ? ` / ${escHtml(run.coldStartResult.agent.name || '사이키')}: ${escHtml(run.coldStartResult.agent.model || '-')}` : ''}${run.coldStartResult.reason ? ` / ${escHtml(run.coldStartResult.reason)}` : ''}</div>` : ''}
+      ${run.psycheWeaveSync ? `<div class="et-note">Psyche Weave: 노드 ${escHtml(run.psycheWeaveSync.nodes || 0)} / 엣지 ${escHtml(run.psycheWeaveSync.edges || 0)}</div>` : ''}
       ${run.graphSync ? `<div class="et-note">Association Graph: 노드 ${escHtml(run.graphSync.nodes || 0)} / 엣지 ${escHtml(run.graphSync.edges || 0)}</div>` : ''}
       <div class="et-note">문학 품질 후처리: ${escHtml(run.qualityRegex?.applied ?? 0)}개 적용${Array.isArray(run.qualityRegex?.errors) && run.qualityRegex.errors.length ? ` / 오류 ${escHtml(run.qualityRegex.errors.length)}` : ''}</div>
       ${renderQualityRunDetails(run.qualityRegex)}
@@ -17180,6 +17666,8 @@
           relationships: Array.isArray(state?.relationships) ? state.relationships.length : 0,
           graphNodes: Array.isArray(state?.associationGraph?.nodes) ? state.associationGraph.nodes.length : 0,
           graphEdges: Array.isArray(state?.associationGraph?.edges) ? state.associationGraph.edges.length : 0,
+          weaveNodes: Array.isArray(state?.psycheWeave?.nodes) ? state.psycheWeave.nodes.length : 0,
+          weaveEdges: Array.isArray(state?.psycheWeave?.edges) ? state.psycheWeave.edges.length : 0,
         }),
         stateLedgerSamples: () => ({
           memory: (Array.isArray(state?.memoryLedger) ? state.memoryLedger : []).slice(0, 80).map(item => ({
