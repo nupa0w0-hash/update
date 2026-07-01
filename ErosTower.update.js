@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.43
+//@display-name ☸Eros Tower 1.1.46
 //@api 3.0
-//@version 1.1.43
+//@version 1.1.46
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -26,7 +26,7 @@
 //@arg et_embedding_model string Embedding model name.
 //@arg et_auto_memory_enabled string Enable automatic Eros memory engine. true/false
 //@arg et_auto_cold_start_enabled string Enable automatic long-memory cold start. true/false
-//@arg et_injection_budget int Manual max chars injected into main request. 0/unset means automatic structured briefing.
+//@arg et_injection_budget int Manual max chars injected into main request. 0/unset means unlimited.
 //@arg et_extra_body_json string Extra JSON body merged into agent requests
 //@arg et_pipeline_json string Override Eros Tower pipeline JSON
 //@arg et_prompt_presets_json string Override Eros agent prompt preset JSON
@@ -35,18 +35,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.43
+ * Eros Tower 1.1.46
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.43 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.46 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.43';
+  const VERSION = '1.1.46';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.43`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.46`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -63,12 +63,10 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.43 analysis context';
-  const AUTO_MAIN_BRIEFING_CHARS = 36000;
-  const PSYCHE_SOURCE_CHUNK_CHARS = 16000;
-  const PSYCHE_SOURCE_CHUNK_OVERLAP_CHARS = 1200;
-  const PSYCHE_INGEST_SOURCE_CHARS = 18000;
-  const PSYCHE_INGEST_BATCH_CHARS = 120000;
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.46 analysis context';
+  const PSYCHE_SOURCE_CHUNK_CHARS = 6000;
+  const PSYCHE_SOURCE_CHUNK_OVERLAP_CHARS = 360;
+  const PSYCHE_INGEST_SOURCE_CHARS = 7600;
   const PSYCHE_COMPILED_SETTING_CHARS = 12000;
   const PSYCHE_STATE_JSON_CHARS = 14000;
   const PSYCHE_HISTORY_TOTAL_CHARS = 10000;
@@ -161,7 +159,7 @@
     autoColdStartEnabled: true,
     agentRoutingMode: 'custom',
     coldStartChunkSize: 12,
-    coldStartMaxChunksPerRun: 256,
+    coldStartMaxChunksPerRun: 2,
     coldStartRetryDelayTurns: 4,
     coldStartMaxAttempts: 3,
     associationGraphEnabled: true,
@@ -188,7 +186,7 @@
     cbsTogglesPerChat: {},
     cbsDropUnresolvedConditionals: true,
     cbsPersistStrip: true,
-    maxAssociationEdges: 2400,
+    maxAssociationEdges: 800,
     injectionBudget: 0,
     stagedSearchEnabled: true,
     extraBodyJson: '',
@@ -912,10 +910,7 @@
     merged.autoColdStartEnabled = true;
     merged.agentRoutingMode = 'custom';
     merged.coldStartChunkSize = parseNumber(merged.coldStartChunkSize, DEFAULT_CONFIG.coldStartChunkSize, 4, 24);
-    if (Number(stored?.coldStartMaxChunksPerRun) > 0 && Number(stored?.coldStartMaxChunksPerRun) <= 16) {
-      merged.coldStartMaxChunksPerRun = DEFAULT_CONFIG.coldStartMaxChunksPerRun;
-    }
-    merged.coldStartMaxChunksPerRun = parseNumber(merged.coldStartMaxChunksPerRun, DEFAULT_CONFIG.coldStartMaxChunksPerRun, 0, 512);
+    merged.coldStartMaxChunksPerRun = parseNumber(merged.coldStartMaxChunksPerRun, DEFAULT_CONFIG.coldStartMaxChunksPerRun, 0, 4);
     merged.coldStartRetryDelayTurns = parseNumber(merged.coldStartRetryDelayTurns, DEFAULT_CONFIG.coldStartRetryDelayTurns, 0, 80);
     merged.coldStartMaxAttempts = parseNumber(merged.coldStartMaxAttempts, DEFAULT_CONFIG.coldStartMaxAttempts, 1, 12);
     merged.associationGraphEnabled = parseBool(merged.associationGraphEnabled, DEFAULT_CONFIG.associationGraphEnabled) === true;
@@ -947,8 +942,7 @@
     merged.referenceCharacterIds = normalizeStringArray(merged.referenceCharacterIds).slice(0, 48);
     merged.referenceModuleIds = normalizeStringArray(merged.referenceModuleIds).slice(0, 48);
     merged.referencePluginKeys = normalizeStringArray(merged.referencePluginKeys).slice(0, 48);
-    if (Number(stored?.maxAssociationEdges) === 800) merged.maxAssociationEdges = DEFAULT_CONFIG.maxAssociationEdges;
-    merged.maxAssociationEdges = parseNumber(merged.maxAssociationEdges, DEFAULT_CONFIG.maxAssociationEdges, 80, 4000);
+    merged.maxAssociationEdges = parseNumber(merged.maxAssociationEdges, DEFAULT_CONFIG.maxAssociationEdges, 80, 1200);
     merged.providerKeys = parseProviderKeys(merged.providerKeysJson, merged.provider, merged.apiKey);
     merged.providerRegistry = parseProviderRegistry(merged.providerRegistryJson, merged);
     merged.activeProviderId = normalizeActiveProviderId(merged.activeProviderId, merged.providerRegistry);
@@ -2321,28 +2315,14 @@
 
   const PSYCHE_SOURCE_INGEST_PROMPT = [
     'You are the Eros Tower Psyche Source Ingestor.',
-    'Convert the provided source chunk or source chunk batch into compact durable retrieval units for continuity, lore, memory, state, and knowledge-boundary use.',
-    'Do not collapse a lorebook entry into one general summary. Extract every concrete named character, faction, place, object, rule, secret, relationship, timeline fact, resource, system, custom, and knowledge boundary as its own usable unit when present.',
-    'For roster-like lore with many minor/supporting characters, create separate character or relationship units for each distinct actor instead of summarizing the roster as a group.',
-    'For world-setting lore, split laws, institutions, geography, culture, economy, magic/technology rules, ranks, taboos, and public systems into separate lore/knowledge/worldFront units.',
-    'For secrets or hidden information, preserve owners, knowers, suspecters, cannotKnow, reveal gates, and risks. Do not flatten a secret into public lore.',
-    'Use only the provided source chunks and source metadata. Do not write story prose or a final reply.',
+    'Convert one provided source chunk into compact durable retrieval units for continuity, lore, memory, state, and knowledge-boundary use.',
+    'Use only the source chunk and source metadata. Do not write story prose or a final reply.',
     'Return JSON only. No markdown.',
-    'Allowed single-chunk shape:',
+    'Allowed shape:',
     '{',
-    '  "units": [{"id":"","type":"lore|memory|state|character|relationship|worldFront|secret|knowledge","name":"","summary":"","keywords":[],"aliases":[],"knownBy":[],"cannotKnow":[],"sourceClass":"foundation|always-active|selective|contextual","loreStability":"fixed|persistent|triggered|contextual","retention":"fixed|persistent|triggered|contextual","priority":5,"importance":5,"confidence":0.85,"canonLevel":"established","sourceRefs":[]}]',
+    '  "units": [{"id":"","type":"lore|memory|state|character|relationship|worldFront|secret|knowledge","name":"","summary":"","keywords":[],"aliases":[],"knownBy":[],"cannotKnow":[],"priority":5,"importance":5,"confidence":0.85,"canonLevel":"established","sourceRefs":[]}]',
     '}',
-    'Allowed batch shape:',
-    '{',
-    '  "chunks": [{"chunkId":"","complete":true,"remainingHint":"","units":[{"id":"","type":"lore|memory|state|character|relationship|worldFront|secret|knowledge","name":"","summary":"","keywords":[],"aliases":[],"knownBy":[],"cannotKnow":[],"sourceClass":"foundation|always-active|selective|contextual","loreStability":"fixed|persistent|triggered|contextual","retention":"fixed|persistent|triggered|contextual","priority":5,"importance":5,"confidence":0.85,"canonLevel":"established","sourceRefs":[]}]}]',
-    '}',
-    'In batch mode, preserve each unit under the correct chunkId. Do not merge unrelated chunks into a single vague unit.',
-    'If one source chunk contains dozens or hundreds of roster entries, emit separate units for as many distinct entries as fit in the response. Do not replace them with a single roster summary.',
-    'If a chunk cannot be fully covered in one response, set that chunk block to "complete": false and include "remainingHint" with what still needs extraction.',
-    'If previousUnits are provided for a chunk, continue extracting missing units from the same source instead of repeating those units.',
-    'There is no fixed maximum number of units per chunk. Dense simulation rosters and large world settings should produce as many separate units as the source requires.',
-    'Prefer complete coverage of distinct source facts over aggressive compression. Keep each unit compact, but do not omit minor entries solely because they are minor.',
-    'Mark immutable foundations, always-active context, selective triggers, and contextual facts with sourceClass/loreStability/retention when the source supports it.',
+    'Prefer fewer high-value units over many shallow entries.',
   ].join('\n');
 
   function createDefaultPsycheIngestState() {
@@ -2551,9 +2531,6 @@
       sourceRank: parseNumber(item.sourceRank, sourceRankForPsycheSourceKind(kind), 0, 100),
       priority,
       alwaysActive: Boolean(item.alwaysActive),
-      sourceClass: cleanString(item.sourceClass, sourceClassForPsycheRuntime(kind, item, Boolean(item.alwaysActive))),
-      loreStability: cleanString(item.loreStability, retentionForSourceClass(cleanString(item.sourceClass, sourceClassForPsycheRuntime(kind, item, Boolean(item.alwaysActive))))),
-      retention: cleanString(item.retention, retentionForSourceClass(cleanString(item.sourceClass, sourceClassForPsycheRuntime(kind, item, Boolean(item.alwaysActive))))),
       chunkCount: parseNumber(item.chunkCount, 0, 0, 999999),
       status: ['active', 'missing', 'superseded'].includes(String(item.status || 'active')) ? String(item.status || 'active') : 'active',
       firstSeenTurn: parseNumber(item.firstSeenTurn, 0, 0, 999999),
@@ -2589,9 +2566,6 @@
       priority: parseNumber(item.priority, 5, 0, 10),
       sourceRank: parseNumber(item.sourceRank, sourceRankForPsycheSourceKind(item.sourceKind), 0, 100),
       alwaysActive: Boolean(item.alwaysActive),
-      sourceClass: cleanString(item.sourceClass, ''),
-      loreStability: cleanString(item.loreStability, ''),
-      retention: cleanString(item.retention, ''),
       status,
       attempts: parseNumber(item.attempts, 0, 0, 99),
       retryAfterTurn: parseNumber(item.retryAfterTurn, 0, 0, 999999),
@@ -2637,9 +2611,6 @@
       sourceRank,
       priority,
       importance,
-      sourceClass: cleanString(item.sourceClass, ''),
-      loreStability: cleanString(item.loreStability, ''),
-      retention: cleanString(item.retention, ''),
       confidence: parseNumber(item.confidence, inferConfidence(item), 0, 1),
       canonLevel: normalizeCanonLevel(item.canonLevel || item.certainty),
       status: ['active', 'superseded', 'retired', 'disputed'].includes(String(item.status || 'active')) ? String(item.status || 'active') : 'active',
@@ -2669,25 +2640,6 @@
     if (/chat|memory/.test(raw)) return SOURCE_RANK.memory;
     if (/lore|module|reference|global|local/.test(raw)) return SOURCE_RANK.lorebook;
     return SOURCE_RANK.stored_state;
-  }
-
-  function sourceClassForPsycheRuntime(kind, source = null, alwaysActive = false) {
-    const raw = String(kind || '').toLowerCase();
-    const meta = source?.meta || source || {};
-    if (meta.constant || raw === 'desc' || raw === 'firstmessage' || /character|persona/.test(raw)) return 'foundation';
-    if (alwaysActive || meta.alwaysActive) return 'always-active';
-    if (meta.selective || meta.key || meta.keys || meta.keyWords || meta.activationKeys) return 'selective';
-    if (/reference|module/.test(raw)) return 'reference';
-    if (/chat|memory/.test(raw)) return 'contextual';
-    return 'scored';
-  }
-
-  function retentionForSourceClass(sourceClass) {
-    const cls = String(sourceClass || '').toLowerCase();
-    if (cls === 'foundation') return 'fixed';
-    if (cls === 'always-active') return 'persistent';
-    if (cls === 'selective') return 'triggered';
-    return 'contextual';
   }
 
   function createDefaultCanonicalIdentity() {
@@ -5397,19 +5349,7 @@
     const lorePreview = lore
       .filter(item => item?.kind !== 'desc' && item?.kind !== 'firstMessage')
       .slice(0, 32)
-      .map(item => {
-        const meta = [
-          item.kind || 'lore',
-          item.path || '',
-          item.meta?.constant ? 'constant' : '',
-          item.meta?.alwaysActive ? 'always' : '',
-          item.meta?.selective ? 'selective' : '',
-          item.priority !== undefined ? `priority=${item.priority}` : '',
-          item.activationKeys?.length ? `keys=${item.activationKeys.slice(0, 6).join(', ')}` : '',
-          item.hash ? `hash=${String(item.hash).slice(0, 10)}` : '',
-        ].filter(Boolean).join(' / ');
-        return `- ${item.label || item.kind || item.path} (${meta})`;
-      })
+      .map(item => `- ${item.kind}/${item.path}${item.meta?.alwaysActive ? ' always' : ''} keys=${item.activationKeys.join(', ') || '-'}: ${item.content.slice(0, 650)}`)
       .join('\n');
     return [
       `[Character]\n${firstNonEmpty(character?.description, character?.desc, character?.data?.description, character?.data?.desc, '(none)').slice(0, 6000)}`,
@@ -5895,9 +5835,9 @@
       add({ content, name: idx ? `Database Global Note ${idx + 1}` : 'Database Global Note' }, 'globalNote', 'database global note', `db:globalNote:${idx}`, { owner: 'database' });
     });
     const globalLore = collectCharacterLoreEntries(character);
-    globalLore.forEach((entry, idx) => add(entry, 'globalLore', 'character lore', `char:globalLore:${idx}`, { owner: 'character' }));
+    globalLore.slice(0, 48).forEach((entry, idx) => add(entry, 'globalLore', 'character lore', `char:globalLore:${idx}`, { owner: 'character' }));
     const localLore = collectChatLoreEntries(chat);
-    localLore.forEach((entry, idx) => add(entry, 'localLore', 'chat lore', `chat:localLore:${idx}`, { owner: 'chat' }));
+    localLore.slice(0, 48).forEach((entry, idx) => add(entry, 'localLore', 'chat lore', `chat:localLore:${idx}`, { owner: 'chat' }));
     const modules = Array.isArray(db?.modules) ? db.modules : [];
     const selectedCharacters = new Set(normalizeStringArray(conf?.referenceCharacterIds));
     const selectedModules = new Set(normalizeStringArray(conf?.referenceModuleIds));
@@ -5908,7 +5848,7 @@
       const isSelectedReference = referenceKeyMatches(modId, selectedModules);
       const isEnabled = enabled.has(String(mod?.id)) || enabled.has(String(mod?.name)) || enabled.has(String(mod?.namespace)) || enabled.has(modId) || isSelectedReference;
       if (!isEnabled) return;
-      collectModuleLoreEntries(mod).forEach((entry, idx) => add(entry, 'moduleLore', `module: ${mod?.name || mod?.id || 'unknown'}`, `module:${modId || 'unknown'}:lore:${idx}`, { owner: 'module', moduleId: modId || '', moduleName: mod?.name || '' }));
+      collectModuleLoreEntries(mod).slice(0, 48).forEach((entry, idx) => add(entry, 'moduleLore', `module: ${mod?.name || mod?.id || 'unknown'}`, `module:${modId || 'unknown'}:lore:${idx}`, { owner: 'module', moduleId: modId || '', moduleName: mod?.name || '' }));
     });
     const currentCharacterId = referenceCharacterId(character);
     getDatabaseCharacters(db).forEach((ref, idx) => {
@@ -5917,7 +5857,7 @@
       const label = referenceLabel(ref, `reference character ${idx + 1}`);
       add({ content: firstNonEmpty(ref?.description, ref?.desc, ref?.data?.description, ref?.data?.desc), name: label }, 'referenceCharacter', `reference character: ${label}`, `reference:character:${refId}:desc`, { owner: 'referenceCharacter', referenceId: refId, referenceName: label });
       collectGlobalNoteTexts(ref).forEach((content, noteIdx) => add({ content, name: `${label} Global Note` }, 'referenceCharacterNote', `reference character note: ${label}`, `reference:character:${refId}:globalNote:${noteIdx}`, { owner: 'referenceCharacter', referenceId: refId, referenceName: label }));
-      collectCharacterLoreEntries(ref).forEach((entry, loreIdx) => add(entry, 'referenceCharacterLore', `reference character lore: ${label}`, `reference:character:${refId}:lore:${loreIdx}`, { owner: 'referenceCharacter', referenceId: refId, referenceName: label }));
+      collectCharacterLoreEntries(ref).slice(0, 48).forEach((entry, loreIdx) => add(entry, 'referenceCharacterLore', `reference character lore: ${label}`, `reference:character:${refId}:lore:${loreIdx}`, { owner: 'referenceCharacter', referenceId: refId, referenceName: label }));
     });
     modules.forEach((mod, idx) => {
       const refId = referenceModuleId(mod, idx);
@@ -5925,7 +5865,7 @@
       if (!referenceKeyMatches(refId, selectedModules) || alreadyEnabled) return;
       const label = referenceLabel(mod, `reference module ${idx + 1}`);
       add({ content: firstNonEmpty(mod?.description, mod?.desc, mod?.backgroundEmbedding), name: label }, 'referenceModule', `reference module: ${label}`, `reference:module:${refId}:desc`, { owner: 'referenceModule', moduleId: refId, moduleName: label });
-      collectModuleLoreEntries(mod).forEach((entry, loreIdx) => add(entry, 'referenceModuleLore', `reference module lore: ${label}`, `reference:module:${refId}:lore:${loreIdx}`, { owner: 'referenceModule', moduleId: refId, moduleName: label }));
+      collectModuleLoreEntries(mod).slice(0, 48).forEach((entry, loreIdx) => add(entry, 'referenceModuleLore', `reference module lore: ${label}`, `reference:module:${refId}:lore:${loreIdx}`, { owner: 'referenceModule', moduleId: refId, moduleName: label }));
     });
     getDatabasePlugins(db).forEach((plugin, idx) => {
       const key = referencePluginKey(plugin, idx);
@@ -5933,8 +5873,8 @@
       const label = referenceLabel(plugin, `reference plugin ${idx + 1}`);
       add({ content: buildReferencePluginSummary(plugin), name: label }, 'referencePlugin', `reference plugin: ${label}`, `reference:plugin:${key}:summary`, { owner: 'referencePlugin', pluginKey: key, pluginName: label });
     });
-    const result = out;
-    result.rawCbsCandidates = rawCbsCandidates;
+    const result = out.slice(0, 260);
+    result.rawCbsCandidates = rawCbsCandidates.slice(0, 240);
     return result;
   }
 
@@ -5973,7 +5913,7 @@
       .replace(/\{\{(?:user|persona)\}\}/gi, firstNonEmpty(getSelectedPersona(db)?.name, ''))
       .replace(/\n{3,}/g, '\n\n')
       .trim();
-    return text;
+    return text.slice(0, 12000);
   }
 
   function stripExtendedCanonicalCbs(text, resolver, conf = null) {
@@ -6251,8 +6191,6 @@
       const stableId = slug(firstNonEmpty(source.id, `${kind}:${path}`));
       if (!stableId) return;
       const hash = String(source.hash || hashString(`${kind}:${path}:${text}`));
-      const sourceClass = cleanString(source.sourceClass, sourceClassForPsycheRuntime(kind, source, Boolean(source.alwaysActive)));
-      const retention = cleanString(source.retention, retentionForSourceClass(sourceClass));
       out.push({
         id: stableId,
         kind,
@@ -6270,9 +6208,6 @@
         scope: String(source.scope || ''),
         priority: parseNumber(source.priority, source.alwaysActive ? 8 : 5, 0, 10),
         alwaysActive: Boolean(source.alwaysActive),
-        sourceClass,
-        loreStability: cleanString(source.loreStability, retention),
-        retention,
         sourceRank: parseNumber(source.sourceRank, sourceRankForPsycheSourceKind(kind), 0, 100),
         meta: source.meta || {},
       });
@@ -6293,9 +6228,6 @@
         scope: source.scope,
         priority: source.priority,
         alwaysActive: Boolean(source?.meta?.alwaysActive || source?.meta?.constant || source?.kind === 'desc' || source?.kind === 'firstMessage'),
-        sourceClass: canonicalSourceClass(source),
-        loreStability: canonicalSourceRetention(source),
-        retention: canonicalSourceRetention(source),
         sourceRank: sourceRankForPsycheSourceKind(source.kind),
         meta: source.meta || {},
       });
@@ -6387,9 +6319,6 @@
           priority: source.priority,
           sourceRank: source.sourceRank,
           alwaysActive: source.alwaysActive,
-          sourceClass: source.sourceClass,
-          loreStability: source.loreStability,
-          retention: source.retention,
         });
       }
       if (end >= text.length) break;
@@ -6474,8 +6403,7 @@
     });
 
     state.psycheSources = Array.from(previousSources.values()).sort((a, b) => b.priority - a.priority || String(a.id).localeCompare(String(b.id)));
-    state.psycheChunks = Array.from(previousChunks.values()).sort((a, b) => b.priority - a.priority || String(a.sourceId).localeCompare(String(b.sourceId)) || a.index - b.index || String(a.id).localeCompare(String(b.id)));
-    const coverage = psycheSourceCoverageStats(state);
+    state.psycheChunks = Array.from(previousChunks.values()).sort((a, b) => b.priority - a.priority || a.index - b.index || String(a.id).localeCompare(String(b.id)));
     state.psycheIngest = normalizePsycheIngestState({
       ...state.psycheIngest,
       sourceCount: state.psycheSources.length,
@@ -6483,38 +6411,18 @@
       unitCount: state.psycheUnits.length,
       stats: {
         ...(state.psycheIngest?.stats || {}),
-        lastSync: { addedSources, revisedSources, addedChunks, revisedChunks, ...coverage, at: nowIso() },
+        lastSync: { addedSources, revisedSources, addedChunks, revisedChunks, at: nowIso() },
       },
     }, state);
     return {
       sources: sources.length,
       chunks: currentChunkIds.size,
-      ...coverage,
       addedSources,
       revisedSources,
       addedChunks,
       revisedChunks,
       activeSources: currentSourceIds.size,
       activeChunks: currentChunkIds.size,
-    };
-  }
-
-  function psycheSourceCoverageStats(state) {
-    const active = (Array.isArray(state?.psycheChunks) ? state.psycheChunks : [])
-      .filter(chunk => !['superseded'].includes(String(chunk?.status || '').toLowerCase()));
-    const absorbed = active.filter(chunk => chunk.status === 'absorbed').length;
-    const pending = active.filter(chunk => ['pending', 'failed'].includes(chunk.status)).length;
-    const failed = active.filter(chunk => chunk.status === 'failed').length;
-    const activeSources = new Set(active.map(chunk => chunk.sourceId).filter(Boolean)).size;
-    const incompleteSources = new Set(active.filter(chunk => chunk.status !== 'absorbed').map(chunk => chunk.sourceId).filter(Boolean)).size;
-    return {
-      absorbedChunks: absorbed,
-      pendingChunks: pending,
-      failedChunks: failed,
-      activeChunkTotal: active.length,
-      activeSourceTotal: activeSources,
-      incompleteSources,
-      coverageRatio: active.length ? absorbed / active.length : 1,
     };
   }
 
@@ -6542,8 +6450,7 @@
       return;
     }
     const attempts = parseNumber(current.attempts, 0, 0, 99) + 1;
-    const partialCoverage = /^partial-source-coverage/i.test(String(error || ''));
-    const permanent = !partialCoverage && attempts >= parseNumber(conf?.coldStartMaxAttempts, DEFAULT_CONFIG.coldStartMaxAttempts, 1, 12);
+    const permanent = attempts >= parseNumber(conf?.coldStartMaxAttempts, DEFAULT_CONFIG.coldStartMaxAttempts, 1, 12);
     const retryDelay = parseNumber(conf?.coldStartRetryDelayTurns, DEFAULT_CONFIG.coldStartRetryDelayTurns, 0, 80);
     state.psycheChunks[idx] = {
       ...current,
@@ -6554,10 +6461,11 @@
     };
   }
 
-  function normalizePsycheUnitsForChunk(units, chunk, source, turn) {
-    return (Array.isArray(units) ? units : []).map((unit, idx) => normalizePsycheUnit({
+  function normalizePsycheIngestUnits(parsed, chunk, source, turn) {
+    const units = Array.isArray(parsed?.units) ? parsed.units : [];
+    return units.map((unit, idx) => normalizePsycheUnit({
       ...unit,
-      id: `psyche:${chunk.hash}:${hashString([unit?.type || unit?.kind || '', unit?.name || '', unit?.summary || unit?.fact || unit?.text || ''].join('\n')).slice(0, 16)}`,
+      id: firstNonEmpty(unit?.id, `psyche:${chunk.hash}:${idx}:${unit?.name || unit?.summary || ''}`),
       sourceId: chunk.sourceId,
       sourceKind: chunk.sourceKind,
       sourcePath: chunk.sourcePath,
@@ -6567,176 +6475,11 @@
       chunkHash: chunk.hash,
       sourceRank: unit?.sourceRank ?? chunk.sourceRank,
       priority: unit?.priority ?? chunk.priority,
-      sourceClass: firstNonEmpty(unit?.sourceClass, chunk.sourceClass, source?.sourceClass),
-      loreStability: firstNonEmpty(unit?.loreStability, chunk.loreStability, source?.loreStability),
-      retention: firstNonEmpty(unit?.retention, chunk.retention, source?.retention),
       sourceRefs: uniqueStrings(normalizeStringArray(unit?.sourceRefs).concat([chunk.sourcePath, chunk.sourceId, chunk.id]).filter(Boolean)),
       createdTurn: turn,
       lastSeenTurn: turn,
       updatedAt: nowIso(),
     }, turn)).filter(Boolean);
-  }
-
-  function normalizePsycheIngestUnits(parsed, chunk, source, turn) {
-    return normalizePsycheUnitsForChunk(parsed?.units, chunk, source, turn);
-  }
-
-  function findPsycheBatchItemForUnit(unit, batch, fallbackIndex = 0) {
-    const list = Array.isArray(batch) ? batch : [];
-    const byChunkId = new Map(list.map(item => [String(item?.chunk?.id || ''), item]).filter(([id]) => id));
-    const refs = normalizeStringArray(unit?.sourceRefs);
-    const chunkId = firstNonEmpty(
-      unit?.chunkId,
-      unit?.sourceChunkId,
-      unit?.chunk_id,
-      refs.find(ref => byChunkId.has(String(ref || '')))
-    );
-    if (chunkId && byChunkId.has(String(chunkId))) return byChunkId.get(String(chunkId));
-    const sourceId = firstNonEmpty(unit?.sourceId, unit?.source_id);
-    if (sourceId) {
-      const found = list.find(item => item?.chunk?.sourceId === sourceId || item?.source?.id === sourceId);
-      if (found) return found;
-    }
-    const sourcePath = firstNonEmpty(unit?.sourcePath, unit?.source_path);
-    if (sourcePath) {
-      const found = list.find(item => item?.chunk?.sourcePath === sourcePath || item?.source?.path === sourcePath);
-      if (found) return found;
-    }
-    return list[Math.max(0, Math.min(list.length - 1, Number(fallbackIndex || 0)))] || null;
-  }
-
-  function normalizePsycheBatchIngestUnits(parsed, batch, turn) {
-    const chunkBlocks = Array.isArray(parsed?.chunks)
-      ? parsed.chunks
-      : Array.isArray(parsed?.results)
-        ? parsed.results
-        : [];
-    if (chunkBlocks.length) {
-      return chunkBlocks.flatMap((block, idx) => {
-        const item = findPsycheBatchItemForUnit(block, batch, idx);
-        if (!item) return [];
-        return normalizePsycheUnitsForChunk(block?.units, item.chunk, item.source, turn);
-      });
-    }
-    return (Array.isArray(parsed?.units) ? parsed.units : []).flatMap((unit, idx) => {
-      const item = findPsycheBatchItemForUnit(unit, batch, idx);
-      if (!item) return [];
-      return normalizePsycheUnitsForChunk([unit], item.chunk, item.source, turn);
-    });
-  }
-
-  function psycheBatchCompletionMap(parsed, batch) {
-    const out = new Map();
-    (Array.isArray(batch) ? batch : []).forEach(item => {
-      if (!item?.chunk?.id) return;
-      const dense = /dense|long/i.test(psycheChunkDensityHint(item.text));
-      out.set(item.chunk.id, { complete: !dense, remainingHint: '' });
-    });
-    const chunkBlocks = Array.isArray(parsed?.chunks)
-      ? parsed.chunks
-      : Array.isArray(parsed?.results)
-        ? parsed.results
-        : [];
-    chunkBlocks.forEach((block, idx) => {
-      const item = findPsycheBatchItemForUnit(block, batch, idx);
-      if (!item?.chunk?.id) return;
-      const dense = /dense|long/i.test(psycheChunkDensityHint(item.text));
-      const explicitlyComplete = block?.complete === true || block?.coverageComplete === true || /complete|done|covered/i.test(String(block?.status || block?.coverage || ''));
-      const explicitlyIncomplete = block?.complete === false
-        || block?.coverageComplete === false
-        || /incomplete|partial|continue/i.test(String(block?.status || block?.coverage || ''));
-      out.set(item.chunk.id, {
-        complete: explicitlyIncomplete ? false : dense ? explicitlyComplete : true,
-        remainingHint: String(block?.remainingHint || block?.remaining || block?.next || '').slice(0, 220),
-      });
-    });
-    return out;
-  }
-
-  function resolvePsycheIngestBatchChars(conf, agentConf) {
-    const contextBased = Math.floor(parseNumber(agentConf?.contextWindow, conf?.contextWindow || DEFAULT_CONFIG.contextWindow, 4, 80) * 2500);
-    return Math.max(PSYCHE_INGEST_SOURCE_CHARS, Math.min(240000, Math.max(PSYCHE_INGEST_BATCH_CHARS, contextBased)));
-  }
-
-  function buildPsycheIngestBatches(items, conf, agentConf) {
-    const max = resolvePsycheIngestBatchChars(conf, agentConf);
-    const batches = [];
-    let current = [];
-    let used = 0;
-    (Array.isArray(items) ? items : []).forEach(item => {
-      const size = String(item?.text || '').length + JSON.stringify(item?.previousUnits || []).length + 1100;
-      if (current.length && used + size > max) {
-        batches.push(current);
-        current = [];
-        used = 0;
-      }
-      current.push(item);
-      used += size;
-    });
-    if (current.length) batches.push(current);
-    return batches;
-  }
-
-  function psycheChunkDensityHint(text) {
-    const source = String(text || '');
-    if (!source.trim()) return 'empty';
-    const lines = source.split(/\n+/).map(line => line.trim()).filter(Boolean);
-    const listed = lines.filter(line => (
-      /^[-*\d]+[.)\s]/.test(line)
-      || /^[^\s:]{1,40}\s*:/.test(line)
-      || /[,;]\s*[^\s,;]{1,32}\s*:/.test(line)
-    )).length;
-    if (listed >= 80) return 'very-dense-roster-or-catalog';
-    if (listed >= 25) return 'dense-roster-or-multi-entry-lore';
-    if (source.length >= 12000) return 'long-world-setting-or-large-lore';
-    if (source.length >= 6000) return 'medium-lore';
-    return 'normal';
-  }
-
-  function existingPsycheUnitsForChunk(state, chunkId, limit = 80) {
-    return (Array.isArray(state?.psycheUnits) ? state.psycheUnits : [])
-      .filter(unit => unit?.chunkId === chunkId && !['superseded', 'retired', 'archived'].includes(String(unit?.status || '').toLowerCase()))
-      .slice(-Math.max(1, Number(limit || 80)))
-      .map(unit => ({
-        type: unit.type,
-        name: unit.name,
-        summary: String(unit.summary || '').slice(0, 180),
-      }));
-  }
-
-  function formatPsycheIngestBatchUserContent(batch) {
-    const chunks = (Array.isArray(batch) ? batch : []).map(({ chunk, source, text, previousUnits }) => ({
-      id: chunk.id,
-      sourceId: chunk.sourceId,
-      kind: chunk.sourceKind,
-      path: chunk.sourcePath,
-      label: chunk.sourceLabel,
-      priority: chunk.priority,
-      alwaysActive: chunk.alwaysActive,
-      sourceRank: chunk.sourceRank,
-      sourceHash: source?.hash || '',
-      chunkId: chunk.id,
-      chunkIndex: chunk.index,
-      chunkTotal: source?.chunkCount || 0,
-      sourceClass: chunk.sourceClass || source?.sourceClass || '',
-      loreStability: chunk.loreStability || source?.loreStability || '',
-      retention: chunk.retention || source?.retention || '',
-      length: String(text || '').length,
-      previousError: chunk.error || '',
-      densityHint: psycheChunkDensityHint(text),
-      previousUnits: Array.isArray(previousUnits) ? previousUnits : [],
-    }));
-    const parts = [
-      '<source_batch_metadata>',
-      compactJson({ batch: true, chunkCount: chunks.length, chunks }),
-      '</source_batch_metadata>',
-    ];
-    (Array.isArray(batch) ? batch : []).forEach(({ chunk, text }) => {
-      parts.push(`<source_chunk chunkId="${chunk.id}" sourceId="${chunk.sourceId}">`);
-      parts.push(String(text || ''));
-      parts.push('</source_chunk>');
-    });
-    return parts.join('\n');
   }
 
   function mergePsycheUnits(state, units) {
@@ -6751,30 +6494,24 @@
 
   async function runPsycheSourceIngest(conf, context, state) {
     if (!conf.autoMemoryEnabled || !conf.autoColdStartEnabled || !conf.stateApiEnabled) return { processed: 0, skipped: true, reason: 'disabled' };
-    const limit = parseNumber(conf.coldStartMaxChunksPerRun, DEFAULT_CONFIG.coldStartMaxChunksPerRun, 0, 512);
+    const limit = parseNumber(conf.coldStartMaxChunksPerRun, DEFAULT_CONFIG.coldStartMaxChunksPerRun, 0, 12);
     if (limit <= 0) return { processed: 0, skipped: true, reason: 'limit-zero' };
     const agent = getPsycheMainAgent(conf);
     if (!agent) return { processed: 0, skipped: true, reason: 'no-psyche-main' };
     const agentConf = resolveAgentConf(agent, conf);
-    const ingestAgentConf = {
-      ...agentConf,
-      maxTokens: Math.max(parseNumber(agentConf.maxTokens, conf.maxTokens, 128, 16000), 12000),
-    };
-    if (!canCallProvider(ingestAgentConf)) return { processed: 0, skipped: true, reason: 'provider-not-ready' };
+    if (!canCallProvider(agentConf)) return { processed: 0, skipped: true, reason: 'provider-not-ready' };
     state.psycheChunks = normalizePsycheChunks(state.psycheChunks);
-    const sourceMap = new Map((state.psycheSources || []).map(source => [source.id, source]));
     const candidates = state.psycheChunks
       .filter(chunk => ['pending', 'failed'].includes(chunk.status)
         && parseNumber(chunk.retryAfterTurn, 0, 0, 999999) <= Number(state.turn || 0))
       .sort((a, b) => Number(b.alwaysActive) - Number(a.alwaysActive)
         || b.priority - a.priority
         || sourceRankForPsycheSourceKind(b.sourceKind) - sourceRankForPsycheSourceKind(a.sourceKind)
-        || String(a.sourceId).localeCompare(String(b.sourceId))
         || a.index - b.index)
       .slice(0, limit);
     if (!candidates.length) return { processed: 0, skipped: true, reason: 'no-pending-source-chunk' };
+    const sourceMap = new Map((state.psycheSources || []).map(source => [source.id, source]));
     const results = [];
-    const pendingItems = [];
     for (const chunk of candidates) {
       const source = sourceMap.get(chunk.sourceId);
       const text = resolvePsycheChunkText(chunk, context, conf);
@@ -6783,119 +6520,81 @@
         results.push({ id: chunk.id, sourceId: chunk.sourceId, error: 'source-unavailable' });
         continue;
       }
-      pendingItems.push({ chunk, source, text: text.slice(0, PSYCHE_INGEST_SOURCE_CHARS) });
-    }
-    let apiCalls = 0;
-    let totalBatches = 0;
-    let queue = pendingItems;
-    const maxPasses = parseNumber(conf.coldStartMaxAttempts, DEFAULT_CONFIG.coldStartMaxAttempts, 1, 12);
-    for (let pass = 0; queue.length && pass < maxPasses; pass += 1) {
-      const batches = buildPsycheIngestBatches(queue.map(item => ({
-        ...item,
-        previousUnits: existingPsycheUnitsForChunk(state, item.chunk.id, 160),
-      })), conf, ingestAgentConf);
-      totalBatches += batches.length;
-      const retryItems = [];
-      for (const batch of batches) {
-        const messages = [
-          { role: 'system', content: PSYCHE_SOURCE_INGEST_PROMPT },
-          { role: 'user', content: formatPsycheIngestBatchUserContent(batch) },
-        ];
-        const promptTrace = formatPromptTraceForRunLog(messages, conf, Math.floor(MAX_RUN_LOG_TEXT_CHARS / 2));
-        const startedAt = Date.now();
-        apiCalls += 1;
-        try {
-          const raw = await callAgent(ingestAgentConf, messages);
-          const parsed = extractJsonObject(raw);
-          if (!parsed) throw new Error('json-parse-failed');
-          const units = normalizePsycheBatchIngestUnits(parsed, batch, state.turn);
-          const completion = psycheBatchCompletionMap(parsed, batch);
-          mergePsycheUnits(state, units);
-          const unitCounts = new Map();
-          units.forEach(unit => unitCounts.set(unit.chunkId, (unitCounts.get(unit.chunkId) || 0) + 1));
-          const rawOutput = clipRunLogText(raw, Math.floor(MAX_RUN_LOG_TEXT_CHARS / 2));
-          batch.forEach((item, idx) => {
-            const unitCount = unitCounts.get(item.chunk.id) || 0;
-            const done = completion.get(item.chunk.id)?.complete !== false && unitCount > 0;
-            const remainingHint = completion.get(item.chunk.id)?.remainingHint || '';
-            const canContinue = !done && unitCount > 0 && pass + 1 < maxPasses;
-            const chunkError = done ? '' : (unitCount ? `partial-source-coverage${remainingHint ? `: ${remainingHint}` : ''}` : 'no-units-extracted');
-            const error = done || canContinue ? '' : chunkError;
-            markPsycheChunk(state, item.chunk.id, done, chunkError, conf);
-            if (canContinue) retryItems.push(item);
-            results.push({
-              id: item.chunk.id,
-              sourceId: item.chunk.sourceId,
-              units: unitCount,
-              ms: Date.now() - startedAt,
-              batchSize: batch.length,
-              apiCall: apiCalls,
-              pass: pass + 1,
-              complete: done,
-              willContinue: canContinue,
-              remainingHint,
-              error,
-              prompt: idx === 0 ? promptTrace : '',
-              rawOutput: idx === 0 ? rawOutput : '',
-              agent: stateCommitAgentInfo(agent, ingestAgentConf),
-            });
-          });
-        } catch (err) {
-          batch.forEach((item, idx) => {
-            markPsycheChunk(state, item.chunk.id, false, err.message, conf);
-            results.push({
-              id: item.chunk.id,
-              sourceId: item.chunk.sourceId,
-              ms: Date.now() - startedAt,
-              batchSize: batch.length,
-              apiCall: apiCalls,
-              pass: pass + 1,
-              error: err.message,
-              prompt: idx === 0 ? promptTrace : '',
-              rawOutput: '',
-              agent: stateCommitAgentInfo(agent, ingestAgentConf),
-            });
-          });
-        }
+      const messages = [
+        { role: 'system', content: PSYCHE_SOURCE_INGEST_PROMPT },
+        { role: 'user', content: [
+          '<source_metadata>',
+          compactJson({
+            id: chunk.sourceId,
+            kind: chunk.sourceKind,
+            path: chunk.sourcePath,
+            label: chunk.sourceLabel,
+            priority: chunk.priority,
+            alwaysActive: chunk.alwaysActive,
+            sourceRank: chunk.sourceRank,
+            sourceHash: source?.hash || '',
+            chunkId: chunk.id,
+            chunkIndex: chunk.index,
+          }),
+          '</source_metadata>',
+          '<source_chunk>',
+          text.slice(0, PSYCHE_INGEST_SOURCE_CHARS),
+          '</source_chunk>',
+        ].join('\n') },
+      ];
+      const promptTrace = formatPromptTraceForRunLog(messages, conf, Math.floor(MAX_RUN_LOG_TEXT_CHARS / 2));
+      const startedAt = Date.now();
+      try {
+        const raw = await callAgent(agentConf, messages);
+        const parsed = extractJsonObject(raw);
+        if (!parsed) throw new Error('json-parse-failed');
+        const units = normalizePsycheIngestUnits(parsed, chunk, source, state.turn);
+        mergePsycheUnits(state, units);
+        markPsycheChunk(state, chunk.id, true, '', conf);
+        results.push({
+          id: chunk.id,
+          sourceId: chunk.sourceId,
+          units: units.length,
+          ms: Date.now() - startedAt,
+          prompt: promptTrace,
+          rawOutput: clipRunLogText(raw, Math.floor(MAX_RUN_LOG_TEXT_CHARS / 2)),
+          agent: stateCommitAgentInfo(agent, agentConf),
+        });
+      } catch (err) {
+        markPsycheChunk(state, chunk.id, false, err.message, conf);
+        results.push({
+          id: chunk.id,
+          sourceId: chunk.sourceId,
+          ms: Date.now() - startedAt,
+          error: err.message,
+          prompt: promptTrace,
+          rawOutput: '',
+          agent: stateCommitAgentInfo(agent, agentConf),
+        });
       }
-      queue = retryItems;
     }
-    const latestByChunk = new Map();
-    results.forEach(item => latestByChunk.set(item.id, item));
-    const latestResults = Array.from(latestByChunk.values());
-    const errors = latestResults.filter(item => item.error).length;
+    const errors = results.filter(item => item.error).length;
     state.psycheIngest = normalizePsycheIngestState({
       ...state.psycheIngest,
       lastRunAt: nowIso(),
-      lastError: errors ? latestResults.find(item => item.error)?.error || '' : '',
-      processedChunks: parseNumber(state.psycheIngest?.processedChunks, 0, 0, 999999) + latestResults.length - errors,
+      lastError: errors ? results.find(item => item.error)?.error || '' : '',
+      processedChunks: parseNumber(state.psycheIngest?.processedChunks, 0, 0, 999999) + results.length - errors,
       failedChunks: parseNumber(state.psycheIngest?.failedChunks, 0, 0, 999999) + errors,
       stats: {
         ...(state.psycheIngest?.stats || {}),
         lastRun: {
-          processed: latestResults.length,
-          attempts: results.length,
+          processed: results.length,
           errors,
           units: results.reduce((sum, item) => sum + parseNumber(item.units, 0, 0, 999999), 0),
-          apiCalls,
-          batchMode: true,
-          batches: totalBatches,
-          ...psycheSourceCoverageStats(state),
           at: nowIso(),
         },
       },
     }, state);
-    const coverage = psycheSourceCoverageStats(state);
     return {
-      processed: latestResults.length,
-      attempts: results.length,
-      extracted: latestResults.filter(item => !item.error).length,
+      processed: results.length,
+      extracted: results.filter(item => !item.error).length,
       errors,
-      apiCalls,
-      batchMode: true,
-      batches: totalBatches,
-      ...coverage,
-      agent: stateCommitAgentInfo(agent, ingestAgentConf),
+      agent: stateCommitAgentInfo(agent, agentConf),
       results,
     };
   }
@@ -6903,196 +6602,60 @@
   function syncCanonicalLoreLedger(state, canonicalSources) {
     const sources = Array.isArray(canonicalSources) ? canonicalSources : [];
     state.loreLedger = Array.isArray(state.loreLedger) ? state.loreLedger : [];
-    const entries = sources.flatMap(source => canonicalSourceToLoreEntries(source, state.turn));
-    const currentIds = new Set(entries.map(entry => entry.id).filter(Boolean));
+    const currentKeys = new Set();
+    sources.forEach(source => {
+      if (source?.hash) currentKeys.add(`hash:${source.hash}`);
+      if (source?.path) currentKeys.add(`path:${source.path}`);
+      if (source?.id) currentKeys.add(`id:${source.id}`);
+    });
     let added = 0;
     let revised = 0;
     let unchanged = 0;
     let removed = 0;
     state.loreLedger = state.loreLedger.filter(item => {
       if (!item?.canonicalSource) return true;
-      if (currentIds.has(item.id)) return true;
+      const keys = [
+        item?.canonicalSource?.hash ? `hash:${item.canonicalSource.hash}` : '',
+        item?.canonicalSource?.path ? `path:${item.canonicalSource.path}` : '',
+        item?.sourceId ? `path:${item.sourceId}` : '',
+        item?.id ? `id:${item.id}` : '',
+      ].filter(Boolean);
+      if (keys.some(key => currentKeys.has(key))) return true;
       removed += 1;
       return false;
     });
-    entries.forEach(entry => {
-      const idx = state.loreLedger.findIndex(item => item?.id === entry.id);
+    sources.forEach(source => {
+      const entry = canonicalSourceToLoreEntry(source, state.turn);
+      const idx = state.loreLedger.findIndex(item => item?.canonicalSource?.hash === source.hash || item?.sourceId === source.path || item?.id === entry.id);
       if (idx >= 0) {
         const oldHash = state.loreLedger[idx]?.canonicalSource?.hash;
-        const oldSegmentHash = state.loreLedger[idx]?.segmentHash;
         state.loreLedger[idx] = mergeObject(state.loreLedger[idx], entry);
-        if ((oldHash && oldHash !== entry.canonicalSource?.hash) || (oldSegmentHash && oldSegmentHash !== entry.segmentHash)) revised += 1;
+        if (oldHash && oldHash !== source.hash) revised += 1;
         else unchanged += 1;
       } else {
         state.loreLedger.push(entry);
         added += 1;
       }
     });
+    state.loreLedger = state.loreLedger.slice(-260);
     return { added, revised, unchanged, removed };
   }
 
-  function canonicalSourceToLoreEntries(source, turn) {
-    const segments = splitCanonicalSourceIntoLoreSegments(source);
-    const multi = segments.length > 1;
-    const ids = segments.map(segment => canonicalSegmentEntryId(source, segment, multi));
-    return segments.map((segment, idx) => canonicalSourceToLoreEntry(source, turn, {
-      ...segment,
-      entryId: ids[idx],
-      siblingIds: ids.filter(id => id !== ids[idx]),
-      segmentCount: segments.length,
-    }));
-  }
-
-  function canonicalSegmentEntryId(source, segment, multi) {
-    if (!multi) return source.id || `canon:${source.hash}`;
-    const root = slug(firstNonEmpty(source.id, source.path, source.hash, source.label, 'source')).slice(0, 96) || 'source';
-    return `canon:${root}:seg:${String(segment.index + 1).padStart(3, '0')}:${String(segment.hash || '').slice(0, 10)}`;
-  }
-
-  function splitCanonicalSourceIntoLoreSegments(source) {
-    const text = String(source?.content || '').replace(/\r\n/g, '\n').trim();
-    if (!text) return [];
-    const target = canonicalSegmentTargetChars(source);
-    const structuralBlocks = canonicalSourceStructuralBlocks(text, target);
-    if (structuralBlocks.length <= 1 && text.length <= target) {
-      return [canonicalSegmentFromText(source, text, 0, 1)];
-    }
-    const segments = [];
-    let buffer = [];
-    let used = 0;
-    const flush = () => {
-      const body = buffer.join('\n\n').trim();
-      if (!body) return;
-      segments.push(canonicalSegmentFromText(source, body, segments.length, structuralBlocks.length));
-      buffer = [];
-      used = 0;
-    };
-    structuralBlocks.forEach(block => {
-      const body = String(block.text || '').trim();
-      if (!body) return;
-      if (block.atomic) {
-        flush();
-        segments.push(canonicalSegmentFromText(source, body, segments.length, structuralBlocks.length));
-        return;
-      }
-      if (buffer.length && used + body.length > target) flush();
-      buffer.push(body);
-      used += body.length + 2;
-    });
-    flush();
-    return segments.length ? segments.map((segment, index) => ({ ...segment, index, total: segments.length })) : [canonicalSegmentFromText(source, text, 0, 1)];
-  }
-
-  function canonicalSegmentTargetChars(source) {
-    const cls = canonicalSourceClass(source);
-    if (cls === 'foundation') return 1800;
-    if (cls === 'always-active') return 1500;
-    return 1300;
-  }
-
-  function canonicalSourceStructuralBlocks(text, target) {
-    const lines = String(text || '').split('\n');
-    const blocks = [];
-    let current = [];
-    let atomic = false;
-    const push = () => {
-      const body = current.join('\n').trim();
-      if (body) blocks.push({ text: body, atomic });
-      current = [];
-      atomic = false;
-    };
-    lines.forEach(line => {
-      const trimmed = line.trim();
-      if (!trimmed) {
-        push();
-        return;
-      }
-      const startsUnit = canonicalLineStartsUnit(trimmed);
-      if (current.length && (startsUnit || current.join('\n').length + trimmed.length > target)) push();
-      current.push(line);
-      atomic = atomic || startsUnit;
-    });
-    push();
-    return blocks;
-  }
-
-  function canonicalLineStartsUnit(line) {
-    const text = String(line || '').trim();
-    if (!text) return false;
-    if (/^#{1,6}\s+/.test(text)) return true;
-    if (/^\[[^\]]{1,120}\]/.test(text)) return true;
-    if (/^(?:[-*]\s*)?(?:name|character|persona|faction|place|location|item|object|rule|secret|relationship|affiliation|rank|title)\s*[:：]/i.test(text)) return true;
-    if (/^(?:[-*]|\d+[.)])\s+[^:：\n]{1,80}\s*[:：]/.test(text)) return true;
-    if (/^[^:：\n]{2,80}\s*[:：]\s+\S/.test(text)) return true;
-    return false;
-  }
-
-  function canonicalSegmentFromText(source, text, index, total) {
-    const body = String(text || '').trim();
-    const title = canonicalSegmentTitle(source, body, index);
-    const hash = hashString(body);
-    return {
-      id: `${source?.id || source?.hash || 'source'}:${index}:${hash}`,
-      index,
-      total,
-      title,
-      content: body,
-      hash,
-      activationKeys: extractCanonicalActivationKeys(source?.meta || {}, title, body),
-    };
-  }
-
-  function canonicalSegmentTitle(source, text, index) {
-    const first = String(text || '').split('\n').map(line => line.trim()).find(Boolean) || '';
-    const cleaned = first
-      .replace(/^#{1,6}\s+/, '')
-      .replace(/^(?:[-*]|\d+[.)])\s+/, '')
-      .replace(/^["'`]+|["'`]+$/g, '')
-      .trim();
-    if (cleaned && cleaned.length <= 120) return cleaned;
-    return `${source?.label || source?.kind || 'canonical source'} ${index + 1}`;
-  }
-
-  function canonicalSourceClass(source) {
-    const kind = String(source?.kind || '').toLowerCase();
-    const meta = source?.meta || {};
-    if (meta.constant || kind === 'desc' || kind === 'firstmessage') return 'foundation';
-    if (meta.alwaysActive) return 'always-active';
-    if (meta.selective) return 'selective';
-    if (/reference|module/.test(kind)) return 'reference';
-    return 'scored';
-  }
-
-  function canonicalSourceRetention(source) {
-    const cls = canonicalSourceClass(source);
-    if (cls === 'foundation') return 'fixed';
-    if (cls === 'always-active') return 'persistent';
-    if (cls === 'selective') return 'triggered';
-    return 'contextual';
-  }
-
-  function canonicalSourceToLoreEntry(source, turn, segment = null) {
-    const selectedSegment = segment || splitCanonicalSourceIntoLoreSegments(source)[0] || canonicalSegmentFromText(source, String(source?.content || ''), 0, 1);
-    const segmentContent = selectedSegment.content || source.content || '';
-    const alwaysActive = Boolean(source?.meta?.alwaysActive || source?.meta?.constant || source?.kind === 'desc' || source?.kind === 'firstMessage');
+  function canonicalSourceToLoreEntry(source, turn) {
+    const alwaysActive = Boolean(source?.meta?.alwaysActive || source?.kind === 'desc' || source?.kind === 'firstMessage');
     const priority = parseNumber(source.priority, 5, 0, 10);
     const boostedPriority = alwaysActive ? Math.max(8, priority) : priority;
-    const sourceClass = canonicalSourceClass(source);
-    const retention = canonicalSourceRetention(source);
     return {
-      id: selectedSegment.entryId || canonicalSegmentEntryId(source, selectedSegment, Number(selectedSegment.segmentCount || selectedSegment.total || 1) > 1),
-      name: selectedSegment.title || source.label || source.kind || 'canonical lore',
-      summary: summarizeCanonicalContent(segmentContent, sourceClass === 'foundation' ? 900 : 700),
-      verbatimExcerpt: String(segmentContent || '').slice(0, sourceClass === 'foundation' ? 1100 : 820),
+      id: source.id || `canon:${source.hash}`,
+      name: source.label || source.kind || 'canonical lore',
+      summary: summarizeCanonicalContent(source.content, 700),
+      verbatimExcerpt: String(source.content || '').slice(0, 1400),
       source: 'lorebook',
       sourceId: source.path || source.sourceId || source.id || '',
       scope: source.scope || 'global',
-      activationKeys: uniqueStrings(normalizeStringArray(source.activationKeys).concat(normalizeStringArray(selectedSegment.activationKeys))).slice(0, 32),
+      activationKeys: normalizeStringArray(source.activationKeys).slice(0, 16),
       priority: boostedPriority,
       importance: boostedPriority,
-      sourceClass,
-      loreStability: retention,
-      retention,
       canonLevel: 'established',
       alwaysActive,
       activationMode: alwaysActive ? 'always' : (source?.meta?.selective ? 'selective' : 'scored'),
@@ -7103,14 +6666,6 @@
       confidence: 0.92,
       sourceRank: SOURCE_RANK.lorebook,
       evidence: `canonical:${source.kind}:${source.path}`,
-      canonicalUnit: true,
-      parentSourceId: source.id || source.path || source.hash || '',
-      segmentId: selectedSegment.id || '',
-      segmentIndex: parseNumber(selectedSegment.index, 0, 0, 999999),
-      segmentCount: parseNumber(selectedSegment.segmentCount || selectedSegment.total, 1, 1, 999999),
-      segmentHash: selectedSegment.hash || hashString(segmentContent),
-      siblingIds: normalizeStringArray(selectedSegment.siblingIds).slice(0, 80),
-      rawLength: String(segmentContent || '').length,
       canonicalSource: {
         kind: source.kind,
         path: source.path,
@@ -7510,7 +7065,7 @@
   async function runAutoColdStart(conf, context, state) {
     if (!conf.autoMemoryEnabled || !conf.autoColdStartEnabled || !conf.stateApiEnabled) return { processed: 0, skipped: true, reason: 'disabled' };
     if (Array.isArray(state.psycheChunks) && state.psycheChunks.length) return { processed: 0, skipped: true, reason: 'superseded-by-psyche-source-ingest' };
-    const limit = parseNumber(conf.coldStartMaxChunksPerRun, DEFAULT_CONFIG.coldStartMaxChunksPerRun, 0, 512);
+    const limit = parseNumber(conf.coldStartMaxChunksPerRun, DEFAULT_CONFIG.coldStartMaxChunksPerRun, 0, 4);
     if (limit <= 0) return { processed: 0, skipped: true, reason: 'limit-zero' };
     const agent = getColdStartPsycheAgent(conf);
     if (!agent) return { processed: 0, skipped: true, reason: 'no-psyche-agent' };
@@ -7809,10 +7364,8 @@
       source.alwaysActive ? 'always' : '',
       source.priority !== undefined ? `priority=${source.priority}` : '',
       source.activationKeys?.length ? `keys=${source.activationKeys.slice(0, 5).join('/')}` : '',
-      source.chunkCount !== undefined ? `chunks=${source.chunkCount}` : '',
-      source.hash ? `hash=${String(source.hash).slice(0, 10)}` : '',
     ].filter(Boolean).join(', ');
-    return `- ${source.label || source.path || source.id} (${meta})`;
+    return `- ${source.label || source.path || source.id} (${meta}): ${source.summary || '(no summary)'}`;
   }
 
   function formatCompiledCandidateLine(candidate) {
@@ -7822,9 +7375,6 @@
       candidate.kind,
       item.sourceLabel ? `source=${item.sourceLabel}` : '',
       item.sourceKind ? `sourceKind=${item.sourceKind}` : '',
-      item.sourceClass ? `sourceClass=${item.sourceClass}` : '',
-      item.loreStability ? `stability=${item.loreStability}` : '',
-      item.retention ? `retention=${item.retention}` : '',
       candidate.importance !== undefined ? `importance=${candidate.importance}` : '',
       candidate.confidence !== undefined ? `confidence=${Number(candidate.confidence).toFixed(2)}` : '',
       item.knownBy?.length ? `knownBy=${item.knownBy.slice(0, 4).join('/')}` : '',
@@ -7950,18 +7500,14 @@
         const nodeId = candidateNodeId(candidate);
         const spreadActivation = spread.get(nodeId) || 0;
         const semantic = working.find(item => item.path === candidate.path)?.semanticScore;
-        const spreadStage = spreadActivation > 0 && recallStageIndex(candidate.recallStage) > recallStageIndex('recursive')
-          ? 'recursive'
-          : candidate.recallStage;
         return {
           ...candidate,
           semanticScore: semantic ?? candidate.semanticScore,
           spreadActivation,
-          recallStage: spreadStage,
           score: Number(candidate.score || 0) + Math.min(52, spreadActivation * 52),
         };
       })
-      .sort(sortRecallCandidates);
+      .sort((a, b) => b.score - a.score);
 
     const note = [
       `[Staged Retrieval: ${agentId}, lexical=${stats.lexical}, stageTop=${lexicalK}, spread=${stats.spread}, blocked=${stats.blocked}]`,
@@ -7993,7 +7539,7 @@
           score: Number(candidate.score || 0) + Math.max(0, similarity) * 36,
         });
       });
-      const reranked = base.map(candidate => byPath.get(candidate.path) || candidate).sort(sortRecallCandidates);
+      const reranked = base.map(candidate => byPath.get(candidate.path) || candidate).sort((a, b) => b.score - a.score);
       const cacheNote = vectorResult.cache
         ? ` cache=${vectorResult.cache.hits}/${vectorResult.cache.hits + vectorResult.cache.misses}`
         : '';
@@ -8154,16 +7700,17 @@
 
   async function buildMainBriefing(state, context, notes, budget = 0, conf = null) {
     const query = buildRetrievalQuery(context, notes, []);
-    const requestedBudget = Math.max(0, Number(budget || 0));
-    const totalBudget = requestedBudget > 0 ? requestedBudget : AUTO_MAIN_BRIEFING_CHARS;
-    const capped = true;
-    const floorBudget = requestedBudget > 0
+    const totalBudget = Math.max(0, Number(budget || 0));
+    const capped = totalBudget > 0;
+    const floorBudget = capped
       ? Math.min(Math.max(900, Math.floor(totalBudget * 0.55)), Math.max(700, totalBudget - 900), totalBudget)
-      : 4200;
+      : 3600;
     const controlFloor = buildMainControlFloorContext(context, floorBudget, state);
-    const activeLoreBridge = buildActiveLoreBridgeContext(context, notes, requestedBudget > 0 ? Math.min(2600, Math.max(900, Math.floor(totalBudget * 0.22))) : 5600, state);
+    const activeLoreBridge = buildActiveLoreBridgeContext(context, notes, capped ? Math.min(2600, Math.max(900, Math.floor(totalBudget * 0.22))) : 3600, state);
     const preAgentNotes = buildPreAgentNotesSource(notes);
-    const remainingBudget = Math.max(2200, totalBudget - controlFloor.length - activeLoreBridge.length - preAgentNotes.length - 160);
+    const remainingBudget = capped
+      ? Math.max(700, totalBudget - controlFloor.length - activeLoreBridge.length - preAgentNotes.length - 160)
+      : AGENT_RETRIEVAL_PROFILE.main.budget;
     const staged = await stagedRetrieveCandidates('main', state, query, AGENT_RETRIEVAL_PROFILE.main, conf, context);
     const candidates = staged.candidates;
     const selected = selectCandidates(candidates, AGENT_RETRIEVAL_PROFILE.main.limit, remainingBudget);
@@ -8171,7 +7718,7 @@
     recordRecallTrace(state, query, selected, 'main', {
       stages: staged.stats || null,
       note: staged.note || '',
-      budget: requestedBudget,
+      budget,
     });
     const blocks = [
       buildMainBriefingIntro(false),
@@ -8182,7 +7729,7 @@
       preAgentNotes,
     ];
     const briefing = capped ? joinBriefingBlocks(blocks, totalBudget) : joinBriefingBlocksUncapped(blocks);
-    recordInjectionTrace(state, query, selected, briefing, requestedBudget, staged);
+    recordInjectionTrace(state, query, selected, briefing, totalBudget, staged);
     return briefing;
   }
 
@@ -8357,7 +7904,7 @@
       const selected = selectCandidates(ranked, compact ? 4 : 10, Math.max(500, max - 170));
       if (selected.length) {
         const lines = [
-          '[Current Weave Briefing]',
+          '[Active Lore Bridge]',
           compact
             ? 'Use as current-turn lore evidence. Prefer established cast/fronts over unrelated new extras. Do not reveal labels.'
             : 'Use these active lore facts as current-turn evidence. Prefer established lore, cast, places, and fronts over inventing unrelated extras when they fit. Do not reveal labels or plugin mechanics.',
@@ -8377,7 +7924,7 @@
     const compact = max <= 1200;
     const selectedItems = compact ? selected.slice(0, 4) : selected;
     const lines = [
-      '[Current Weave Briefing]',
+      '[Active Lore Bridge]',
       compact
         ? 'Use as current-turn lore evidence. Prefer established cast/fronts over unrelated new extras. Do not reveal labels.'
         : 'Use these active lore facts as current-turn evidence. Prefer established lore, cast, places, and fronts over inventing unrelated extras when they fit. Do not reveal labels or plugin mechanics.',
@@ -8387,17 +7934,20 @@
       : Math.max(120, Math.min(360, Math.floor((max - 260) / Math.max(1, selectedItems.length))));
     let used = lines.join('\n').length + 1;
     for (const source of selectedItems) {
-      const entry = canonicalSourceToLoreEntry(source, 0);
-      const nextLine = formatCompiledCandidateLine({
-        kind: 'lore',
-        path: `canonical.${entry.id}`,
-        item: entry,
-        importance: entry.importance,
-        confidence: entry.confidence,
-      });
-      const next = nextLine.length > perItemCap ? `${nextLine.slice(0, perItemCap).trimEnd()}...` : nextLine;
+      const label = firstNonEmpty(source.label, source.kind, source.path, 'lore');
+      const meta = [
+        source.kind || 'lore',
+        source.path || '',
+        source?.meta?.alwaysActive || source?.meta?.constant ? 'always' : '',
+        source.kind === 'firstMessage' ? 'first-message' : '',
+        normalizeStringArray(source.activationKeys).length ? `keys=${normalizeStringArray(source.activationKeys).slice(0, 5).join('/')}` : '',
+        `score=${Math.round(source._activeLoreBridgeScore || 0)}`,
+      ].filter(Boolean).join(', ');
+      const summary = String(source.content || '').replace(/\s+/g, ' ').trim().slice(0, perItemCap);
+      if (!summary) continue;
+      const next = `- ${label} (${meta}): ${summary}`;
       if (used + next.length > max) {
-        if (!lines[lines.length - 1].includes('truncated')) lines.push('[Current Weave Briefing truncated by budget]');
+        if (!lines[lines.length - 1].includes('truncated')) lines.push('[Active Lore Bridge truncated by budget]');
         break;
       }
       lines.push(next);
@@ -8467,15 +8017,8 @@
       let used = '[Always-Active Lore Floor]\n'.length;
       alwaysLore.forEach(source => {
         const label = source.label || source.kind || source.path;
-        const meta = [
-          source.kind || 'lore',
-          source?.meta?.constant ? 'constant' : '',
-          source?.meta?.alwaysActive ? 'always' : '',
-          source.kind === 'firstMessage' ? 'first-message' : '',
-          normalizeStringArray(source.activationKeys).length ? `keys=${normalizeStringArray(source.activationKeys).slice(0, 5).join('/')}` : '',
-          source.hash ? `hash=${String(source.hash).slice(0, 10)}` : '',
-        ].filter(Boolean).join(', ');
-        const next = `- ${label} (${meta})`;
+        const summary = String(source.content || '').replace(/\s+/g, ' ').trim().slice(0, perItemCap);
+        const next = `- ${label}: ${summary}`;
         if (used + next.length > floorBudget && used > 0) return;
         used += next.length + 1;
         lines.push(next);
@@ -8536,62 +8079,6 @@
     return Array.from(new Set(tokens)).slice(0, 80);
   }
 
-  function recallStageIndex(stage) {
-    const order = {
-      foundation: 0,
-      trigger: 1,
-      activeMemoryBridge: 2,
-      recursive: 3,
-      siblingCompletion: 4,
-      generic: 5,
-    };
-    return order[String(stage || 'generic')] ?? order.generic;
-  }
-
-  function recallStageBoost(stage) {
-    const boost = {
-      foundation: 220,
-      trigger: 160,
-      activeMemoryBridge: 110,
-      recursive: 60,
-      siblingCompletion: 48,
-      generic: 0,
-    };
-    return boost[String(stage || 'generic')] || 0;
-  }
-
-  function sortRecallCandidates(a, b) {
-    return recallStageIndex(a.recallStage) - recallStageIndex(b.recallStage)
-      || Number(b.score || 0) - Number(a.score || 0);
-  }
-
-  function candidateHasFocusOverlap(candidate, state) {
-    const terms = currentFocusTerms(state);
-    if (!terms.length) return false;
-    const haystack = [candidate?.kind, candidate?.path, candidate?.text, candidate?.item?.name, candidate?.item?.summary, candidate?.item?.sourceId, candidate?.item?.sourceLabel]
-      .filter(Boolean)
-      .join('\n')
-      .toLowerCase();
-    return terms.some(term => term && haystack.includes(term));
-  }
-
-  function classifyRecallStage(candidate, state, context, queryTerms) {
-    const item = candidate?.item || {};
-    if (candidate?.kind === 'lore') {
-      if (isFoundationLoreItem(item) || item.alwaysActive || item.activationMode === 'always' || item?.canonicalSource?.meta?.alwaysActive || item?.canonicalSource?.meta?.constant) return 'foundation';
-      if (candidate.activeLore || loreActivationScore(item, queryTerms) > 0 || isActiveLoreItemForQuery(item, context, queryTerms)) return 'trigger';
-    }
-    if (candidate?.siblingCompletion) return 'siblingCompletion';
-    if (candidate?.spreadActivation || candidate?.propagatedActivation) return 'recursive';
-    if (candidate?.kind === 'scene') return 'activeMemoryBridge';
-    if (['memory', 'character', 'relationship', 'secret', 'worldFront', 'knowledge'].includes(candidate?.kind)) {
-      const tier = normalizeMemoryLifecycleTier(item.memoryTier) || String(item.memoryTier || '').toLowerCase();
-      if (item.anchor || /hot|active|present|current|focal/i.test(`${tier} ${item.status || ''} ${item.state || ''}`)) return 'activeMemoryBridge';
-      if (candidateHasFocusOverlap(candidate, state)) return 'activeMemoryBridge';
-    }
-    return 'generic';
-  }
-
   function rankStateCandidates(state, queryTerms, profile, context = null) {
     const signature = buildRecallQuerySignature(queryTerms, context);
     return collectStateCandidates(state)
@@ -8599,18 +8086,15 @@
       .map(candidate => {
         const activeLore = candidate.kind === 'lore' && isActiveLoreItemForQuery(candidate.item, context, queryTerms);
         const enriched = { ...candidate, activeLore };
-        const recallStage = classifyRecallStage(enriched, state, context, queryTerms);
         return {
           ...enriched,
-          recallStage,
           score: scoreCandidate(enriched, queryTerms, state.turn, state)
             + weightedRecallOverlap(enriched, signature)
-            + recallStageBoost(recallStage)
             + (activeLore ? 72 : 0)
             + (candidate.kind === 'lore' && isPinnedLoreLedgerItem(candidate.item, context) ? 80 : 0),
         };
       })
-      .sort(sortRecallCandidates);
+      .sort((a, b) => b.score - a.score);
   }
 
   function buildRecallQuerySignature(queryTerms, context = null) {
@@ -8772,15 +8256,13 @@
     const heatScore = clampFloat(candidate.heatScore, 0, 0, 100) * 0.22;
     const lifecycleScore = lifecycleBoost(candidate.status);
     const activationScore = candidate.kind === 'lore' ? loreActivationScore(candidate.item, queryTerms) : 0;
-    const stabilityScore = loreStabilityScore(candidate);
-    const affinityScore = characterAffinityScore(candidate, state);
     const mustCarryScore = isMustCarryCandidate(candidate) ? 34 : 0;
     const graphScore = associationActivationScore(candidate, state);
     const boundaryPenalty = knowledgeBoundaryPenalty(candidate, state);
     const decay = parseNumber(candidate.item?.decay, candidate.kind === 'memory' ? calculateMemoryDecay(candidate.item, age) : 1, 0, 1);
     const decayScore = candidate.kind === 'memory' ? (decay - 1) * 34 : 0;
     const fadedPenalty = /faded/i.test(candidate.status) ? -22 : 0;
-    return matchScore + sourceScore + importanceScore + confidenceScore + recencyScore + tierScore + memoryTierScore + heatScore + lifecycleScore + activationScore + stabilityScore + affinityScore + mustCarryScore + graphScore + boundaryPenalty + decayScore + fadedPenalty;
+    return matchScore + sourceScore + importanceScore + confidenceScore + recencyScore + tierScore + memoryTierScore + heatScore + lifecycleScore + activationScore + mustCarryScore + graphScore + boundaryPenalty + decayScore + fadedPenalty;
   }
 
   function associationActivationScore(candidate, state) {
@@ -8855,7 +8337,7 @@
       })
       .filter(node => node.terms.length)
       .sort((a, b) => b.activation - a.activation)
-      .slice(0, Math.max(320, Math.min(1200, Math.floor(Number(conf.maxAssociationEdges || DEFAULT_CONFIG.maxAssociationEdges) * 0.55))));
+      .slice(0, 260);
     const observedEdges = [];
     for (let i = 0; i < candidates.length; i += 1) {
       for (let j = i + 1; j < candidates.length; j += 1) {
@@ -9031,7 +8513,7 @@
   }
 
   function loreActivationScore(item, queryTerms) {
-    const alwaysActive = Boolean(item?.alwaysActive || item?.activationMode === 'always' || item?.canonicalSource?.meta?.alwaysActive || item?.canonicalSource?.meta?.constant);
+    const alwaysActive = Boolean(item?.alwaysActive || item?.activationMode === 'always' || item?.canonicalSource?.meta?.alwaysActive);
     let score = alwaysActive ? 24 : 0;
     const keys = normalizeStringArray(item?.activationKeys).map(key => key.toLowerCase());
     if (!keys.length || !Array.isArray(queryTerms) || !queryTerms.length) return score;
@@ -9041,77 +8523,15 @@
     return Math.min(alwaysActive ? 42 : 32, score);
   }
 
-  function loreStabilityScore(candidate) {
-    if (candidate?.kind !== 'lore' && !candidate?.item?.sourceClass && !candidate?.item?.loreStability && !candidate?.item?.retention) return 0;
-    const item = candidate.item || {};
-    const source = item.canonicalSource || {};
-    const meta = source.meta || {};
-    const cls = String(item.sourceClass || '').toLowerCase();
-    const stability = String(item.loreStability || item.retention || '').toLowerCase();
-    const sourceKind = String(source.kind || '').toLowerCase();
-    let score = 0;
-    if (cls === 'foundation' || stability === 'fixed' || meta.constant || sourceKind === 'desc' || sourceKind === 'firstmessage') score += 44;
-    else if (cls === 'always-active' || stability === 'persistent' || item.alwaysActive || item.activationMode === 'always' || meta.alwaysActive) score += 24;
-    if (item.activationMode === 'selective' && candidate.activeLore) score += 12;
-    return Math.min(64, score);
-  }
-
-  function isFoundationLoreItem(item) {
-    if (!item) return false;
-    const source = item.canonicalSource || {};
-    const kind = String(source.kind || '').toLowerCase();
-    const cls = String(item.sourceClass || '').toLowerCase();
-    const stability = String(item.loreStability || item.retention || '').toLowerCase();
-    return cls === 'foundation' || stability === 'fixed' || source?.meta?.constant || kind === 'desc' || kind === 'firstmessage';
-  }
-
-  function characterAffinityScore(candidate, state) {
-    if (!state) return 0;
-    const terms = currentFocusTerms(state);
-    if (!terms.length) return 0;
-    const haystack = [
-      candidate?.kind,
-      candidate?.path,
-      candidate?.text,
-      candidate?.item?.name,
-      candidate?.item?.summary,
-      candidate?.item?.sourceId,
-      candidate?.item?.sourceLabel,
-      candidate?.item?.sourcePath,
-    ].filter(Boolean).join('\n').toLowerCase();
-    let hits = 0;
-    terms.forEach(term => {
-      if (term && haystack.includes(term)) hits += 1;
-    });
-    return Math.min(56, hits * 14);
-  }
-
-  function currentFocusTerms(state) {
-    const scene = state?.scene || {};
-    const perspective = normalizeActivePerspective(state?.activePerspective);
-    const terms = []
-      .concat(normalizeStringArray(scene.presentCast))
-      .concat(normalizeStringArray(scene.location))
-      .concat(normalizeStringArray(scene.place))
-      .concat(normalizeStringArray(scene.currentPlace))
-      .concat(normalizeStringArray(perspective.protectedNames));
-    Object.values(state?.characters || {}).forEach(character => {
-      const status = String(character?.status || character?.state || '').toLowerCase();
-      if (/active|present|current|focal/.test(status)) terms.push(character.name, character.id);
-    });
-    return uniqueStrings(terms)
-      .map(term => String(term || '').trim().toLowerCase())
-      .filter(term => term.length >= 2)
-      .slice(0, 18);
-  }
-
   function isMustCarryCandidate(candidate) {
     const item = candidate?.item || {};
     if (candidate?.kind === 'scene') return true;
     if (candidate?.kind === 'character' && /active|present|current/i.test(String(item.status || item.state || 'active'))) return true;
     if (candidate?.kind === 'lore') {
-      if (isFoundationLoreItem(item)) return true;
-      if (candidate.activeLore && inferImportance(item, 'lore') >= 9) return true;
+      if (candidate.activeLore) return true;
+      const canonicalKind = String(item?.canonicalSource?.kind || '').toLowerCase();
+      if (canonicalKind === 'desc' || canonicalKind === 'firstmessage') return true;
+      if (item.alwaysActive || item.activationMode === 'always' || item?.canonicalSource?.meta?.alwaysActive) return true;
     }
     if (candidate?.kind === 'memory') {
       const tier = normalizeMemoryLifecycleTier(item.memoryTier) || String(item.memoryTier || '').toLowerCase();
@@ -9126,7 +8546,11 @@
     const selectedIds = new Set();
     const kindCounts = {};
     let used = 0;
-    const input = (Array.isArray(candidates) ? candidates : []).slice().sort(sortRecallCandidates);
+    const input = Array.isArray(candidates) ? candidates : [];
+    const mustCarry = input
+      .filter(isMustCarryCandidate)
+      .sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
+    const rest = input.filter(candidate => !isMustCarryCandidate(candidate));
     const pushCandidate = (candidate, forceFloor = false) => {
       if (selected.length >= limit) return false;
       if (candidate.memoryTier === 'archived' && Number(candidate.score || 0) < 72) return false;
@@ -9147,49 +8571,20 @@
       used += line.length;
       return true;
     };
-
-    const pushStage = (stage, force = false) => {
-      for (const candidate of input) {
-        if (selected.length >= limit) break;
-        const candidateStage = candidate.recallStage || 'generic';
-        if (candidateStage !== stage) continue;
-        pushCandidate(candidate, force || isMustCarryCandidate(candidate) || stage === 'foundation');
-      }
-    };
-    ['foundation', 'trigger', 'activeMemoryBridge', 'recursive'].forEach(stage => pushStage(stage, stage === 'foundation'));
-    pushSiblingCompletionCandidates(input, selected, pushCandidate);
-    pushStage('generic', false);
+    for (const candidate of mustCarry) {
+      pushCandidate(candidate, true);
+    }
+    for (const candidate of rest) {
+      if (selected.length >= limit) break;
+      pushCandidate(candidate, false);
+    }
     if (selected.length < Math.min(limit, 6)) {
-      for (const candidate of input) {
+      for (const candidate of rest) {
         if (selected.length >= limit) break;
         pushCandidate(candidate, true);
       }
     }
     return selected;
-  }
-
-  function pushSiblingCompletionCandidates(input, selected, pushCandidate) {
-    const selectedItemIds = new Set(selected.map(candidate => candidate?.item?.id).filter(Boolean));
-    const selectedParents = new Set(selected.map(candidate => candidate?.item?.parentSourceId).filter(Boolean));
-    if (!selectedItemIds.size && !selectedParents.size) return;
-    input
-      .filter(candidate => {
-        if (candidate?.kind !== 'lore') return false;
-        const item = candidate.item || {};
-        if (!item.canonicalUnit) return false;
-        if (selectedItemIds.has(item.id)) return false;
-        const siblings = normalizeStringArray(item.siblingIds);
-        if (siblings.some(id => selectedItemIds.has(id))) return true;
-        return item.parentSourceId && selectedParents.has(item.parentSourceId);
-      })
-      .map(candidate => ({
-        ...candidate,
-        siblingCompletion: true,
-        recallStage: 'siblingCompletion',
-        score: Number(candidate.score || 0) + recallStageBoost('siblingCompletion'),
-      }))
-      .sort(sortRecallCandidates)
-      .forEach(candidate => pushCandidate(candidate, true));
   }
 
   function candidateTraceId(candidate) {
@@ -9221,16 +8616,13 @@
     const summary = summarizeLedgerText(candidate.item, candidate.kind);
     const meta = [
       `score=${Math.round(candidate.score || 0)}`,
-      candidate.recallStage ? `stage=${candidate.recallStage}` : '',
       `importance=${candidate.importance}`,
       `confidence=${Number(candidate.confidence).toFixed(2)}`,
       `turn=${candidate.turn}`,
       candidate.memoryTier ? `memoryTier=${candidate.memoryTier}` : '',
       candidate.kind === 'memory' ? `decay=${formatDecimal(candidate.item?.decay ?? 1)}` : '',
       candidate.kind === 'lore' && candidate.activeLore ? 'activeLore' : '',
-      candidate.kind === 'lore' && (candidate.item?.alwaysActive || candidate.item?.activationMode === 'always' || candidate.item?.canonicalSource?.meta?.alwaysActive || candidate.item?.canonicalSource?.meta?.constant) ? 'always' : '',
-      candidate.item?.sourceClass ? `sourceClass=${candidate.item.sourceClass}` : '',
-      candidate.item?.loreStability ? `stability=${candidate.item.loreStability}` : '',
+      candidate.kind === 'lore' && (candidate.item?.alwaysActive || candidate.item?.activationMode === 'always' || candidate.item?.canonicalSource?.meta?.alwaysActive) ? 'always' : '',
       candidate.kind === 'lore' && Array.isArray(candidate.item?.activationKeys) ? `keys=${candidate.item.activationKeys.slice(0, 5).join('/')}` : '',
       candidate.tier ? `tier=${candidate.tier}` : '',
       candidate.status ? `status=${candidate.status}` : '',
@@ -12556,28 +11948,17 @@
       .replace(/\$(\d+)/g, (_, idx) => captures[Number(idx)] ?? '');
   }
   
-  function injectContext(messages, injection, budget, conf = null) {
+  function injectContext(messages, injection, budget) {
     if (!injection) return messages;
     const max = Number(budget || 0);
     const content = max > 0 ? String(injection).slice(0, max) : String(injection);
-    const block = `---\n[${MAIN_INJECTION_TITLE}]\n${content}\n---`;
     const clone = (Array.isArray(messages) ? messages : [])
       .map(m => {
         const item = { ...m };
-        item.content = stripExistingErosInjectionBlock(item.content);
+        if (item.role === 'system') item.content = stripExistingErosInjectionBlock(item.content);
         return item;
       })
       .filter(m => !(m.role === 'system' && !String(m.content || '').trim()));
-    const placeholderIdx = findErosInjectionPlaceholderMessage(clone);
-    if (placeholderIdx >= 0) {
-      clone[placeholderIdx].content = replaceErosInjectionPlaceholder(clone[placeholderIdx].content, block);
-      return clone;
-    }
-    const lastUserIdx = findLastMessageRoleIndex(clone, 'user');
-    if (lastUserIdx >= 0) {
-      clone[lastUserIdx].content = `${block}\n\n${clone[lastUserIdx].content || ''}`.trim();
-      return clone;
-    }
     let idx = -1;
     for (let i = clone.length - 1; i >= 0; i -= 1) {
       if (clone[i]?.role === 'system') {
@@ -12586,34 +11967,10 @@
       }
     }
     if (idx >= 0) {
-      clone[idx].content = `${clone[idx].content || ''}\n\n${block}`;
+      clone[idx].content = `${clone[idx].content || ''}\n\n---\n[${MAIN_INJECTION_TITLE}]\n${content}\n---`;
       return clone;
     }
     return [{ role: 'system', content: `[${MAIN_INJECTION_TITLE}]\n${content}` }, ...clone];
-  }
-
-  function findLastMessageRoleIndex(messages, role) {
-    for (let i = (Array.isArray(messages) ? messages.length : 0) - 1; i >= 0; i -= 1) {
-      if (messages[i]?.role === role) return i;
-    }
-    return -1;
-  }
-
-  function erosInjectionPlaceholderPattern() {
-    return /\{\{\s*(?:slot::)?(?:eros[_-]?tower|eros[_-]?context|erosTowerContext)\s*\}\}|<\s*ErosTowerContext\s*\/?>|<<\s*EROS_TOWER_CONTEXT\s*>>/gi;
-  }
-
-  function findErosInjectionPlaceholderMessage(messages) {
-    const list = Array.isArray(messages) ? messages : [];
-    for (let i = list.length - 1; i >= 0; i -= 1) {
-      const content = String(list[i]?.content || '');
-      if (erosInjectionPlaceholderPattern().test(content)) return i;
-    }
-    return -1;
-  }
-
-  function replaceErosInjectionPlaceholder(value, content) {
-    return String(value || '').replace(erosInjectionPlaceholderPattern(), content);
   }
 
   function stripExistingErosInjectionBlock(value) {
@@ -12621,8 +11978,6 @@
     const escapedTitle = MAIN_INJECTION_TITLE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     text = text.replace(new RegExp(`\\n*---\\s*\\n\\[${escapedTitle}\\]\\n[\\s\\S]*?\\n---\\s*(?=\\n|$)`, 'g'), '\n');
     text = text.replace(new RegExp(`^\\s*\\[${escapedTitle}\\]\\n[\\s\\S]*$`, 'g'), '');
-    text = text.replace(/\n*---\s*\n\[Eros Tower \d+(?:\.\d+)* analysis context\]\n[\s\S]*?\n---\s*(?=\n|$)/g, '\n');
-    text = text.replace(/^\s*\[Eros Tower \d+(?:\.\d+)* analysis context\]\n[\s\S]*$/g, '');
     return text.replace(/\n{3,}/g, '\n\n').trim();
   }
 
@@ -13620,13 +12975,8 @@
     if (memoryRecoverySync?.blocked) lines.push(`므네메 정원 보류: 메시지 ${Number(memoryRecoverySync.deletedCount || 0)}개 감소 확인 대기`);
     else if (memoryRecoverySync?.changed) lines.push(`므네메 정원 재정렬: 메시지 ${Number(memoryRecoverySync.deletedCount || 0)}개 삭제 / ${Number(memoryRecoverySync.isolatedChunks || 0)} chunk 격리 / 파생 ${Number(memoryRecoverySync.purgedDerived || 0)}개 정리`);
     if (longMemorySync) lines.push(`장기기억 ${Number(longMemorySync.added || 0)}개 추가 / ${Number(longMemorySync.total || 0)}개 유지`);
-    if (psycheSourceSync) {
-      const absorbed = Number(psycheSourceSync.absorbedChunks || 0);
-      const total = Number(psycheSourceSync.activeChunkTotal || psycheSourceSync.activeChunks || psycheSourceSync.chunks || 0);
-      const incomplete = Number(psycheSourceSync.incompleteSources || 0);
-      lines.push(`Psyche sources ${Number(psycheSourceSync.activeSources || psycheSourceSync.sources || 0)} / chunks ${absorbed}/${total}${incomplete ? ` / incomplete sources ${incomplete}` : ''}`);
-    }
-    if (psycheIngestResult && !psycheIngestResult.skipped) lines.push(`Psyche ingest ${Number(psycheIngestResult.processed || 0)} chunks / calls ${Number(psycheIngestResult.apiCalls || 0)} / units ${Array.isArray(psycheIngestResult.results) ? psycheIngestResult.results.reduce((sum, item) => sum + Number(item.units || 0), 0) : 0} / errors ${Number(psycheIngestResult.errors || 0)}`);
+    if (psycheSourceSync) lines.push(`Psyche sources ${Number(psycheSourceSync.activeSources || psycheSourceSync.sources || 0)} / chunks ${Number(psycheSourceSync.activeChunks || psycheSourceSync.chunks || 0)}`);
+    if (psycheIngestResult && !psycheIngestResult.skipped) lines.push(`Psyche ingest ${Number(psycheIngestResult.processed || 0)} / units ${Array.isArray(psycheIngestResult.results) ? psycheIngestResult.results.reduce((sum, item) => sum + Number(item.units || 0), 0) : 0} / errors ${Number(psycheIngestResult.errors || 0)}`);
     if (cold.processed || cold.extracted || cold.errors) lines.push(`Cold-start 처리 ${Number(cold.processed || 0)} / 추출 ${Number(cold.extracted || 0)} / 오류 ${Number(cold.errors || 0)}`);
     lines.push(`연관 그래프 ${graph.nodes} nodes / ${graph.edges} edges`);
     return lines;
@@ -13751,7 +13101,7 @@
     registerPendingRun(run);
     Runtime.lastScope = context.scope;
     await safeAppendRunLog(context.scope, run, conf);
-    return injectContext(messages, injection, injectionBudget, conf);
+    return injectContext(messages, injection, injectionBudget);
   }
 
   async function afterRequest(content, type) {
@@ -17589,7 +16939,7 @@
           return {
             length: briefing.length,
             briefing,
-            hasCurrentWeaveBriefing: briefing.includes('[Current Weave Briefing]'),
+            hasActiveBridge: briefing.includes('[Active Lore Bridge]'),
             hasLoreFact: briefing.includes('Low Budget Subject') || briefing.includes('Established Counterpart') || briefing.includes('Local Front'),
             hasMidSentenceCut: /Prefer establishe\\s*$/m.test(briefing) || briefing.includes('Prefer establishe\n---'),
             hasMode: briefing.includes('[Current Writing Mode]'),
@@ -17608,13 +16958,13 @@
           ];
           const injected = injectContext(original, 'fresh Eros context', 4000);
           const systemMessages = injected.filter(item => item.role === 'system');
-          const carrier = injected.find(item => String(item.content || '').includes(`[${MAIN_INJECTION_TITLE}]`)) || null;
+          const carrier = systemMessages.find(item => String(item.content || '').includes(`[${MAIN_INJECTION_TITLE}]`)) || null;
           return {
             hostSystemCount: systemMessages.filter(item => String(item.content || '').includes('Host lore/system message must remain intact.')).length,
             oldInjectionCount: injected.filter(item => String(item.content || '').includes('old Eros context must be removed')).length,
-            newInjectionCount: injected.reduce((sum, item) => sum + (String(item.content || '').match(new RegExp(`\\[${MAIN_INJECTION_TITLE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\]`, 'g')) || []).length, 0),
+            newInjectionCount: systemMessages.reduce((sum, item) => sum + (String(item.content || '').match(new RegExp(`\\[${MAIN_INJECTION_TITLE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\]`, 'g')) || []).length, 0),
             userMentionCount: injected.filter(item => item.role === 'user' && String(item.content || '').includes(MAIN_INJECTION_TITLE)).length,
-            carrierCount: injected.filter(item => String(item.content || '').includes(`[${MAIN_INJECTION_TITLE}]`)).length,
+            carrierCount: systemMessages.filter(item => String(item.content || '').includes(`[${MAIN_INJECTION_TITLE}]`)).length,
             carrierRole: carrier?.role || '',
             injectionRole: carrier?.role || '',
             carrierText: carrier?.content || '',
