@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.42
+//@display-name ☸Eros Tower 1.1.43
 //@api 3.0
-//@version 1.1.42
+//@version 1.1.43
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -35,18 +35,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.42
+ * Eros Tower 1.1.43
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.42 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.43 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.42';
+  const VERSION = '1.1.43';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.42`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.43`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -63,7 +63,7 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.42 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.43 analysis context';
   const AUTO_MAIN_BRIEFING_CHARS = 36000;
   const PSYCHE_SOURCE_CHUNK_CHARS = 16000;
   const PSYCHE_SOURCE_CHUNK_OVERLAP_CHARS = 1200;
@@ -6903,35 +6903,25 @@
   function syncCanonicalLoreLedger(state, canonicalSources) {
     const sources = Array.isArray(canonicalSources) ? canonicalSources : [];
     state.loreLedger = Array.isArray(state.loreLedger) ? state.loreLedger : [];
-    const currentKeys = new Set();
-    sources.forEach(source => {
-      if (source?.hash) currentKeys.add(`hash:${source.hash}`);
-      if (source?.path) currentKeys.add(`path:${source.path}`);
-      if (source?.id) currentKeys.add(`id:${source.id}`);
-    });
+    const entries = sources.flatMap(source => canonicalSourceToLoreEntries(source, state.turn));
+    const currentIds = new Set(entries.map(entry => entry.id).filter(Boolean));
     let added = 0;
     let revised = 0;
     let unchanged = 0;
     let removed = 0;
     state.loreLedger = state.loreLedger.filter(item => {
       if (!item?.canonicalSource) return true;
-      const keys = [
-        item?.canonicalSource?.hash ? `hash:${item.canonicalSource.hash}` : '',
-        item?.canonicalSource?.path ? `path:${item.canonicalSource.path}` : '',
-        item?.sourceId ? `path:${item.sourceId}` : '',
-        item?.id ? `id:${item.id}` : '',
-      ].filter(Boolean);
-      if (keys.some(key => currentKeys.has(key))) return true;
+      if (currentIds.has(item.id)) return true;
       removed += 1;
       return false;
     });
-    sources.forEach(source => {
-      const entry = canonicalSourceToLoreEntry(source, state.turn);
-      const idx = state.loreLedger.findIndex(item => item?.canonicalSource?.hash === source.hash || item?.sourceId === source.path || item?.id === entry.id);
+    entries.forEach(entry => {
+      const idx = state.loreLedger.findIndex(item => item?.id === entry.id);
       if (idx >= 0) {
         const oldHash = state.loreLedger[idx]?.canonicalSource?.hash;
+        const oldSegmentHash = state.loreLedger[idx]?.segmentHash;
         state.loreLedger[idx] = mergeObject(state.loreLedger[idx], entry);
-        if (oldHash && oldHash !== source.hash) revised += 1;
+        if ((oldHash && oldHash !== entry.canonicalSource?.hash) || (oldSegmentHash && oldSegmentHash !== entry.segmentHash)) revised += 1;
         else unchanged += 1;
       } else {
         state.loreLedger.push(entry);
@@ -6939,6 +6929,128 @@
       }
     });
     return { added, revised, unchanged, removed };
+  }
+
+  function canonicalSourceToLoreEntries(source, turn) {
+    const segments = splitCanonicalSourceIntoLoreSegments(source);
+    const multi = segments.length > 1;
+    const ids = segments.map(segment => canonicalSegmentEntryId(source, segment, multi));
+    return segments.map((segment, idx) => canonicalSourceToLoreEntry(source, turn, {
+      ...segment,
+      entryId: ids[idx],
+      siblingIds: ids.filter(id => id !== ids[idx]),
+      segmentCount: segments.length,
+    }));
+  }
+
+  function canonicalSegmentEntryId(source, segment, multi) {
+    if (!multi) return source.id || `canon:${source.hash}`;
+    const root = slug(firstNonEmpty(source.id, source.path, source.hash, source.label, 'source')).slice(0, 96) || 'source';
+    return `canon:${root}:seg:${String(segment.index + 1).padStart(3, '0')}:${String(segment.hash || '').slice(0, 10)}`;
+  }
+
+  function splitCanonicalSourceIntoLoreSegments(source) {
+    const text = String(source?.content || '').replace(/\r\n/g, '\n').trim();
+    if (!text) return [];
+    const target = canonicalSegmentTargetChars(source);
+    const structuralBlocks = canonicalSourceStructuralBlocks(text, target);
+    if (structuralBlocks.length <= 1 && text.length <= target) {
+      return [canonicalSegmentFromText(source, text, 0, 1)];
+    }
+    const segments = [];
+    let buffer = [];
+    let used = 0;
+    const flush = () => {
+      const body = buffer.join('\n\n').trim();
+      if (!body) return;
+      segments.push(canonicalSegmentFromText(source, body, segments.length, structuralBlocks.length));
+      buffer = [];
+      used = 0;
+    };
+    structuralBlocks.forEach(block => {
+      const body = String(block.text || '').trim();
+      if (!body) return;
+      if (block.atomic) {
+        flush();
+        segments.push(canonicalSegmentFromText(source, body, segments.length, structuralBlocks.length));
+        return;
+      }
+      if (buffer.length && used + body.length > target) flush();
+      buffer.push(body);
+      used += body.length + 2;
+    });
+    flush();
+    return segments.length ? segments.map((segment, index) => ({ ...segment, index, total: segments.length })) : [canonicalSegmentFromText(source, text, 0, 1)];
+  }
+
+  function canonicalSegmentTargetChars(source) {
+    const cls = canonicalSourceClass(source);
+    if (cls === 'foundation') return 1800;
+    if (cls === 'always-active') return 1500;
+    return 1300;
+  }
+
+  function canonicalSourceStructuralBlocks(text, target) {
+    const lines = String(text || '').split('\n');
+    const blocks = [];
+    let current = [];
+    let atomic = false;
+    const push = () => {
+      const body = current.join('\n').trim();
+      if (body) blocks.push({ text: body, atomic });
+      current = [];
+      atomic = false;
+    };
+    lines.forEach(line => {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        push();
+        return;
+      }
+      const startsUnit = canonicalLineStartsUnit(trimmed);
+      if (current.length && (startsUnit || current.join('\n').length + trimmed.length > target)) push();
+      current.push(line);
+      atomic = atomic || startsUnit;
+    });
+    push();
+    return blocks;
+  }
+
+  function canonicalLineStartsUnit(line) {
+    const text = String(line || '').trim();
+    if (!text) return false;
+    if (/^#{1,6}\s+/.test(text)) return true;
+    if (/^\[[^\]]{1,120}\]/.test(text)) return true;
+    if (/^(?:[-*]\s*)?(?:name|character|persona|faction|place|location|item|object|rule|secret|relationship|affiliation|rank|title)\s*[:：]/i.test(text)) return true;
+    if (/^(?:[-*]|\d+[.)])\s+[^:：\n]{1,80}\s*[:：]/.test(text)) return true;
+    if (/^[^:：\n]{2,80}\s*[:：]\s+\S/.test(text)) return true;
+    return false;
+  }
+
+  function canonicalSegmentFromText(source, text, index, total) {
+    const body = String(text || '').trim();
+    const title = canonicalSegmentTitle(source, body, index);
+    const hash = hashString(body);
+    return {
+      id: `${source?.id || source?.hash || 'source'}:${index}:${hash}`,
+      index,
+      total,
+      title,
+      content: body,
+      hash,
+      activationKeys: extractCanonicalActivationKeys(source?.meta || {}, title, body),
+    };
+  }
+
+  function canonicalSegmentTitle(source, text, index) {
+    const first = String(text || '').split('\n').map(line => line.trim()).find(Boolean) || '';
+    const cleaned = first
+      .replace(/^#{1,6}\s+/, '')
+      .replace(/^(?:[-*]|\d+[.)])\s+/, '')
+      .replace(/^["'`]+|["'`]+$/g, '')
+      .trim();
+    if (cleaned && cleaned.length <= 120) return cleaned;
+    return `${source?.label || source?.kind || 'canonical source'} ${index + 1}`;
   }
 
   function canonicalSourceClass(source) {
@@ -6959,21 +7071,23 @@
     return 'contextual';
   }
 
-  function canonicalSourceToLoreEntry(source, turn) {
+  function canonicalSourceToLoreEntry(source, turn, segment = null) {
+    const selectedSegment = segment || splitCanonicalSourceIntoLoreSegments(source)[0] || canonicalSegmentFromText(source, String(source?.content || ''), 0, 1);
+    const segmentContent = selectedSegment.content || source.content || '';
     const alwaysActive = Boolean(source?.meta?.alwaysActive || source?.meta?.constant || source?.kind === 'desc' || source?.kind === 'firstMessage');
     const priority = parseNumber(source.priority, 5, 0, 10);
     const boostedPriority = alwaysActive ? Math.max(8, priority) : priority;
     const sourceClass = canonicalSourceClass(source);
     const retention = canonicalSourceRetention(source);
     return {
-      id: source.id || `canon:${source.hash}`,
-      name: source.label || source.kind || 'canonical lore',
-      summary: summarizeCanonicalContent(source.content, sourceClass === 'foundation' ? 760 : 560),
-      verbatimExcerpt: String(source.content || '').slice(0, sourceClass === 'foundation' ? 900 : 520),
+      id: selectedSegment.entryId || canonicalSegmentEntryId(source, selectedSegment, Number(selectedSegment.segmentCount || selectedSegment.total || 1) > 1),
+      name: selectedSegment.title || source.label || source.kind || 'canonical lore',
+      summary: summarizeCanonicalContent(segmentContent, sourceClass === 'foundation' ? 900 : 700),
+      verbatimExcerpt: String(segmentContent || '').slice(0, sourceClass === 'foundation' ? 1100 : 820),
       source: 'lorebook',
       sourceId: source.path || source.sourceId || source.id || '',
       scope: source.scope || 'global',
-      activationKeys: normalizeStringArray(source.activationKeys).slice(0, 16),
+      activationKeys: uniqueStrings(normalizeStringArray(source.activationKeys).concat(normalizeStringArray(selectedSegment.activationKeys))).slice(0, 32),
       priority: boostedPriority,
       importance: boostedPriority,
       sourceClass,
@@ -6989,6 +7103,14 @@
       confidence: 0.92,
       sourceRank: SOURCE_RANK.lorebook,
       evidence: `canonical:${source.kind}:${source.path}`,
+      canonicalUnit: true,
+      parentSourceId: source.id || source.path || source.hash || '',
+      segmentId: selectedSegment.id || '',
+      segmentIndex: parseNumber(selectedSegment.index, 0, 0, 999999),
+      segmentCount: parseNumber(selectedSegment.segmentCount || selectedSegment.total, 1, 1, 999999),
+      segmentHash: selectedSegment.hash || hashString(segmentContent),
+      siblingIds: normalizeStringArray(selectedSegment.siblingIds).slice(0, 80),
+      rawLength: String(segmentContent || '').length,
       canonicalSource: {
         kind: source.kind,
         path: source.path,
@@ -7828,14 +7950,18 @@
         const nodeId = candidateNodeId(candidate);
         const spreadActivation = spread.get(nodeId) || 0;
         const semantic = working.find(item => item.path === candidate.path)?.semanticScore;
+        const spreadStage = spreadActivation > 0 && recallStageIndex(candidate.recallStage) > recallStageIndex('recursive')
+          ? 'recursive'
+          : candidate.recallStage;
         return {
           ...candidate,
           semanticScore: semantic ?? candidate.semanticScore,
           spreadActivation,
+          recallStage: spreadStage,
           score: Number(candidate.score || 0) + Math.min(52, spreadActivation * 52),
         };
       })
-      .sort((a, b) => b.score - a.score);
+      .sort(sortRecallCandidates);
 
     const note = [
       `[Staged Retrieval: ${agentId}, lexical=${stats.lexical}, stageTop=${lexicalK}, spread=${stats.spread}, blocked=${stats.blocked}]`,
@@ -7867,7 +7993,7 @@
           score: Number(candidate.score || 0) + Math.max(0, similarity) * 36,
         });
       });
-      const reranked = base.map(candidate => byPath.get(candidate.path) || candidate).sort((a, b) => b.score - a.score);
+      const reranked = base.map(candidate => byPath.get(candidate.path) || candidate).sort(sortRecallCandidates);
       const cacheNote = vectorResult.cache
         ? ` cache=${vectorResult.cache.hits}/${vectorResult.cache.hits + vectorResult.cache.misses}`
         : '';
@@ -8410,6 +8536,62 @@
     return Array.from(new Set(tokens)).slice(0, 80);
   }
 
+  function recallStageIndex(stage) {
+    const order = {
+      foundation: 0,
+      trigger: 1,
+      activeMemoryBridge: 2,
+      recursive: 3,
+      siblingCompletion: 4,
+      generic: 5,
+    };
+    return order[String(stage || 'generic')] ?? order.generic;
+  }
+
+  function recallStageBoost(stage) {
+    const boost = {
+      foundation: 220,
+      trigger: 160,
+      activeMemoryBridge: 110,
+      recursive: 60,
+      siblingCompletion: 48,
+      generic: 0,
+    };
+    return boost[String(stage || 'generic')] || 0;
+  }
+
+  function sortRecallCandidates(a, b) {
+    return recallStageIndex(a.recallStage) - recallStageIndex(b.recallStage)
+      || Number(b.score || 0) - Number(a.score || 0);
+  }
+
+  function candidateHasFocusOverlap(candidate, state) {
+    const terms = currentFocusTerms(state);
+    if (!terms.length) return false;
+    const haystack = [candidate?.kind, candidate?.path, candidate?.text, candidate?.item?.name, candidate?.item?.summary, candidate?.item?.sourceId, candidate?.item?.sourceLabel]
+      .filter(Boolean)
+      .join('\n')
+      .toLowerCase();
+    return terms.some(term => term && haystack.includes(term));
+  }
+
+  function classifyRecallStage(candidate, state, context, queryTerms) {
+    const item = candidate?.item || {};
+    if (candidate?.kind === 'lore') {
+      if (isFoundationLoreItem(item) || item.alwaysActive || item.activationMode === 'always' || item?.canonicalSource?.meta?.alwaysActive || item?.canonicalSource?.meta?.constant) return 'foundation';
+      if (candidate.activeLore || loreActivationScore(item, queryTerms) > 0 || isActiveLoreItemForQuery(item, context, queryTerms)) return 'trigger';
+    }
+    if (candidate?.siblingCompletion) return 'siblingCompletion';
+    if (candidate?.spreadActivation || candidate?.propagatedActivation) return 'recursive';
+    if (candidate?.kind === 'scene') return 'activeMemoryBridge';
+    if (['memory', 'character', 'relationship', 'secret', 'worldFront', 'knowledge'].includes(candidate?.kind)) {
+      const tier = normalizeMemoryLifecycleTier(item.memoryTier) || String(item.memoryTier || '').toLowerCase();
+      if (item.anchor || /hot|active|present|current|focal/i.test(`${tier} ${item.status || ''} ${item.state || ''}`)) return 'activeMemoryBridge';
+      if (candidateHasFocusOverlap(candidate, state)) return 'activeMemoryBridge';
+    }
+    return 'generic';
+  }
+
   function rankStateCandidates(state, queryTerms, profile, context = null) {
     const signature = buildRecallQuerySignature(queryTerms, context);
     return collectStateCandidates(state)
@@ -8417,15 +8599,18 @@
       .map(candidate => {
         const activeLore = candidate.kind === 'lore' && isActiveLoreItemForQuery(candidate.item, context, queryTerms);
         const enriched = { ...candidate, activeLore };
+        const recallStage = classifyRecallStage(enriched, state, context, queryTerms);
         return {
           ...enriched,
+          recallStage,
           score: scoreCandidate(enriched, queryTerms, state.turn, state)
             + weightedRecallOverlap(enriched, signature)
+            + recallStageBoost(recallStage)
             + (activeLore ? 72 : 0)
             + (candidate.kind === 'lore' && isPinnedLoreLedgerItem(candidate.item, context) ? 80 : 0),
         };
       })
-      .sort((a, b) => b.score - a.score);
+      .sort(sortRecallCandidates);
   }
 
   function buildRecallQuerySignature(queryTerms, context = null) {
@@ -8941,11 +9126,7 @@
     const selectedIds = new Set();
     const kindCounts = {};
     let used = 0;
-    const input = Array.isArray(candidates) ? candidates : [];
-    const mustCarry = input
-      .filter(isMustCarryCandidate)
-      .sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
-    const rest = input.filter(candidate => !isMustCarryCandidate(candidate));
+    const input = (Array.isArray(candidates) ? candidates : []).slice().sort(sortRecallCandidates);
     const pushCandidate = (candidate, forceFloor = false) => {
       if (selected.length >= limit) return false;
       if (candidate.memoryTier === 'archived' && Number(candidate.score || 0) < 72) return false;
@@ -8966,20 +9147,49 @@
       used += line.length;
       return true;
     };
-    for (const candidate of mustCarry) {
-      pushCandidate(candidate, true);
-    }
-    for (const candidate of rest) {
-      if (selected.length >= limit) break;
-      pushCandidate(candidate, false);
-    }
+
+    const pushStage = (stage, force = false) => {
+      for (const candidate of input) {
+        if (selected.length >= limit) break;
+        const candidateStage = candidate.recallStage || 'generic';
+        if (candidateStage !== stage) continue;
+        pushCandidate(candidate, force || isMustCarryCandidate(candidate) || stage === 'foundation');
+      }
+    };
+    ['foundation', 'trigger', 'activeMemoryBridge', 'recursive'].forEach(stage => pushStage(stage, stage === 'foundation'));
+    pushSiblingCompletionCandidates(input, selected, pushCandidate);
+    pushStage('generic', false);
     if (selected.length < Math.min(limit, 6)) {
-      for (const candidate of rest) {
+      for (const candidate of input) {
         if (selected.length >= limit) break;
         pushCandidate(candidate, true);
       }
     }
     return selected;
+  }
+
+  function pushSiblingCompletionCandidates(input, selected, pushCandidate) {
+    const selectedItemIds = new Set(selected.map(candidate => candidate?.item?.id).filter(Boolean));
+    const selectedParents = new Set(selected.map(candidate => candidate?.item?.parentSourceId).filter(Boolean));
+    if (!selectedItemIds.size && !selectedParents.size) return;
+    input
+      .filter(candidate => {
+        if (candidate?.kind !== 'lore') return false;
+        const item = candidate.item || {};
+        if (!item.canonicalUnit) return false;
+        if (selectedItemIds.has(item.id)) return false;
+        const siblings = normalizeStringArray(item.siblingIds);
+        if (siblings.some(id => selectedItemIds.has(id))) return true;
+        return item.parentSourceId && selectedParents.has(item.parentSourceId);
+      })
+      .map(candidate => ({
+        ...candidate,
+        siblingCompletion: true,
+        recallStage: 'siblingCompletion',
+        score: Number(candidate.score || 0) + recallStageBoost('siblingCompletion'),
+      }))
+      .sort(sortRecallCandidates)
+      .forEach(candidate => pushCandidate(candidate, true));
   }
 
   function candidateTraceId(candidate) {
@@ -9011,6 +9221,7 @@
     const summary = summarizeLedgerText(candidate.item, candidate.kind);
     const meta = [
       `score=${Math.round(candidate.score || 0)}`,
+      candidate.recallStage ? `stage=${candidate.recallStage}` : '',
       `importance=${candidate.importance}`,
       `confidence=${Number(candidate.confidence).toFixed(2)}`,
       `turn=${candidate.turn}`,
@@ -12345,17 +12556,28 @@
       .replace(/\$(\d+)/g, (_, idx) => captures[Number(idx)] ?? '');
   }
   
-  function injectContext(messages, injection, budget) {
+  function injectContext(messages, injection, budget, conf = null) {
     if (!injection) return messages;
     const max = Number(budget || 0);
     const content = max > 0 ? String(injection).slice(0, max) : String(injection);
+    const block = `---\n[${MAIN_INJECTION_TITLE}]\n${content}\n---`;
     const clone = (Array.isArray(messages) ? messages : [])
       .map(m => {
         const item = { ...m };
-        if (item.role === 'system') item.content = stripExistingErosInjectionBlock(item.content);
+        item.content = stripExistingErosInjectionBlock(item.content);
         return item;
       })
       .filter(m => !(m.role === 'system' && !String(m.content || '').trim()));
+    const placeholderIdx = findErosInjectionPlaceholderMessage(clone);
+    if (placeholderIdx >= 0) {
+      clone[placeholderIdx].content = replaceErosInjectionPlaceholder(clone[placeholderIdx].content, block);
+      return clone;
+    }
+    const lastUserIdx = findLastMessageRoleIndex(clone, 'user');
+    if (lastUserIdx >= 0) {
+      clone[lastUserIdx].content = `${block}\n\n${clone[lastUserIdx].content || ''}`.trim();
+      return clone;
+    }
     let idx = -1;
     for (let i = clone.length - 1; i >= 0; i -= 1) {
       if (clone[i]?.role === 'system') {
@@ -12364,10 +12586,34 @@
       }
     }
     if (idx >= 0) {
-      clone[idx].content = `${clone[idx].content || ''}\n\n---\n[${MAIN_INJECTION_TITLE}]\n${content}\n---`;
+      clone[idx].content = `${clone[idx].content || ''}\n\n${block}`;
       return clone;
     }
     return [{ role: 'system', content: `[${MAIN_INJECTION_TITLE}]\n${content}` }, ...clone];
+  }
+
+  function findLastMessageRoleIndex(messages, role) {
+    for (let i = (Array.isArray(messages) ? messages.length : 0) - 1; i >= 0; i -= 1) {
+      if (messages[i]?.role === role) return i;
+    }
+    return -1;
+  }
+
+  function erosInjectionPlaceholderPattern() {
+    return /\{\{\s*(?:slot::)?(?:eros[_-]?tower|eros[_-]?context|erosTowerContext)\s*\}\}|<\s*ErosTowerContext\s*\/?>|<<\s*EROS_TOWER_CONTEXT\s*>>/gi;
+  }
+
+  function findErosInjectionPlaceholderMessage(messages) {
+    const list = Array.isArray(messages) ? messages : [];
+    for (let i = list.length - 1; i >= 0; i -= 1) {
+      const content = String(list[i]?.content || '');
+      if (erosInjectionPlaceholderPattern().test(content)) return i;
+    }
+    return -1;
+  }
+
+  function replaceErosInjectionPlaceholder(value, content) {
+    return String(value || '').replace(erosInjectionPlaceholderPattern(), content);
   }
 
   function stripExistingErosInjectionBlock(value) {
@@ -12375,6 +12621,8 @@
     const escapedTitle = MAIN_INJECTION_TITLE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     text = text.replace(new RegExp(`\\n*---\\s*\\n\\[${escapedTitle}\\]\\n[\\s\\S]*?\\n---\\s*(?=\\n|$)`, 'g'), '\n');
     text = text.replace(new RegExp(`^\\s*\\[${escapedTitle}\\]\\n[\\s\\S]*$`, 'g'), '');
+    text = text.replace(/\n*---\s*\n\[Eros Tower \d+(?:\.\d+)* analysis context\]\n[\s\S]*?\n---\s*(?=\n|$)/g, '\n');
+    text = text.replace(/^\s*\[Eros Tower \d+(?:\.\d+)* analysis context\]\n[\s\S]*$/g, '');
     return text.replace(/\n{3,}/g, '\n\n').trim();
   }
 
@@ -13503,7 +13751,7 @@
     registerPendingRun(run);
     Runtime.lastScope = context.scope;
     await safeAppendRunLog(context.scope, run, conf);
-    return injectContext(messages, injection, injectionBudget);
+    return injectContext(messages, injection, injectionBudget, conf);
   }
 
   async function afterRequest(content, type) {
@@ -17360,13 +17608,13 @@
           ];
           const injected = injectContext(original, 'fresh Eros context', 4000);
           const systemMessages = injected.filter(item => item.role === 'system');
-          const carrier = systemMessages.find(item => String(item.content || '').includes(`[${MAIN_INJECTION_TITLE}]`)) || null;
+          const carrier = injected.find(item => String(item.content || '').includes(`[${MAIN_INJECTION_TITLE}]`)) || null;
           return {
             hostSystemCount: systemMessages.filter(item => String(item.content || '').includes('Host lore/system message must remain intact.')).length,
             oldInjectionCount: injected.filter(item => String(item.content || '').includes('old Eros context must be removed')).length,
-            newInjectionCount: systemMessages.reduce((sum, item) => sum + (String(item.content || '').match(new RegExp(`\\[${MAIN_INJECTION_TITLE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\]`, 'g')) || []).length, 0),
+            newInjectionCount: injected.reduce((sum, item) => sum + (String(item.content || '').match(new RegExp(`\\[${MAIN_INJECTION_TITLE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\]`, 'g')) || []).length, 0),
             userMentionCount: injected.filter(item => item.role === 'user' && String(item.content || '').includes(MAIN_INJECTION_TITLE)).length,
-            carrierCount: systemMessages.filter(item => String(item.content || '').includes(`[${MAIN_INJECTION_TITLE}]`)).length,
+            carrierCount: injected.filter(item => String(item.content || '').includes(`[${MAIN_INJECTION_TITLE}]`)).length,
             carrierRole: carrier?.role || '',
             injectionRole: carrier?.role || '',
             carrierText: carrier?.content || '',
