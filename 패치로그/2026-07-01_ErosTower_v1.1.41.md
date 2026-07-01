@@ -1,15 +1,10 @@
 # Eros Tower v1.1.41
 
-## 덧대기성 변경 제거
+## 임시 변경 제거
 
-- v1.1.40에서 추가했던 런타임 원천 source chunk 후보 경로를 삭제했다.
-- 삭제한 항목:
-  - `runtimeSourceCandidateKind`
-  - `sourceExcerptAroundTerms`
-  - `runtimeSourceCandidateCacheKey`
-  - `collectRuntimeSourceCandidates`
-  - `rankStateCandidates()`에 원천 후보를 별도로 합치던 경로
-- 별도 안전주입층, 원천 후보 덧대기, source fallback 본문 확장은 현재 코드에 남기지 않았다.
+- v1.1.40에서 추가했던 별도 원천 후보 경로를 삭제했다.
+- 현재 코드는 기존 검색 후보와 Retrieval Pack 포맷 경로만 사용한다.
+- v1.1.40 패치로그 파일도 현재 트리에서 제거했다.
 
 ## 유지한 핵심 수리
 
