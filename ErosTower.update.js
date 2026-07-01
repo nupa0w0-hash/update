@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.37
+//@display-name ☸Eros Tower 1.1.38
 //@api 3.0
-//@version 1.1.37
+//@version 1.1.38
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -35,18 +35,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.37
+ * Eros Tower 1.1.38
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.37 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.38 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.37';
+  const VERSION = '1.1.38';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.37`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.38`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -63,7 +63,7 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.37 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.38 analysis context';
   const AUTO_MAIN_BRIEFING_CHARS = 36000;
   const PSYCHE_SOURCE_CHUNK_CHARS = 16000;
   const PSYCHE_SOURCE_CHUNK_OVERLAP_CHARS = 1200;
@@ -8741,6 +8741,10 @@
     return slug(`candidate:${candidateNodeId(candidate)}`);
   }
 
+  function psycheWeaveAnchorId(name, role = 'entity-anchor') {
+    return slug(`anchor:${role}:${name}`);
+  }
+
   function psycheWeaveTextTerms(parts, limit = 64) {
     const text = (Array.isArray(parts) ? parts : [parts]).filter(Boolean).join('\n').toLowerCase();
     return uniqueStrings((text.match(/[a-z][a-z0-9_-]{2,}|[가-힣][가-힣a-z0-9_-]{1,}|[\u3040-\u30ff]{2,}|[\u4e00-\u9fff]{2,}/g) || [])
@@ -8787,6 +8791,96 @@
   function psycheWeaveSourceKeyForCandidate(candidate) {
     const item = candidate?.item || {};
     return firstNonEmpty(item.sourceId, item.sourcePath, item.canonicalSource?.path, item.canonicalSource?.hash, item.chunkId, item.sourceHash);
+  }
+
+  function normalizePsycheWeaveAnchorName(value) {
+    return String(value || '')
+      .replace(/^[\s"'`“”‘’()[\]{}<>]+|[\s"'`“”‘’()[\]{}<>.,;:]+$/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 80);
+  }
+
+  function isPsycheWeaveAnchorName(value) {
+    const text = normalizePsycheWeaveAnchorName(value);
+    if (text.length < 2 || text.length > 80) return false;
+    if (/^[\d\s._:-]+$/.test(text)) return false;
+    if (/^(?:none|unknown|n\/a|null|true|false|user|assistant|system|source|lore|lorebook|memory|chat_long_memory|final_output|author_note|stored_state|state|scene|current|present|character|relationship|secret|world|main|model)$/i.test(text)) return false;
+    if (/^(?:그|그녀|그들|나|너|우리|상대|누군가|어딘가|무언가)$/.test(text)) return false;
+    if (/[{}<>]|https?:\/\//i.test(text)) return false;
+    return true;
+  }
+
+  function addPsycheWeaveAnchorName(out, value, relation = 'mentions') {
+    normalizeStringArray(value).forEach(raw => {
+      const name = normalizePsycheWeaveAnchorName(raw);
+      if (!isPsycheWeaveAnchorName(name)) return;
+      out.push({ name, relation });
+    });
+  }
+
+  function psycheWeaveAnchorsForCandidate(candidate) {
+    const item = candidate?.item || {};
+    const out = [];
+    addPsycheWeaveAnchorName(out, item.name || item.title, candidate.kind === 'character' ? 'self' : 'mentions');
+    addPsycheWeaveAnchorName(out, item.aliases, 'alias');
+    addPsycheWeaveAnchorName(out, item.participants || item.participantIds, 'participant');
+    addPsycheWeaveAnchorName(out, item.a || item.from || item.subject || item.owner || item.holder, 'participant');
+    addPsycheWeaveAnchorName(out, item.b || item.to || item.target || item.object || item.counterpart, 'participant');
+    addPsycheWeaveAnchorName(out, item.owners || item.holders, 'owner');
+    addPsycheWeaveAnchorName(out, item.knowers || item.knownBy || item.knows, 'known-by');
+    addPsycheWeaveAnchorName(out, item.suspecters || item.suspects, 'suspects');
+    addPsycheWeaveAnchorName(out, item.cannotKnow || item.cannotKnowers || item.privateTo || item.forbiddenTo, 'cannot-know');
+    if (candidate.kind === 'scene') {
+      addPsycheWeaveAnchorName(out, item.presentCast, 'present');
+      addPsycheWeaveAnchorName(out, item.location || item.place || item.currentPlace, 'place');
+    }
+    return uniqueStrings(out.map(entry => `${entry.relation}:${entry.name}`))
+      .map(key => {
+        const idx = key.indexOf(':');
+        return { relation: key.slice(0, idx), name: key.slice(idx + 1) };
+      })
+      .slice(0, 28);
+  }
+
+  function upsertPsycheWeaveAnchorNode(nodeMap, previousNodes, anchor, state, querySet, focusSet) {
+    const name = normalizePsycheWeaveAnchorName(anchor?.name);
+    if (!isPsycheWeaveAnchorName(name)) return null;
+    const role = anchor?.relation === 'place' ? 'place-anchor' : 'entity-anchor';
+    const id = psycheWeaveAnchorId(name, role);
+    const previous = previousNodes.get(id);
+    const terms = psycheWeaveTextTerms([name], 24);
+    const queryHits = terms.filter(term => querySet.has(term)).length;
+    const focusHits = terms.filter(term => focusSet.has(term) || focusSet.has(name.toLowerCase())).length;
+    const existing = nodeMap.get(id);
+    const baseActivation = Math.min(1,
+      (existing?.baseActivation || 0)
+      + 0.08
+      + queryHits * 0.2
+      + focusHits * 0.32
+      + (anchor?.relation === 'present' ? 0.24 : 0)
+      + (anchor?.relation === 'cannot-know' ? 0.05 : 0)
+    );
+    const activation = Math.max(baseActivation, existing?.activation || 0, (previous?.activation || 0) * 0.7);
+    const node = normalizePsycheWeaveNode({
+      ...(existing || {}),
+      id,
+      path: `psycheWeave.anchors.${id}`,
+      kind: 'anchor',
+      role,
+      label: name,
+      terms: uniqueStrings([...(existing?.terms || []), ...terms]).slice(0, 64),
+      importance: Math.max(existing?.importance || 0, anchor?.relation === 'present' ? 8 : 5),
+      confidence: 0.9,
+      baseActivation,
+      activation,
+      lastActivatedTurn: queryHits || focusHits || anchor?.relation === 'present' ? state.turn : previous?.lastActivatedTurn || existing?.lastActivatedTurn || 0,
+      activationSources: uniqueStrings([...(existing?.activationSources || []), queryHits ? 'query-anchor' : '', focusHits ? 'focus-anchor' : '', anchor?.relation || 'anchor'].filter(Boolean)).slice(0, 12),
+      turn: state.turn,
+      preview: `Anchor: ${name}`,
+    });
+    if (node) nodeMap.set(id, node);
+    return node;
   }
 
   function addPsycheWeaveEdge(edgeMap, edge) {
@@ -8905,6 +8999,25 @@
       });
       if (!node) return;
       nodeMap.set(node.id, node);
+      psycheWeaveAnchorsForCandidate(candidate).forEach(anchor => {
+        const anchorNode = upsertPsycheWeaveAnchorNode(nodeMap, previousNodes, anchor, state, querySet, focusSet);
+        if (!anchorNode) return;
+        const relationWeight = anchor.relation === 'self' ? 0.86
+          : anchor.relation === 'present' ? 0.82
+            : anchor.relation === 'participant' ? 0.74
+              : anchor.relation === 'known-by' || anchor.relation === 'cannot-know' ? 0.7
+                : anchor.relation === 'owner' ? 0.76
+                  : 0.58;
+        addPsycheWeaveEdge(edgeMap, {
+          from: anchorNode.id,
+          to: id,
+          kind: anchor.relation,
+          weight: relationWeight,
+          lastReinforcedTurn: state.turn,
+          shared: [anchor.name],
+          evidence: ['anchor'],
+        });
+      });
       const sourceKey = psycheWeaveSourceKeyForCandidate(candidate);
       const sourceNodeId = sourceKey ? sourceLookup.get(String(sourceKey)) : '';
       if (sourceNodeId) {
@@ -9000,10 +9113,12 @@
       .filter(edge => validIds.has(edge.from) && validIds.has(edge.to))
       .sort((a, b) => b.weight - a.weight)
       .slice(0, edgeCap);
+    const clusters = buildPsycheWeaveClusters(finalNodes, finalEdges, querySet, focusSet);
     state.psycheWeave = normalizePsycheWeave({
       version: 1,
       nodes: finalNodes,
       edges: finalEdges,
+      clusters,
       lastQueryTerms: queryTerms,
       lastPropagationTurn: state.turn,
       lastPropagationStage: notes && notes.length ? 'post-pre-agent' : 'pre-agent',
@@ -9013,12 +9128,64 @@
         activeSeeds: activeSeeds.length,
         previousNodes: previous.nodes.length,
         previousEdges: previous.edges.length,
+        anchorNodes: finalNodes.filter(node => /anchor$/.test(node.role || '')).length,
+        clusters: clusters.length,
         sourceEdges: finalEdges.filter(edge => edge.kind === 'provenance').length,
+        anchorEdges: finalEdges.filter(edge => ['self', 'alias', 'participant', 'present', 'place', 'owner', 'known-by', 'cannot-know', 'suspects'].includes(edge.kind)).length,
         termEdges: finalEdges.filter(edge => /term|same-source/.test(edge.kind)).length,
       },
       updatedAt: nowIso(),
     });
     return { nodes: state.psycheWeave.nodes.length, edges: state.psycheWeave.edges.length, queryTerms: queryTerms.slice(0, 12) };
+  }
+
+  function buildPsycheWeaveClusters(nodes, edges, querySet, focusSet) {
+    const nodeMap = new Map((Array.isArray(nodes) ? nodes : []).map(node => [node.id, node]));
+    const adjacency = new Map();
+    (Array.isArray(edges) ? edges : []).forEach(edge => {
+      if (!nodeMap.has(edge.from) || !nodeMap.has(edge.to)) return;
+      if (!adjacency.has(edge.from)) adjacency.set(edge.from, []);
+      if (!adjacency.has(edge.to)) adjacency.set(edge.to, []);
+      adjacency.get(edge.from).push(edge);
+      adjacency.get(edge.to).push(edge);
+    });
+    return (Array.isArray(nodes) ? nodes : [])
+      .filter(node => /anchor$/.test(String(node.role || '')) && !node.blockedForPerspective)
+      .map(anchor => {
+        const linkedEdges = adjacency.get(anchor.id) || [];
+        const linkedNodes = linkedEdges
+          .map(edge => nodeMap.get(edge.from === anchor.id ? edge.to : edge.from))
+          .filter(Boolean)
+          .filter(node => !node.blockedForPerspective);
+        const roles = uniqueStrings(linkedNodes.map(node => node.role || node.kind).filter(Boolean)).slice(0, 8);
+        const termHits = (anchor.terms || []).filter(term => querySet.has(term)).length;
+        const focusHits = (anchor.terms || []).filter(term => focusSet.has(term) || focusSet.has(String(anchor.label || '').toLowerCase())).length;
+        const weightSum = linkedEdges.reduce((sum, edge) => sum + clampNumber(edge.weight, 0, 0, 1), 0);
+        const activation = Math.min(1, clampNumber(anchor.activation, 0, 0, 1) + Math.min(0.28, weightSum / 30) + termHits * 0.08 + focusHits * 0.12);
+        return {
+          id: anchor.id,
+          label: anchor.label || anchor.preview || anchor.id,
+          role: anchor.role,
+          activation: Number(activation.toFixed(3)),
+          nodeCount: linkedNodes.length,
+          edgeCount: linkedEdges.length,
+          roles,
+          queryHits: termHits,
+          focusHits,
+          topLinks: linkedNodes
+            .sort((a, b) => b.activation - a.activation || b.importance - a.importance)
+            .slice(0, 6)
+            .map(node => ({
+              path: node.path,
+              role: node.role || node.kind,
+              activation: Number(clampNumber(node.activation, 0, 0, 1).toFixed(3)),
+              preview: String(node.preview || node.label || '').slice(0, 140),
+            })),
+        };
+      })
+      .filter(cluster => cluster.nodeCount > 0)
+      .sort((a, b) => b.activation - a.activation || b.nodeCount - a.nodeCount || String(a.label).localeCompare(String(b.label)))
+      .slice(0, 36);
   }
 
   function spreadPsycheWeaveActivation(weave, seedIds, conf = {}) {
@@ -9074,6 +9241,10 @@
     if (!weave.nodes.length) return '';
     const max = Math.max(600, Number(budget || 2200));
     const selectedIds = new Set((Array.isArray(selected) ? selected : []).map(psycheWeaveNodeIdForCandidate));
+    const activeClusters = (Array.isArray(weave.clusters) ? weave.clusters : [])
+      .filter(cluster => Number(cluster?.activation || 0) >= 0.12)
+      .sort((a, b) => Number(b.activation || 0) - Number(a.activation || 0) || Number(b.nodeCount || 0) - Number(a.nodeCount || 0))
+      .slice(0, 6);
     const active = weave.nodes
       .filter(node => !node.blockedForPerspective)
       .map(node => ({
@@ -9092,8 +9263,16 @@
       '[Psyche Weave]',
       'Shared private context graph: source lore, memory, state, relationships, secrets, and current focus are linked here. Use as context evidence, not text to reveal.',
       `Query: ${normalizeStringArray(queryTerms).slice(0, 14).join(', ') || '(none)'}`,
-      '[Active Nodes]',
     ];
+    if (activeClusters.length) {
+      lines.push('[Active Anchors]');
+      activeClusters.forEach(cluster => {
+        const roles = normalizeStringArray(cluster.roles).slice(0, 5).join('/');
+        const top = (Array.isArray(cluster.topLinks) ? cluster.topLinks : []).slice(0, 3).map(link => `${link.role}:${String(link.preview || link.path || '').slice(0, 80)}`).join(' | ');
+        lines.push(`- ${cluster.label} (${cluster.role || 'anchor'}, act=${formatDecimal(cluster.activation)}, nodes=${cluster.nodeCount}${roles ? `, roles=${roles}` : ''}): ${top || '(linked context)'}`);
+      });
+    }
+    lines.push('[Active Nodes]');
     active.forEach(node => {
       const meta = [
         node.role || node.kind,
@@ -15085,6 +15264,7 @@
         ${statBox('엣지', associationGraph.edges.length)}
         ${statBox('Weave 노드', weave.nodes.length)}
         ${statBox('Weave 엣지', weave.edges.length)}
+        ${statBox('Weave 축', weave.clusters.length)}
         ${statBox('전파', associationGraph.lastPropagationStage || '-')}
         ${statBox('현재 관점', normalizeActivePerspective(activePerspective).presentCast.join(', ') || '-')}
       </div>
