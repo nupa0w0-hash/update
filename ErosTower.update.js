@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.39
+//@display-name ☸Eros Tower 1.1.40
 //@api 3.0
-//@version 1.1.39
+//@version 1.1.40
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -35,18 +35,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.39
+ * Eros Tower 1.1.40
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.39 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.40 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.39';
+  const VERSION = '1.1.40';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.39`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.40`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -63,7 +63,7 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.39 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.40 analysis context';
   const AUTO_MAIN_BRIEFING_CHARS = 36000;
   const PSYCHE_SOURCE_CHUNK_CHARS = 16000;
   const PSYCHE_SOURCE_CHUNK_OVERLAP_CHARS = 1200;
@@ -7725,7 +7725,7 @@
     ];
     if (sourceFallback.length) {
       lines.push('', '[Source Registry]');
-      sourceFallback.forEach(source => lines.push(formatPsycheSourceFallbackLine(source)));
+      sourceFallback.forEach(source => lines.push(formatPsycheSourceFallbackLine(source, true)));
     }
     if (selected.length) {
       lines.push('', '[Selected Psyche/State Units]');
@@ -7763,7 +7763,7 @@
       .slice(0, Math.max(1, Number(limit || 10)));
   }
 
-  function formatPsycheSourceFallbackLine(source) {
+  function formatPsycheSourceFallbackLine(source, includeSummary = false) {
     const meta = [
       source.kind || 'source',
       source.alwaysActive ? 'always' : '',
@@ -7772,7 +7772,10 @@
       source.chunkCount !== undefined ? `chunks=${source.chunkCount}` : '',
       source.hash ? `hash=${String(source.hash).slice(0, 10)}` : '',
     ].filter(Boolean).join(', ');
-    return `- ${source.label || source.path || source.id} (${meta})`;
+    const base = `- ${source.label || source.path || source.id} (${meta})`;
+    if (!includeSummary) return base;
+    const summary = summarizeCanonicalContent(firstNonEmpty(source.summary, source.content, source.text), 520);
+    return summary ? `${base}: ${summary}` : base;
   }
 
   function formatCompiledCandidateLine(candidate) {
@@ -8415,7 +8418,7 @@
         const perItemCap = Math.max(100, Math.min(220, Math.floor((floorBudget - 120) / Math.max(1, floorSources.length))));
         let used = '[Always-Active Lore Floor]\n'.length;
         floorSources.forEach(source => {
-          const next = formatPsycheSourceFallbackLine(source);
+          const next = formatPsycheSourceFallbackLine(source, true);
           const line = next.length > perItemCap ? `${next.slice(0, perItemCap).trimEnd()}...` : next;
           if (used + line.length > floorBudget && used > 0) return;
           used += line.length + 1;
@@ -8504,9 +8507,126 @@
     return Array.from(new Set(tokens)).slice(0, 80);
   }
 
+  function runtimeSourceCandidateKind(source) {
+    const raw = String(source?.kind || '').toLowerCase();
+    if (/chat|memory/.test(raw)) return 'memory';
+    if (/desc|firstmessage|persona|author|lore|module|reference|global|local/.test(raw)) return 'lore';
+    return 'knowledge';
+  }
+
+  function sourceExcerptAroundTerms(text, queryTerms = [], maxChars = 900) {
+    const source = String(text || '').replace(/\s+/g, ' ').trim();
+    const max = Math.max(220, Number(maxChars || 900));
+    if (source.length <= max) return source;
+    const lower = source.toLowerCase();
+    const terms = (Array.isArray(queryTerms) ? queryTerms : [])
+      .map(term => String(term || '').toLowerCase())
+      .filter(term => term.length >= 2)
+      .sort((a, b) => b.length - a.length);
+    let hit = -1;
+    for (const term of terms) {
+      hit = lower.indexOf(term);
+      if (hit >= 0) break;
+    }
+    if (hit < 0) return source.slice(0, max).trimEnd();
+    let start = Math.max(0, hit - Math.floor(max * 0.34));
+    let end = Math.min(source.length, start + max);
+    if (end - start < max) start = Math.max(0, end - max);
+    const leftBreak = source.lastIndexOf(' ', start + 40);
+    if (leftBreak > 0 && leftBreak < hit) start = leftBreak + 1;
+    const rightBreak = source.indexOf(' ', Math.max(hit + 20, end - 60));
+    if (rightBreak > hit && rightBreak < source.length) end = Math.min(source.length, rightBreak);
+    return `${start > 0 ? '... ' : ''}${source.slice(start, end).trim()}${end < source.length ? ' ...' : ''}`;
+  }
+
+  function runtimeSourceCandidateCacheKey(context, state, queryTerms) {
+    const sourceSig = (Array.isArray(context?.canonicalSources) ? context.canonicalSources : [])
+      .map(source => source?.hash || source?.id || source?.path || '')
+      .filter(Boolean)
+      .join('|');
+    const messageSig = (Array.isArray(context?.messages) ? context.messages : [])
+      .slice(-4)
+      .map(message => hashString(`${message?.role || ''}:${String(message?.content || '').slice(0, 1200)}`))
+      .join('|');
+    return hashString([state?.turn || 0, sourceSig, messageSig, (Array.isArray(queryTerms) ? queryTerms : []).join('|')].join('\n'));
+  }
+
+  function collectRuntimeSourceCandidates(context, state, queryTerms = []) {
+    if (!context) return [];
+    const key = runtimeSourceCandidateCacheKey(context, state, queryTerms);
+    if (context._erosRuntimeSourceCandidateCache?.key === key) return context._erosRuntimeSourceCandidateCache.items;
+    const out = [];
+    const seen = new Set();
+    buildPsycheRuntimeSources(context, null).forEach(source => {
+      splitPsycheSourceIntoChunkRefs(source).forEach(chunk => {
+        const chunkText = String(source.text || '').slice(chunk.start, chunk.end).trim();
+        if (!chunkText) return;
+        const candidateKey = `${source.id}:${chunk.index}:${chunk.hash}`;
+        if (seen.has(candidateKey)) return;
+        seen.add(candidateKey);
+        const kind = runtimeSourceCandidateKind(source);
+        const priority = parseNumber(source.priority, source.alwaysActive ? 8 : 5, 0, 10);
+        const summary = sourceExcerptAroundTerms(chunkText, queryTerms, source.alwaysActive ? 980 : 860);
+        const item = {
+          id: `sourcechunk:${chunk.hash}`,
+          name: `${source.label || source.path || source.id} #${chunk.index + 1}`,
+          summary,
+          verbatimExcerpt: summary,
+          source: source.kind || 'source',
+          sourceId: source.path || source.id,
+          sourceKind: source.kind,
+          sourcePath: source.path,
+          sourceLabel: source.label,
+          sourceClass: source.sourceClass,
+          loreStability: source.loreStability,
+          retention: source.retention,
+          activationKeys: normalizeStringArray(source.activationKeys).slice(0, 32),
+          knownBy: normalizeStringArray(source.knownBy).slice(0, 32),
+          cannotKnow: normalizeStringArray(source.cannotKnow).slice(0, 32),
+          priority,
+          importance: source.alwaysActive ? Math.max(8, priority) : priority,
+          alwaysActive: Boolean(source.alwaysActive),
+          activationMode: source.alwaysActive ? 'always' : (source.sourceClass === 'selective' ? 'selective' : 'scored'),
+          canonLevel: 'established',
+          confidence: 0.88,
+          sourceRank: parseNumber(source.sourceRank, sourceRankForPsycheSourceKind(source.kind), 0, 100),
+          lastSeenTurn: state?.turn || 0,
+          canonicalSource: {
+            kind: source.kind,
+            path: source.path,
+            hash: source.hash,
+            label: source.label,
+            meta: source.meta || {},
+          },
+        };
+        out.push({
+          kind,
+          path: `runtimeSources.${source.id}.chunks.${chunk.index}`,
+          item,
+          text: [source.label, source.kind, source.path, normalizeStringArray(source.activationKeys).join(' '), chunkText].filter(Boolean).join('\n'),
+          turn: state?.turn || 0,
+          sourceRank: item.sourceRank,
+          importance: item.importance,
+          confidence: item.confidence,
+          tier: inferTier(item, kind),
+          memoryTier: kind === 'memory' ? inferMemoryLifecycleTier(item, kind, state?.turn || 0) : '',
+          heatScore: memoryLifecycleHeat(item, kind, state?.turn || 0),
+          status: 'active',
+        });
+      });
+    });
+    try {
+      context._erosRuntimeSourceCandidateCache = { key, items: out };
+    } catch (_) {
+      // context may be immutable in some hosts
+    }
+    return out;
+  }
+
   function rankStateCandidates(state, queryTerms, profile, context = null) {
     const signature = buildRecallQuerySignature(queryTerms, context);
-    return collectStateCandidates(state)
+    const candidates = collectStateCandidates(state).concat(collectRuntimeSourceCandidates(context, state, queryTerms));
+    return candidates
       .filter(candidate => !profile?.kinds || profile.kinds.includes(candidate.kind))
       .map(candidate => {
         const activeLore = candidate.kind === 'lore' && isActiveLoreItemForQuery(candidate.item, context, queryTerms);
@@ -9778,9 +9898,21 @@
 
   function summarizeLedgerText(item, kind) {
     if (typeof item === 'string') return item.slice(0, 220);
+    const isLoreLike = ['lore', 'knowledge'].includes(String(kind || ''))
+      || item?.sourceKind
+      || item?.sourceClass
+      || item?.loreStability
+      || item?.retention;
     const title = firstNonEmpty(
       item?.name,
+      item?.title,
+      item?.id,
+      kind
+    );
+    const body = firstNonEmpty(
       item?.summary,
+      item?.verbatimExcerpt,
+      item?.rawExcerpt,
       item?.quoteOrSummary,
       item?.objective,
       item?.seed,
@@ -9789,11 +9921,16 @@
       item?.item,
       item?.issue,
       item?.fact,
-      item?.resource,
-      kind
+      item?.resource
     );
+    const titleText = String(title || kind || '').replace(/\s+/g, ' ').trim();
+    const bodyText = String(body || '').replace(/\s+/g, ' ').trim();
+    const bodyDetail = bodyText && bodyText.toLowerCase() !== titleText.toLowerCase()
+      ? bodyText.slice(0, isLoreLike ? 760 : 420)
+      : '';
     const detail = [
       item?.status || item?.maturity || item?.state,
+      bodyDetail,
       item?.lastChange,
       item?.unsupportedLeapToAvoid ? `avoid leap: ${item.unsupportedLeapToAvoid}` : '',
       item?.riskIfRevealed ? `risk: ${item.riskIfRevealed}` : '',
@@ -9805,7 +9942,7 @@
       Array.isArray(item?.cannotKnow) ? `cannotKnow: ${item.cannotKnow.join(', ')}` : '',
       item?.clock !== undefined ? `clock: ${item.clock}` : '',
     ].filter(Boolean).join(' | ');
-    return `${title}${detail ? ` | ${detail}` : ''}`.slice(0, 420);
+    return `${titleText}${detail ? ` | ${detail}` : ''}`.slice(0, isLoreLike ? 980 : 620);
   }
 
   function inferItemTurn(item, currentTurn) {
