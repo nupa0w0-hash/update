@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.50
+//@display-name ☸Eros Tower 1.1.51
 //@api 3.0
-//@version 4.0.9
+//@version 4.0.10
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -35,18 +35,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.50
+ * Eros Tower 1.1.51
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.50 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.51 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.50';
+  const VERSION = '1.1.51';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.50`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.51`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -57,18 +57,34 @@
   const MAX_EVENT_LOG = 100;
   const MAX_RUN_LOGS = 12;
   const MAX_RUN_LOG_TEXT_CHARS = 16000;
+  const MAX_RUN_LOG_AGENT_NOTE_CHARS = 32000;
   const MAX_USAGE_EVENTS = 500;
   const LONG_MEMORY_EXCERPT_CHARS = 1800;
   const STORAGE_VERIFY_HASH_LIMIT = 384000;
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.50 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.51 analysis context';
   const MAIN_INJECTION_PLACEHOLDER_RE = /\{\{et\.(canonical|memory|state|characters|executive)\}\}/gi;
   const AUTO_INJECTION_FALLBACK_CHARS = 22000;
   const AUTO_INJECTION_MIN_CHARS = 3200;
   const AUTO_INJECTION_MAX_CHARS = 32000;
+  const RESPONSE_LENGTH_TOGGLE_OPTIONS = Object.freeze([
+    { index: 0, label: '자연', englishLabel: 'natural', instruction: '', scale: 'No explicit response-length toggle is active.' },
+    { index: 1, label: '한 숨결', englishLabel: 'one breath', instruction: 'Write maximum 200 words.', scale: 'One breath: focus on the immediate beat, one sensory/emotional turn, and avoid broad offscreen expansion.' },
+    { index: 2, label: '단상', englishLabel: 'short reflection', instruction: 'Write maximum 400 words.', scale: 'Short reflection: keep notes compact, one or two present-facing beats, only the most relevant continuity risks.' },
+    { index: 3, label: '한 장면', englishLabel: 'one scene', instruction: 'Write at least 800 words.', scale: 'One scene: support a complete scene movement with immediate stakes, present cast, and proportionate offscreen pressure.' },
+    { index: 4, label: '한 장', englishLabel: 'one chapter', instruction: 'Write at least 2400 words.', scale: 'Chapter scale: provide enough breadth for a scene arc, several linked beats, character pressure, world texture, and continuity risks.' },
+    { index: 5, label: '대서사', englishLabel: 'epic movement', instruction: 'Write at least 3200 words.', scale: 'Epic movement: track multiple fronts and consequences, but keep each note actionable for the current reply.' },
+    { index: 6, label: '장편', englishLabel: 'long-form', instruction: 'Write at least 5000 words.', scale: 'Long-form: support sustained multi-stage pacing, recurring motifs, wider world fronts, and delayed consequences without dumping unrelated lore.' },
+    { index: 7, label: '초장편', englishLabel: 'very long-form', instruction: 'Write at least 9000 words.', scale: 'Very long-form: prepare dense continuity, layered character movement, multiple world threads, and long-range setup while preserving knowledge boundaries.' },
+  ]);
   const SYSTEM_PATCH_NOTES = Object.freeze([
+    {
+      version: '1.1.51',
+      kind: 'p0-engine',
+      summary: 'Fixed malformed length-toggle residue handling, hidden-source auto injection, canonical duplication, Psyche ingest fallback, and agent note diagnostics.',
+    },
     {
       version: '1.1.50',
       kind: 'tooling',
@@ -909,7 +925,7 @@
     merged.apiKey = merged.apiKey === MASKED_SECRET ? String(stored?.apiKey || '') : String(merged.apiKey || '');
     merged.model = cleanString(merged.model, providerDefaults(merged.provider).model);
     merged.temperature = parseNumber(merged.temperature, DEFAULT_CONFIG.temperature, 0, 2);
-    merged.maxTokens = parseNumber(merged.maxTokens, DEFAULT_CONFIG.maxTokens, 128, 16000);
+    merged.maxTokens = parseNumber(merged.maxTokens, DEFAULT_CONFIG.maxTokens, 128);
     merged.contextWindow = parseNumber(merged.contextWindow, DEFAULT_CONFIG.contextWindow, 4, 80);
     merged.timeoutMs = normalizeTimeoutMsSetting(merged.timeoutMs, DEFAULT_CONFIG.timeoutMs);
     if (!injectionBudgetArg && Number(stored?.injectionBudget) === 22000 && parseBool(stored?.autoCapEnabled, true) === true) {
@@ -1241,7 +1257,7 @@
       baseUrl: normalizeUrl(preset.baseUrl || defaults.baseUrl || conf.baseUrl),
       model: cleanString(preset.model, defaults.model || conf.model),
       temperature: parseNumber(preset.temperature, conf.temperature, 0, 2),
-      maxTokens: parseNumber(preset.maxTokens, conf.maxTokens, 128, 16000),
+      maxTokens: parseNumber(preset.maxTokens, conf.maxTokens, 128),
       contextWindow: parseNumber(preset.contextWindow, conf.contextWindow, 4, 80),
       extraBodyJson: String(preset.extraBodyJson || ''),
     };
@@ -1843,16 +1859,18 @@
     const modePrompts = agent.modePrompts && typeof agent.modePrompts === 'object' && !Array.isArray(agent.modePrompts)
       ? agent.modePrompts
       : fallback?.modePrompts || null;
+    const phase = fallback?.phase || agent.phase;
+    const maxTokens = normalizeAgentMaxTokens(agent.maxTokens ?? fallback?.maxTokens, conf.maxTokens, agent.id, phase);
     return {
       ...agent,
       name: normalizedName || fallback?.name || agent.id,
-      phase: fallback?.phase || agent.phase,
+      phase,
       enabled: agent.enabled !== false,
       providerId,
       model: cleanString(agent.model || preset?.model || providerEntry?.defaultModel || fallback?.model || conf.model, conf.model),
       modelPresetId: agent.modelPresetId || fallback?.modelPresetId || '',
       temperature: parseNumber(agent.temperature ?? fallback?.temperature, conf.temperature, 0, 2),
-      maxTokens: parseNumber(agent.maxTokens ?? fallback?.maxTokens, conf.maxTokens, 128, 16000),
+      maxTokens,
       contextWindow: parseNumber(agent.contextWindow ?? fallback?.contextWindow, conf.contextWindow, 4, 80),
       timeoutMs: normalizeTimeoutMsSetting(agent.timeoutMs ?? fallback?.timeoutMs, conf.timeoutMs),
       systemPrompt: agent.systemPrompt || fallback?.systemPrompt || '',
@@ -1874,6 +1892,19 @@
       translationSourceParallelEnabled: parseBool(agent.translationSourceParallelEnabled, fallback?.translationSourceParallelEnabled === true) === true,
       translationPromptModeId: normalizeActiveTranslationPromptModeId(agent.translationPromptModeId || fallback?.translationPromptModeId || conf.activeTranslationPromptModeId, conf.translationPromptModes),
     };
+  }
+
+  function agentMaxTokenFloor(agentId, phase) {
+    const id = String(agentId || '');
+    const phaseKey = String(phase || '');
+    if (id === 'state-commit' || phaseKey === 'psyche-main') return 4096;
+    if (id === 'state-aux' || phaseKey === 'psyche-aux') return 4096;
+    return 128;
+  }
+
+  function normalizeAgentMaxTokens(value, fallback, agentId = '', phase = '') {
+    const floor = agentMaxTokenFloor(agentId, phase);
+    return parseNumber(value, fallback, floor);
   }
 
   function defaultPipeline() {
@@ -1952,7 +1983,7 @@
       baseUrl,
       model: cleanString(agent?.model || providerEntry?.defaultModel || preset?.model || conf.model, providerDefaults(provider).model),
       temperature: parseNumber(agent?.temperature ?? preset?.temperature, conf.temperature, 0, 2),
-      maxTokens: parseNumber(agent?.maxTokens ?? preset?.maxTokens, conf.maxTokens, 128, 16000),
+      maxTokens: normalizeAgentMaxTokens(agent?.maxTokens ?? preset?.maxTokens, conf.maxTokens, agent?.id || '', agent?.phase || ''),
       contextWindow: parseNumber(agent?.contextWindow ?? preset?.contextWindow, conf.contextWindow, 4, 80),
       timeoutMs: normalizeTimeoutMsSetting(agent?.timeoutMs ?? preset?.timeoutMs, conf.timeoutMs),
       apiKey: providerEntry?.apiKey || conf.providerKeys?.[provider] || conf.apiKey || '',
@@ -2101,7 +2132,7 @@
     'Respect user agency: do not decide the user persona inner thoughts, consent, dialogue, or next action.',
   ].join('\n');
 
-  const EROS_AGENT_PROMPT_REVISION = 'v1.1.22-prompt-modes';
+  const EROS_AGENT_PROMPT_REVISION = 'v1.1.51-session-world-persons';
   const PRE_AGENT_SOURCE_HANDLING = [
     'Source Handling:',
     'The final-response model receives Eros Tower source context separately. Use lore, memory, state, retrieved context, character cards, and chat history as shared working context for your active agent role, not as material to re-deliver.',
@@ -2111,9 +2142,9 @@
     'You are the Eros Tower Living World and Active Fronts Agent for RP.',
     COMMON_EVIDENCE_RULES,
     'The user persona and primary bot are participants in a larger world, not the automatic center of every event.',
-    'Map the current scene and up to four established wider fronts with their own actors, pressures, routes, clocks, and material limits.',
+    'Map the current scene and up to four established wider fronts with their own people, communities, systems, pressures, routes, clocks, and material limits.',
     'A front may be a named character, faction, household, institution, neighborhood, route, market, investigation, ritual, rumor network, public event, resource chain, weather system, duty, conflict, or other ongoing process.',
-    'Let offscreen actors continue proportionally to elapsed time, geography, communication speed, rank, injury, routine, resources, and prior commitments.',
+    'Let offscreen people, groups, and systems continue proportionally to elapsed time, geography, communication speed, rank, injury, routine, resources, and prior commitments.',
     'Make the world broad through causal contact: a trace, message, absence, arrival, departure, delay, shortage, overheard exchange, public reaction, institutional response, changed readiness, or environmental consequence.',
     'Do not pull random lore, rotate the whole cast, or name-drop. Use existing lore/cast only when the present scene has a credible contact point.',
   ].join('\n\n');
@@ -2121,9 +2152,9 @@
   const EROS_RP_WORLD_OUTPUT = [
     'Write compact structured notes in English.',
     '[Scene Anchor]\n- In-story time / current place / present cast / unfinished physical action.',
-    '[Active World Fronts]\n- Front: autonomous actors / objective or pressure / current motion / clock or timing / relation to current scene, including `independent` when no direct relation exists yet.',
+    '[Active World Fronts]\n- Front: autonomous people, communities, or systems / objective or pressure / current motion / clock or timing / relation to current scene, including `independent` when no direct relation exists yet.',
     '[Present-Facing Intersections]\n- Established ways the wider world can touch this reply through observable evidence or causal consequence.',
-    '[Offscreen Continuation]\n- Actor or system: last established state -> proportionate next motion -> possible later trace. Mark uncertain items `PLAUSIBLE`, not fact.',
+    '[Offscreen Continuation]\n- Person, group, place, or system: last established state -> proportionate next motion -> possible later trace. Mark uncertain items `PLAUSIBLE`, not fact.',
     '[Lived World Texture]\n- Two to four scene-relevant details from culture, labor, logistics, class, infrastructure, custom, ecology, technology, magic, or public life. Notes only, not finished prose.',
     '[Continuity Risks]\n- Geography, time, object, injury, authority, resource, or information-flow errors to avoid.',
     '[Clearly Irrelevant This Turn]\n- Lore or cast that would be random intrusion now. Use `(none)` when unnecessary.',
@@ -2134,7 +2165,7 @@
     'You are the Eros Tower World Stage and Parallel Fronts Agent for fiction.',
     COMMON_EVIDENCE_RULES,
     'Build an operational map for an immersive story set in a large world. The nominal protagonist, persona, and primary bot are not the only people whose lives matter.',
-    'Track the current theater, physical continuity, and up to five established parallel fronts with autonomous actors, objectives, mechanisms, clocks, geography, information reach, and resource limits.',
+    'Track the current theater, physical continuity, and up to five established parallel fronts with autonomous people, communities, institutions, systems, objectives, mechanisms, clocks, geography, information reach, and resource limits.',
     'A side character, faction, place, institution, route, household, economy, ritual, investigation, conflict, or ordinary system may deserve attention when it creates causal motion.',
     'Broad scope does not mean encyclopedic summary. Select active, consequential, emotionally alive, or likely-to-intersect fronts.',
     'The final prose may use one or several deep-POV focal characters. At any instant, private interior access belongs to one character, and any shift needs a clear paragraph or action-beat boundary.',
@@ -2144,10 +2175,10 @@
   const EROS_NOVEL_WORLD_OUTPUT = [
     'Write compact structured notes in English.',
     '[Current Theater]\n- Time / place / focal possibilities / present cast / unfinished action / immediate material conditions.',
-    '[Parallel World Fronts]\n- Front: autonomous actors / objective or process / current established motion / clock / geographic and informational reach / relation to current arc.',
+    '[Parallel World Fronts]\n- Front: autonomous people, communities, places, or systems / objective or process / current established motion / clock / geographic and informational reach / relation to current arc.',
     '[Intersections and Divergences]\n- Front A <-> Front B: causal connection, collision window, misunderstanding, or deliberate separation.',
     '[Present-Facing Intersections]\n- Ways parallel fronts can enter prose as scene, trace, message, absence, public response, logistics, or environment rather than exposition.',
-    '[Offscreen Continuation]\n- Actor/system: established state -> plausible proportional motion -> later trace. Mark uncertain items `PLAUSIBLE`.',
+    '[Offscreen Continuation]\n- Person, group, place, or system: established state -> plausible proportional motion -> later trace. Mark uncertain items `PLAUSIBLE`.',
     '[Focal Transition Candidates]\n- Focal character + location: why another lived perspective could add causal or emotional value. Use `(none)` when a transition would dilute movement.',
     '[Continuity Risks]\n- World-state, geography, time, knowledge, resource, institution, or simultaneity errors to avoid.',
     'Do not write the final reply.',
@@ -2160,7 +2191,7 @@
     'Select characters who can genuinely affect this beat, including side characters whose independent agenda naturally intersects it.',
     'Use strict cognitive boundaries. A character may act only from information, memories, intelligence, resources, injuries, access, temperament, rank, fear, loyalty, incentives, and setting-specific common sense they possess.',
     'For consequential NPC choices, compare the danger of acting, the cost of delay/refusal/silence, and the calculated initiative that follows when inaction is worse.',
-    'Do not force equal screen time, summon every named character, or invent a new extra when an established lore character can logically fill the function.',
+    'Prefer established lore/cast when they logically fit, but allow session-born people when scene pressure, body memory, local routine, rumor, institution, or offscreen life naturally creates them. Mark them as new living world members, not disposable extras or source-canon characters.',
     'Never author the user persona private thought, emotion, consent, dialogue, decision, or next action.',
   ].join('\n\n');
 
@@ -2184,7 +2215,7 @@
     'Strict cognitive boundaries apply. Each character acts only from knowledge, memory, access, rank, injury, resources, fear, desire, culture, and setting-specific common sense they possess.',
     'For consequential choices, compare risk from acting, credible cost of inaction, and the earned decision, tactic, or active-wait behavior that follows.',
     'Allow multiple focal characters only when each shift adds real causal, emotional, or relational value. Do not ping-pong for novelty.',
-    'Do not rotate the whole cast, flatten side characters into functions, or invent a new extra when established lore/cast can carry the beat.',
+    'Prefer established lore/cast when they can carry the beat, but allow session-born people when the world logic creates them. Treat a newly named passerby, senior, servant, merchant, guard, rumor-source, or local resident as a living world member with continuity potential, not a disposable function.',
   ].join('\n\n');
 
   const EROS_NOVEL_CHARACTER_OUTPUT = [
@@ -2203,7 +2234,7 @@
     'You are the Eros Tower Momentum, Clocks, and Converging Threads Agent for RP.',
     COMMON_EVIDENCE_RULES,
     'Prevent narrative stagnation without turning the world into arbitrary chaos.',
-    'For every consequential choice, compare the real risk of acting with the credible cost of inaction. If delay now guarantees a worse outcome, an actor or system should take a calculated risk.',
+    'For every consequential choice, compare the real risk of acting with the credible cost of inaction. If delay now guarantees a worse outcome, a person, group, institution, or system should take a calculated risk.',
     'Friction must end in movement: decision, active waiting, preparation, refusal, retreat, delegation, confrontation, departure, concealment, resource use, or another changed state.',
     'Do not manufacture catastrophic clocks when none exists. Quiet scenes can move through exchange, departure, discovery, failed attempt, new obligation, changed access, social realignment, routine completed, resource shift, or information reaching the wrong person.',
     'The user is not required to initiate everything. NPCs, factions, institutions, crowds, logistics, weather, and ongoing processes may act first when earned.',
@@ -2212,7 +2243,7 @@
   const EROS_RP_MOMENTUM_OUTPUT = [
     'Write compact structured notes in English.',
     '[Active Clocks and Windows]\n- Pressure or opportunity: source / who notices / what worsens or closes with delay / time scale. Use `(none)` if no clock exists.',
-    '[Action vs Inaction Decisions]\n- Actor or system: risk of acting / cost of inaction / calculated move or active-wait tactic / knowledge basis.',
+    '[Action vs Inaction Decisions]\n- Person, group, institution, or system: risk of acting / cost of inaction / calculated move or active-wait tactic / knowledge basis.',
     '[Concrete Movement Required This Reply]\n- One primary state change that is causally earned.',
     '[Compatible Ensemble or World Beats]\n- Zero to two supporting movements that broaden the world without crowding the scene.',
     '[Mechanism and Consequence]\n- Cause -> action -> immediate response -> new situation or pending consequence.',
@@ -2227,7 +2258,7 @@
     'Prevent stagnation while preserving causality, tonal variation, and the scale of a living world.',
     'Require at least one meaningful state change in an ordinary in-story response. Scale movement to requested length.',
     'A side character or distant location may receive a scene if it moves an independent arc or creates a later collision.',
-    'Every beat needs a mechanism: actor -> choice -> resistance -> consequence -> changed state.',
+    'Every beat needs a mechanism: person/group/system -> choice or process -> resistance -> consequence -> changed state.',
     'Permit failure, misunderstanding, partial success, competing agendas, and consequences unfolding at different speeds.',
     'Avoid convenient convergence, instant travel, synchronized revelations, protagonist-centered coincidence, and needless crisis.',
   ].join('\n\n');
@@ -2235,7 +2266,7 @@
   const EROS_NOVEL_MOMENTUM_OUTPUT = [
     'Write compact structured notes in English.',
     '[Response Shape]\n- Amount of movement justified by length and material / focal order if more than one / boundary for each shift / separator only when a substantial continuity break warrants it.',
-    '[Primary Causal Movement]\n- Actor -> pressure -> risk of acting / cost of inaction -> choice -> resistance -> changed state.',
+    '[Primary Causal Movement]\n- Person/group/system -> pressure -> risk of acting / cost of inaction -> choice or process -> resistance -> changed state.',
     '[Secondary or Parallel Movements]\n- Zero to three compatible beats from other characters, locations, factions, or systems; each must change or prepare durable state.',
     '[Cross-Cutting Logic]\n- Why the segments belong together: shared clock, contrast, cause-and-effect, object, rumor, route, institution, relationship, or pressure. Avoid decorative cuts.',
     '[Consequences at Different Speeds]\n- Immediate / delayed / contingent effects and who can perceive them.',
@@ -2250,7 +2281,7 @@
     'You do not write the reply. Convert prior notes and visible context into compact, reliable pre-writing guidance for the main model.',
     'Source priority: current user input and recent chat, then character/persona/lore/author-note facts, then durable memory, then agent inference.',
     'Desired experience: a wide, inhabited world seen through a narrow, coherent camera. The user and primary bot are important participants, not the only people with stories.',
-    'Use existing lore/cast/fronts when they are relevant. Do not invent a random extra or generic institution when an established character, faction, place, or front already fits the function.',
+    'Use existing lore/cast/fronts when they are relevant. When the scene naturally creates a new named person, household member, worker, guard, messenger, rumor-source, or local resident, identify them as session-born/world-born and preserve their continuity instead of treating them as a random extra.',
     'Keep private interior access singular at each instant. Leave user private state, dialogue, consent, decision, and next action unauthored.',
     'The structured notes are private planning. The visible reply must not reproduce labels or planning format.',
   ].join('\n\n');
@@ -2260,9 +2291,9 @@
     '[RP Reply Mandate]\n- Immediate dramatic obligation and the concrete change the reply must accomplish.',
     '[POV and Scene Anchor]\n- Focal sequence: one or more NPCs / each perceptual limit / paragraph or action-beat boundary for any shift / time-place-physical anchor. Use one focal lens when no shift is useful.',
     '[Recommended Entrances / Re-entries]\n- Existing lore character, faction, place, or front to use this turn / why now / channel of entrance / what to avoid. Use `(none)` if no established entrance is earned.',
-    '[Ensemble Weaving]\n- Primary actor plus zero to three supporting characters or systems / each independent function / NPC-to-NPC interaction worth dramatizing.',
+    '[Ensemble Weaving]\n- Primary person or system plus zero to three supporting people, communities, or systems / each independent function / NPC-to-NPC interaction worth dramatizing.',
     '[Living World Signals]\n- One or two wider-world intersections that can be shown without exposition or omniscience.',
-    '[Risk and Cost-of-Inaction Logic]\n- Consequential actor: acting risk / credible inaction cost / resulting choice or active-wait tactic / how it becomes legible through behavior or consequence.',
+    '[Risk and Cost-of-Inaction Logic]\n- Consequential person, group, or system: acting risk / credible inaction cost / resulting choice or active-wait tactic / how it becomes legible through behavior or consequence.',
     '[Must Preserve]\n- Maximum six hard continuity, knowledge, relationship, or world-logic constraints.',
     '[User Agency]\n- Explicit user contribution that remains canon / private or future state that must remain open.',
     '[End State]\n- The changed situation after the reply / unresolved affordance left for the user.',
@@ -2277,7 +2308,7 @@
     'You do not write the prose. Convert prior notes and visible context into a compact mandate for the next response.',
     'Source priority: explicit current user direction and recent story events, then character/persona/lore/author-note facts, then durable memory, then agent inference.',
     'Desired experience: an immersive story with a genuinely inhabited world. The nominal protagonist, persona, and primary bot are nodes in an ensemble, not gravitational centers that erase everyone else.',
-    'Use established lore/cast/fronts when relevant. Do not invent a random extra, location, faction, or institution when existing material can carry the beat.',
+    'Use established lore/cast/fronts when relevant. When the scene naturally creates a new named person, local place, household member, worker, guard, messenger, rumor-source, or institution contact, identify them as session-born/world-born and preserve their continuity instead of treating them as a random extra.',
     'Keep private interior access singular at each instant while allowing multiple focal characters only when each shift adds real value.',
     'The structured notes are private planning. The visible response must remain in the conversation established format.',
   ].join('\n\n');
@@ -2288,7 +2319,7 @@
     '[Focal and Continuity Plan]\n- Focal sequence / each character time-place anchor and perceptual limits / paragraph or action-beat boundary for any shift / separator only when a substantial continuity break warrants it.',
     '[Recommended Entrances / Re-entries]\n- Existing lore character, faction, place, or front to use this response / why now / scene or trace channel / what to avoid. Use `(none)` if no established entrance is earned.',
     '[Ensemble Arc Weaving]\n- Primary arc plus zero to four supporting character, faction, institution, place, or system beats / each independent function.',
-    '[Risk and Cost-of-Inaction Decisions]\n- Consequential actor: acting risk / credible inaction cost / earned decision or active-wait tactic / how the logic becomes legible through behavior, timing, preparation, or consequence.',
+    '[Risk and Cost-of-Inaction Decisions]\n- Consequential person, group, or system: acting risk / credible inaction cost / earned decision or active-wait tactic / how the logic becomes legible through behavior, timing, preparation, or consequence.',
     '[World in Motion]\n- Wider fronts, public systems, logistics, culture, or offscreen processes that become dramatized intersections rather than exposition.',
     '[Must Preserve]\n- Maximum eight hard facts about chronology, geography, knowledge, physical state, relationship, resources, authority, or causality.',
     '[End State and Carry-Forward]\n- Changed states across used fronts / unresolved pressure that remains alive without forced cliffhanger.',
@@ -2311,7 +2342,7 @@
     '{',
     '  "summary": "one sentence",',
     '  "scene": {"time":"","location":"","presentCast":[],"unfinishedAction":"","materialConditions":[]},',
-    '  "characters": [{"id":"","name":"","location":"","status":"","goal":"","rank":"","access":[],"desires":[],"fears":[],"incentives":[],"resources":[],"vitals":{"hp":100,"stamina":100,"fatigue":0,"stress":0},"stats":{"mana":{"label":"Mana","current":30,"max":100,"min":0,"kind":"resource","evidence":""},"qi":{"label":"Qi","current":50,"max":100,"min":0,"kind":"resource","evidence":""}},"conditions":[]}],',
+    '  "characters": [{"id":"","name":"","aliases":[],"origin":"source-canon|session-born|body-memory|rumor|offscreen|unknown","affiliation":"","role":"","location":"","status":"","goal":"","rank":"","access":[],"desires":[],"fears":[],"incentives":[],"resources":[],"vitals":{"hp":100,"stamina":100,"fatigue":0,"stress":0},"stats":{"mana":{"label":"Mana","current":30,"max":100,"min":0,"kind":"resource","evidence":""},"qi":{"label":"Qi","current":50,"max":100,"min":0,"kind":"resource","evidence":""}},"conditions":[],"canonLevel":"visible_chat","confidence":0.9,"firstSeenTurn":0,"lastSeenTurn":0,"evidence":[]}],',
     '  "relationships": [{"id":"","a":"","b":"","affinity":0,"affection":0,"favorability":0,"trust":0,"intimacy":0,"loyalty":0,"respect":0,"fear":0,"jealousy":0,"dependence":0,"dominance":0,"tension":0,"socialDistance":50,"tie":"","dynamics":[],"secrets":[],"lastChange":"","unsupportedLeapToAvoid":""}],',
     '  "worldFronts": [{"id":"","actors":[],"objective":"","mechanism":"","domain":"","resourceChannels":[],"clock":0,"deadlineOrRhythm":"","visibility":"trace","status":"active","intersections":[]}],',
     '  "memoryLedger": [{"id":"","summary":"","source":"final_output","sourceRank":88,"importance":5,"recency":1,"confidence":0.9,"emotionalWeight":0,"canonLevel":"established","decay":1,"createdTurn":0,"lastSeenTurn":0,"lastConfirmedTurn":0,"tags":[],"anchor":false}],',
@@ -2328,6 +2359,8 @@
     'For secrets, separate who owns the truth, who knows it, who only suspects, and who cannot know it. leakPressure is 0-100. Do not reveal a secret unless revealGate is satisfied in the final output.',
     'For memories, assign sourceRank, importance, confidence, emotionalWeight (-10 to 10), canonLevel, and anchor when the memory must resist decay.',
     'For loreLedger, store durable lorebook/world-rule/long-memory units only when they were activated, used, corrected, or established. Include sourceId, activationKeys, scope, priority, canonLevel, knownBy, and cannotKnow when available.',
+    'If the final output creates or names a person who is not in source lore, commit them as a session-born/body-memory/rumor/offscreen character. Do not discard them as an extra. Preserve firstSeenTurn, affiliation, role/title, aliases, relationship to present characters, and a short evidence quote.',
+    'A session-born person is canon for this chat once visible in the final output. Keep them distinct from source-canon lore, but let them persist, reappear, form relationships, spread rumors, and live offscreen in later turns.',
     'Pre-agent notes are advisory. Commit only facts, relationship shifts, stat changes, reveals, clues, resource changes, or front movements that actually happened or became established in the final output/user input.',
   ].join('\n');
 
@@ -2553,7 +2586,10 @@
     const id = slug(firstNonEmpty(item.id, item.sourceId, item.path, item.label, item.hash));
     if (!id) return null;
     const kind = cleanString(item.kind, 'source');
-    const priority = parseNumber(item.priority, item.alwaysActive ? 8 : 5, 0, 10);
+    const knowledgeBoundary = Boolean(item.knowledgeBoundary || item?.meta?.knowledgeBoundary || item?.meta?.hiddenSource || item?.meta?.secretSource);
+    const futureSource = Boolean(item.futureSource || item?.meta?.futureSource);
+    const sourceAlwaysActive = Boolean(item.sourceAlwaysActive || item.alwaysActive);
+    const priority = parseNumber(item.priority, sourceAlwaysActive ? 8 : 5, 0, 10);
     return {
       id,
       kind,
@@ -2570,7 +2606,11 @@
       scope: String(item.scope || ''),
       sourceRank: parseNumber(item.sourceRank, sourceRankForPsycheSourceKind(kind), 0, 100),
       priority,
-      alwaysActive: Boolean(item.alwaysActive),
+      alwaysActive: Boolean(item.alwaysActive) && !knowledgeBoundary,
+      sourceAlwaysActive,
+      knowledgeBoundary,
+      futureSource,
+      boundaryReason: String(item.boundaryReason || item?.meta?.boundaryReason || '').slice(0, 160),
       chunkCount: parseNumber(item.chunkCount, 0, 0, 999999),
       status: ['active', 'missing', 'superseded'].includes(String(item.status || 'active')) ? String(item.status || 'active') : 'active',
       firstSeenTurn: parseNumber(item.firstSeenTurn, 0, 0, 999999),
@@ -2591,6 +2631,8 @@
     const id = firstNonEmpty(item.id, sourceId && hash ? `${sourceId}:chunk:${index}:${hash}` : '');
     if (!id || !sourceId) return null;
     const status = ['pending', 'absorbed', 'failed', 'superseded'].includes(String(item.status || 'pending')) ? String(item.status || 'pending') : 'pending';
+    const knowledgeBoundary = Boolean(item.knowledgeBoundary || item?.meta?.knowledgeBoundary || item?.meta?.hiddenSource || item?.meta?.secretSource);
+    const futureSource = Boolean(item.futureSource || item?.meta?.futureSource);
     return {
       id,
       sourceId,
@@ -2605,7 +2647,11 @@
       rangeHash: String(item.rangeHash || ''),
       priority: parseNumber(item.priority, 5, 0, 10),
       sourceRank: parseNumber(item.sourceRank, sourceRankForPsycheSourceKind(item.sourceKind), 0, 100),
-      alwaysActive: Boolean(item.alwaysActive),
+      alwaysActive: Boolean(item.alwaysActive) && !knowledgeBoundary,
+      sourceAlwaysActive: Boolean(item.sourceAlwaysActive || item.alwaysActive),
+      knowledgeBoundary,
+      futureSource,
+      boundaryReason: String(item.boundaryReason || item?.meta?.boundaryReason || '').slice(0, 160),
       status,
       attempts: parseNumber(item.attempts, 0, 0, 99),
       retryAfterTurn: parseNumber(item.retryAfterTurn, 0, 0, 999999),
@@ -2631,6 +2677,12 @@
     const priority = parseNumber(item.priority, parseNumber(item.importance, 5, 0, 10), 0, 10);
     const importance = parseNumber(item.importance, priority || inferImportance(item, type), 0, 10);
     const sourceRank = parseNumber(item.sourceRank, sourceRankForPsycheSourceKind(sourceKind || type), 0, 100);
+    const boundary = inferPsycheUnitBoundary(item, summary);
+    const visibility = firstNonEmpty(
+      item.visibility,
+      boundary.knowledgeBoundary ? 'knowledge-boundary' : '',
+      boundary.futureSource ? 'future-route' : ''
+    );
     return {
       id,
       type,
@@ -2653,12 +2705,58 @@
       importance,
       confidence: parseNumber(item.confidence, inferConfidence(item), 0, 1),
       canonLevel: normalizeCanonLevel(item.canonLevel || item.certainty),
+      visibility: String(visibility || '').slice(0, 80),
+      knowledgeBoundary: boundary.knowledgeBoundary,
+      futureSource: boundary.futureSource,
+      boundaryReason: boundary.reason,
       status: ['active', 'superseded', 'retired', 'disputed'].includes(String(item.status || 'active')) ? String(item.status || 'active') : 'active',
       memoryTier: normalizeMemoryLifecycleTier(item.memoryTier) || inferMemoryLifecycleTier({ ...item, importance, sourceRank }, type, turn),
       createdTurn: parseNumber(item.createdTurn, turn, 0, 999999),
       lastSeenTurn: parseNumber(item.lastSeenTurn ?? item.turn, turn, 0, 999999),
       updatedAt: String(item.updatedAt || ''),
     };
+  }
+
+  function inferPsycheUnitBoundary(item, summary = '') {
+    const visibility = String(item?.visibility || '').toLowerCase();
+    const explicitBoundary = Boolean(
+      item?.knowledgeBoundary
+      || item?.meta?.knowledgeBoundary
+      || item?.meta?.hiddenSource
+      || item?.meta?.secretSource
+      || visibility.includes('knowledge-boundary')
+      || visibility.includes('private')
+      || visibility.includes('hidden')
+    );
+    const futureSource = Boolean(
+      item?.futureSource
+      || item?.meta?.futureSource
+      || looksFutureOriginalRouteText([
+        item?.name,
+        item?.title,
+        summary,
+        item?.sourceLabel,
+        item?.sourcePath,
+        item?.boundaryReason,
+        ...(Array.isArray(item?.sourceRefs) ? item.sourceRefs : []),
+      ].filter(Boolean).join('\n'))
+    );
+    const reason = uniqueStrings([
+      item?.boundaryReason,
+      explicitBoundary ? 'explicit-knowledge-boundary' : '',
+      futureSource ? 'future/original-route-marker' : '',
+    ]).join(',');
+    return {
+      knowledgeBoundary: explicitBoundary,
+      futureSource,
+      reason: reason.slice(0, 160),
+    };
+  }
+
+  function looksFutureOriginalRouteText(value) {
+    const text = String(value || '');
+    if (!text.trim()) return false;
+    return /(?:future|original\s+(?:route|timeline|plot)|bad\s+ending|counterfactual|if\s+route|spoiler|미래|원작|원래\s*루트|원래\s*전개|원작\s*전개|분기|루트|스포|앞으로의\s*(?:전개|사건|일|미래)|장차|훗날|후일|未來|未来|原作|原本路线|原本路線)/i.test(text);
   }
 
   function normalizePsycheUnitType(value) {
@@ -2861,8 +2959,9 @@
     if (!source) return false;
     const text = [source.label, source.content, source.path].filter(Boolean).join('\n');
     if (!String(text || '').trim()) return false;
-    const identityHit = /姓名|名字|名称|name\s*:|성명|이름|性别|성별|gender\s*:|sex\s*:|所属门派|所属组织|所属|门派|宗门|阵营|势力|소속|문파|종파|진영|세력|affiliation|faction|sect|order|school|clan|guild|organization|身份|role\s*:|角色设定集|profile|character sheet/i.test(text);
-    if (!identityHit) return false;
+    const strongIdentityHit = /姓名|名字|name\s*:|성명|이름|性别|성별|gender\s*:|sex\s*:|角色设定集|角色設定集|character\s*sheet|character\s*profile|oc\s+角色|인물\s*설정|캐릭터\s*설정/i.test(text);
+    const explicitProfileHint = isExplicitLoreCharacterSource(source) && /姓名|名字|name\s*:|성명|이름|性别|성별|gender\s*:|sex\s*:|profile|character/i.test(text);
+    if (!strongIdentityHit && !explicitProfileHint) return false;
     const kind = String(source.kind || '').toLowerCase();
     return /lore|desc|firstmessage|globalnote|referencecharacter/.test(kind) || source?.meta?.alwaysActive;
   }
@@ -3384,6 +3483,7 @@
     const raw = character && typeof character === 'object' ? character : {};
     const role = String(raw.role || '').toLowerCase();
     const name = firstNonEmpty(raw.name, id);
+    if (/^(?:unknown|characters\.unknown|character:unknown)$/i.test(String(id || '').trim())) return true;
     if (String(id || '').startsWith('lore-character:')) return true;
     if (role === 'explicit lore character' || role === 'always-active lore character') return true;
     const evidence = Array.isArray(raw.evidence) ? raw.evidence : [];
@@ -3428,23 +3528,46 @@
 
   function syncCurrentCharacterBootstrap(state, context) {
     const pruned = pruneAutoLoreBootstrapCharacters(state);
+    const identitySubjects = extractIdentitySubjectsFromSources(context?.canonicalSources, null);
+    const identityPrimaryNames = uniqueStrings(identitySubjects.map(subject => subject.name).filter(Boolean));
+    const identityProtectedNames = uniqueStrings(identitySubjects.flatMap(subject => [subject.name].concat(normalizeStringArray(subject.aliases))).filter(Boolean));
+    const cardName = firstNonEmpty(context?.character?.name, context?.character?.data?.name);
+    const persona = getEffectiveSelectedPersona(context?.db);
+    const useCardNameAsCast = !identityPrimaryNames.length && cardName;
     const names = uniqueStrings([
-      firstNonEmpty(context?.character?.name, context?.character?.data?.name),
-      firstNonEmpty(getSelectedPersona(context?.db)?.name),
+      ...identityPrimaryNames,
+      useCardNameAsCast ? cardName : '',
+      firstNonEmpty(persona?.name),
       ...(Array.isArray(state.scene?.presentCast) ? state.scene.presentCast : []),
     ]).filter(name => name && !isGenericCharacterStateToken(name));
+    const protectedNames = uniqueStrings(identityProtectedNames.concat(names)).filter(name => name && !isGenericCharacterStateToken(name));
     state.activePerspective = {
       presentCast: names.slice(0, 20),
-      protectedNames: names.slice(0, 20),
+      protectedNames: protectedNames.slice(0, 20),
     };
     state.characters = state.characters && typeof state.characters === 'object' ? state.characters : {};
-    const charName = firstNonEmpty(context?.character?.name, context?.character?.data?.name);
-    if (charName) {
-      const id = slug(firstNonEmpty(context.characterId, context?.character?.id, context?.character?.chaId, charName));
+    if (identitySubjects.length) {
+      identitySubjects.forEach(subject => {
+        const id = slug(firstNonEmpty(subject.id, subject.name));
+        if (!id || state.characters[id]) return;
+        state.characters[id] = normalizeCharacterState({
+          id,
+          name: subject.name,
+          aliases: normalizeStringArray(subject.aliases),
+          gender: subject.immutable?.gender || '',
+          affiliation: subject.mutableBaseline?.affiliation || '',
+          role: 'canonical identity',
+          status: 'active',
+          location: state.scene?.location || '',
+          evidence: [{ source: 'canonical_identity', turn: state.turn, quoteOrSummary: subject.sourceRefs?.[0] || 'canonical identity bootstrap', certainty: 'established' }],
+        }, state.turn);
+      });
+    } else if (cardName) {
+      const id = slug(firstNonEmpty(context.characterId, context?.character?.id, context?.character?.chaId, cardName));
       if (!state.characters[id]) {
         state.characters[id] = normalizeCharacterState({
           id,
-          name: charName,
+          name: cardName,
           role: 'primary character',
           status: 'active',
           location: state.scene?.location || '',
@@ -3452,7 +3575,12 @@
         }, state.turn);
       }
     }
-    return { presentCast: state.activePerspective.presentCast.length, bootstrapped: Boolean(charName), prunedLoreCharacters: pruned.removed };
+    return {
+      presentCast: state.activePerspective.presentCast.length,
+      bootstrapped: Boolean(identitySubjects.length || cardName),
+      bootstrapSource: identitySubjects.length ? 'canonical-identity' : 'character-card',
+      prunedLoreCharacters: pruned.removed,
+    };
   }
 
   function shouldSavePreSnapshot(previous, nextState, conf = null, ring = []) {
@@ -3731,7 +3859,7 @@
     const lastMessage = messages[messages.length - 1] || {};
     const character = context?.character || {};
     const db = context?.db || {};
-    const persona = getSelectedPersona(db) || {};
+    const persona = getEffectiveSelectedPersona(db) || {};
     const registeredFirstMessage = context?.firstMessageInfo?.message !== undefined
       ? context.firstMessageInfo
       : resolveRegisteredFirstMessage(character, context?.currentChat);
@@ -4791,6 +4919,7 @@
       character: context ? displayCharacterName(context) : '',
       chat: context ? displayChatName(context) : '',
       providerCount: conf?.providerRegistry?.length || 0,
+      responseLengthControl: resolveResponseLengthControl(context, conf),
       stateSize: jsonSize,
       storageHealth: health,
       sessionFingerprint: state?.sessionFingerprint || null,
@@ -4864,6 +4993,7 @@
   }
 
   function compactDiagnosticAgentTrace(note) {
+    const noteText = agentNoteBodyForRunLog(note);
     return {
       id: note?.id || '',
       name: note?.name || '',
@@ -4879,6 +5009,8 @@
       changed: note?.changed,
       attempts: note?.attempts,
       retries: note?.retries,
+      text: redactDiagnosticText(clipRunLogText(noteText, MAX_RUN_LOG_AGENT_NOTE_CHARS), MAX_RUN_LOG_AGENT_NOTE_CHARS + 300),
+      textChars: String(noteText || '').length,
       textPreview: redactDiagnosticText(note?.text || note?.outputPreview || '', 1400),
       inputPreview: redactDiagnosticText(note?.inputPreview || '', 900),
       retrievalPreview: redactDiagnosticText(note?.retrievalPreview || '', 900),
@@ -4900,8 +5032,11 @@
       agentSummary: runAgentSummary(run || {}),
       errors: normalizeStringArray(run?.errors).map(item => redactDiagnosticText(item, 600)).slice(0, 12),
       commitReason: redactDiagnosticText(run?.commitReason || '', 600),
+      failedCommitReason: redactDiagnosticText(run?.failedCommitReason || '', 900),
       commitAgent: run?.commitAgent || null,
       commitCounts: run?.commitCounts || null,
+      commitPromptPreview: redactDiagnosticText(run?.commitPromptPreview || '', 1400),
+      commitRawPreview: redactDiagnosticText(run?.commitRawPreview || '', 1400),
       outputSanitized: run?.outputSanitized === true,
       userInputPreview: redactDiagnosticText(run?.userInputPreview || '', 800),
       finalPreview: redactDiagnosticText(run?.finalPreview || '', 1400),
@@ -4957,6 +5092,15 @@
           at,
           runId: run.id || '',
           message: run.commitReason,
+        });
+      }
+      if (run.failedCommitReason && !isIntentionalSkipReason(run.failedCommitReason)) {
+        pushDiagnosticEvent(events, {
+          severity: 'warn',
+          kind: 'commit-failed-detail',
+          at,
+          runId: run.id || '',
+          message: run.failedCommitReason,
         });
       }
       (Array.isArray(run.notes) ? run.notes : []).forEach(note => {
@@ -5049,7 +5193,8 @@
         mode: context.mode || '',
         messageCount: Array.isArray(context.messages) ? context.messages.length : 0,
         canonicalSources: Array.isArray(context.canonicalSources) ? context.canonicalSources.length : 0,
-        canonicalUnits: Array.isArray(context.canonicalUnits) ? context.canonicalUnits.length : 0,
+        canonicalUnits: buildCanonicalUnits(context, conf).length,
+        responseLengthControl: resolveResponseLengthControl(context, conf),
       } : null,
       system: {
         pluginLabel: PLUGIN_LABEL,
@@ -5080,11 +5225,39 @@
     return text ? `- ${text}` : '';
   }
 
+  function mdFence(language, text) {
+    const body = mdLine(text || '(empty)');
+    let fence = '```';
+    while (body.includes(fence)) fence += '`';
+    return [
+      language ? `${fence}${language}` : fence,
+      body,
+      fence,
+    ];
+  }
+
+  function latestAgentNotesMarkdown(latest) {
+    const notes = Array.isArray(latest?.notes) ? latest.notes : [];
+    if (!notes.length) return ['- (none)'];
+    return notes.flatMap((note, idx) => {
+      const noteText = agentNoteBodyForRunLog(note) || note.textPreview || note.message || '';
+      return [
+        `### ${idx + 1}. ${note.name || note.id || 'agent'}`,
+        mdBullet(`Status: ${note.status || (note.error ? 'error' : note.skipped ? 'skipped' : 'ok')}`),
+        mdBullet(`Provider/model: ${note.provider || '-'} / ${note.model || '-'}`),
+        mdBullet(`Duration: ${note.ms ?? '-'} ms`),
+        ...mdFence('text', redactDiagnosticText(clipRunLogText(noteText, MAX_RUN_LOG_AGENT_NOTE_CHARS), MAX_RUN_LOG_AGENT_NOTE_CHARS + 300)),
+        '',
+      ];
+    });
+  }
+
   function buildRunLogDiagnosticMarkdown(packageData) {
     const ctx = packageData.context || {};
     const diag = packageData.diagnostics || {};
     const counts = diag.ledgerCounts || {};
     const latest = Array.isArray(packageData.runs) && packageData.runs.length ? packageData.runs[0] : null;
+    const lengthControl = ctx.responseLengthControl || diag.responseLengthControl || {};
     const lines = [
       '# Eros Tower Diagnostic Report',
       '',
@@ -5096,6 +5269,7 @@
       `- Mode: ${ctx.mode || '-'}`,
       `- Messages: ${ctx.messageCount ?? '-'}`,
       `- Canonical Sources / Units: ${ctx.canonicalSources ?? '-'} / ${ctx.canonicalUnits ?? '-'}`,
+      `- Response Length: ${lengthControl.active ? `toggle_길이=${lengthControl.index} (${lengthControl.option?.label || lengthControl.selected || '-'})` : '(inactive)'}`,
       '',
       '## System Patch Notes',
       '',
@@ -5138,6 +5312,10 @@
       '```json',
       JSON.stringify(latest || {}, null, 2).slice(0, 16000),
       '```',
+      '',
+      '## Latest Agent Notes',
+      '',
+      ...latestAgentNotesMarkdown(latest),
       '',
       '## Recent Runs',
       '',
@@ -5769,7 +5947,7 @@
   }
 
   function buildSettingBlocks(character, db, chat, canonicalSources = null, registeredFirstMessage = null) {
-    const persona = getSelectedPersona(db);
+    const persona = getEffectiveSelectedPersona(db);
     const lore = canonicalSources || collectCanonicalSources(character, db, chat);
     const firstMessage = firstNonEmpty(registeredFirstMessage?.message, resolveRegisteredFirstMessage(character, chat).message, '(none)');
     const lorePreview = lore
@@ -5780,7 +5958,7 @@
     return [
       `[Character]\n${firstNonEmpty(character?.description, character?.desc, character?.data?.description, character?.data?.desc, '(none)').slice(0, 6000)}`,
       `[First Message]\n${firstMessage.slice(0, 5000)}`,
-      `[Persona]\n${firstNonEmpty(persona?.description, persona?.desc, persona?.prompt, persona?.name, '(none)').slice(0, 2500)}`,
+      `[Persona]\n${formatEffectivePersonaBlock(persona).slice(0, 2500) || '(none)'}`,
       `[Author Note]\n${firstNonEmpty(chat?.note, chat?.authorNote, character?.authorNote, character?.data?.authorNote, '(none)').slice(0, 2000)}`,
       `[Canonical Lore Candidates]\n${lorePreview || '(none)'}`,
     ].join('\n\n');
@@ -5797,6 +5975,66 @@
       return personas.find(p => p?.id === trimmed || p?.name === trimmed) || null;
     }
     return null;
+  }
+
+  function getEffectiveSelectedPersona(db) {
+    const persona = getSelectedPersona(db);
+    return isNoPersonaPlaceholder(persona) ? null : persona;
+  }
+
+  function formatEffectivePersonaBlock(persona) {
+    if (isNoPersonaPlaceholder(persona)) return '';
+    return firstNonEmpty(
+      persona?.description,
+      persona?.desc,
+      persona?.prompt,
+      persona?.note,
+      persona?.content,
+      persona?.data?.description,
+      persona?.data?.desc,
+      persona?.data?.prompt,
+      persona?.data?.note,
+      persona?.name
+    );
+  }
+
+  function cleanPersonaSettingText(value) {
+    const text = String(value || '').trim();
+    if (!text || text === '(none)') return '';
+    return isNoPersonaMarkerText(text) ? '' : text;
+  }
+
+  function isNoPersonaPlaceholder(persona) {
+    if (!persona || typeof persona !== 'object') return true;
+    const body = firstNonEmpty(
+      persona.description,
+      persona.desc,
+      persona.prompt,
+      persona.note,
+      persona.content,
+      persona.data?.description,
+      persona.data?.desc,
+      persona.data?.prompt,
+      persona.data?.note
+    );
+    if (body && !isNoPersonaMarkerText(body)) return false;
+    const name = firstNonEmpty(persona.name, persona.id);
+    if (!name) return true;
+    return isNoPersonaMarkerText(name);
+  }
+
+  function isNoPersonaMarkerText(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return true;
+    const normalized = raw
+      .replace(/^>+\s*/, '')
+      .replace(/[()[\]{}<>「」『』"'`]+/g, ' ')
+      .replace(/[_:|/\\\-]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+    if (!normalized) return true;
+    return /^(?:none|null|undefined|no persona|no user persona|empty persona|blank persona|observer|spectator|viewer|reader|anonymous|anon|user|persona|no name|unnamed|없음|없어|없다|무페르소나|페르소나 없음|빈 페르소나|빈페르소나|관찰자|관전자|구경꾼|독자|시청자|익명|무명|이름 없음|사용자|유저)$/.test(normalized);
   }
 
   function referenceCharacterId(character, index = -1) {
@@ -6205,6 +6443,7 @@
       }
       const name = firstNonEmpty(entry?.comment, entry?.name, entry?.title, label);
       const hash = hashString(`${kind}:${path}:${content}`);
+      const boundary = inferCanonicalKnowledgeBoundary(entry, name, content, meta);
       out.push({
         id: `canon:${hash}`,
         kind,
@@ -6232,6 +6471,11 @@
           kindHint: firstNonEmpty(entry?.kindHint, entry?.classification),
           roleHint: firstNonEmpty(entry?.roleHint, entry?.characterRole),
           tags: normalizeStringArray(entry?.tags || entry?.tag || entry?.labels),
+          knowledgeBoundary: boundary.knowledgeBoundary,
+          boundaryReason: boundary.reason,
+          hiddenSource: boundary.hiddenSource,
+          futureSource: boundary.futureSource,
+          secretSource: boundary.secretSource,
           cbsToggleVars,
           canonPersistStrip: String(rawContent) !== String(content),
           rawLength: String(rawContent).length,
@@ -6336,7 +6580,7 @@
       .replace(/\{\{(?:setvar|settempvar|setdefaultvar|setglobalvar|addvar|incvar|decvar|mulvar|divvar|modvar|flushvar)::[^{}]*\}\}/gi, '')
       .replace(/\{\{(?:getvar|gettempvar|tempvar|getglobalvar)::([^{}]+)\}\}/gi, (_, name) => resolver(name))
       .replace(/\{\{(?:char|character)\}\}/gi, firstNonEmpty(character?.name, character?.data?.name, ''))
-      .replace(/\{\{(?:user|persona)\}\}/gi, firstNonEmpty(getSelectedPersona(db)?.name, ''))
+      .replace(/\{\{(?:user|persona)\}\}/gi, firstNonEmpty(getEffectiveSelectedPersona(db)?.name, ''))
       .replace(/\n{3,}/g, '\n\n')
       .trim();
     return text.slice(0, 12000);
@@ -6346,8 +6590,47 @@
     return firstNonEmpty(source?.id, `canon:${source?.hash || hashString(`${source?.kind || ''}:${source?.path || ''}:${String(source?.content || '').slice(0, 240)}`)}`);
   }
 
+  function inferCanonicalKnowledgeBoundary(entry, label, content, meta = {}, options = {}) {
+    const explicit = [
+      entry?.visibility,
+      entry?.privacy,
+      entry?.access,
+      entry?.revealState,
+      entry?.secret,
+      entry?.hidden,
+      entry?.kindHint,
+      entry?.classification,
+      meta?.kindHint,
+      meta?.roleHint,
+    ].map(value => String(value ?? '')).join('\n');
+    const text = [label, explicit, content].filter(Boolean).join('\n');
+    const explicitEnglishSecret = /\b(?:secret|hidden|spoiler|private|unrevealed)\b/i.test(text)
+      && /\b(?:unknown\s+to|does\s+not\s+know|do\s+not\s+know|cannot\s+know|must\s+not\s+surface|do\s+not\s+reveal|not\s+revealed|private\s+to|spoiler)\b/i.test(text);
+    const secretSource = /(?:비밀|秘密|숨겨|숨김|隐藏|隱|스포|🔒|警告|경고)/i.test(text) || explicitEnglishSecret;
+    const hiddenSource = /(?:원작\s*숨|원작\s*비밀|原作隐藏|原作隱藏|미공개|未公开|未公開|未揭|밝혀지지|모르는\s*내용|并未发生|未发生|unknown\s+to\s+(?:the\s+)?(?:current\s+)?(?:pov|reader|character|protagonist|user)|does\s+not\s+know\s+this|do\s+not\s+reveal|cannot\s+be\s+known|must\s+not\s+surface)/i.test(text);
+    const futureSource = looksFutureOriginalRouteText(text);
+    const explicitPrivate = /(?:private|hidden|secret|locked|unrevealed|spoiler|비공개|미공개|비밀|숨김)/i.test(explicit);
+    const knowledgeBoundary = Boolean(secretSource || hiddenSource || explicitPrivate || (options?.futureAsBoundary && futureSource));
+    const reason = [
+      secretSource ? 'secret-marker' : '',
+      hiddenSource ? 'hidden/unrevealed-marker' : '',
+      futureSource ? 'future/original-route-marker' : '',
+      explicitPrivate ? 'explicit-private-marker' : '',
+    ].filter(Boolean).join(',');
+    return { knowledgeBoundary, reason, hiddenSource, futureSource, secretSource };
+  }
+
+  function isKnowledgeBoundaryCanonicalSource(source) {
+    return Boolean(source?.meta?.knowledgeBoundary || source?.meta?.hiddenSource || source?.meta?.secretSource);
+  }
+
+  function isKnowledgeBoundaryCanonicalUnit(unit) {
+    return Boolean(unit?.knowledgeBoundary || unit?.meta?.knowledgeBoundary || unit?.meta?.hiddenSource || unit?.meta?.secretSource);
+  }
+
   function isFoundationCanonicalSource(source) {
     if (!source) return false;
+    if (isKnowledgeBoundaryCanonicalSource(source)) return false;
     const kind = String(source.kind || '');
     if (['desc', 'firstMessage', 'globalNote', 'referenceCharacter', 'referenceModule'].includes(kind)) return true;
     return Boolean(source?.meta?.constant || source?.meta?.foundation);
@@ -6358,6 +6641,8 @@
     if (kind === 'desc') return CANONICAL_PART_CAPS.desc;
     if (kind === 'firstMessage') return CANONICAL_PART_CAPS.firstMessage;
     if (kind === 'globalNote') return CANONICAL_PART_CAPS.globalNote;
+    if (isKnowledgeBoundaryCanonicalSource(source)) return CANONICAL_PART_CAPS.selective;
+    if (source?.meta?.futureSource) return CANONICAL_PART_CAPS.selective;
     if (isFoundationCanonicalSource(source)) return CANONICAL_PART_CAPS.foundation;
     if (source?.meta?.alwaysActive || source?.meta?.constant) return CANONICAL_PART_CAPS.alwaysActive;
     if (source?.meta?.selective) return CANONICAL_PART_CAPS.selective;
@@ -6417,6 +6702,41 @@
     return parts.length ? parts : [raw.slice(0, max)];
   }
 
+  function splitCanonicalTextIntoBoundaryAwareParts(text, maxChars) {
+    const max = Math.max(480, Number(maxChars || CANONICAL_PART_CAPS.default));
+    const raw = String(text || '').replace(/\r\n/g, '\n').trim();
+    if (!raw) return [];
+    const blocks = raw.split(/\n{2,}/).map(block => block.trim()).filter(Boolean);
+    if (blocks.length <= 1) return splitCanonicalTextIntoParts(raw, max);
+    const parts = [];
+    let current = '';
+    let currentFuture = false;
+    const flush = () => {
+      const textPart = current.trim();
+      if (textPart) parts.push(textPart);
+      current = '';
+      currentFuture = false;
+    };
+    blocks.forEach(block => {
+      const blockFuture = looksFutureOriginalRouteText(block);
+      if (!current) {
+        current = block;
+        currentFuture = blockFuture;
+        return;
+      }
+      const next = `${current}\n\n${block}`;
+      if (blockFuture !== currentFuture || next.length > max) {
+        flush();
+        current = block;
+        currentFuture = blockFuture;
+      } else {
+        current = next;
+      }
+    });
+    flush();
+    return parts.flatMap(part => part.length > max ? splitCanonicalTextIntoParts(part, max) : [part]);
+  }
+
   function extractCanonicalTemporalHints(source) {
     const text = [source?.label, source?.path, source?.content].filter(Boolean).join('\n');
     const years = uniqueStrings((text.match(/\b\d{3,4}\b/g) || []).filter(year => Number(year) >= 1 && Number(year) <= 9999)).slice(0, 8);
@@ -6437,12 +6757,25 @@
     if (!source || !String(source.content || '').trim()) return [];
     const baseId = canonicalSourceBaseId(source);
     const cap = canonicalPartCapForSource(source, conf);
-    const parts = splitCanonicalTextIntoParts(source.content, cap);
+    const parts = source?.meta?.futureSource
+      ? splitCanonicalTextIntoBoundaryAwareParts(source.content, cap)
+      : splitCanonicalTextIntoParts(source.content, cap);
     const temporal = extractCanonicalTemporalHints(source);
     const total = Math.max(1, parts.length);
     const ids = parts.map((part, idx) => `${baseId}:p${idx + 1}-${hashString(part).slice(0, 6)}`);
     return parts.map((part, idx) => {
       const unitId = ids[idx];
+      const sourceBoundary = isKnowledgeBoundaryCanonicalSource(source);
+      const partBoundary = inferCanonicalKnowledgeBoundary(source, source.label, part, source.meta || {}, { futureAsBoundary: false });
+      const knowledgeBoundary = Boolean(sourceBoundary || partBoundary.knowledgeBoundary);
+      const futureSource = Boolean(partBoundary.futureSource);
+      const boundaryReason = uniqueStrings([
+        sourceBoundary ? source?.meta?.boundaryReason || 'source-knowledge-boundary' : '',
+        partBoundary.reason,
+      ].filter(Boolean)).join(',');
+      const sourceAlwaysActive = Boolean(source?.meta?.alwaysActive || source?.meta?.constant);
+      const foundation = !futureSource && isFoundationCanonicalSource(source);
+      const alwaysActive = sourceAlwaysActive && !knowledgeBoundary && !futureSource;
       return {
         id: unitId,
         baseId,
@@ -6457,8 +6790,12 @@
         keys: normalizeStringArray(source.activationKeys),
         activationKeys: normalizeStringArray(source.activationKeys),
         priority: parseNumber(source.priority, 5, 0, 10),
-        foundation: isFoundationCanonicalSource(source),
-        alwaysActive: Boolean(source?.meta?.alwaysActive || source?.meta?.constant),
+        foundation,
+        alwaysActive,
+        sourceAlwaysActive,
+        knowledgeBoundary,
+        futureSource,
+        boundaryReason,
         selective: Boolean(source?.meta?.selective),
         knownBy: normalizeStringArray(source.knownBy),
         cannotKnow: normalizeStringArray(source.cannotKnow),
@@ -6504,10 +6841,16 @@
       priority: unit.priority,
       foundation: Boolean(unit.foundation),
       alwaysActive: Boolean(unit.alwaysActive),
+      sourceAlwaysActive: Boolean(unit.sourceAlwaysActive),
+      knowledgeBoundary: Boolean(unit.knowledgeBoundary),
+      futureSource: Boolean(unit.futureSource),
+      boundaryReason: unit.boundaryReason || '',
       selective: Boolean(unit.selective),
       route: unit.route || '',
       validYear: unit.validYear || '',
-      preview: String(unit.content || '').replace(/\s+/g, ' ').slice(0, 120),
+      preview: isKnowledgeBoundaryCanonicalUnit(unit)
+        ? `[knowledge-boundary redacted: ${String(unit.boundaryReason || 'locked').slice(0, 80)}]`
+        : String(unit.content || '').replace(/\s+/g, ' ').slice(0, 120),
     };
   }
 
@@ -6522,6 +6865,12 @@
     context._canonicalInjectionTrace = list.slice(-40);
   }
 
+  function canonicalAlreadyInjectedIds(context) {
+    return new Set((Array.isArray(context?._canonicalInjectionTrace) ? context._canonicalInjectionTrace : [])
+      .map(item => item?.id)
+      .filter(Boolean));
+  }
+
   function canonicalUnitQueryScore(unit, queryTerms = [], queryText = '') {
     const query = String(queryText || '').toLowerCase();
     const terms = Array.isArray(queryTerms) ? queryTerms.map(term => String(term || '').toLowerCase()).filter(Boolean) : [];
@@ -6531,8 +6880,13 @@
     let score = clampFloat(unit.priority, 5, 0, 10) * 8;
     if (unit.foundation) score += 180;
     if (unit.alwaysActive) score += 120;
+    if (isKnowledgeBoundaryCanonicalUnit(unit)) score -= 160;
     if (unit.kind === 'firstMessage') score += 60;
     if (unit.selective) score -= 12;
+    const labelName = String(unit.label || '').trim().toLowerCase();
+    if (labelName && labelName.length >= 2 && (query.includes(labelName) || terms.some(term => term.includes(labelName) || labelName.includes(term)))) score += 120;
+    if (/身份|角色设定|角色設定|신상|프로필|character\s*sheet|oc\s+角色/i.test(unit.content || '')) score += 72;
+    if (/성별|性别|性別|年龄|年齡|나이|所属|所屬|소속|门派|門派|身份\/阶级|身份\/階級|role|affiliation/i.test(unit.content || '')) score += 44;
     keys.forEach(key => {
       if (query.includes(key) || terms.some(term => key.includes(term) || term.includes(key))) score += 46;
     });
@@ -6554,6 +6908,7 @@
       + (unit.foundation ? 800 : 0)
       + (unit.alwaysActive ? 420 : 0)
       + (unit.kind === 'firstMessage' ? 160 : 0)
+      - (isKnowledgeBoundaryCanonicalUnit(unit) ? 900 : 0)
       + clampFloat(unit.priority, 5, 0, 10) * 12
       - ((unit.part?.index || 1) - 1) * 0.01;
   }
@@ -6567,6 +6922,8 @@
       unit.priority !== undefined ? `priority="${unit.priority}"` : '',
       unit.foundation ? 'foundation="true"' : '',
       unit.alwaysActive ? 'always="true"' : '',
+      unit.sourceAlwaysActive && !unit.alwaysActive ? 'sourceAlways="true"' : '',
+      unit.knowledgeBoundary ? `knowledgeBoundary="${xmlAttr(unit.boundaryReason || 'locked')}"` : '',
       unit.route ? `route="${xmlAttr(unit.route)}"` : '',
       unit.validYear ? `validYear="${xmlAttr(unit.validYear)}"` : '',
       section ? `section="${xmlAttr(section)}"` : '',
@@ -6588,6 +6945,8 @@
     const headerCost = Number(options.headerCost || 0);
     const limit = Math.max(1, Number(options.limit || 20));
     const allowSibling = options.allowSibling !== false;
+    const allowFutureSource = options.allowFutureSource !== false;
+    const allowKnowledgeBoundary = options.allowKnowledgeBoundary === true;
     const allUnits = Array.isArray(options.allUnits) && options.allUnits.length
       ? options.allUnits
       : (Array.isArray(candidates) ? candidates.map(item => item.unit) : []);
@@ -6600,6 +6959,8 @@
     let used = headerCost;
     const tryAdd = (unit, score = 0, reason = '') => {
       if (!unit || selectedIds.has(unit.id) || selected.length >= limit) return false;
+      if (isKnowledgeBoundaryCanonicalUnit(unit) && !allowKnowledgeBoundary) return false;
+      if (unit.futureSource && !allowFutureSource) return false;
       const line = canonicalUnitLine(unit, reason || options.section || 'canonical');
       const nextLen = line.length + 2;
       if (max > 0 && used + nextLen > max && selected.length) return false;
@@ -6630,9 +6991,54 @@
     return unit?.id || `${unit?.baseId || ''}:${unit?.part?.index || 0}`;
   }
 
-  function addCanonicalStageCandidates(target, seen, units, queryTerms, queryText, reason, minScore, bias = 0, predicate = null) {
+  function canInjectKnowledgeBoundaryCanonicalUnit(unit, queryText = '', futureAccessText = queryText) {
+    if (unit?.futureSource && !hasFutureOriginalAccess(futureAccessText)) return false;
+    if (!isKnowledgeBoundaryCanonicalUnit(unit)) return true;
+    const query = String(queryText || '').toLowerCase();
+    if (!query) return false;
+    if (!hasExplicitKnowledgeBoundaryIntent(query)) return false;
+    const keys = uniqueStrings([
+      unit.label,
+      unit.path,
+      unit.kind,
+      ...(unit.activationKeys || []),
+      ...(unit.subjectHints || []),
+    ].map(value => String(value || '').toLowerCase()).filter(value => value.length >= 2));
+    return keys.some(key => query.includes(key));
+  }
+
+  function hasExplicitKnowledgeBoundaryIntent(text) {
+    return /(?:비밀|숨겨|숨김|미공개|스포|밝혀|공개|누설|유출|reveal|secret|hidden|spoiler|unrevealed|unknown\s+truth|cannot\s+know|do\s+not\s+reveal)/i.test(String(text || ''));
+  }
+
+  function hasExplicitFutureOriginalIntent(text) {
+    return /(?:원작|원래\s*전개|원래\s*루트|미래|앞으로의\s*(?:전개|사건|일|미래)|장차|훗날|후일|스포|분기|루트|future|original\s+(?:plot|route|timeline)|spoiler|foreshadow|later\s+event)/i.test(String(text || ''));
+  }
+
+  function hasFutureOriginalAccess(text) {
+    const source = String(text || '');
+    return hasExplicitFutureOriginalIntent(source) || looksFutureOriginalRouteText(source);
+  }
+
+  function futureOriginalAccessText(context = null, fallback = '') {
+    const messages = Array.isArray(context?.messages) ? context.messages : [];
+    const recent = messages
+      .slice(-8)
+      .filter(msg => msg && (msg.role === 'user' || msg.role === 'assistant' || msg.role === 'char'))
+      .map(msg => messageText(msg))
+      .join('\n');
+    return [getUserInput(messages), recent, fallback].filter(Boolean).join('\n');
+  }
+
+  function knowledgeBoundaryIntentText(context = null, fallback = '') {
+    const currentUser = getUserInput(context?.messages || []);
+    return String(currentUser || fallback || '');
+  }
+
+  function addCanonicalStageCandidates(target, seen, units, queryTerms, queryText, reason, minScore, bias = 0, predicate = null, boundaryQueryText = queryText, futureAccessText = boundaryQueryText) {
     (Array.isArray(units) ? units : []).forEach(unit => {
       if (!unit || (predicate && !predicate(unit))) return;
+      if (!canInjectKnowledgeBoundaryCanonicalUnit(unit, boundaryQueryText, futureAccessText)) return;
       const score = canonicalUnitQueryScore(unit, queryTerms, queryText);
       if (score < minScore && !(unit.foundation || unit.alwaysActive)) return;
       const key = canonicalCandidateKey(unit);
@@ -6663,6 +7069,8 @@
     const candidates = [];
     const seen = new Set();
     const sourceUnits = Array.isArray(units) ? units : [];
+    const boundaryQueryText = knowledgeBoundaryIntentText(context, '');
+    const futureAccessText = futureOriginalAccessText(context, '');
     addCanonicalStageCandidates(
       candidates,
       seen,
@@ -6672,13 +7080,15 @@
       'foundation-always',
       0,
       1000,
-      unit => unit.foundation || unit.alwaysActive || unit.kind === 'firstMessage'
+      unit => unit.foundation || unit.alwaysActive || unit.kind === 'firstMessage',
+      boundaryQueryText,
+      futureAccessText
     );
-    addCanonicalStageCandidates(candidates, seen, sourceUnits, queryTerms, queryText, 'trigger', 58, 700);
+    addCanonicalStageCandidates(candidates, seen, sourceUnits, queryTerms, queryText, 'trigger', 58, 700, null, boundaryQueryText, futureAccessText);
     const bridgeText = buildActiveStateBridgeText(state, context, queryTerms);
     if (bridgeText) {
       const bridgeTerms = extractQueryTerms(bridgeText).slice(0, 100);
-      addCanonicalStageCandidates(candidates, seen, sourceUnits, bridgeTerms, bridgeText, 'active-memory-bridge', 62, 420);
+      addCanonicalStageCandidates(candidates, seen, sourceUnits, bridgeTerms, bridgeText, 'active-memory-bridge', 62, 420, null, boundaryQueryText, futureAccessText);
     }
     const recursiveText = candidates
       .slice(0, 10)
@@ -6686,7 +7096,7 @@
       .join('\n');
     if (recursiveText) {
       const recursiveTerms = extractQueryTerms(recursiveText).slice(0, 120);
-      addCanonicalStageCandidates(candidates, seen, sourceUnits, recursiveTerms, recursiveText, 'recursive', 72, 180);
+      addCanonicalStageCandidates(candidates, seen, sourceUnits, recursiveTerms, recursiveText, 'recursive', 72, 180, null, boundaryQueryText, futureAccessText);
     }
     return candidates;
   }
@@ -6966,6 +7376,10 @@
       const stableId = slug(firstNonEmpty(source.id, `${kind}:${path}`));
       if (!stableId) return;
       const hash = String(source.hash || hashString(`${kind}:${path}:${text}`));
+      const meta = source.meta || {};
+      const knowledgeBoundary = Boolean(source.knowledgeBoundary || meta.knowledgeBoundary || meta.hiddenSource || meta.secretSource);
+      const futureSource = Boolean(source.futureSource || meta.futureSource || looksFutureOriginalRouteText([source.label, source.name, source.path, text].filter(Boolean).join('\n')));
+      const sourceAlwaysActive = Boolean(source.alwaysActive);
       out.push({
         id: stableId,
         kind,
@@ -6981,10 +7395,14 @@
         knownBy: normalizeStringArray(source.knownBy).slice(0, 32),
         cannotKnow: normalizeStringArray(source.cannotKnow).slice(0, 32),
         scope: String(source.scope || ''),
-        priority: parseNumber(source.priority, source.alwaysActive ? 8 : 5, 0, 10),
-        alwaysActive: Boolean(source.alwaysActive),
+        priority: parseNumber(source.priority, sourceAlwaysActive ? 8 : 5, 0, 10),
+        alwaysActive: sourceAlwaysActive && !knowledgeBoundary,
+        sourceAlwaysActive,
+        knowledgeBoundary,
+        futureSource,
+        boundaryReason: String(source.boundaryReason || meta.boundaryReason || (futureSource ? 'future/original-route-marker' : '')).slice(0, 160),
         sourceRank: parseNumber(source.sourceRank, sourceRankForPsycheSourceKind(kind), 0, 100),
-        meta: source.meta || {},
+        meta,
       });
     };
 
@@ -7003,6 +7421,9 @@
         scope: source.scope,
         priority: source.priority,
         alwaysActive: Boolean(source?.meta?.alwaysActive || source?.meta?.constant || source?.kind === 'desc' || source?.kind === 'firstMessage'),
+        knowledgeBoundary: isKnowledgeBoundaryCanonicalSource(source),
+        futureSource: Boolean(source?.meta?.futureSource),
+        boundaryReason: source?.meta?.boundaryReason || '',
         sourceRank: sourceRankForPsycheSourceKind(source.kind),
         meta: source.meta || {},
       });
@@ -7079,6 +7500,14 @@
       const chunkText = text.slice(start, end).trim();
       if (chunkText) {
         const hash = hashString(chunkText);
+        const chunkBoundary = inferPsycheUnitBoundary({
+          name: source.label,
+          sourceLabel: source.label,
+          sourcePath: source.path,
+          visibility: source.knowledgeBoundary ? 'knowledge-boundary' : '',
+          knowledgeBoundary: source.knowledgeBoundary,
+          boundaryReason: source.boundaryReason,
+        }, chunkText);
         chunks.push({
           id: `${source.id}:chunk:${chunks.length}:${hash}`,
           sourceId: source.id,
@@ -7093,7 +7522,11 @@
           rangeHash: hashString(`${source.id}:${start}:${end}:${source.hash}`),
           priority: source.priority,
           sourceRank: source.sourceRank,
-          alwaysActive: source.alwaysActive,
+          alwaysActive: source.alwaysActive && !chunkBoundary.knowledgeBoundary,
+          sourceAlwaysActive: source.sourceAlwaysActive,
+          knowledgeBoundary: Boolean(source.knowledgeBoundary || chunkBoundary.knowledgeBoundary),
+          futureSource: Boolean(chunkBoundary.futureSource),
+          boundaryReason: uniqueStrings([source.boundaryReason, chunkBoundary.reason].filter(Boolean)).join(',').slice(0, 160),
         });
       }
       if (end >= text.length) break;
@@ -7248,6 +7681,14 @@
       sourceHash: source?.hash || '',
       chunkId: chunk.id,
       chunkHash: chunk.hash,
+      knowledgeBoundary: Boolean(unit?.knowledgeBoundary || chunk?.knowledgeBoundary || source?.knowledgeBoundary),
+      futureSource: Boolean(unit?.futureSource || chunk?.futureSource),
+      boundaryReason: uniqueStrings([unit?.boundaryReason, chunk?.boundaryReason, source?.boundaryReason].filter(Boolean)).join(','),
+      visibility: firstNonEmpty(
+        unit?.visibility,
+        (unit?.knowledgeBoundary || chunk?.knowledgeBoundary || source?.knowledgeBoundary) ? 'knowledge-boundary' : '',
+        (unit?.futureSource || chunk?.futureSource) ? 'future-route' : ''
+      ),
       sourceRank: unit?.sourceRank ?? chunk.sourceRank,
       priority: unit?.priority ?? chunk.priority,
       sourceRefs: uniqueStrings(normalizeStringArray(unit?.sourceRefs).concat([chunk.sourcePath, chunk.sourceId, chunk.id]).filter(Boolean)),
@@ -7255,6 +7696,51 @@
       lastSeenTurn: turn,
       updatedAt: nowIso(),
     }, turn)).filter(Boolean);
+  }
+
+  function fallbackPsycheUnitsFromSourceChunk(chunk, source, text, turn) {
+    const body = String(text || '').trim();
+    if (!body) return [];
+    const label = firstNonEmpty(chunk?.sourceLabel, source?.label, chunk?.sourceKind, 'canonical source');
+    const boundary = Boolean(chunk?.knowledgeBoundary || source?.knowledgeBoundary || source?.meta?.knowledgeBoundary || source?.meta?.hiddenSource || source?.meta?.secretSource);
+    const futureSource = Boolean(chunk?.futureSource);
+    const type = boundary ? 'secret' : 'lore';
+    const keywords = uniqueStrings([
+      label,
+      chunk?.sourceKind,
+      chunk?.sourcePath,
+      ...extractQueryTerms([label, body.slice(0, 1600)].join('\n')).slice(0, 24),
+    ]).slice(0, 32);
+    return [normalizePsycheUnit({
+      id: `psyche:fallback:${chunk?.hash || hashString(body).slice(0, 12)}`,
+      type,
+      name: label,
+      summary: summarizeCanonicalContent(body, 1200),
+      keywords,
+      aliases: normalizeStringArray(source?.activationKeys).slice(0, 16),
+      knownBy: normalizeStringArray(source?.knownBy),
+      cannotKnow: boundary ? uniqueStrings(normalizeStringArray(source?.cannotKnow).concat(['current POV unless revealed'])) : normalizeStringArray(source?.cannotKnow),
+      priority: chunk?.priority,
+      importance: chunk?.priority,
+      confidence: boundary ? 0.68 : 0.72,
+      canonLevel: 'established',
+      sourceId: chunk?.sourceId,
+      sourceKind: chunk?.sourceKind,
+      sourcePath: chunk?.sourcePath,
+      sourceLabel: chunk?.sourceLabel,
+      sourceHash: source?.hash || '',
+      chunkId: chunk?.id,
+      chunkHash: chunk?.hash,
+      knowledgeBoundary: boundary,
+      futureSource,
+      boundaryReason: uniqueStrings([chunk?.boundaryReason, source?.boundaryReason, futureSource ? 'future/original-route-marker' : ''].filter(Boolean)).join(','),
+      sourceRank: chunk?.sourceRank,
+      sourceRefs: uniqueStrings([chunk?.sourcePath, chunk?.sourceId, chunk?.id].filter(Boolean)),
+      visibility: boundary ? 'knowledge-boundary' : (futureSource ? 'future-route' : 'canonical'),
+      createdTurn: turn,
+      lastSeenTurn: turn,
+      updatedAt: nowIso(),
+    }, turn)].filter(Boolean);
   }
 
   function mergePsycheUnits(state, units) {
@@ -7317,10 +7803,11 @@
           '</source_chunk>',
         ].join('\n') },
       ];
-      const promptTrace = formatPromptTraceForRunLog(messages, conf, Math.floor(MAX_RUN_LOG_TEXT_CHARS / 2));
+      const promptTrace = formatPromptTraceForRunLog(messages, conf, 5000, true);
       const startedAt = Date.now();
+      let raw = '';
       try {
-        const raw = await callAgent(agentConf, messages);
+        raw = await callAgent(agentConf, messages);
         const parsed = extractJsonObject(raw);
         if (!parsed) throw new Error('json-parse-failed');
         const units = normalizePsycheIngestUnits(parsed, chunk, source, state.turn);
@@ -7336,6 +7823,23 @@
           agent: stateCommitAgentInfo(agent, agentConf),
         });
       } catch (err) {
+        const fallbackUnits = fallbackPsycheUnitsFromSourceChunk(chunk, source, text, state.turn);
+        if (/json-parse-failed/i.test(String(err.message || '')) && fallbackUnits.length) {
+          mergePsycheUnits(state, fallbackUnits);
+          markPsycheChunk(state, chunk.id, true, '', conf);
+          results.push({
+            id: chunk.id,
+            sourceId: chunk.sourceId,
+            units: fallbackUnits.length,
+            ms: Date.now() - startedAt,
+            fallback: true,
+            warning: 'json-parse-failed:fallback-canonical-unit',
+            prompt: promptTrace,
+            rawOutput: clipRunLogText(raw, Math.floor(MAX_RUN_LOG_TEXT_CHARS / 2)),
+            agent: stateCommitAgentInfo(agent, agentConf),
+          });
+          continue;
+        }
         markPsycheChunk(state, chunk.id, false, err.message, conf);
         results.push({
           id: chunk.id,
@@ -7417,7 +7921,9 @@
   }
 
   function canonicalSourceToLoreEntry(source, turn) {
-    const alwaysActive = Boolean(source?.meta?.alwaysActive || source?.kind === 'desc' || source?.kind === 'firstMessage');
+    const knowledgeBoundary = isKnowledgeBoundaryCanonicalSource(source);
+    const sourceAlwaysActive = Boolean(source?.meta?.alwaysActive || source?.kind === 'desc' || source?.kind === 'firstMessage');
+    const alwaysActive = sourceAlwaysActive && !knowledgeBoundary;
     const priority = parseNumber(source.priority, 5, 0, 10);
     const boostedPriority = alwaysActive ? Math.max(8, priority) : priority;
     return {
@@ -7432,6 +7938,10 @@
       priority: boostedPriority,
       importance: boostedPriority,
       canonLevel: 'established',
+      visibility: knowledgeBoundary ? 'knowledge-boundary' : '',
+      knowledgeBoundary,
+      boundaryReason: source?.meta?.boundaryReason || '',
+      sourceAlwaysActive,
       alwaysActive,
       activationMode: alwaysActive ? 'always' : (source?.meta?.selective ? 'selective' : 'scored'),
       knownBy: normalizeStringArray(source.knownBy),
@@ -7871,7 +8381,7 @@
           'Return compact JSON only.',
         ].join('\n') },
       ];
-      const promptTrace = formatPromptTraceForRunLog(messages, conf, Math.floor(MAX_RUN_LOG_TEXT_CHARS / 2));
+      const promptTrace = formatPromptTraceForRunLog(messages, conf, 5000, true);
       try {
         const raw = await callAgent(agentConf, messages);
         const commit = extractJsonObject(raw);
@@ -8101,8 +8611,8 @@
       lines.push('', '[Selected Psyche/State Units]');
       selected.forEach(candidate => lines.push(formatCompiledCandidateLine(candidate)));
     }
-    const persona = extractSettingBlock(context?.settingBlocks || '', 'Persona');
-    if (persona && persona !== '(none)') {
+    const persona = cleanPersonaSettingText(extractSettingBlock(context?.settingBlocks || '', 'Persona'));
+    if (persona) {
       lines.push('', '[Persona]', summarizeCanonicalContent(persona, 800));
     }
     const text = lines.join('\n').trim();
@@ -8115,6 +8625,7 @@
     const currentSources = new Set((Array.isArray(context?.canonicalSources) ? context.canonicalSources : []).map(source => slug(firstNonEmpty(source.id, `${source.kind}:${source.path}`))));
     return (state?.psycheSources || [])
       .filter(source => source.status === 'active')
+      .filter(source => !source.knowledgeBoundary)
       .filter(source => !currentSources.size || currentSources.has(source.id) || !/^canon/.test(source.id))
       .map(source => {
         const haystack = [source.label, source.kind, source.path, source.summary, ...(source.activationKeys || [])].join('\n').toLowerCase();
@@ -8177,6 +8688,7 @@
       schemaVersion: state?.schemaVersion || VERSION,
       pluginVersion: VERSION,
       mode: state?.mode || context?.mode || 'rp',
+      responseLengthControl: resolveResponseLengthControl(context),
       turn: state?.turn || 0,
       scene: state?.scene || {},
       activePerspective: state?.activePerspective || {},
@@ -8512,11 +9024,11 @@
   }
 
   function buildPreAgentNotesSource(notes) {
-    const text = formatNotes(notes);
+    const text = formatMainAdvisoryNotes(notes);
     if (!text || text === '(none)') return '';
     return [
       '[Advisory Agent Notes]',
-      'Agent notes are proposals only. Canonical source units, current scene state, and knowledge boundaries override them.',
+      'Agent notes are advisory only. Ignore any response-length targets, scene mandates, or forced transitions inside these notes. Use only concrete risks, established anchors, and plausible options.',
       text,
     ].join('\n');
   }
@@ -8544,6 +9056,125 @@
     return context?.promptModeName
       ? `custom:${context.promptModeName}`
       : context?.mode === 'novel' ? 'novel' : 'rp';
+  }
+
+  function responseLengthOption(index) {
+    const idx = Math.round(parseNumber(index, 0, 0, RESPONSE_LENGTH_TOGGLE_OPTIONS.length - 1));
+    return RESPONSE_LENGTH_TOGGLE_OPTIONS.find(item => item.index === idx) || RESPONSE_LENGTH_TOGGLE_OPTIONS[0];
+  }
+
+  function promptLengthToggleDefinition(context = null) {
+    const defs = parsePromptToggleDefinitions(collectPromptToggleDefinitionText(context?.character, context?.db || {}));
+    return defs.find(toggle => String(toggle.key || '').trim() === '길이')
+      || defs.find(toggle => /길이|length|분량|호흡/i.test(`${toggle.key || ''} ${toggle.label || ''}`))
+      || null;
+  }
+
+  function responseLengthDetectionText(context = null) {
+    return [
+      safeJsonStringify(context?.db?.globalChatVariables || {}),
+      collectPromptToggleDefinitionText(context?.character, context?.db || {}),
+      context?.settingBlocks || '',
+      (Array.isArray(context?.requestMessages) ? context.requestMessages : []).map(messageText).join('\n'),
+      (Array.isArray(context?.messages) ? context.messages : []).map(message => message?.content || '').join('\n'),
+    ].filter(Boolean).join('\n').slice(0, 120000);
+  }
+
+  function inferResponseLengthIndexFromText(text) {
+    const raw = String(text || '');
+    if (!raw.trim()) return null;
+    const usableLines = raw.split(/\r?\n/)
+      .map(line => line.trim())
+      .filter(line => line && !isMalformedLengthToggleResidueLine(line));
+    for (const line of usableLines) {
+      const direct = line.match(/(?:^|[{"'\s,])(?:toggle_길이|길이|toggle_length|response[_\s-]*length|length)["'\s:=]+([0-7])\b/i);
+      if (direct) return Number(direct[1]);
+    }
+    const normalized = usableLines.join(' ').replace(/\s+/g, ' ');
+    const instructionMap = [
+      [7, /write\s+at\s+least\s+9000\s+words/i],
+      [6, /write\s+at\s+least\s+5000\s+words/i],
+      [5, /write\s+at\s+least\s+3200\s+words/i],
+      [4, /write\s+at\s+least\s+2400\s+words/i],
+      [3, /write\s+at\s+least\s+800\s+words/i],
+      [2, /write\s+maximum\s+400\s+words|maximum\s+400\s+words/i],
+      [1, /write\s+maximum\s+200\s+words|maximum\s+200\s+words/i],
+    ];
+    const found = instructionMap.find(([, pattern]) => pattern.test(normalized));
+    return found ? found[0] : null;
+  }
+
+  function isMalformedLengthToggleResidueLine(line) {
+    const raw = String(line || '');
+    if (!raw) return false;
+    const mentionsLengthInstruction = /write\s+(?:at\s+least|maximum)\s+\d+\s+words/i.test(raw);
+    const hasTemplateResidue = /\{\{|\}\}|if_pure|getglobalvar::toggle_길이|getglobalvar::length|toggle_길이/i.test(raw);
+    const hasInactiveComparisonResidue = /\b0\s*=\s*[1-7]\s*\}\}\}\}/.test(raw) || /\b0\s*=\s*[1-7]\b/.test(raw);
+    return mentionsLengthInstruction && (hasTemplateResidue || hasInactiveComparisonResidue);
+  }
+
+  function hasMalformedLengthToggleResidue(text) {
+    return String(text || '').split(/\r?\n/).some(isMalformedLengthToggleResidueLine);
+  }
+
+  function resolveResponseLengthControl(context = null, conf = null) {
+    const character = context?.character || null;
+    const db = context?.db || {};
+    const chat = context?.currentChat || null;
+    const raw = firstNonEmpty(
+      resolveCanonicalVariable('toggle_길이', character, db, chat, conf),
+      resolveCanonicalVariable('길이', character, db, chat, conf),
+      resolveCanonicalVariable('toggle_length', character, db, chat, conf),
+      resolveCanonicalVariable('length', character, db, chat, conf)
+    );
+    const detectionText = responseLengthDetectionText(context);
+    const inferredIndex = inferResponseLengthIndexFromText(detectionText);
+    const malformedResidue = hasMalformedLengthToggleResidue(detectionText);
+    const rawText = String(raw ?? '').trim();
+    if (!rawText && inferredIndex === null) return { active: false, index: 0, raw: '', option: responseLengthOption(0), source: '', malformedResidue };
+    const index = rawText
+      ? Math.round(parseNumber(rawText, 0, 0, RESPONSE_LENGTH_TOGGLE_OPTIONS.length - 1))
+      : Math.round(parseNumber(inferredIndex, 0, 0, RESPONSE_LENGTH_TOGGLE_OPTIONS.length - 1));
+    const option = responseLengthOption(index);
+    const definition = promptLengthToggleDefinition(context);
+    const selected = definition?.options?.[index] || option.label;
+    const hasGlobalValue = Object.prototype.hasOwnProperty.call(db?.globalChatVariables || {}, 'toggle_길이');
+    return {
+      active: index > 0,
+      index,
+      raw: rawText || String(inferredIndex ?? ''),
+      source: hasGlobalValue ? 'globalChatVariables.toggle_길이' : rawText ? 'resolved-variable' : 'prompt-text',
+      malformedResidue,
+      key: definition?.key || '길이',
+      label: definition?.label || '이야기의 깊이',
+      selected,
+      option: {
+        ...option,
+        label: selected || option.label,
+      },
+    };
+  }
+
+  function buildResponseLengthControlBlock(context = null, conf = null, compact = false) {
+    const control = resolveResponseLengthControl(context, conf);
+    if (!control.active && !control.malformedResidue) return '';
+    const option = control.option || responseLengthOption(control.index);
+    if (!control.active && control.malformedResidue) {
+      return [
+        '[Response Length Control]',
+        'Detected inactive or malformed host length-toggle residue.',
+        'Treat the response length toggle as inactive. Ignore unresolved conditional fragments such as `0=6}}}}Write at least 5000 words` or stale branch text.',
+        'Do not expand solely because a broken conditional branch remains visible in the host prompt.',
+      ].join('\n');
+    }
+    const lines = [
+      '[Response Length Control]',
+      `Detected: toggle_길이=${control.index} (${option.label} / ${option.englishLabel}) from ${control.source || 'runtime variable'}.`,
+      option.instruction ? `Main prompt equivalent: ${option.instruction}` : '',
+      compact ? `Agent scale: ${option.scale}` : `Agent scale guidance: ${option.scale}`,
+      'Advisory only: use this to scale note breadth, pacing, front count, and continuity detail. Do not override a stronger host prompt, user instruction, or absent/disabled length toggle.',
+    ];
+    return lines.filter(Boolean).join('\n');
   }
 
   function resolveMainInjectionBudget(context = null, budget = 0, conf = null) {
@@ -8622,13 +9253,20 @@
     return String(text || '').replace(/\n?\[Canonical Lore Candidates\][\s\S]*$/i, '').trim();
   }
 
+  function stripSourceHeavySectionsFromSettingBlocks(text) {
+    return String(text || '')
+      .replace(/\n?\[Canonical Lore Candidates\][\s\S]*?(?=\n\n\[[^\]]+\]|$)/gi, '')
+      .replace(/\n?\[Character\]\n[\s\S]*?(?=\n\n\[[^\]]+\]|$)/gi, '')
+      .trim();
+  }
+
   function activeLoreBridgeQueryText(context, notes = []) {
     const messages = Array.isArray(context?.messages) ? context.messages : [];
     return [
       context?.mode || '',
       getUserInput(messages),
       messages.slice(-6).map(item => item?.content || '').join('\n'),
-      stripLoreCandidateSectionFromSettingBlocks(context?.settingBlocks || ''),
+      stripSourceHeavySectionsFromSettingBlocks(context?.settingBlocks || ''),
       includedAgentNotes(notes).map(note => note?.text || '').join('\n').slice(0, 4000),
     ].filter(Boolean).join('\n');
   }
@@ -8690,6 +9328,9 @@
     const sources = Array.isArray(context?.canonicalSources) ? context.canonicalSources : [];
     const queryText = activeLoreBridgeQueryText(context, notes);
     const queryTerms = extractQueryTerms(queryText).slice(0, 80);
+    const boundaryQueryText = knowledgeBoundaryIntentText(context, '');
+    const allowKnowledgeBoundary = hasExplicitKnowledgeBoundaryIntent(boundaryQueryText);
+    const allowFutureSource = hasFutureOriginalAccess(futureOriginalAccessText(context, ''));
     const seen = new Set();
     return sources
       .map((source, index) => ({
@@ -8698,6 +9339,8 @@
         score: sourceActivationHitScore(source, queryTerms, queryText),
       }))
       .filter(item => isActiveLoreBridgeSource(item.source, queryTerms, queryText))
+      .filter(item => allowKnowledgeBoundary || !isKnowledgeBoundaryCanonicalSource(item.source))
+      .filter(item => allowFutureSource || !item.source?.meta?.futureSource)
       .filter(({ source }) => {
         const key = source?.hash || source?.path || `${source?.kind || ''}:${String(source?.content || '').slice(0, 140)}`;
         if (!key || seen.has(key)) return false;
@@ -8714,13 +9357,17 @@
     const compact = max <= 1200;
     const queryText = activeLoreBridgeQueryText(context, notes);
     const queryTerms = extractQueryTerms(queryText).slice(0, 80);
+    const boundaryQueryText = knowledgeBoundaryIntentText(context, '');
+    const allowKnowledgeBoundary = hasExplicitKnowledgeBoundaryIntent(boundaryQueryText);
+    const allowFutureSource = hasFutureOriginalAccess(futureOriginalAccessText(context, ''));
     const header = [
       '[Active Canonical Bridge]',
       compact
-        ? 'Current-turn canonical source parts. Prefer these over unrelated new extras. Do not reveal labels.'
+        ? 'Current-turn canonical source parts. Prefer these over unrelated insertions. Do not reveal labels.'
         : 'Current-turn canonical source parts. Use as evidence for lore, cast, places, and fronts when they fit. State and agent notes may help selection but do not override these sources.',
     ];
-    const units = buildCanonicalUnits(context, conf);
+    const injectedIds = canonicalAlreadyInjectedIds(context);
+    const units = buildCanonicalUnits(context, conf).filter(unit => !injectedIds.has(unit.id));
     const candidates = buildCanonicalStageCandidates(
       units.filter(unit => unit.kind !== 'desc'),
       queryTerms,
@@ -8732,6 +9379,8 @@
       limit: compact ? 4 : 10,
       section: 'active-canonical',
       allowSibling: true,
+      allowKnowledgeBoundary,
+      allowFutureSource,
       allUnits: units,
     });
     if (selected.length) {
@@ -8739,7 +9388,7 @@
       return trimBriefingBlockToBudget(header.concat(selected.map(item => item.line)).join('\n'), max);
     }
 
-    if (state) {
+    if (state && !canonicalAlreadyInjectedIds(context).size) {
       const profile = { ...AGENT_RETRIEVAL_PROFILE.main, kinds: ['lore', 'knowledge', 'memory', 'worldFront', 'character', 'relationship', 'secret'], limit: 16 };
       const ranked = rankStateCandidates(state, queryTerms, profile, context)
         .filter(candidate => candidate.path.startsWith('psycheUnits.') || candidate.kind === 'lore' || candidate.activeLore || isMustCarryCandidate(candidate));
@@ -8762,7 +9411,12 @@
       '[Eros Tower Control Floor]',
       `[Current Writing Mode]\n${currentWritingModeLabel(context)}`,
     ];
+    const lengthControl = buildResponseLengthControlBlock(context, conf, max <= 1600);
+    if (lengthControl) lines.push(lengthControl);
     const units = buildCanonicalUnits(context, conf);
+    const boundaryQueryText = knowledgeBoundaryIntentText(context, '');
+    const allowKnowledgeBoundary = hasExplicitKnowledgeBoundaryIntent(boundaryQueryText);
+    const allowFutureSource = hasFutureOriginalAccess(futureOriginalAccessText(context, ''));
     const queryText = [
       getUserInput(context?.messages || []),
       (Array.isArray(context?.messages) ? context.messages : []).slice(-4).map(item => item.content).join('\n'),
@@ -8770,6 +9424,7 @@
     const queryTerms = extractQueryTerms(queryText).slice(0, 60);
     const canonicalCandidates = units
       .filter(unit => unit.foundation || unit.alwaysActive || unit.kind === 'firstMessage')
+      .filter(unit => canInjectKnowledgeBoundaryCanonicalUnit(unit, boundaryQueryText, futureOriginalAccessText(context, '')))
       .map(unit => ({
         unit,
         score: canonicalUnitQueryScore(unit, queryTerms, queryText),
@@ -8783,6 +9438,8 @@
       limit: max <= 1600 ? 4 : 8,
       section: 'canonical-foundation',
       allowSibling: true,
+      allowKnowledgeBoundary,
+      allowFutureSource,
       allUnits: units,
     });
     if (selected.length) {
@@ -8791,7 +9448,7 @@
     }
 
     const remaining = max - lines.join('\n').length;
-    if (state && remaining >= 420) {
+    if (state && remaining >= 420 && !selected.length) {
       const floorSources = selectPsycheSourceFallbacks(state, context, buildRetrievalQuery(context || { messages: [] }, [], []), 4)
         .filter(source => source.alwaysActive || /desc|firstmessage|persona|author/i.test(source.kind));
       if (floorSources.length) {
@@ -8858,6 +9515,7 @@
     const signature = buildRecallQuerySignature(queryTerms, context);
     return collectStateCandidates(state)
       .filter(candidate => !profile?.kinds || profile.kinds.includes(candidate.kind))
+      .filter(candidate => canUseFutureOriginalCandidate(candidate, context))
       .map(candidate => {
         const activeLore = candidate.kind === 'lore' && isActiveLoreItemForQuery(candidate.item, context, queryTerms);
         const enriched = { ...candidate, activeLore };
@@ -8870,6 +9528,28 @@
         };
       })
       .sort((a, b) => b.score - a.score);
+  }
+
+  function canUseFutureOriginalCandidate(candidate, context = null) {
+    if (!isFutureOriginalCandidate(candidate)) return true;
+    return hasFutureOriginalAccess(futureOriginalAccessText(context, ''));
+  }
+
+  function isFutureOriginalCandidate(candidate) {
+    const item = candidate?.item || {};
+    const text = [
+      item.futureSource ? 'future-source' : '',
+      item.visibility,
+      item.boundaryReason,
+      item.name,
+      item.summary,
+      item.sourceLabel,
+      item.sourcePath,
+      ...(Array.isArray(item.sourceRefs) ? item.sourceRefs : []),
+      ...(Array.isArray(item.tags) ? item.tags : []),
+      ...(Array.isArray(item.keywords) ? item.keywords : []),
+    ].filter(Boolean).join('\n');
+    return Boolean(item.futureSource || /future-route|future\/original-route/i.test(text) || looksFutureOriginalRouteText(text));
   }
 
   function buildRecallQuerySignature(queryTerms, context = null) {
@@ -9050,10 +9730,13 @@
   }
 
   function knowledgeBoundaryPenalty(candidate, state) {
+    const item = candidate?.item || {};
+    const visibility = String(item.visibility || item.canonLevel || '').toLowerCase();
+    if (item.knowledgeBoundary || visibility.includes('knowledge-boundary')) return -140;
+    if ((visibility.includes('private') || visibility.includes('hidden')) && candidate.kind !== 'secret') return -120;
     const perspective = normalizeActivePerspective(state?.activePerspective);
     const present = perspective.protectedNames.map(item => item.toLowerCase());
     if (!present.length) return 0;
-    const item = candidate?.item || {};
     const cannotKnow = uniqueStrings([]
       .concat(normalizeStringArray(item.cannotKnow))
       .concat(normalizeStringArray(item.cannotKnowers))
@@ -9069,8 +9752,6 @@
       const suspecters = normalizeStringArray(item.suspecters);
       if (suspecters.length && nameListIntersects(suspecters, present)) return -6;
     }
-    const visibility = String(item.visibility || item.canonLevel || '').toLowerCase();
-    if ((visibility.includes('private') || visibility.includes('hidden')) && candidate.kind !== 'secret') return -10;
     return 0;
   }
 
@@ -9319,6 +10000,7 @@
   function selectCandidates(candidates, limit, budget) {
     const selected = [];
     const selectedIds = new Set();
+    const selectedTextSignatures = new Set();
     const kindCounts = {};
     let used = 0;
     const input = Array.isArray(candidates) ? candidates : [];
@@ -9328,10 +10010,13 @@
     const rest = input.filter(candidate => !isMustCarryCandidate(candidate));
     const pushCandidate = (candidate, forceFloor = false) => {
       if (selected.length >= limit) return false;
+      if (knowledgeBoundaryPenalty(candidate, null) <= -100) return false;
       if (candidate.memoryTier === 'archived' && Number(candidate.score || 0) < 72) return false;
       if (candidate.memoryTier === 'disputed' && Number(candidate.score || 0) < 105) return false;
       const lineId = candidateTraceId(candidate);
       if (selectedIds.has(lineId)) return false;
+      const textSignature = candidateTextDedupSignature(candidate);
+      if (textSignature && selectedTextSignatures.has(textSignature)) return false;
       const kind = candidate.kind || 'unknown';
       const softCap = RECALL_KIND_SOFT_CAPS[kind] || Math.max(3, Math.ceil(Number(limit || 0) / 3));
       const overSoftCap = (kindCounts[kind] || 0) >= softCap;
@@ -9342,6 +10027,7 @@
       if (forceFloor && used + line.length > floorBudget && selected.length >= 4) return false;
       selected.push({ ...candidate, line, lineId });
       selectedIds.add(lineId);
+      if (textSignature) selectedTextSignatures.add(textSignature);
       kindCounts[kind] = (kindCounts[kind] || 0) + 1;
       used += line.length;
       return true;
@@ -9360,6 +10046,16 @@
       }
     }
     return selected;
+  }
+
+  function candidateTextDedupSignature(candidate) {
+    const kind = String(candidate?.kind || '');
+    if (!['memory', 'event', 'continuityRisk'].includes(kind)) return '';
+    const text = summarizeLedgerText(candidate?.item, kind)
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (text.length < 80) return '';
+    return `text:${hashString(text.slice(0, 420))}`;
   }
 
   function candidateTraceId(candidate) {
@@ -9757,7 +10453,7 @@
     const values = {
       glossary: '',
       lore: settingView,
-      persona: extractSettingBlock(context?.settingBlocks || '', 'Persona'),
+      persona: cleanPersonaSettingText(extractSettingBlock(context?.settingBlocks || '', 'Persona')),
       username: firstNonEmpty(context?.userName, context?.username, ''),
       context: agent?.includeHistory === false ? '' : formatHistory(context?.messages || [], agentConf.contextWindow),
       content: String(current ?? ''),
@@ -9817,12 +10513,25 @@
     return `${raw.slice(0, max)}\n...[truncated ${raw.length - max} chars]`;
   }
 
+  function agentNoteBodyForRunLog(note) {
+    const source = note || {};
+    return firstNonEmpty(
+      source.text,
+      source.note,
+      source.outputText,
+      source.output,
+      source.rawOutput,
+      source.outputPreview,
+      source.message
+    );
+  }
+
   function shouldCaptureVerboseRunLog(conf = null) {
     return conf?.debugLog === true;
   }
 
-  function formatPromptTraceForRunLog(messages, conf = null, limit = MAX_RUN_LOG_TEXT_CHARS) {
-    if (!shouldCaptureVerboseRunLog(conf)) return '';
+  function formatPromptTraceForRunLog(messages, conf = null, limit = MAX_RUN_LOG_TEXT_CHARS, force = false) {
+    if (!force && !shouldCaptureVerboseRunLog(conf)) return '';
     return formatPromptForRunLog(messages, limit);
   }
 
@@ -10057,12 +10766,13 @@
       { role: 'system', content: agent.systemPrompt || STATE_COMMIT_PROMPT },
       { role: 'user', content: renderTemplate(agent.userTemplate, values) },
     ];
-    const promptTrace = formatPromptTraceForRunLog(messages, conf);
+    const promptTrace = formatPromptTraceForRunLog(messages, conf, 5000, true);
     const raw = await callAgent(agentConf, messages);
     const commit = extractJsonObject(raw);
     if (!commit) return { changed: false, reason: 'json-parse-failed', raw: clipRunLogText(raw), prompt: promptTrace, agent: stateCommitAgentInfo(agent, agentConf) };
     const nextTurn = Math.max(Number(state.turn || 0) + 1, 1);
-    const resolvedCommit = resolveEvidenceCommit(commit, state, context, finalOutput, nextTurn);
+    const deterministicCommit = buildDeterministicStateCommit(state, context, finalOutput, nextTurn, 'state-commit-baseline');
+    const resolvedCommit = resolveEvidenceCommit(mergeStateCommitPayload(deterministicCommit, commit), state, context, finalOutput, nextTurn);
     if (!hasMeaningfulCommit(resolvedCommit)) {
       return { changed: false, reason: 'empty-commit', raw: clipRunLogText(raw), prompt: promptTrace, agent: stateCommitAgentInfo(agent, agentConf) };
     }
@@ -10091,40 +10801,115 @@
     };
   }
 
-  function applyFallbackStateCommit(state, context, finalOutput, reason) {
+  function applyFallbackStateCommit(state, context, finalOutput, reason, failedCommit = null) {
     const summary = summarizeFinalOutputForCommit(finalOutput);
-    if (!summary || summary.length < 40) return { changed: false, reason: `fallback-skipped:${reason || 'empty-output'}` };
+    if (!summary || summary.length < 40) return attachFailedCommitTrace({ changed: false, reason: `fallback-skipped:${reason || 'empty-output'}` }, failedCommit);
     const nextTurn = Math.max(Number(state.turn || 0) + 1, 1);
-    const status = extractStatusLine(finalOutput);
-    const scene = {};
-    if (status.time) scene.time = status.time;
-    if (status.location) scene.location = status.location;
-    if (status.action) scene.unfinishedAction = status.action;
-    const characterName = firstNonEmpty(context?.character?.name, context?.character?.data?.name);
-    if (characterName) scene.presentCast = [characterName];
-    scene.evidence = [{ source: 'fallback_final_output', quoteOrSummary: summary.slice(0, 180), turn: nextTurn }];
-    const commit = {
-      scene,
-      eventLog: [{
-        source: 'final_output',
-        turn: nextTurn,
-        quoteOrSummary: summary,
-        certainty: 'established',
-      }],
-      continuityRisks: [`State Committer fallback used: ${reason || 'unknown'}`],
-    };
+    const commit = buildDeterministicStateCommit(state, context, finalOutput, nextTurn, `fallback:${reason || 'unknown'}`);
+    if (!hasMeaningfulCommit(commit)) return attachFailedCommitTrace({ changed: false, reason: `fallback-empty:${reason || 'unknown'}` }, failedCommit);
     const resolvedCommit = resolveEvidenceCommit(commit, state, context, finalOutput, nextTurn);
-    if (!hasMeaningfulCommit(resolvedCommit)) return { changed: false, reason: `fallback-empty:${reason || 'unknown'}` };
+    if (!hasMeaningfulCommit(resolvedCommit)) return attachFailedCommitTrace({ changed: false, reason: `fallback-empty:${reason || 'unknown'}` }, failedCommit);
     state.turn = nextTurn;
     applyStateCommit(state, resolvedCommit, { context, finalOutput, turn: state.turn });
     applyStateDecay(state, state.turn);
     state.updatedAt = nowIso();
-    return {
+    return attachFailedCommitTrace({
       changed: true,
       reason: `fallback:${reason || 'unknown'}`,
       commit: resolvedCommit,
       counts: commitCounts(resolvedCommit),
+    }, failedCommit);
+  }
+
+  function buildDeterministicStateCommit(state, context, finalOutput, turn, reason = 'deterministic') {
+    const summary = summarizeFinalOutputForCommit(finalOutput);
+    const status = extractStatusLine(finalOutput);
+    const inferredTime = extractSceneTimeHint(finalOutput);
+    const scene = {};
+    if (status.time) scene.time = status.time;
+    else if (inferredTime) scene.time = inferredTime;
+    if (status.location) scene.location = status.location;
+    if (status.action) scene.unfinishedAction = status.action;
+    const fallbackCast = inferFallbackPresentCast(context, finalOutput, state);
+    const sessionPersons = extractSessionBornWorldPersons(finalOutput, context, state, fallbackCast, turn);
+    const presentCast = uniqueStrings(fallbackCast.concat(sessionPersons.map(person => person.name))).filter(name => name && !isGenericCharacterStateToken(name));
+    if (presentCast.length) scene.presentCast = presentCast.slice(0, 20);
+    scene.evidence = [{ source: reason, quoteOrSummary: summary.slice(0, 180), turn }];
+    const characters = buildDeterministicCharacters(context, finalOutput, presentCast, turn, sessionPersons);
+    const relationships = buildDeterministicSessionRelationships(context, state, finalOutput, sessionPersons, presentCast, turn);
+    const loreLedger = buildDeterministicLoreLedger(context, finalOutput, presentCast, turn);
+    const sessionPersonMemories = buildDeterministicSessionPersonMemories(sessionPersons, turn);
+    return {
+      scene,
+      characters,
+      relationships,
+      loreLedger,
+      memoryLedger: [{
+        id: `turn-${turn}-final-output`,
+        summary,
+        source: 'final_output',
+        sourceRank: 88,
+        importance: inferDeterministicMemoryImportance(finalOutput, fallbackCast),
+        recency: 1,
+        confidence: 0.9,
+        canonLevel: 'established',
+        emotionalWeight: 0,
+        tags: extractQueryTerms(summary).slice(0, 10),
+        anchor: false,
+        createdTurn: turn,
+        lastSeenTurn: turn,
+        lastConfirmedTurn: turn,
+      }].concat(sessionPersonMemories),
+      eventLog: [{
+        source: 'final_output',
+        turn,
+        quoteOrSummary: summary,
+        certainty: 'established',
+        importance: inferDeterministicMemoryImportance(finalOutput, fallbackCast),
+      }],
+      continuityRisks: reason.startsWith('fallback:')
+        ? [`State Committer fallback used: ${reason.replace(/^fallback:/, '') || 'unknown'}`]
+        : [],
     };
+  }
+
+  function mergeStateCommitPayload(base, extra) {
+    const lhs = base && typeof base === 'object' ? base : {};
+    const rhs = extra && typeof extra === 'object' ? extra : {};
+    const out = { ...lhs, ...rhs };
+    out.scene = mergeObject(lhs.scene || {}, rhs.scene || {});
+    ['characters', 'relationships', 'socialGraph', 'worldFronts', 'memoryLedger', 'secretLedger', 'loreLedger', 'eventLog', 'continuityRisks', 'ops'].forEach(key => {
+      const left = Array.isArray(lhs[key]) ? lhs[key] : lhs[key] ? [lhs[key]] : [];
+      const right = Array.isArray(rhs[key]) ? rhs[key] : rhs[key] ? [rhs[key]] : [];
+      out[key] = left.concat(right);
+    });
+    out.plotThreads = {
+      ...(lhs.plotThreads || {}),
+      ...(rhs.plotThreads || {}),
+    };
+    ['foreshadowing', 'clues', 'secrets', 'promisesDebtsConsequences', 'resourceChannels'].forEach(key => {
+      out.plotThreads[key] = []
+        .concat(Array.isArray(lhs.plotThreads?.[key]) ? lhs.plotThreads[key] : [])
+        .concat(Array.isArray(rhs.plotThreads?.[key]) ? rhs.plotThreads[key] : []);
+    });
+    out.knowledge = {
+      ...(lhs.knowledge || {}),
+      ...(rhs.knowledge || {}),
+      units: []
+        .concat(Array.isArray(lhs.knowledge?.units) ? lhs.knowledge.units : [])
+        .concat(Array.isArray(rhs.knowledge?.units) ? rhs.knowledge.units : []),
+    };
+    return out;
+  }
+
+  function attachFailedCommitTrace(result, failedCommit = null) {
+    if (!failedCommit || typeof failedCommit !== 'object') return result;
+    const out = { ...(result || {}) };
+    out.failedCommitReason = firstNonEmpty(failedCommit.reason, out.failedCommitReason);
+    out.agent = out.agent || failedCommit.agent || null;
+    out.raw = out.raw || failedCommit.raw || '';
+    out.prompt = out.prompt || failedCommit.prompt || '';
+    return out;
   }
 
   function summarizeFinalOutputForCommit(text) {
@@ -10147,6 +10932,320 @@
       location: parts[3] || '',
       action: parts.slice(4).join(' / '),
     };
+  }
+
+  function extractSceneTimeHint(text) {
+    const source = stripNonNarrativeBlocks(String(text || '')).slice(0, 2400);
+    const korean = source.match(/(\d{3,4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일/);
+    if (korean) return `${korean[1]}년 ${korean[2]}월 ${korean[3]}일`;
+    const chinese = source.match(/(\d{3,4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日/);
+    if (chinese) return `${chinese[1]}年 ${chinese[2]}月 ${chinese[3]}日`;
+    const iso = source.match(/\b(\d{3,4})-(\d{1,2})-(\d{1,2})\b/);
+    if (iso) return `${iso[1]}-${iso[2].padStart(2, '0')}-${iso[3].padStart(2, '0')}`;
+    return '';
+  }
+
+  function inferFallbackPresentCast(context, finalOutput, state = null) {
+    const text = String(finalOutput || '');
+    const subjects = extractIdentitySubjectsFromSources(context?.canonicalSources, null);
+    const matched = [];
+    subjects.forEach(subject => {
+      const names = uniqueStrings([subject.name].concat(normalizeStringArray(subject.aliases))).filter(Boolean);
+      if (names.length && names.some(name => text.includes(name))) matched.push(subject.name);
+    });
+    if (matched.length) return uniqueStrings(matched).slice(0, 8);
+    const existing = normalizeStringArray(state?.activePerspective?.presentCast)
+      .concat(normalizeStringArray(state?.scene?.presentCast))
+      .concat(normalizeStringArray(context?.state?.scene?.presentCast));
+    if (existing.length) return uniqueStrings(existing).filter(name => !isGenericCharacterStateToken(name)).slice(0, 8);
+    if (subjects.length && isFirstPersonNarrativeOutput(text)) return [subjects[0].name].filter(Boolean);
+    const protectedNames = normalizeStringArray(state?.activePerspective?.protectedNames);
+    if (protectedNames.length) return protectedNames.filter(name => !isGenericCharacterStateToken(name)).slice(0, 8);
+    return existing.filter(name => !isGenericCharacterStateToken(name)).slice(0, 8);
+  }
+
+  function isFirstPersonNarrativeOutput(text) {
+    const source = stripNonNarrativeBlocks(String(text || '')).slice(0, 2400);
+    return /(^|[^가-힣])(?:나는|내가|내|나를|나의|나에게)(?=$|[^가-힣])/i.test(source)
+      || /\b(?:I|me|my)\b/i.test(source)
+      || /(^|[^一-龥])(?:我|我的|我在|我把|我从|我还|我只|我已)(?=$|[^一-龥])/i.test(source);
+  }
+
+  function extractSessionBornWorldPersons(finalOutput, context, state, castNames = [], turn = 0) {
+    const source = stripLeadingMarkdownTitle(removeBilingualDraftLeak(stripNonNarrativeBlocks(finalOutput))).slice(0, 16000);
+    if (!source.trim()) return [];
+    const canonicalNames = new Set(extractIdentitySubjectsFromSources(context?.canonicalSources, null)
+      .flatMap(subject => [subject.name].concat(normalizeStringArray(subject.aliases)))
+      .filter(Boolean)
+      .map(name => String(name).trim()));
+    normalizeStringArray(castNames).forEach(name => canonicalNames.add(String(name).trim()));
+    const out = [];
+    const seen = new Set();
+    const roleAlternatives = [
+      '사형', '사저', '사제', '사매', '사숙', '사백', '사부', '스승', '장문인', '장로', '도사', '제자', '동문', '선배', '후배',
+      '공자', '소저', '낭자', '대협', '협객', '무사', '호위', '문지기', '상인', '점소이', '의원', '하인', '시녀', '관리', '병사',
+    ];
+    const cjkRoleAlternatives = ['师兄', '師兄', '师姐', '師姐', '师弟', '師弟', '师妹', '師妹', '师父', '師父', '长老', '長老', '弟子', '道士', '护卫', '護衛', '商人', '医师', '醫師', '侍女', '仆人', '僕人', '士兵'];
+    const patterns = [
+      new RegExp(`([가-힣]{2,6})(?:\\s*\\(([^)\\n]{1,32})\\))?\\s*(${roleAlternatives.join('|')})(?:[이가은는을를과와도만의에께서]{0,3})?(?=$|[^가-힣])`, 'g'),
+      new RegExp(`([\\u4e00-\\u9fff]{2,6})(?:\\s*\\(([^)\\n]{1,32})\\))?\\s*(${cjkRoleAlternatives.join('|')})(?=$|[^\\u4e00-\\u9fff])`, 'g'),
+    ];
+    patterns.forEach(pattern => {
+      for (const match of source.matchAll(pattern)) {
+        const name = cleanSessionPersonName(match[1]);
+        const alias = cleanSessionPersonAlias(match[2]);
+        const title = cleanSessionPersonTitle(match[3]);
+        if (!name || !title || isGenericSessionPersonName(name) || canonicalNames.has(name)) continue;
+        const key = slug(name);
+        if (!key || seen.has(key)) continue;
+        const start = Math.max(0, match.index - 220);
+        const end = Math.min(source.length, match.index + match[0].length + 260);
+        const evidenceText = source.slice(start, end).replace(/\s+/g, ' ').trim();
+        const affiliation = inferSessionPersonAffiliation(title, evidenceText, source);
+        const origin = inferSessionPersonOrigin(title, evidenceText);
+        const role = [affiliation, title].filter(Boolean).join(' ').trim() || title;
+        const aliases = uniqueStrings([alias, `${name} ${title}`].filter(Boolean));
+        seen.add(key);
+        out.push({
+          id: key,
+          name,
+          aliases,
+          origin,
+          affiliation,
+          role,
+          title,
+          status: 'active',
+          canonLevel: 'visible_chat',
+          confidence: origin === 'body-memory' ? 0.9 : 0.82,
+          sourceRank: SOURCE_RANK.final_output,
+          firstSeenTurn: turn,
+          lastSeenTurn: turn,
+          lastConfirmedTurn: turn,
+          evidence: [{ source: 'session_world_person_extractor', turn, quoteOrSummary: evidenceText.slice(0, 260), certainty: 'visible_chat' }],
+        });
+      }
+    });
+    return out.slice(0, 12);
+  }
+
+  function cleanSessionPersonName(value) {
+    return String(value || '')
+      .replace(/[“”"'`「」『』《》[\]{}]/g, '')
+      .replace(/\s+/g, '')
+      .trim();
+  }
+
+  function cleanSessionPersonAlias(value) {
+    const text = String(value || '').replace(/[“”"'`「」『』《》[\]{}]/g, '').replace(/\s+/g, ' ').trim();
+    if (!text || text.length > 32) return '';
+    if (/[,.;:!?]/.test(text)) return '';
+    return text;
+  }
+
+  function cleanSessionPersonTitle(value) {
+    return String(value || '').replace(/\s+/g, '').trim();
+  }
+
+  function isGenericSessionPersonName(name) {
+    const text = String(name || '').trim();
+    if (!text || text.length < 2 || text.length > 8) return true;
+    if (isGenericCharacterStateToken(text)) return true;
+    const depersonalized = text.replace(/[이가은는을를과와도만의에께서]+$/g, '');
+    if (/^(?:도포|소매|옷|옷자락|허리띠|문|문고리|방|침상|이불|창호지|바닥|마룻바닥|손|손가락|발|발바닥|몸|몸뚱이|머리|머리카락|기억|머릿속|숨|입김|공기|냄새|향|햇살|안개|서리|목혜|은사연검|검|부적|탁자|빗|거울|황동경)$/.test(depersonalized)) return true;
+    return /^(?:누군가|아무개|사람|인물|남자|여자|소년|소녀|노인|노파|사내|여인|도사|제자|사형|사제|사저|사매|상인|의원|하인|시녀|관리|병사|문지기|호위|그|그녀|그놈|그자)$/.test(text);
+  }
+
+  function inferSessionPersonOrigin(title, evidenceText) {
+    const evidence = String(evidenceText || '');
+    if (/기억|몸의 기억|익숙|떠올|제 이름|이름을 찾아|나보다|가장 먼저|앓아누워|어제|지난/.test(evidence)) return 'body-memory';
+    if (/소문|풍문|입에 오르|전해 들|들려오|떠돈/.test(evidence)) return 'rumor';
+    if (/멀리|밖에서|복도 저편|마당 저편|산문 밖|어딘가/.test(evidence)) return 'offscreen';
+    if (/사형|사저|사제|사매|사숙|사백|사부|스승|장문인|장로|도사|제자|동문/.test(title)) return 'session-born';
+    return 'session-born';
+  }
+
+  function inferSessionPersonAffiliation(title, evidenceText, fullText) {
+    const text = [evidenceText, fullText].filter(Boolean).join('\n');
+    if (/청허문|淸虛門|清虚门|Qingxu/i.test(text) && /사형|사저|사제|사매|사숙|사백|사부|스승|장문인|장로|도사|제자|동문/.test(title)) return '청허문';
+    if (/남궁|南宮|南宫/.test(text) && /호위|무사|하인|시녀|공자|소저|낭자/.test(title)) return '남궁';
+    return '';
+  }
+
+  function primaryFocalNameForSessionPerson(context, state, castNames = []) {
+    const cast = normalizeStringArray(castNames).filter(name => !isGenericCharacterStateToken(name));
+    if (cast.length) return cast[0];
+    const subjects = extractIdentitySubjectsFromSources(context?.canonicalSources, null);
+    if (subjects.length && subjects[0].name) return subjects[0].name;
+    return firstNonEmpty(context?.character?.name, context?.character?.data?.name, state?.scene?.presentCast?.[0], '');
+  }
+
+  function buildDeterministicSessionRelationships(context, state, finalOutput, sessionPersons = [], castNames = [], turn = 0) {
+    const focal = primaryFocalNameForSessionPerson(context, state, castNames);
+    if (!focal) return [];
+    return (Array.isArray(sessionPersons) ? sessionPersons : []).map(person => {
+      if (!person?.name || person.name === focal) return null;
+      const title = String(person.title || person.role || '');
+      const tie = sessionPersonTie(title, person);
+      if (!tie) return null;
+      return {
+        id: relationshipKey({ a: focal, b: person.name }),
+        a: focal,
+        b: person.name,
+        tie,
+        affinity: 0,
+        affection: 0,
+        favorability: 0,
+        trust: 0,
+        intimacy: 0,
+        loyalty: 0,
+        respect: /사부|스승|장문인|장로|사숙|사백/.test(title) ? 2 : 1,
+        fear: 0,
+        tension: 0,
+        socialDistance: /사형|사저|사제|사매|동문|선배|후배/.test(title) ? 35 : 50,
+        dynamics: [tie],
+        lastChange: `${person.name} became visible in the final output as a ${tie}.`,
+        canonLevel: 'visible_chat',
+        confidence: person.origin === 'body-memory' ? 0.86 : 0.76,
+        sourceRank: SOURCE_RANK.final_output,
+        lastSeenTurn: turn,
+        evidence: person.evidence || [{ source: 'session_world_person_extractor', turn, quoteOrSummary: person.name, certainty: 'visible_chat' }],
+      };
+    }).filter(Boolean).slice(0, 12);
+  }
+
+  function sessionPersonTie(title, person) {
+    const raw = String(title || '');
+    if (/사형|师兄|師兄/.test(raw)) return person.affiliation ? `${person.affiliation} 사형` : '사형';
+    if (/사저|师姐|師姐/.test(raw)) return person.affiliation ? `${person.affiliation} 사저` : '사저';
+    if (/사제|师弟|師弟/.test(raw)) return person.affiliation ? `${person.affiliation} 사제` : '사제';
+    if (/사매|师妹|師妹/.test(raw)) return person.affiliation ? `${person.affiliation} 사매` : '사매';
+    if (/사부|스승|师父|師父/.test(raw)) return person.affiliation ? `${person.affiliation} 스승` : '스승';
+    if (/사숙|사백|장문인|장로|长老|長老/.test(raw)) return person.affiliation ? `${person.affiliation} 권위자` : '기관 권위자';
+    if (/동문|제자|弟子/.test(raw)) return person.affiliation ? `${person.affiliation} 문하` : '같은 조직';
+    if (/호위|문지기|하인|시녀|관리|병사|护卫|護衛|侍女|仆人|僕人|士兵/.test(raw)) return person.affiliation ? `${person.affiliation} 실무자/호위` : '지역 실무자/호위';
+    return '';
+  }
+
+  function buildDeterministicSessionPersonMemories(sessionPersons = [], turn = 0) {
+    return (Array.isArray(sessionPersons) ? sessionPersons : []).map(person => ({
+      id: `turn-${turn}-person-${slug(person.name)}`,
+      summary: `${person.name}${person.role ? ` (${person.role})` : ''} became visible as a ${person.origin || 'session-born'} world person in the final output.`,
+      source: 'final_output',
+      sourceRank: SOURCE_RANK.final_output,
+      importance: person.origin === 'body-memory' ? 7 : 6,
+      recency: 1,
+      confidence: person.confidence || 0.82,
+      canonLevel: 'visible_chat',
+      emotionalWeight: 0,
+      tags: uniqueStrings([person.name, person.affiliation, person.title, person.origin].filter(Boolean)).slice(0, 10),
+      relatedIds: [person.id].filter(Boolean),
+      anchor: false,
+      createdTurn: turn,
+      lastSeenTurn: turn,
+      lastConfirmedTurn: turn,
+      evidence: person.evidence || [],
+    })).slice(0, 12);
+  }
+
+  function buildDeterministicCharacters(context, finalOutput, castNames = [], turn = 0, sessionPersons = []) {
+    const text = String(finalOutput || '');
+    const subjects = extractIdentitySubjectsFromSources(context?.canonicalSources, null);
+    const out = [];
+    subjects.forEach(subject => {
+      const names = uniqueStrings([subject.name].concat(normalizeStringArray(subject.aliases))).filter(Boolean);
+      const present = names.some(name => text.includes(name)) || normalizeStringArray(castNames).some(name => names.includes(name));
+      if (!present) return;
+      out.push({
+        id: slug(firstNonEmpty(subject.id, subject.name)),
+        name: subject.name,
+        aliases: normalizeStringArray(subject.aliases),
+        gender: subject.immutable?.gender || '',
+        affiliation: subject.mutableBaseline?.affiliation || '',
+        role: 'canonical identity',
+        status: 'active',
+        location: '',
+        canonLevel: 'established',
+        confidence: 0.94,
+        evidence: [{ source: 'deterministic_commit', turn, quoteOrSummary: subject.sourceRefs?.[0] || subject.name, certainty: 'established' }],
+      });
+    });
+    (Array.isArray(sessionPersons) ? sessionPersons : []).forEach(person => {
+      if (!person?.name || isGenericCharacterStateToken(person.name)) return;
+      if (out.some(item => item.name === person.name || normalizeStringArray(item.aliases).includes(person.name))) return;
+      out.push({
+        id: person.id || slug(person.name),
+        name: person.name,
+        aliases: normalizeStringArray(person.aliases),
+        origin: person.origin || 'session-born',
+        affiliation: person.affiliation || '',
+        role: person.role || person.title || '',
+        status: person.status || 'active',
+        canonLevel: person.canonLevel || 'visible_chat',
+        confidence: parseNumber(person.confidence, 0.82, 0, 1),
+        sourceRank: SOURCE_RANK.final_output,
+        firstSeenTurn: parseNumber(person.firstSeenTurn, turn, 0, 999999),
+        lastSeenTurn: parseNumber(person.lastSeenTurn, turn, 0, 999999),
+        lastConfirmedTurn: parseNumber(person.lastConfirmedTurn, turn, 0, 999999),
+        evidence: normalizeEvidenceArray(person.evidence),
+      });
+    });
+    normalizeStringArray(castNames).forEach(name => {
+      if (!name || isGenericCharacterStateToken(name)) return;
+      if (out.some(item => item.name === name || normalizeStringArray(item.aliases).includes(name))) return;
+      out.push({
+        id: slug(name),
+        name,
+        status: 'active',
+        canonLevel: 'established',
+        confidence: 0.76,
+        evidence: [{ source: 'deterministic_commit', turn, quoteOrSummary: `Present in final output: ${name}`, certainty: 'established' }],
+      });
+    });
+    return out.slice(0, 12);
+  }
+
+  function buildDeterministicLoreLedger(context, finalOutput, castNames = [], turn = 0) {
+    const text = String(finalOutput || '');
+    const cast = normalizeStringArray(castNames);
+    const sources = Array.isArray(context?.canonicalSources) ? context.canonicalSources : [];
+    const selected = [];
+    sources.forEach(source => {
+      if (!source || isKnowledgeBoundaryCanonicalSource(source)) return;
+      const label = firstNonEmpty(source.label, source.path, source.kind);
+      const keys = uniqueStrings([label]
+        .concat(normalizeStringArray(source.activationKeys))
+        .concat(cast)
+        .filter(Boolean));
+      const identityHit = isPinnedIdentityLoreSource(source) && keys.some(key => text.includes(key) || cast.includes(key));
+      const directHit = keys.some(key => key.length >= 2 && text.includes(key));
+      if (!identityHit && !directHit) return;
+      selected.push({
+        id: slug(firstNonEmpty(source.path, source.id, label)),
+        name: label,
+        summary: summarizeCanonicalContent(source.content, 360),
+        source: 'canonical_source',
+        sourceId: firstNonEmpty(source.path, source.id, source.hash),
+        scope: source.kind || '',
+        activationKeys: normalizeStringArray(source.activationKeys).slice(0, 12),
+        priority: parseNumber(source.priority, source?.meta?.alwaysActive ? 8 : 5, 0, 10),
+        importance: isPinnedIdentityLoreSource(source) ? 8 : 6,
+        canonLevel: 'established',
+        knownBy: normalizeStringArray(source.knownBy),
+        cannotKnow: normalizeStringArray(source.cannotKnow),
+        lastActivatedTurn: turn,
+        evidence: `Activated by deterministic commit from final output / ${label}`,
+      });
+    });
+    return selected.slice(0, 8);
+  }
+
+  function inferDeterministicMemoryImportance(finalOutput, castNames = []) {
+    const text = String(finalOutput || '');
+    let score = 5;
+    if (normalizeStringArray(castNames).length) score += 1;
+    if (/[“"][^”"]{1,80}[”"]/.test(text)) score += 1;
+    if (/(결심|선택|도착|떠났|만났|밝혔|알게|발견|공격|부상|죽|구했|약속|거절|accepted|refused|revealed|discovered|arrived|left)/i.test(text)) score += 1;
+    return clampNumber(score, 5, 0, 10);
   }
 
   function commitCounts(commit) {
@@ -10196,6 +11295,77 @@
       note.error ? `Error: ${note.error}` : '',
       note.text || '',
     ].filter(Boolean).join('\n')).join('\n\n');
+  }
+
+  function formatMainAdvisoryNotes(notes) {
+    if (!Array.isArray(notes) || !notes.length) return '(none)';
+    const included = includedAgentNotes(notes).slice(0, 4);
+    if (!included.length) return '(none)';
+    const blocks = included.map((note, idx) => {
+      const text = sanitizeMainAdvisoryNoteText(note.text || note.outputPreview || '');
+      if (!text) return '';
+      return [
+        `## ${idx + 1}. ${note.name || note.id || 'agent'}`,
+        text,
+      ].join('\n');
+    }).filter(Boolean);
+    return blocks.length ? blocks.join('\n\n').slice(0, 5200) : '(none)';
+  }
+
+  function sanitizeMainAdvisoryNoteText(text) {
+    const source = String(text || '').replace(/\r\n/g, '\n');
+    if (!source.trim()) return '';
+    const lines = source.split('\n');
+    const out = [];
+    let skipSection = false;
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        if (!skipSection && out.length && out[out.length - 1] !== '') out.push('');
+        continue;
+      }
+      if (isAdvisorySectionHeading(trimmed)) {
+        skipSection = isMainDirectiveAdvisorySection(trimmed);
+        if (skipSection) continue;
+      }
+      if (skipSection) continue;
+      if (isMainDirectiveAdvisoryLine(trimmed)) continue;
+      if (/response\s+mandate|response\s+shape|recommended\s+entrances|end\s+state|carry-forward|separator|breadth/i.test(trimmed)) continue;
+      if (/(?:write\s+(?:at\s+least|maximum)|\b\d+\s*[-~]\s*\d+\s*(?:words?|字|자)\b|약\s*\d+\s*[-~]\s*\d+\s*자)/i.test(trimmed)) continue;
+      if (/^(?:core\s+change|emotional\s+purpose|focal\s+sequence|boundary)\b/i.test(trimmed.replace(/^#+\s*/, ''))) continue;
+      out.push(line);
+      if (out.join('\n').length >= 1200) break;
+    }
+    return out.join('\n').replace(/\n{3,}/g, '\n\n').trim().slice(0, 1400);
+  }
+
+  function isAdvisorySectionHeading(line) {
+    const text = String(line || '').trim();
+    return /^#{1,6}\s+/.test(text) || /^[-*]?\s*\[[^\]\n]{2,80}\]\s*:?\s*$/.test(text);
+  }
+
+  function normalizeAdvisoryHeading(line) {
+    return String(line || '')
+      .replace(/^[-*\s#]+/, '')
+      .replace(/^\[|\]$/g, '')
+      .replace(/\*\*/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+  }
+
+  function isMainDirectiveAdvisorySection(line) {
+    const heading = normalizeAdvisoryHeading(line);
+    return /(?:response\s+mandate|response\s+shape|recommended\s+entrances|re-entries|advisory\s+contract|response\s+contract|focal\s+and\s+continuity\s+plan|ensemble\s+arc\s+weaving|primary\s+causal\s+movement|response\s+plan|final\s+check|output\s+plan|end\s+state|carry-forward|separator|breadth)/i.test(heading);
+  }
+
+  function isMainDirectiveAdvisoryLine(line) {
+    const text = String(line || '').trim().replace(/^[-*]\s*/, '').replace(/\*\*/g, '');
+    if (/(?:write\s+(?:at\s+least|maximum)|\b\d+\s*[-~]\s*\d+\s*(?:words?|字|자)\b|약\s*\d+\s*[-~]\s*\d+\s*자)/i.test(text)) return true;
+    if (/^(?:core\s+change|emotional\s+purpose|focal\s+sequence|boundary|separator|breadth|length|recommended\s+entrances?|recommended\s+re-entries|avoid|channel|why\s+now|action\s+this\s+response|changed\s+state|earned\s+decision)\s*[:：-]/i.test(text)) return true;
+    if (/^(?:single\s+focal|no\s+boundary\s+break|no\s+shift\s+warranted|any\s+pov\s+transition|no\s+additional\s+adjacent\s+scene)\b/i.test(text)) return true;
+    if (/\b(?:response|output|reply)\b.{0,60}\b(?:must|should|warranted|justify|requires?)\b/i.test(text)) return true;
+    return false;
   }
 
   function extractJsonObject(text) {
@@ -12438,7 +13608,7 @@
     };
     push(context?.character?.name);
     push(context?.character?.data?.name);
-    push(getSelectedPersona(context?.db)?.name);
+    push(getEffectiveSelectedPersona(context?.db)?.name);
     (Array.isArray(state?.scene?.presentCast) ? state.scene.presentCast : []).forEach(push);
     Object.values(state?.characters || {}).forEach(character => {
       push(character?.name);
@@ -13341,6 +14511,7 @@
   function compactAgentTraceForRunLog(note, verbose = false) {
     const source = note || {};
     const status = source.error ? 'error' : source.skipped ? 'skipped' : 'ok';
+    const noteText = agentNoteBodyForRunLog(source);
     const out = {
       id: source.id || '',
       name: source.name || '',
@@ -13355,6 +14526,8 @@
       error: source.error || '',
       includeInNotes: source.includeInNotes !== false,
       memoryEnabled: source.memoryEnabled === true,
+      text: clipRunLogText(noteText, MAX_RUN_LOG_AGENT_NOTE_CHARS),
+      textChars: String(noteText || '').length,
     };
     if (source.postMode) out.postMode = source.postMode;
     if (source.changed !== undefined) out.changed = source.changed === true;
@@ -13365,7 +14538,6 @@
       out.prompt = source.prompt ? clipRunLogText(source.prompt) : '';
       out.rawOutput = source.rawOutput ? clipRunLogText(source.rawOutput) : '';
       out.retrievalPreview = source.retrievalPreview ? clipRunLogText(source.retrievalPreview, 12000) : '';
-      out.text = source.text ? clipRunLogText(source.text, 12000) : '';
       out.inputPreview = source.inputPreview ? clipRunLogText(source.inputPreview, 1600) : '';
       out.outputPreview = source.outputPreview ? clipRunLogText(source.outputPreview, 1600) : '';
     }
@@ -13435,8 +14607,9 @@
     }
     if (out.postPipelineResult) out.postPipelineResult = compactPostPipelineResultForRunLog(out.postPipelineResult, verbose);
     if (out.qualityRegex) out.qualityRegex = compactQualityRegexForRunLog(out.qualityRegex);
-    if (out.commitPromptPreview) out.commitPromptPreview = verbose ? clipRunLogText(out.commitPromptPreview, 24000) : '';
-    if (out.commitRawPreview) out.commitRawPreview = verbose ? clipRunLogText(out.commitRawPreview, 24000) : '';
+    const keepCommitFailureTrace = Boolean(out.failedCommitReason) || /json|parse|fail|error|timeout/i.test(String(out.commitReason || ''));
+    if (out.commitPromptPreview) out.commitPromptPreview = verbose ? clipRunLogText(out.commitPromptPreview, 24000) : keepCommitFailureTrace ? clipRunLogText(out.commitPromptPreview, 5000) : '';
+    if (out.commitRawPreview) out.commitRawPreview = verbose ? clipRunLogText(out.commitRawPreview, 24000) : keepCommitFailureTrace ? clipRunLogText(out.commitRawPreview, 3000) : '';
     if (out.rawFinalPreview) out.rawFinalPreview = clipRunLogText(out.rawFinalPreview, verbose ? 16000 : 4000);
     if (out.finalPreview) out.finalPreview = clipRunLogText(out.finalPreview, verbose ? 16000 : 4000);
     if (Array.isArray(out.coldStartResult?.results)) {
@@ -13462,9 +14635,11 @@
           sourceId: item?.sourceId || '',
           units: item?.units || 0,
           error: item?.error || '',
+          fallback: item?.fallback === true,
+          warning: item?.warning || '',
           agent: item?.agent || null,
-          prompt: verbose && item?.prompt ? clipRunLogText(item.prompt, 20000) : '',
-          rawOutput: verbose && item?.rawOutput ? clipRunLogText(item.rawOutput, 20000) : '',
+          prompt: verbose && item?.prompt ? clipRunLogText(item.prompt, 20000) : (item?.error || item?.warning) && item?.prompt ? clipRunLogText(item.prompt, 4000) : '',
+          rawOutput: verbose && item?.rawOutput ? clipRunLogText(item.rawOutput, 20000) : (item?.error || item?.warning) && item?.rawOutput ? clipRunLogText(item.rawOutput, 3000) : '',
         })).slice(-12),
       };
     }
@@ -13976,7 +15151,8 @@
     try {
       commitResult = await runStateCommit(conf, postContext, state, finalContent, notes);
       if (!commitResult.changed && conf.stateApiEnabled) {
-        commitResult = applyFallbackStateCommit(state, postContext, finalContent, commitResult.reason || 'state-commit-empty');
+        const failedCommit = commitResult;
+        commitResult = applyFallbackStateCommit(state, postContext, finalContent, commitResult.reason || 'state-commit-empty', failedCommit);
       }
     } catch (err) {
       Runtime.lastError = err.message;
@@ -13998,6 +15174,7 @@
       completedAt: nowIso(),
       status: commitResult.changed ? 'complete' : 'complete-no-state-commit',
       commitReason: commitResult.reason || '',
+      failedCommitReason: commitResult.failedCommitReason || '',
       commitAgent: commitResult.agent || null,
       commitCounts: commitResult.counts || null,
       sessionSync,
@@ -14667,7 +15844,7 @@
               </div>
               <div class="et-row et-row-4">
                 ${inputField('Temperature', `et-agent-temperature-${agent.id}`, 'number', String(agent.temperature ?? conf.temperature), '0.25', `min="0" max="2" step="0.05" class="et-agent-temperature" data-agent-id="${escHtml(agent.id)}"`)}
-                ${inputField('Max Tokens', `et-agent-max-tokens-${agent.id}`, 'number', String(agent.maxTokens ?? conf.maxTokens), '4096', `min="128" max="16000" class="et-agent-max-tokens" data-agent-id="${escHtml(agent.id)}"`)}
+                ${inputField('Max Tokens', `et-agent-max-tokens-${agent.id}`, 'number', String(agent.maxTokens ?? conf.maxTokens), '4096', `min="128" class="et-agent-max-tokens" data-agent-id="${escHtml(agent.id)}"`)}
                 ${inputField('최근 대화', `et-agent-context-window-${agent.id}`, 'number', String(agent.contextWindow ?? conf.contextWindow), '48', `min="4" max="80" class="et-agent-context-window" data-agent-id="${escHtml(agent.id)}"`)}
                 ${inputField('Timeout s', `et-agent-timeout-s-${agent.id}`, 'number', String(timeoutMsToSeconds(agent.timeoutMs ?? conf.timeoutMs)), '300', `min="15" max="600" class="et-agent-timeout-s" data-agent-id="${escHtml(agent.id)}"`)}
               </div>
@@ -17240,7 +18417,7 @@
       providerId: value('et-agent-provider', base.providerId || conf.activeProviderId),
       model: value('et-agent-model', base.model || ''),
       temperature: parseNumber(value('et-agent-temperature', base.temperature ?? conf.temperature), base.temperature ?? conf.temperature, 0, 2),
-      maxTokens: parseNumber(value('et-agent-max-tokens', base.maxTokens ?? conf.maxTokens), base.maxTokens ?? conf.maxTokens, 128, 16000),
+      maxTokens: parseNumber(value('et-agent-max-tokens', base.maxTokens ?? conf.maxTokens), base.maxTokens ?? conf.maxTokens, 128),
       contextWindow: parseNumber(value('et-agent-context-window', base.contextWindow ?? conf.contextWindow), base.contextWindow ?? conf.contextWindow, 4, 80),
       timeoutMs: timeoutSecondsToMs(value('et-agent-timeout-s', timeoutMsToSeconds(base.timeoutMs ?? conf.timeoutMs)), base.timeoutMs ?? conf.timeoutMs),
       postMode: normalizePostMode(value('et-agent-post-mode', base.postMode || 'suffix')),
@@ -17775,6 +18952,82 @@
             conflicts: resolved._evidenceConflicts,
           };
         },
+        testSessionWorldPersonCommit: () => {
+          const targetState = createDefaultState('novel');
+          targetState.activePerspective = { presentCast: ['연수'], protectedNames: ['연수'] };
+          const targetContext = { character: { name: '연수' }, canonicalSources: [], messages: [] };
+          const finalOutput = '청허문의 마당 저편에서 명선(明仙) 사형이 다가왔다. 기억이 머릿속에서 제 이름을 찾아 튀어 올랐다. 명선 사형은 연수의 이마에 손을 얹었다.';
+          const commit = buildDeterministicStateCommit(targetState, targetContext, finalOutput, 2, 'debug-session-world-person');
+          return {
+            presentCast: commit.scene?.presentCast || [],
+            characters: commit.characters || [],
+            relationships: commit.relationships || [],
+            memories: commit.memoryLedger || [],
+            counts: commitCounts(commit),
+          };
+        },
+        testFutureRouteAndSessionPersonGate: () => {
+          const targetCharacter = {
+            id: 'future-route-subject',
+            name: '연수',
+            lorebook: { type: 'risu', data: [{
+              comment: '연수',
+              alwaysActive: true,
+              content: [
+                '# 연수',
+                '이름: 연수. 청허문의 어린 제자. 현대 한국인의 정신이 어린 몸에 들어왔다.',
+                '',
+                '# 원작 미래 루트',
+                '원작의 미래 전개에서는 929년에 남궁묵야가 납치되고, 훗날 큰 재앙이 발생한다.',
+              ].join('\n'),
+            }] },
+          };
+          const blankContext = {
+            character: targetCharacter,
+            currentChat: { id: 'future-route-test', message: [] },
+            db: { modules: [], enabledModules: [] },
+            messages: [{ role: 'user', content: '*says nothing*' }],
+            mode: 'novel',
+          };
+          blankContext.canonicalSources = collectCanonicalSources(targetCharacter, blankContext.db, blankContext.currentChat, conf || DEFAULT_CONFIG);
+          blankContext.settingBlocks = buildSettingBlocks(targetCharacter, blankContext.db, blankContext.currentChat, blankContext.canonicalSources);
+          const units = buildCanonicalUnits(blankContext, conf || DEFAULT_CONFIG);
+          const blankCandidates = buildCanonicalStageCandidates(units, extractQueryTerms('*says nothing*'), '*says nothing*', createDefaultState('novel'), blankContext);
+          const activeContext = {
+            ...blankContext,
+            messages: [
+              { role: 'assistant', content: '연수는 원작의 미래 루트와 929년 사건을 떠올렸다.' },
+              { role: 'user', content: '*says nothing*' },
+            ],
+          };
+          const activeCandidates = buildCanonicalStageCandidates(units, extractQueryTerms('원작 미래 루트 929'), '원작 미래 루트 929', createDefaultState('novel'), activeContext);
+          const falsePositiveState = createDefaultState('novel');
+          falsePositiveState.activePerspective = { presentCast: ['연수'], protectedNames: ['연수'] };
+          const falsePositiveCommit = buildDeterministicStateCommit(
+            falsePositiveState,
+            { character: { name: '연수' }, canonicalSources: [], messages: [] },
+            '도포가 소년의 좁은 어깨에 헐렁하게 걸쳐져 있었다. 청허문의 마당 저편에서 명선(明仙) 사형이 다가왔다.',
+            1,
+            'debug-future-route-gate'
+          );
+          return {
+            unitTrace: units.map(unit => ({
+              label: unit.label,
+              part: unit.part?.index || 0,
+              futureSource: Boolean(unit.futureSource),
+              foundation: Boolean(unit.foundation),
+              alwaysActive: Boolean(unit.alwaysActive),
+              preview: String(unit.content || '').slice(0, 80),
+            })),
+            blankFutureSelected: blankCandidates.filter(item => item.unit?.futureSource).map(item => item.unit.id),
+            activeFutureSelected: activeCandidates.filter(item => item.unit?.futureSource).map(item => item.unit.id),
+            sessionCharacters: falsePositiveCommit.characters || [],
+            sessionMemories: falsePositiveCommit.memoryLedger || [],
+            hasDopoFalsePositive: (falsePositiveCommit.characters || []).some(item => /도포/.test(item.name || ''))
+              || (falsePositiveCommit.memoryLedger || []).some(item => /도포/.test(item.id || item.summary || '')),
+            hasNamedSenior: (falsePositiveCommit.characters || []).some(item => item.name === '명선'),
+          };
+        },
         testInjectionTrace: async () => {
           const targetState = createDefaultState(context?.mode || 'rp');
           targetState.turn = 4;
@@ -17893,6 +19146,28 @@
             hasPlaceholder: text.includes('{{et.canonical}}'),
             contentField: injected[0].content || '',
             partsText: injected[0].parts?.[0]?.text || '',
+          };
+        },
+        testResponseLengthToggle: () => {
+          const targetContext = {
+            character: {
+              name: 'Length Subject',
+              customPromptTemplateToggle: '길이=이야기의 깊이=select=자연,한 숨결,단상,한 장면,한 장,대서사,장편,초장편',
+            },
+            db: { globalChatVariables: { 'toggle_길이': '4' }, modules: [], enabledModules: [] },
+            currentChat: { id: 'length-chat', message: [] },
+            messages: [{ role: 'user', content: 'continue' }],
+            canonicalSources: [],
+            mode: 'novel',
+          };
+          const block = buildResponseLengthControlBlock(targetContext, DEFAULT_CONFIG);
+          const floor = buildMainControlFloorContext(targetContext, 1600, createDefaultState('novel'), DEFAULT_CONFIG);
+          return {
+            control: resolveResponseLengthControl(targetContext, DEFAULT_CONFIG),
+            hasBlock: block.includes('[Response Length Control]'),
+            hasSelectedLabel: block.includes('한 장'),
+            hasInstruction: block.includes('Write at least 2400 words.'),
+            floorHasControl: floor.includes('[Response Length Control]'),
           };
         },
         testCanonicalUnitSplit: () => {

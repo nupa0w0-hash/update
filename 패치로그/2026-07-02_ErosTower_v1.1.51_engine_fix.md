@@ -424,3 +424,34 @@
   - `ErosTower.v1.update.js`
   - `☸에로스 타워.js`
   - 두 파일 모두 `523D47594128333CE2BB2F992397B91764A62C102AA5BFC131388707C839BD82`
+
+---
+
+## 배포 채널 보정: compat update file
+
+작성 시각: 2026-07-02 14:20 KST
+
+### 문제
+
+- 1.1.51 배포 커밋에서 `ErosTower.v1.update.js`와 `☸에로스 타워.js`는 1.1.51로 갱신됐지만, 4.x 구설치본용 호환 채널인 `ErosTower.update.js`가 1.1.50 / `//@version 4.0.9` 상태로 남아 있었음.
+- 4.x 채널로 설치된 사용자는 `ErosTower.update.js`를 확인하므로 1.1.51 업데이트가 표시되지 않을 수 있었음.
+
+### 백업
+
+- `D:\리수작업\에로스 타워\백업\ErosTower_v1.1.51_before_compat_update_channel_20260702-142008`
+
+### 변경 내용
+
+- `ErosTower.update.js` 본문을 1.1.51 패키지와 동기화.
+- 호환 채널 헤더만 유지:
+  - `//@display-name ☸Eros Tower 1.1.51`
+  - `//@version 4.0.10`
+  - `//@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.update.js`
+
+### 검증
+
+- `node --check .\ErosTower.v1.update.js`: 통과.
+- `node --check .\ErosTower.update.js`: 통과.
+- `node --check .\☸에로스 타워.js`: 통과.
+- `git diff --check`: 통과.
+- `ErosTower.update.js`는 상단 헤더 5줄 이후 본문이 `ErosTower.v1.update.js`와 동일함을 확인.
