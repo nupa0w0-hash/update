@@ -48,5 +48,7 @@
 
 ## 배포 후 확인
 
-- v1 raw URL: 배포 후 확인 예정
-- compat raw URL: 배포 후 확인 예정
+- v1 raw URL 확인 완료: `//@display-name ☸Eros Tower 1.1.64`, `//@version 1.1.64`
+- compat raw URL 확인 완료: `//@display-name ☸Eros Tower 1.1.64`, `//@version 4.0.15`
+- 원격 브랜치: `main`
+- 배포 커밋: `afc1b7cac80de476897d2662580533c4976c0304`
