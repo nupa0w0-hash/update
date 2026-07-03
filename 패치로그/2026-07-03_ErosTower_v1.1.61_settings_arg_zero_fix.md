@@ -49,4 +49,6 @@ Status: released
   - `☸에로스 타워.js`: `//@display-name ☸Eros Tower 1.1.61`, `//@version 1.1.61`
 - Body sync check passed: v1/direct/compat bodies all match.
 - File prefix check passed: all three files start with `2F 2F 40`, no BOM.
-- Raw URL check: pending after release
+- Raw URL check passed:
+  - `https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js`: `//@display-name ☸Eros Tower 1.1.61`, `//@version 1.1.61`
+  - `https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.update.js`: `//@display-name ☸Eros Tower 1.1.61`, `//@version 4.0.13`
