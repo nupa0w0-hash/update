@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.52
+//@display-name ☸Eros Tower 1.1.60
 //@api 3.0
-//@version 1.1.52
+//@version 1.1.60
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -35,18 +35,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.52
+ * Eros Tower 1.1.60
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.52 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.60 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.52';
+  const VERSION = '1.1.60';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.52`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.60`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -64,7 +64,7 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.52 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.60 analysis context';
   const MAIN_INJECTION_PLACEHOLDER_RE = /\{\{et\.(canonical|memory|state|characters|executive)\}\}/gi;
   const AUTO_INJECTION_FALLBACK_CHARS = 22000;
   const AUTO_INJECTION_MIN_CHARS = 3200;
@@ -80,6 +80,56 @@
     { index: 7, label: '초장편', englishLabel: 'very long-form', instruction: 'Write at least 9000 words.', scale: 'Very long-form: prepare dense continuity, layered character movement, multiple world threads, and long-range setup while preserving knowledge boundaries.' },
   ]);
   const SYSTEM_PATCH_NOTES = Object.freeze([
+    {
+      version: '1.1.60',
+      kind: 'retrieval-session-person-filter',
+      summary: 'Filtered lore heading/institution labels out of character retrieval and blocked session-born person fragments such as possessive sect names, pronoun particles, and descriptive CJK clauses from becoming memory/person entries.',
+    },
+    {
+      version: '1.1.58',
+      kind: 'neurocore-homeostasis',
+      summary: 'Added deterministic Autonomic/Homeostatic MiniCore overlays for arousal, stressLoad, allostaticLoad, recoveryReserve, fatigue, and securityTone so active characters can modulate salience without overriding canonical facts or perspective gates.',
+    },
+    {
+      version: '1.1.57',
+      kind: 'natural-length-guard',
+      summary: 'Clarified inactive/natural length handling so main output does not expand merely because Eros context, agent notes, max response tokens, or retrieval budget are large.',
+    },
+    {
+      version: '1.1.57',
+      kind: 'diagnostic-retrieval-cleanup',
+      summary: 'Filtered multilingual descriptor/pronoun false person candidates, excluded characters.unknown from retrieval/injection, removed decorative canonical split debris, and demoted agent scene-shape notes into low-authority proposals instead of final-response commands.',
+    },
+    {
+      version: '1.1.56',
+      kind: 'neurograph-rank',
+      summary: 'Added NeuroGraph PPR/RRF fusion so active MiniCores, present cast, lexical hits, embeddings, and association spread rank canonical/state candidates together without increasing injection size.',
+    },
+    {
+      version: '1.1.55',
+      kind: 'agent-note-length-meta-filter',
+      summary: 'Kept response-length guidance available to pre-agents while stripping explicit length-control metadata from stored/reused agent notes.',
+    },
+    {
+      version: '1.1.55',
+      kind: 'keywordless-lore-filter',
+      summary: 'Excluded non-always-active lorebook entries with no explicit activation keys before canonical/Psyche ingestion so empty-key lore cannot drift into retrieval by inferred labels or body text.',
+    },
+    {
+      version: '1.1.55',
+      kind: 'perspective-gate-hardening',
+      summary: 'Introduced a shared perspective gate for canonical, NeuroCore, state recall, and association graph candidates with explicit hidden/private/foreknowledge access reasons in diagnostics.',
+    },
+    {
+      version: '1.1.54',
+      kind: 'neurocore-perspective-time',
+      summary: 'Separated current temporal facts from active-perspective foreknowledge in NeuroCore briefing, tightened hidden future-boundary access, and added selected current/foreknowledge trace counters.',
+    },
+    {
+      version: '1.1.53',
+      kind: 'neurocore-ground',
+      summary: 'Introduced NeuroCore scene/time/route state, deterministic Character MiniCore overlays, executive route/perspective gate tracing, and a compact NeuroCore main briefing block without replacing canonical source injection.',
+    },
     {
       version: '1.1.52',
       kind: 'agent-length-route',
@@ -242,6 +292,15 @@
     associationHebbianBoost: 0.07,
     associationEdgeDecay: 0.992,
     associationHardBoundary: true,
+    neuroGraphRankingEnabled: true,
+    neuroGraphPprAlpha: 0.18,
+    neuroGraphPprIterations: 8,
+    neuroGraphPprBoost: 64,
+    neuroGraphRrfK: 60,
+    neuroGraphRrfBoost: 180,
+    neuroHomeostasisEnabled: true,
+    neuroHomeostasisBriefingEnabled: false,
+    neuroHomeostasisCandidateBoost: 18,
     recallTraceEnabled: true,
     stateBackupEnabled: true,
     snapshotRingEnabled: true,
@@ -993,6 +1052,15 @@
     merged.associationHebbianBoost = parseNumber(merged.associationHebbianBoost, DEFAULT_CONFIG.associationHebbianBoost, 0, 0.4);
     merged.associationEdgeDecay = parseNumber(merged.associationEdgeDecay, DEFAULT_CONFIG.associationEdgeDecay, 0.8, 1);
     merged.associationHardBoundary = parseBool(merged.associationHardBoundary, DEFAULT_CONFIG.associationHardBoundary) === true;
+    merged.neuroGraphRankingEnabled = parseBool(merged.neuroGraphRankingEnabled, DEFAULT_CONFIG.neuroGraphRankingEnabled) === true;
+    merged.neuroGraphPprAlpha = parseNumber(merged.neuroGraphPprAlpha, DEFAULT_CONFIG.neuroGraphPprAlpha, 0.05, 0.85);
+    merged.neuroGraphPprIterations = Math.round(parseNumber(merged.neuroGraphPprIterations, DEFAULT_CONFIG.neuroGraphPprIterations, 2, 24));
+    merged.neuroGraphPprBoost = parseNumber(merged.neuroGraphPprBoost, DEFAULT_CONFIG.neuroGraphPprBoost, 0, 180);
+    merged.neuroGraphRrfK = parseNumber(merged.neuroGraphRrfK, DEFAULT_CONFIG.neuroGraphRrfK, 10, 160);
+    merged.neuroGraphRrfBoost = parseNumber(merged.neuroGraphRrfBoost, DEFAULT_CONFIG.neuroGraphRrfBoost, 0, 420);
+    merged.neuroHomeostasisEnabled = parseBool(merged.neuroHomeostasisEnabled, DEFAULT_CONFIG.neuroHomeostasisEnabled) === true;
+    merged.neuroHomeostasisBriefingEnabled = parseBool(merged.neuroHomeostasisBriefingEnabled, DEFAULT_CONFIG.neuroHomeostasisBriefingEnabled) === true;
+    merged.neuroHomeostasisCandidateBoost = parseNumber(merged.neuroHomeostasisCandidateBoost, DEFAULT_CONFIG.neuroHomeostasisCandidateBoost, 0, 120);
     merged.recallTraceEnabled = parseBool(merged.recallTraceEnabled, DEFAULT_CONFIG.recallTraceEnabled) === true;
     merged.stateBackupEnabled = parseBool(merged.stateBackupEnabled, DEFAULT_CONFIG.stateBackupEnabled) === true;
     merged.snapshotRingEnabled = parseBool(merged.snapshotRingEnabled, DEFAULT_CONFIG.snapshotRingEnabled) === true;
@@ -2353,6 +2421,7 @@
         presentCast: [],
         protectedNames: [],
       },
+      neuroCore: createDefaultNeuroCoreState(),
       continuityRisks: [],
       evidenceConflicts: [],
       injectionTrace: [],
@@ -2413,6 +2482,7 @@
     next.associationGraph = normalizeAssociationGraph(next.associationGraph);
     next.recallTrace = Array.isArray(next.recallTrace) ? next.recallTrace.slice(-MAX_RECALL_TRACE) : [];
     next.activePerspective = normalizeActivePerspective(next.activePerspective);
+    next.neuroCore = normalizeNeuroCoreState(next.neuroCore, next);
     pruneAutoLoreBootstrapCharacters(next);
     next.continuityRisks = Array.isArray(next.continuityRisks) ? next.continuityRisks : [];
     next.evidenceConflicts = Array.isArray(next.evidenceConflicts) ? next.evidenceConflicts.slice(-80) : [];
@@ -2432,6 +2502,1163 @@
     refreshMemoryTiers(next, 'normalize');
     next.updatedAt = next.updatedAt || nowIso();
     return next;
+  }
+
+  function createDefaultNeuroCoreState() {
+    return {
+      version: 1,
+      updatedAt: '',
+      scene: {
+        sceneDate: '',
+        sceneYear: '',
+        currentRoute: 'current',
+        presentCast: [],
+        mentionedNames: [],
+      },
+      temporalFacts: [],
+      routeEvents: [],
+      characterMiniCores: {},
+      activeMiniCores: [],
+      homeostasisSignals: null,
+      executiveTrace: createDefaultNeuroExecutiveTrace(),
+    };
+  }
+
+  function createDefaultNeuroExecutiveTrace() {
+    return {
+      at: '',
+      sceneYear: '',
+      currentRoute: 'current',
+      selectedCanonicalParts: 0,
+      selectedCurrentParts: 0,
+      selectedFutureKnowledgeParts: 0,
+      selectedSections: {},
+      activeMiniCores: 0,
+      blockedByRoute: 0,
+      blockedByPerspective: 0,
+      blockedByKnowledgeBoundary: 0,
+      blockedByHiddenBoundary: 0,
+      blockedByPrivateKnowledge: 0,
+      blockedSamples: [],
+    };
+  }
+
+  function normalizeNeuroCoreState(value, state = null) {
+    const raw = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    const next = {
+      ...createDefaultNeuroCoreState(),
+      ...raw,
+      version: 1,
+    };
+    next.scene = normalizeNeuroCoreScene(next.scene, state);
+    next.temporalFacts = (Array.isArray(next.temporalFacts) ? next.temporalFacts : []).map(normalizeNeuroTemporalFact).filter(Boolean).slice(0, 600);
+    next.routeEvents = (Array.isArray(next.routeEvents) ? next.routeEvents : []).map(normalizeNeuroRouteEvent).filter(Boolean).slice(0, 400);
+    next.characterMiniCores = normalizeCharacterMiniCoreRegistry(next.characterMiniCores);
+    next.activeMiniCores = (Array.isArray(next.activeMiniCores) ? next.activeMiniCores : []).map(normalizeCharacterMiniCore).filter(Boolean).slice(0, 12);
+    next.homeostasisSignals = normalizeNeuroHomeostasisSignals(next.homeostasisSignals);
+    next.executiveTrace = normalizeNeuroExecutiveTrace(next.executiveTrace, next.scene);
+    next.updatedAt = String(next.updatedAt || '');
+    return next;
+  }
+
+  function normalizeNeuroHomeostasisSignals(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    return {
+      threat: clampFloat(value.threat, 0, 0, 1),
+      conflict: clampFloat(value.conflict, 0, 0, 1),
+      safety: clampFloat(value.safety, 0, 0, 1),
+      trust: clampFloat(value.trust, 0, 0, 1),
+      recovery: clampFloat(value.recovery, 0, 0, 1),
+      fatigue: clampFloat(value.fatigue, 0, 0, 1),
+      injury: clampFloat(value.injury, 0, 0, 1),
+      uncertainty: clampFloat(value.uncertainty, 0, 0, 1),
+      intensity: clampFloat(value.intensity, 0, 0, 1),
+      cues: normalizeStringArray(value.cues).slice(0, 12),
+    };
+  }
+
+  function normalizeNeuroCoreScene(value, state = null) {
+    const raw = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    const scene = state?.scene || {};
+    return {
+      sceneDate: cleanString(firstNonEmpty(raw.sceneDate, raw.date, scene.time), '').slice(0, 80),
+      sceneYear: cleanString(firstNonEmpty(raw.sceneYear, raw.year), '').slice(0, 12),
+      currentRoute: normalizeNeuroRoute(firstNonEmpty(raw.currentRoute, raw.route, 'current')) || 'current',
+      presentCast: normalizeStringArray(raw.presentCast).filter(name => !isGenericCharacterStateToken(name)).slice(0, 20),
+      mentionedNames: normalizeStringArray(raw.mentionedNames).filter(name => !isGenericCharacterStateToken(name)).slice(0, 40),
+    };
+  }
+
+  function normalizeNeuroTemporalFact(item) {
+    if (!item || typeof item !== 'object') return null;
+    const subject = cleanString(firstNonEmpty(item.subject, item.name), '').slice(0, 120);
+    const predicate = cleanString(firstNonEmpty(item.predicate, item.fact, item.kind), '').slice(0, 80);
+    if (!subject || !predicate) return null;
+    return {
+      id: cleanString(firstNonEmpty(item.id, `tf-${hashString(safeJsonStringify(item)).slice(0, 12)}`), '').slice(0, 160),
+      subject,
+      predicate,
+      object: cleanString(firstNonEmpty(item.object, item.value), '').slice(0, 240),
+      route: normalizeNeuroRoute(item.route) || 'unknown',
+      validYear: cleanString(item.validYear, '').slice(0, 12),
+      validFrom: cleanString(item.validFrom, '').slice(0, 24),
+      validTo: cleanString(item.validTo, '').slice(0, 24),
+      sourceUnitIds: normalizeStringArray(item.sourceUnitIds).slice(0, 16),
+      summary: cleanString(item.summary || item.excerpt, '').slice(0, 300),
+      knowledgeBoundary: Boolean(item.knowledgeBoundary || item?.meta?.knowledgeBoundary || item?.meta?.hiddenSource || item?.meta?.secretSource),
+      futureSource: Boolean(item.futureSource || item?.meta?.futureSource),
+      boundaryReason: cleanString(item.boundaryReason || item?.meta?.boundaryReason, '').slice(0, 160),
+      knownBy: normalizeStringArray(item.knownBy).slice(0, 32),
+      cannotKnow: normalizeStringArray(item.cannotKnow).slice(0, 32),
+      confidence: clampFloat(item.confidence, 0.72, 0, 1),
+    };
+  }
+
+  function normalizeNeuroRouteEvent(item) {
+    if (!item || typeof item !== 'object') return null;
+    const label = cleanString(firstNonEmpty(item.label, item.event, item.name), '').slice(0, 180);
+    if (!label) return null;
+    return {
+      id: cleanString(firstNonEmpty(item.id, `route-${hashString(safeJsonStringify(item)).slice(0, 12)}`), '').slice(0, 160),
+      label,
+      route: normalizeNeuroRoute(item.route) || 'unknown',
+      eventYear: cleanString(firstNonEmpty(item.eventYear, item.validYear), '').slice(0, 12),
+      appliesToCurrentScene: item.appliesToCurrentScene === true,
+      sourceUnitIds: normalizeStringArray(item.sourceUnitIds).slice(0, 16),
+      summary: cleanString(item.summary || item.excerpt, '').slice(0, 300),
+      knowledgeBoundary: Boolean(item.knowledgeBoundary || item?.meta?.knowledgeBoundary || item?.meta?.hiddenSource || item?.meta?.secretSource),
+      futureSource: Boolean(item.futureSource || item?.meta?.futureSource),
+      boundaryReason: cleanString(item.boundaryReason || item?.meta?.boundaryReason, '').slice(0, 160),
+      knownBy: normalizeStringArray(item.knownBy).slice(0, 32),
+      cannotKnow: normalizeStringArray(item.cannotKnow).slice(0, 32),
+      confidence: clampFloat(item.confidence, 0.68, 0, 1),
+    };
+  }
+
+  function createDefaultNeuroAutonomicTone() {
+    return {
+      arousal: 0.18,
+      threatPressure: 0,
+      safetyPressure: 0,
+      approachTendency: 0.34,
+      avoidTendency: 0.22,
+      freezeTendency: 0.08,
+      updatedAt: '',
+    };
+  }
+
+  function createDefaultNeuroHomeostaticState() {
+    return {
+      stressLoad: 0.12,
+      allostaticLoad: 0.08,
+      recoveryReserve: 0.68,
+      fatigue: 0.16,
+      securityTone: 0.55,
+      lastUpdatedTurn: 0,
+      updatedAt: '',
+      evidence: [],
+    };
+  }
+
+  function createDefaultNeuroMiniCoreModulators() {
+    return {
+      threatThreshold: 0.56,
+      recoveryBias: 0.62,
+      fatigueBias: 0.16,
+      salienceBias: 0,
+    };
+  }
+
+  function normalizeNeuroAutonomicTone(value) {
+    const raw = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    return {
+      ...createDefaultNeuroAutonomicTone(),
+      arousal: clampFloat(raw.arousal, 0.18, 0, 1),
+      threatPressure: clampFloat(raw.threatPressure, 0, 0, 1),
+      safetyPressure: clampFloat(raw.safetyPressure, 0, 0, 1),
+      approachTendency: clampFloat(raw.approachTendency, 0.34, 0, 1),
+      avoidTendency: clampFloat(raw.avoidTendency, 0.22, 0, 1),
+      freezeTendency: clampFloat(raw.freezeTendency, 0.08, 0, 1),
+      updatedAt: String(raw.updatedAt || ''),
+    };
+  }
+
+  function normalizeNeuroHomeostaticState(value) {
+    const raw = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    return {
+      ...createDefaultNeuroHomeostaticState(),
+      stressLoad: clampFloat(raw.stressLoad, 0.12, 0, 1),
+      allostaticLoad: clampFloat(raw.allostaticLoad, 0.08, 0, 1),
+      recoveryReserve: clampFloat(raw.recoveryReserve, 0.68, 0, 1),
+      fatigue: clampFloat(raw.fatigue, 0.16, 0, 1),
+      securityTone: clampFloat(raw.securityTone, 0.55, 0, 1),
+      lastUpdatedTurn: parseNumber(raw.lastUpdatedTurn, 0, 0, 999999),
+      updatedAt: String(raw.updatedAt || ''),
+      evidence: (Array.isArray(raw.evidence) ? raw.evidence : []).map(item => String(item || '').slice(0, 120)).filter(Boolean).slice(0, 8),
+    };
+  }
+
+  function normalizeNeuroMiniCoreModulators(value) {
+    const raw = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    return {
+      ...createDefaultNeuroMiniCoreModulators(),
+      threatThreshold: clampFloat(raw.threatThreshold, 0.56, 0, 1),
+      recoveryBias: clampFloat(raw.recoveryBias, 0.62, 0, 1),
+      fatigueBias: clampFloat(raw.fatigueBias, 0.16, 0, 1),
+      salienceBias: clampFloat(raw.salienceBias, 0, -1, 1),
+    };
+  }
+
+  function normalizeCharacterMiniCore(item) {
+    if (!item || typeof item !== 'object') return null;
+    const name = cleanString(firstNonEmpty(item.name, item.characterName, item.id), '').slice(0, 120);
+    if (!name || isGenericCharacterStateToken(name)) return null;
+    const id = slug(firstNonEmpty(item.id, name));
+    if (!id) return null;
+    return {
+      id,
+      name,
+      aliases: normalizeStringArray(item.aliases).filter(alias => alias !== name && !isGenericCharacterStateToken(alias)).slice(0, 20),
+      route: normalizeNeuroRoute(item.route) || 'current',
+      age: cleanString(item.age, '').slice(0, 24),
+      affiliation: cleanString(item.affiliation, '').slice(0, 160),
+      role: cleanString(item.role, '').slice(0, 160),
+      salience: clampFloat(item.salience, 0, 0, 9999),
+      sourceUnitIds: normalizeStringArray(item.sourceUnitIds).slice(0, 40),
+      knownFactIds: normalizeStringArray(item.knownFactIds).slice(0, 80),
+      blockedFactIds: normalizeStringArray(item.blockedFactIds).slice(0, 80),
+      cannotKnow: normalizeStringArray(item.cannotKnow).slice(0, 40),
+      perspectivePolicy: item.perspectivePolicy && typeof item.perspectivePolicy === 'object' ? item.perspectivePolicy : {},
+      autonomicTone: normalizeNeuroAutonomicTone(item.autonomicTone || item.affectState),
+      homeostaticState: normalizeNeuroHomeostaticState(item.homeostaticState),
+      modulators: normalizeNeuroMiniCoreModulators(item.modulators),
+      activeReason: cleanString(item.activeReason, '').slice(0, 120),
+      updatedAt: cleanString(item.updatedAt, ''),
+    };
+  }
+
+  function normalizeCharacterMiniCoreRegistry(value) {
+    const out = {};
+    const list = Array.isArray(value) ? value : Object.values(value && typeof value === 'object' ? value : {});
+    list.map(normalizeCharacterMiniCore).filter(Boolean).slice(0, 160).forEach(core => {
+      out[core.id] = core;
+    });
+    return out;
+  }
+
+  function normalizeNeuroExecutiveTrace(value, scene = null) {
+    const raw = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    return {
+      ...createDefaultNeuroExecutiveTrace(),
+      ...raw,
+      sceneYear: cleanString(firstNonEmpty(raw.sceneYear, scene?.sceneYear), '').slice(0, 12),
+      currentRoute: normalizeNeuroRoute(firstNonEmpty(raw.currentRoute, scene?.currentRoute, 'current')) || 'current',
+      selectedCanonicalParts: parseNumber(raw.selectedCanonicalParts, 0, 0, 999999),
+      selectedCurrentParts: parseNumber(raw.selectedCurrentParts, 0, 0, 999999),
+      selectedFutureKnowledgeParts: parseNumber(raw.selectedFutureKnowledgeParts, 0, 0, 999999),
+      selectedSections: raw.selectedSections && typeof raw.selectedSections === 'object' && !Array.isArray(raw.selectedSections) ? raw.selectedSections : {},
+      activeMiniCores: parseNumber(raw.activeMiniCores, 0, 0, 999999),
+      blockedByRoute: parseNumber(raw.blockedByRoute, 0, 0, 999999),
+      blockedByPerspective: parseNumber(raw.blockedByPerspective, 0, 0, 999999),
+      blockedByKnowledgeBoundary: parseNumber(raw.blockedByKnowledgeBoundary, 0, 0, 999999),
+      blockedByHiddenBoundary: parseNumber(raw.blockedByHiddenBoundary, 0, 0, 999999),
+      blockedByPrivateKnowledge: parseNumber(raw.blockedByPrivateKnowledge, 0, 0, 999999),
+      blockedSamples: (Array.isArray(raw.blockedSamples) ? raw.blockedSamples : []).slice(0, 24),
+    };
+  }
+
+  function normalizeNeuroRoute(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    const lower = raw.toLowerCase();
+    if (/counterfactual|if-route|what-if/.test(lower)) return 'counterfactual';
+    if (/original-future|future|later|spoiler|original\s+route|future\s+route/.test(lower) || looksFutureOriginalRouteText(raw)) return 'original-future';
+    if (/universal|always|all/.test(lower)) return 'universal';
+    if (/current|main|present|active/.test(lower)) return 'current';
+    return raw.slice(0, 80);
+  }
+
+  function extractYearToken(value) {
+    return extractYearTokens(value)[0] || '';
+  }
+
+  function extractYearTokens(value, options = {}) {
+    const text = String(value || '');
+    if (!text.trim()) return [];
+    const strict = Boolean(options.strict);
+    const out = [];
+    const add = year => {
+      const n = Number(year);
+      if (Number.isFinite(n) && n >= 1 && n <= 9999) out.push(String(n));
+    };
+    const marked = text.matchAll(/(?:^|[^\d])([1-9]\d{2,3})\s*(?:year|yr|\uB144|\u5E74)/gi);
+    for (const match of marked) add(match[1]);
+    const markedAfter = text.matchAll(/\b(?:year|yr)\s*[:=\-]?\s*([1-9]\d{2,3})\b/gi);
+    for (const match of markedAfter) add(match[1]);
+    if (!strict) {
+      const bare = text.matchAll(/\b([1-9]\d{2,3})\b/g);
+      for (const match of bare) add(match[1]);
+    }
+    return uniqueStrings(out).slice(0, Number.isFinite(Number(options.limit)) ? Math.max(1, Number(options.limit)) : 16);
+  }
+
+  function extractAgeToken(value) {
+    const text = String(value || '');
+    const patterns = [
+      /(?:age|aged|\uB098\uC774|\uC5F0\uB839|\u5E74\u9F62|\u5E74\u9F84|\u5E74\u9F61)\s*[:\uFF1A=\-]?\s*(\d{1,3})(?:\s*(?:\uC138|\uC0B4|\u6B73|\u624D|\u5C81|years?\s*old|y\/o))?/i,
+      /\b(\d{1,3})\s*(?:years?\s*old|y\/o)\b/i,
+      /(?:^|[^\d])(\d{1,3})\s*(?:\uC138|\uC0B4|\u6B73|\u624D|\u5C81)(?=$|[^\d])/,
+    ];
+    for (const pattern of patterns) {
+      const match = text.match(pattern);
+      const n = Number(match?.[1]);
+      if (Number.isFinite(n) && n >= 1 && n <= 150) return String(n);
+    }
+    return '';
+  }
+
+  const PROFILE_NAME_LABELS = Object.freeze([
+    'name', 'character name', 'full name',
+    '\uC774\uB984', '\uC131\uBA85', '\uBCF8\uBA85',
+    '\u59D3\u540D', '\u540D\u5B57', '\u540D\u79F0',
+    '\u540D\u524D', '\u6C0F\u540D', '\u540D',
+  ]);
+  const PROFILE_ALIAS_LABELS = Object.freeze([
+    'alias', 'aliases', 'nickname', 'also known as',
+    '\uBCC4\uBA85', '\uC774\uBA85', '\uD638\uCE6D',
+    '\u522B\u540D', '\u7EF0\u53F7', '\u7B49\u522B\u540D',
+    '\u5225\u540D', '\u901A\u79F0', '\u7570\u540D',
+  ]);
+  const PROFILE_GENDER_LABELS = Object.freeze([
+    'gender', 'sex',
+    '\uC131\uBCC4', '\uC131',
+    '\u6027\u5225', '\u6027',
+    '\u6027\u522B',
+  ]);
+  const PROFILE_AFFILIATION_LABELS = Object.freeze([
+    'affiliation', 'faction', 'sect', 'clan', 'school', 'house', 'family', 'organization', 'origin',
+    '\uC18C\uC18D', '\uC138\uB825', '\uBB38\uD30C', '\uAC00\uBB38', '\uAC00\uC871', '\uC870\uC9C1', '\uCD9C\uC2E0',
+    '\u6240\u5C5E', '\u52BF\u529B', '\u95E8\u6D3E', '\u9580\u6D3E', '\u5BB6\u95E8', '\u5BB6\u65CF', '\u7EC4\u7EC7', '\u7D44\u7E54', '\u51FA\u8EAB',
+  ]);
+  const PROFILE_ROLE_LABELS = Object.freeze([
+    'role', 'occupation', 'job', 'title', 'class', 'position', 'rank',
+    '\uC5ED\uD560', '\uC9C1\uC5C5', '\uC2E0\uBD84', '\uC9C0\uC704', '\uCE6D\uD638', '\uC9C1\uCC45', '\uC9C1\uC704', '\uC11C\uC5F4',
+    '\u89D2\u8272', '\u8EAB\u4EFD', '\u804C\u4E1A', '\u8077\u696D', '\u5730\u4F4D', '\u8077\u4F4D', '\u79F0\u53F7', '\u7A31\u53F7', '\u5E8F\u5217',
+    '\u5F79\u5272', '\u8EAB\u5206',
+  ]);
+  const PROFILE_APPEARANCE_LABELS = Object.freeze([
+    'appearance', 'looks', 'body', 'height',
+    '\uC678\uD615', '\uC678\uBAA8', '\uC2E0\uCCB4', '\uD0A4',
+    '\u5916\u8C8C', '\u5916\u5F62', '\u8EAB\u4F53', '\u8EAB\u9AD8',
+    '\u5916\u898B', '\u4F53\u578B',
+  ]);
+  const PROFILE_PERSONALITY_LABELS = Object.freeze([
+    'personality', 'temperament', 'traits', 'character',
+    '\uC131\uACA9', '\uAE30\uC9C8', '\uD2B9\uC9D5',
+    '\u6027\u683C', '\u6C14\u8D28', '\u6C23\u8CEA', '\u7279\u5F81', '\u7279\u6027',
+  ]);
+
+  function profileLabelPattern(labels) {
+    return (Array.isArray(labels) ? labels : [])
+      .map(label => escapeRegexLiteral(label))
+      .filter(Boolean)
+      .join('|');
+  }
+
+  function hasProfileFieldLabel(text, labels) {
+    const pattern = profileLabelPattern(labels);
+    if (!pattern) return false;
+    return new RegExp(`(?:^|\\n)\\s*(?:[-*#>]+\\s*)?(?:${pattern})\\s*[:\\uFF1A=\\-]`, 'i').test(String(text || ''));
+  }
+
+  function cleanProfileFieldValue(value, limit = 160) {
+    return String(value || '')
+      .replace(/^[\s#*_`~>\-]+/, '')
+      .replace(/\s*(?:\/\/|#|<br\s*\/?>).*$/i, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim()
+      .slice(0, Math.max(20, Number(limit || 160)));
+  }
+
+  function extractProfileFieldValue(text, labels, limit = 160) {
+    const pattern = profileLabelPattern(labels);
+    if (!pattern) return '';
+    const match = String(text || '').match(new RegExp(`(?:^|\\n)\\s*(?:[-*#>]+\\s*)?(?:${pattern})\\s*[:\\uFF1A=\\-]\\s*([^\\n\\r]{1,260})`, 'i'));
+    return match ? cleanProfileFieldValue(match[1], limit) : '';
+  }
+
+  function profileFieldHitCount(text) {
+    const source = String(text || '');
+    let count = 0;
+    [
+      PROFILE_NAME_LABELS,
+      PROFILE_ALIAS_LABELS,
+      PROFILE_GENDER_LABELS,
+      PROFILE_AFFILIATION_LABELS,
+      PROFILE_ROLE_LABELS,
+      PROFILE_APPEARANCE_LABELS,
+      PROFILE_PERSONALITY_LABELS,
+    ].forEach(labels => {
+      if (hasProfileFieldLabel(source, labels)) count += 1;
+    });
+    if (extractAgeToken(source)) count += 1;
+    return count;
+  }
+
+  function looksLikeCharacterProfileText(text, labelText = '') {
+    const source = String(text || '');
+    const label = String(labelText || '');
+    if (!source.trim() && !label.trim()) return false;
+    const profileHeader = /(?:character\s*(?:sheet|profile|setting)|cast\s*(?:sheet|profile)|persona|profile|oc\s+profile|\uCE90\uB9AD\uD130|\uC778\uBB3C|\uB4F1\uC7A5\uC778\uBB3C|\uC778\uBB3C\s*\uC124\uC815|\uD504\uB85C\uD544|\u89D2\u8272|\u4EBA\u7269|\u767B\u573A\u4EBA\u7269|\u4EBA\u7269\u8BBE\u5B9A|\u8A2D\u5B9A|\u30AD\u30E3\u30E9|\u30AD\u30E3\u30E9\u30AF\u30BF\u30FC|\u767B\u5834\u4EBA\u7269|\u4EBA\u7269\u8A2D\u5B9A|\u30D7\u30ED\u30D5\u30A3\u30FC\u30EB)/i.test(`${label}\n${source.slice(0, 1200)}`);
+    const hits = profileFieldHitCount(source);
+    return hits >= 2 || (hits >= 1 && profileHeader);
+  }
+
+  function looksLikeCharacterProfileUnit(unit) {
+    const text = String(unit?.content || '');
+    const label = [
+      unit?.label,
+      unit?.path,
+      unit?.kind,
+      ...(normalizeStringArray(unit?.activationKeys)),
+      ...(normalizeStringArray(unit?.subjectHints)),
+    ].filter(Boolean).join('\n');
+    return looksLikeCharacterProfileText(text, label);
+  }
+
+  function splitProfileAliases(value) {
+    return uniqueStrings(String(value || '')
+      .replace(/[(){}\[\]]/g, ' ')
+      .split(/[\/,;|、，・\s]+/)
+      .map(item => item.trim())
+      .filter(item => item && item.length <= 80 && !isGenericCharacterStateToken(item) && !isForbiddenIdentityAlias(item)))
+      .slice(0, 16);
+  }
+
+  function extractMiniCoreProfileFields(unit) {
+    const content = String(unit?.content || '');
+    const explicitName = extractProfileFieldValue(content, PROFILE_NAME_LABELS, 120);
+    const name = firstNonEmpty(explicitName, canonicalUnitPrimaryName(unit));
+    const aliases = uniqueStrings([])
+      .concat(splitProfileAliases(extractProfileFieldValue(content, PROFILE_ALIAS_LABELS, 220)))
+      .concat(canonicalUnitNameHints(unit).filter(alias => alias !== name))
+      .slice(0, 20);
+    return {
+      name,
+      aliases,
+      age: extractAgeToken(content),
+      affiliation: extractProfileFieldValue(content, PROFILE_AFFILIATION_LABELS, 160),
+      role: extractProfileFieldValue(content, PROFILE_ROLE_LABELS, 160),
+      gender: extractProfileFieldValue(content, PROFILE_GENDER_LABELS, 80),
+      isProfile: looksLikeCharacterProfileUnit(unit),
+    };
+  }
+
+  function canonicalUnitNameHints(unit) {
+    return uniqueStrings([]
+      .concat(normalizeStringArray(unit?.subjectHints))
+      .concat(normalizeStringArray(unit?.activationKeys))
+      .concat(normalizeStringArray(unit?.keys))
+      .concat(firstNonEmpty(unit?.label).split(/[\/,;|]/))
+      .map(name => String(name || '').trim())
+      .filter(name => name && name.length <= 120 && !isGenericCharacterStateToken(name)));
+  }
+
+  function canonicalUnitPrimaryName(unit) {
+    const hints = canonicalUnitNameHints(unit);
+    return hints.find(name => !/description|scenario|setting|world|kingdom|module|lore/i.test(name)) || hints[0] || '';
+  }
+
+  function extractMentionedNamesFromText(names, text) {
+    const source = String(text || '');
+    return uniqueStrings(normalizeStringArray(names).filter(name => {
+      const raw = String(name || '').trim();
+      return raw.length >= 2 && source.includes(raw);
+    })).slice(0, 40);
+  }
+
+  const NEURO_HOMEOSTASIS_CUES = Object.freeze({
+    threat: /(?:attack|assault|ambush|danger|threat|kill|murder|blood|bleed|pain|wound|enemy|chase|fear|scared|panic|terror|poison|위협|위험|공격|습격|살해|죽이|죽을|피\b|출혈|통증|상처|부상|적\b|추격|공포|두려|독\b|危险|危險|威胁|威脅|攻击|攻擊|袭击|襲擊|杀|殺|血|伤|傷|痛|敌|敵|追杀|追殺|恐惧|恐懼|毒|危険|攻撃|襲撃|殺|血|傷|痛|敵|追撃|恐怖|怖|毒)/i,
+    conflict: /(?:conflict|fight|argue|tension|betray|lie|deceive|secret|pressure|hostile|갈등|싸움|다툼|논쟁|긴장|배신|거짓|속임|비밀|압박|적대|冲突|衝突|争执|爭執|紧张|緊張|背叛|谎|謊|秘密|敌意|敵意|衝突|争い|口論|緊張|裏切|嘘|秘密|敵意)/i,
+    safety: /(?:safe|safety|protect|shelter|home|calm|peace|relief|secure|guard|안전|보호|지켜|피난|집\b|평온|안심|안정|경호|安全|保护|保護|守护|守護|庇护|庇護|安心|平静|安全|守る|守護|庇護|安心|穏やか|平穏)/i,
+    trust: /(?:trust|ally|friend|companion|promise|bond|embrace|support|믿|신뢰|동료|친구|벗\b|약속|유대|포옹|지원|信任|信赖|信賴|伙伴|同伴|朋友|约定|約定|羁绊|絆|信頼|仲間|友人|約束|絆|抱擁|支え)/i,
+    recovery: /(?:rest|sleep|heal|recover|recovery|meal|food|bath|medicine|treat|쉬|휴식|잠\b|수면|치료|회복|식사|음식|목욕|약재|약\b|休息|睡|眠|治疗|治療|恢复|恢復|回復|饭|飯|食物|药|藥|風呂|休む|眠る|治療|回復|食事|薬)/i,
+    fatigue: /(?:tired|exhausted|fatigue|weary|sleepy|hungry|thirsty|overwork|지친|지쳤|피곤|탈진|졸린|졸음|허기|배고|갈증|과로|疲惫|疲憊|疲劳|疲勞|困倦|困|饿|餓|渴|疲れ|疲労|眠い|空腹|喉が渇|過労)/i,
+    injury: /(?:injury|wound|bleed|scar|poison|burn|fracture|상처|부상|출혈|흉터|독\b|화상|골절|伤|傷|流血|疤|毒|烧伤|燒傷|骨折|怪我|傷|出血|毒|火傷|骨折)/i,
+    uncertainty: /(?:unknown|uncertain|strange|confused|lost|doubt|낯선|모르는|불확실|이상한|혼란|길을 잃|의심|未知|不明|奇怪|困惑|迷失|怀疑|懷疑|未知|不明|見知らぬ|奇妙|混乱|迷子|疑い)/i,
+  });
+
+  function createDefaultNeuroSceneSignals() {
+    return {
+      threat: 0,
+      conflict: 0,
+      safety: 0,
+      trust: 0,
+      recovery: 0,
+      fatigue: 0,
+      injury: 0,
+      uncertainty: 0,
+      intensity: 0,
+      cues: [],
+      text: '',
+    };
+  }
+
+  function countNeuroCueHits(text, pattern) {
+    const source = String(text || '');
+    if (!source.trim() || !(pattern instanceof RegExp)) return 0;
+    const flags = pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`;
+    const re = new RegExp(pattern.source, flags);
+    const matches = source.match(re);
+    return matches ? matches.length : 0;
+  }
+
+  function neuroCueScore(text, pattern, weight = 0.18, cap = 1) {
+    return clampFloat(countNeuroCueHits(text, pattern) * weight, 0, 0, cap);
+  }
+
+  function collectNeuroSceneSignalText(context = null, state = null) {
+    return [
+      (Array.isArray(context?.messages) ? context.messages : []).slice(-8).map(messageText).join('\n'),
+      stringifyLedgerItem(state?.scene || {}),
+      (Array.isArray(state?.eventLog) ? state.eventLog : []).slice(-6).map(item => stringifyLedgerItem(item)).join('\n'),
+    ].filter(Boolean).join('\n').slice(-24000);
+  }
+
+  function extractNeuroSceneSignals(context = null, state = null) {
+    const text = collectNeuroSceneSignalText(context, state);
+    const signals = {
+      ...createDefaultNeuroSceneSignals(),
+      text,
+    };
+    Object.entries(NEURO_HOMEOSTASIS_CUES).forEach(([key, pattern]) => {
+      signals[key] = neuroCueScore(text, pattern, key === 'threat' || key === 'conflict' ? 0.16 : 0.14, 1);
+      if (signals[key] > 0) signals.cues.push(`${key}:${formatDecimal(signals[key])}`);
+    });
+    signals.intensity = clampFloat((signals.threat * 0.38) + (signals.conflict * 0.22) + (signals.injury * 0.18) + (signals.uncertainty * 0.08) + (signals.fatigue * 0.06), 0, 0, 1);
+    return signals;
+  }
+
+  function coreNameMentionFactor(core, signals, scene = null) {
+    const names = uniqueStrings([core?.name].concat(normalizeStringArray(core?.aliases))).filter(Boolean);
+    const lowerPresent = normalizeStringArray(scene?.presentCast).map(name => name.toLowerCase());
+    const lowerMentioned = normalizeStringArray(scene?.mentionedNames).map(name => name.toLowerCase());
+    const lowerNames = names.map(name => name.toLowerCase());
+    if (lowerNames.some(name => lowerPresent.some(seed => name === seed || name.includes(seed) || seed.includes(name)))) return 1;
+    if (lowerNames.some(name => lowerMentioned.some(seed => name === seed || name.includes(seed) || seed.includes(name)))) return 0.86;
+    if (names.some(name => String(signals?.text || '').includes(name))) return 0.74;
+    return 0.42;
+  }
+
+  function relationshipHomeostasisSignals(core, state = null, scene = null) {
+    const names = uniqueStrings([core?.name].concat(normalizeStringArray(core?.aliases))).filter(Boolean).map(name => name.toLowerCase());
+    const present = normalizeStringArray(scene?.presentCast).map(name => name.toLowerCase());
+    if (!names.length || !present.length) return { trust: 0, conflict: 0, safety: 0, threat: 0 };
+    const out = { trust: 0, conflict: 0, safety: 0, threat: 0 };
+    (Array.isArray(state?.relationships) ? state.relationships : []).forEach(rel => {
+      const a = String(rel?.a || '').toLowerCase();
+      const b = String(rel?.b || '').toLowerCase();
+      const touchesCore = names.some(name => a.includes(name) || b.includes(name) || name.includes(a) || name.includes(b));
+      const touchesPresent = present.some(name => a.includes(name) || b.includes(name) || name.includes(a) || name.includes(b));
+      if (!touchesCore || !touchesPresent) return;
+      const trust = clampFloat(parseNumber(rel.trust, 0, -100, 100) / 100, 0, -1, 1);
+      const affinity = clampFloat(parseNumber(firstNonEmpty(rel.affinity, rel.affection, rel.favorability), 0, -100, 100) / 100, 0, -1, 1);
+      const tension = clampFloat(parseNumber(rel.tension, 0, 0, 100) / 100, 0, 0, 1);
+      const fear = clampFloat(parseNumber(rel.fear, 0, 0, 100) / 100, 0, 0, 1);
+      out.trust = Math.max(out.trust, Math.max(0, trust, affinity) * 0.45);
+      out.safety = Math.max(out.safety, Math.max(0, trust) * 0.28);
+      out.conflict = Math.max(out.conflict, tension * 0.42);
+      out.threat = Math.max(out.threat, fear * 0.38);
+    });
+    return out;
+  }
+
+  function decayToward(value, target, retention) {
+    return target + (clampFloat(value, target, 0, 1) - target) * clampFloat(retention, 0, 0, 1);
+  }
+
+  function roundedUnitInterval(value) {
+    return Number(clampFloat(value, 0, 0, 1).toFixed(3));
+  }
+
+  function labelNeuroLevel(value, highLabel = 'high', midLabel = 'mild', lowLabel = 'low') {
+    const n = clampFloat(value, 0, 0, 1);
+    if (n >= 0.72) return highLabel;
+    if (n >= 0.42) return midLabel;
+    if (n <= 0.18) return lowLabel;
+    return 'regulated';
+  }
+
+  function labelNeuroLoad(value) {
+    const n = clampFloat(value, 0, 0, 1);
+    if (n >= 0.72) return 'high';
+    if (n >= 0.32) return 'mild';
+    return 'low';
+  }
+
+  function labelNeuroReserve(value) {
+    const n = clampFloat(value, 0, 0, 1);
+    if (n >= 0.72) return 'ample';
+    if (n >= 0.52) return 'adequate';
+    return 'low';
+  }
+
+  function labelNeuroSecurity(value) {
+    const n = clampFloat(value, 0, 0, 1);
+    if (n >= 0.68) return 'secure';
+    if (n >= 0.46) return 'steady';
+    return 'fragile';
+  }
+
+  function updateNeuroMiniCoreHomeostasis(core, sceneSignals, state = null, scene = null) {
+    const normalized = normalizeCharacterMiniCore(core);
+    if (!normalized) return null;
+    const priorAuto = normalizeNeuroAutonomicTone(normalized.autonomicTone);
+    const priorHomeo = normalizeNeuroHomeostaticState(normalized.homeostaticState);
+    const turn = parseNumber(state?.turn, 0, 0, 999999);
+    const lastTurn = parseNumber(priorHomeo.lastUpdatedTurn, 0, 0, 999999);
+    const elapsed = Math.max(1, lastTurn > 0 ? turn - lastTurn : 1);
+    const factor = coreNameMentionFactor(normalized, sceneSignals, scene);
+    const rel = relationshipHomeostasisSignals(normalized, state, scene);
+    const signal = {
+      threat: clampFloat((sceneSignals.threat + rel.threat) * factor, 0, 0, 1),
+      conflict: clampFloat((sceneSignals.conflict + rel.conflict) * factor, 0, 0, 1),
+      safety: clampFloat((sceneSignals.safety + rel.safety) * factor, 0, 0, 1),
+      trust: clampFloat((sceneSignals.trust + rel.trust) * factor, 0, 0, 1),
+      recovery: clampFloat(sceneSignals.recovery * factor, 0, 0, 1),
+      fatigue: clampFloat(sceneSignals.fatigue * factor, 0, 0, 1),
+      injury: clampFloat(sceneSignals.injury * factor, 0, 0, 1),
+      uncertainty: clampFloat(sceneSignals.uncertainty * factor, 0, 0, 1),
+    };
+    const arousalRetention = Math.pow(0.52, elapsed);
+    const pressureRetention = Math.pow(0.48, elapsed);
+    const stressRetention = Math.pow(0.94, elapsed);
+    const allostaticRetention = Math.pow(0.985, elapsed);
+    const recoveryRetention = Math.pow(0.97, elapsed);
+    const fatigueRetention = Math.pow(0.92, elapsed);
+    const securityRetention = Math.pow(0.96, elapsed);
+    const threatPressure = roundedUnitInterval(decayToward(priorAuto.threatPressure, 0, pressureRetention) + signal.threat * 0.52 + signal.conflict * 0.26 + signal.injury * 0.18 + signal.uncertainty * 0.1);
+    const safetyPressure = roundedUnitInterval(decayToward(priorAuto.safetyPressure, 0, pressureRetention) + signal.safety * 0.44 + signal.trust * 0.34 + signal.recovery * 0.2);
+    const arousal = roundedUnitInterval(decayToward(priorAuto.arousal, 0.18, arousalRetention) + threatPressure * 0.46 + signal.conflict * 0.18 + signal.fatigue * 0.07 - safetyPressure * 0.12);
+    const stressLoad = roundedUnitInterval(decayToward(priorHomeo.stressLoad, 0.12, stressRetention) + signal.threat * 0.1 + signal.conflict * 0.07 + signal.injury * 0.06 - signal.recovery * 0.022 - signal.trust * 0.012);
+    const allostaticLoad = roundedUnitInterval(decayToward(priorHomeo.allostaticLoad, 0.08, allostaticRetention) + Math.max(0, stressLoad - 0.42) * 0.05 + signal.threat * 0.025 + signal.fatigue * 0.018 - signal.recovery * 0.01);
+    const recoveryReserve = roundedUnitInterval(decayToward(priorHomeo.recoveryReserve, 0.68, recoveryRetention) + signal.recovery * 0.12 + signal.safety * 0.08 + signal.trust * 0.08 - signal.threat * 0.06 - signal.fatigue * 0.055 - allostaticLoad * 0.025);
+    const fatigue = roundedUnitInterval(decayToward(priorHomeo.fatigue, 0.16, fatigueRetention) + signal.fatigue * 0.15 + signal.injury * 0.055 + Math.max(0, 0.42 - recoveryReserve) * 0.04 - signal.recovery * 0.12);
+    const securityTone = roundedUnitInterval(decayToward(priorHomeo.securityTone, 0.55, securityRetention) + signal.trust * 0.1 + signal.safety * 0.075 - signal.threat * 0.055 - signal.conflict * 0.045);
+    const approachTendency = roundedUnitInterval(decayToward(priorAuto.approachTendency, 0.34, arousalRetention) + securityTone * 0.12 + signal.trust * 0.12 - threatPressure * 0.07);
+    const avoidTendency = roundedUnitInterval(decayToward(priorAuto.avoidTendency, 0.22, arousalRetention) + threatPressure * 0.18 + fatigue * 0.06 - securityTone * 0.05);
+    const freezeTendency = roundedUnitInterval(decayToward(priorAuto.freezeTendency, 0.08, arousalRetention) + threatPressure * 0.12 + allostaticLoad * 0.08 + Math.max(0, 0.38 - recoveryReserve) * 0.08);
+    const evidence = uniqueStrings([]
+      .concat(sceneSignals.cues || [])
+      .concat(rel.trust ? `relationship-trust:${formatDecimal(rel.trust)}` : [])
+      .concat(rel.conflict ? `relationship-conflict:${formatDecimal(rel.conflict)}` : []))
+      .slice(0, 8);
+    const modulators = normalizeNeuroMiniCoreModulators({
+      threatThreshold: roundedUnitInterval(0.58 - allostaticLoad * 0.2 - stressLoad * 0.1 + recoveryReserve * 0.06 + securityTone * 0.04),
+      recoveryBias: roundedUnitInterval(recoveryReserve * 0.56 + securityTone * 0.34 + safetyPressure * 0.1),
+      fatigueBias: fatigue,
+      salienceBias: roundedUnitInterval((arousal * 0.34) + (stressLoad * 0.26) + (allostaticLoad * 0.18) + ((1 - recoveryReserve) * 0.16) + (fatigue * 0.08) - 0.28),
+    });
+    return normalizeCharacterMiniCore({
+      ...normalized,
+      autonomicTone: {
+        arousal,
+        threatPressure,
+        safetyPressure,
+        approachTendency,
+        avoidTendency,
+        freezeTendency,
+        updatedAt: nowIso(),
+      },
+      homeostaticState: {
+        stressLoad,
+        allostaticLoad,
+        recoveryReserve,
+        fatigue,
+        securityTone,
+        lastUpdatedTurn: turn,
+        updatedAt: nowIso(),
+        evidence,
+      },
+      modulators,
+      salience: clampFloat(Number(normalized.salience || 0) + modulators.salienceBias * 26, 0, 0, 9999),
+      updatedAt: nowIso(),
+    });
+  }
+
+  function refreshNeuroMiniCoreHomeostasis(registry, activeMiniCores, state = null, context = null, scene = null, conf = null) {
+    if (conf?.neuroHomeostasisEnabled === false) return { registry, activeMiniCores, signals: createDefaultNeuroSceneSignals(), changed: false };
+    const nextRegistry = normalizeCharacterMiniCoreRegistry(registry);
+    const signals = extractNeuroSceneSignals(context, state);
+    let changed = false;
+    (Array.isArray(activeMiniCores) ? activeMiniCores : []).forEach(core => {
+      const id = core?.id || slug(core?.name);
+      if (!id || !nextRegistry[id]) return;
+      const updated = updateNeuroMiniCoreHomeostasis(nextRegistry[id], signals, state, scene);
+      if (!updated) return;
+      nextRegistry[id] = updated;
+      changed = true;
+    });
+    const nextActive = (Array.isArray(activeMiniCores) ? activeMiniCores : [])
+      .map(core => nextRegistry[core?.id || slug(core?.name)] || core)
+      .map(normalizeCharacterMiniCore)
+      .filter(Boolean);
+    return { registry: nextRegistry, activeMiniCores: nextActive, signals, changed };
+  }
+
+  function inferNeuroScene(context = null, state = null, units = []) {
+    const messages = Array.isArray(context?.messages) ? context.messages : [];
+    const recentText = messages.slice(-6).map(messageText).join('\n');
+    const sceneDate = firstNonEmpty(state?.scene?.time, extractSceneTimeHint(recentText), state?.neuroCore?.scene?.sceneDate);
+    const sceneYear = firstNonEmpty(extractYearToken(sceneDate), extractYearToken(state?.neuroCore?.scene?.sceneYear));
+    const existingRoute = normalizeNeuroRoute(firstNonEmpty(state?.scene?.route, state?.neuroCore?.scene?.currentRoute, 'current')) || 'current';
+    const identityNames = extractIdentitySubjectsFromSources(context?.canonicalSources, context?.character)
+      .flatMap(subject => [subject.name].concat(normalizeStringArray(subject.aliases)));
+    const unitNames = (Array.isArray(units) ? units : []).slice(0, 80).flatMap(canonicalUnitNameHints);
+    const knownNames = uniqueStrings(identityNames.concat(unitNames).concat(Object.values(state?.characters || {}).flatMap(ch => [ch?.name].concat(normalizeStringArray(ch?.aliases))))).filter(Boolean);
+    const mentionedNames = extractMentionedNamesFromText(knownNames, recentText);
+    const presentCast = uniqueStrings([]
+      .concat(normalizeStringArray(state?.activePerspective?.presentCast))
+      .concat(normalizeStringArray(state?.scene?.presentCast))
+      .concat(mentionedNames.slice(0, 8)))
+      .filter(name => !isGenericCharacterStateToken(name))
+      .slice(0, 20);
+    return {
+      sceneDate: sceneDate || '',
+      sceneYear: sceneYear || '',
+      currentRoute: existingRoute,
+      presentCast,
+      mentionedNames,
+    };
+  }
+
+  function buildNeuroTemporalFacts(units = []) {
+    return (Array.isArray(units) ? units : []).map(unit => {
+      const fields = extractMiniCoreProfileFields(unit);
+      const subject = firstNonEmpty(fields.name, canonicalUnitPrimaryName(unit));
+      if (!subject) return null;
+      const age = firstNonEmpty(fields.age, extractAgeToken(unit.content));
+      const fallbackYear = extractYearToken(unit.content);
+      const hasTemporal = Boolean(age || unit.validYear || unit.validFrom || unit.validTo || fallbackYear || unit.route || unit.futureSource);
+      if (!hasTemporal) return null;
+      return normalizeNeuroTemporalFact({
+        id: `tf-${hashString([unit.id, subject, age, unit.validYear || fallbackYear, unit.route].join('|')).slice(0, 16)}`,
+        subject,
+        predicate: age ? 'age' : 'canonical-context',
+        object: age || String(unit.label || '').slice(0, 120),
+        route: normalizeNeuroRoute(unit.route || (unit.futureSource ? 'original-future' : 'current')),
+        validYear: firstNonEmpty(unit.validYear, fallbackYear),
+        validFrom: unit.validFrom,
+        validTo: unit.validTo,
+        sourceUnitIds: [unit.id],
+        summary: String(unit.content || '').replace(/\s+/g, ' ').slice(0, 260),
+        knowledgeBoundary: Boolean(unit.knowledgeBoundary),
+        futureSource: Boolean(unit.futureSource),
+        boundaryReason: unit.boundaryReason || '',
+        knownBy: normalizeStringArray(unit.knownBy),
+        cannotKnow: normalizeStringArray(unit.cannotKnow),
+        confidence: age ? 0.86 : 0.7,
+      });
+    }).filter(Boolean).slice(0, 600);
+  }
+
+  function buildNeuroRouteEvents(units = []) {
+    return (Array.isArray(units) ? units : [])
+      .filter(unit => unit.futureSource || ['original-future', 'counterfactual'].includes(normalizeNeuroRoute(unit.route)))
+      .map(unit => {
+        const eventYear = firstNonEmpty(unit.validYear, extractYearToken(unit.content));
+        return normalizeNeuroRouteEvent({
+          id: `route-${hashString([unit.id, unit.route, eventYear].join('|')).slice(0, 16)}`,
+          label: firstNonEmpty(unit.label, unit.path, unit.kind),
+          route: normalizeNeuroRoute(unit.route || 'original-future'),
+          eventYear,
+          appliesToCurrentScene: false,
+          sourceUnitIds: [unit.id],
+          summary: String(unit.content || '').replace(/\s+/g, ' ').slice(0, 260),
+          knowledgeBoundary: Boolean(unit.knowledgeBoundary),
+          futureSource: Boolean(unit.futureSource),
+          boundaryReason: unit.boundaryReason || '',
+          knownBy: normalizeStringArray(unit.knownBy),
+          cannotKnow: normalizeStringArray(unit.cannotKnow),
+          confidence: 0.72,
+        });
+      })
+      .filter(Boolean)
+      .slice(0, 400);
+  }
+
+  function buildNeuroMiniCoreRegistry(state, context, units = [], scene = null) {
+    const registry = normalizeCharacterMiniCoreRegistry(state?.neuroCore?.characterMiniCores);
+    const addCore = data => {
+      const key = slug(firstNonEmpty(data.id, data.name));
+      const existing = registry[key] || {};
+      const incomingRoute = normalizeNeuroRoute(data.route);
+      const existingRoute = normalizeNeuroRoute(existing.route);
+      const incomingFuture = ['original-future', 'counterfactual'].includes(incomingRoute);
+      const existingCurrent = !existingRoute || ['current', 'universal'].includes(existingRoute);
+      const preserveCurrentOverlay = incomingFuture && existingCurrent;
+      const core = normalizeCharacterMiniCore({
+        ...existing,
+        ...data,
+        route: preserveCurrentOverlay ? existing.route : firstNonEmpty(data.route, existing.route),
+        age: preserveCurrentOverlay ? firstNonEmpty(existing.age, '') : firstNonEmpty(data.age, existing.age),
+        affiliation: preserveCurrentOverlay ? firstNonEmpty(existing.affiliation, data.affiliation) : firstNonEmpty(data.affiliation, existing.affiliation),
+        role: preserveCurrentOverlay ? firstNonEmpty(existing.role, data.role) : firstNonEmpty(data.role, existing.role),
+        sourceUnitIds: uniqueStrings([].concat(existing.sourceUnitIds || [], data.sourceUnitIds || [])).slice(0, 40),
+        aliases: uniqueStrings([].concat(existing.aliases || [], data.aliases || [])).slice(0, 20),
+        updatedAt: nowIso(),
+      });
+      if (core) registry[core.id] = core;
+    };
+    extractIdentitySubjectsFromSources(context?.canonicalSources, context?.character).forEach(subject => addCore({
+      id: subject.id || subject.name,
+      name: subject.name,
+      aliases: normalizeStringArray(subject.aliases),
+      route: scene?.currentRoute || 'current',
+      affiliation: subject.mutableBaseline?.affiliation || '',
+      role: 'canonical identity',
+      sourceUnitIds: normalizeStringArray(subject.sourceRefs),
+      salience: 90,
+    }));
+    Object.values(state?.characters || {}).forEach(character => addCore({
+      id: character.id || character.name,
+      name: character.name,
+      aliases: normalizeStringArray(character.aliases),
+      route: scene?.currentRoute || 'current',
+      age: character.age || '',
+      affiliation: character.affiliation || '',
+      role: character.role || '',
+      salience: 56,
+    }));
+    (Array.isArray(units) ? units : []).forEach(unit => {
+      const fields = extractMiniCoreProfileFields(unit);
+      if (!fields.isProfile && !fields.age) return;
+      const name = firstNonEmpty(fields.name, canonicalUnitPrimaryName(unit));
+      if (!name) return;
+      addCore({
+        id: name,
+        name,
+        aliases: fields.aliases,
+        route: normalizeNeuroRoute(unit.route || (unit.futureSource ? 'original-future' : 'current')),
+        age: fields.age,
+        affiliation: fields.affiliation,
+        role: firstNonEmpty(fields.role, fields.gender ? `gender: ${fields.gender}` : '', unit.kind),
+        sourceUnitIds: [unit.id],
+        cannotKnow: normalizeStringArray(unit.cannotKnow),
+        salience: unit.foundation || unit.alwaysActive ? 64 : 36,
+      });
+    });
+    return registry;
+  }
+
+  function neuroMiniCoreHomeostaticActivationBoost(core) {
+    const auto = normalizeNeuroAutonomicTone(core?.autonomicTone);
+    const homeo = normalizeNeuroHomeostaticState(core?.homeostaticState);
+    const modulators = normalizeNeuroMiniCoreModulators(core?.modulators);
+    return clampFloat(
+      auto.arousal * 34
+        + homeo.stressLoad * 24
+        + homeo.allostaticLoad * 18
+        + homeo.fatigue * 12
+        + Math.max(0, 1 - homeo.recoveryReserve) * 16
+        + Math.max(0, modulators.salienceBias) * 22,
+      0,
+      0,
+      96
+    );
+  }
+
+  function selectActiveNeuroMiniCores(registry, state, context, scene, units = []) {
+    const text = [
+      getUserInput(context?.messages || []),
+      (Array.isArray(context?.messages) ? context.messages : []).slice(-6).map(messageText).join('\n'),
+    ].join('\n');
+    const present = normalizeStringArray(scene?.presentCast).map(name => name.toLowerCase());
+    const mentioned = normalizeStringArray(scene?.mentionedNames).map(name => name.toLowerCase());
+    const relationSeeds = uniqueStrings((state?.relationships || []).flatMap(rel => {
+      const names = [rel?.a, rel?.b].filter(Boolean);
+      return names.some(name => present.includes(String(name).toLowerCase()) || mentioned.includes(String(name).toLowerCase())) ? names : [];
+    })).map(name => String(name).toLowerCase());
+    const scored = Object.values(registry || {}).map(core => {
+      const names = uniqueStrings([core.name].concat(normalizeStringArray(core.aliases))).filter(Boolean);
+      const lowerNames = names.map(name => name.toLowerCase());
+      let score = clampFloat(core.salience, 0, 0, 9999);
+      score += neuroMiniCoreHomeostaticActivationBoost(core);
+      if (lowerNames.some(name => present.some(seed => name === seed || name.includes(seed) || seed.includes(name)))) score += 160;
+      if (lowerNames.some(name => mentioned.some(seed => name === seed || name.includes(seed) || seed.includes(name)))) score += 120;
+      if (lowerNames.some(name => relationSeeds.some(seed => name === seed || name.includes(seed) || seed.includes(name)))) score += 44;
+      if (names.some(name => text.includes(name))) score += 80;
+      if (normalizeStringArray(core.sourceUnitIds).some(id => (Array.isArray(units) ? units : []).some(unit => unit.id === id && (unit.foundation || unit.alwaysActive)))) score += 28;
+      return {
+        ...core,
+        salience: Number(score.toFixed(2)),
+        activeReason: score >= 160 ? 'present/mentioned' : score >= 90 ? (neuroMiniCoreHomeostaticActivationBoost(core) >= 24 ? 'homeostatic-salience' : 'canonical-identity') : 'background',
+      };
+    }).filter(core => core.salience >= 44);
+    if (!scored.length) return Object.values(registry || {}).sort((a, b) => b.salience - a.salience).slice(0, 3);
+    return scored.sort((a, b) => b.salience - a.salience).slice(0, 8);
+  }
+
+  function syncNeuroCore(state, context, conf = null, unitsOverride = null) {
+    if (!state || typeof state !== 'object') return { skipped: true, reason: 'no-state' };
+    const units = Array.isArray(unitsOverride) ? unitsOverride : buildCanonicalUnits(context || {}, conf);
+    const scene = inferNeuroScene(context, state, units);
+    const temporalFacts = buildNeuroTemporalFacts(units);
+    const routeEvents = buildNeuroRouteEvents(units);
+    let registry = buildNeuroMiniCoreRegistry(state, context || {}, units, scene);
+    const preliminaryActiveMiniCores = selectActiveNeuroMiniCores(registry, state, context || {}, scene, units);
+    const homeostasis = refreshNeuroMiniCoreHomeostasis(registry, preliminaryActiveMiniCores, state, context || {}, scene, conf || DEFAULT_CONFIG);
+    registry = homeostasis.registry;
+    const activeMiniCores = selectActiveNeuroMiniCores(registry, state, context || {}, scene, units);
+    state.neuroCore = normalizeNeuroCoreState({
+      ...(state.neuroCore || {}),
+      scene,
+      temporalFacts,
+      routeEvents,
+      characterMiniCores: registry,
+      activeMiniCores,
+      homeostasisSignals: homeostasis.signals ? {
+        threat: homeostasis.signals.threat,
+        conflict: homeostasis.signals.conflict,
+        safety: homeostasis.signals.safety,
+        trust: homeostasis.signals.trust,
+        recovery: homeostasis.signals.recovery,
+        fatigue: homeostasis.signals.fatigue,
+        injury: homeostasis.signals.injury,
+        uncertainty: homeostasis.signals.uncertainty,
+        intensity: homeostasis.signals.intensity,
+        cues: homeostasis.signals.cues,
+      } : null,
+      updatedAt: nowIso(),
+    }, state);
+    return summarizeNeuroCoreSync(state.neuroCore);
+  }
+
+  function summarizeNeuroCoreSync(neuroCore) {
+    const core = normalizeNeuroCoreState(neuroCore || {});
+    const activeHomeostasis = summarizeActiveNeuroHomeostasis(core.activeMiniCores);
+    return {
+      sceneYear: core.scene.sceneYear || '',
+      currentRoute: core.scene.currentRoute || 'current',
+      miniCores: Object.keys(core.characterMiniCores || {}).length,
+      activeMiniCores: core.activeMiniCores.length,
+      temporalFacts: core.temporalFacts.length,
+      routeEvents: core.routeEvents.length,
+      homeostasis: activeHomeostasis,
+      homeostasisSignals: core.homeostasisSignals,
+      executiveTrace: core.executiveTrace,
+    };
+  }
+
+  function summarizeActiveNeuroHomeostasis(activeMiniCores = []) {
+    const list = (Array.isArray(activeMiniCores) ? activeMiniCores : []).map(normalizeCharacterMiniCore).filter(Boolean);
+    if (!list.length) return {
+      arousalMean: 0,
+      stressLoadMean: 0,
+      allostaticLoadMean: 0,
+      recoveryReserveMean: 0,
+      fatigueMean: 0,
+      securityToneMean: 0,
+    };
+    const average = getter => Number((list.reduce((sum, item) => sum + getter(item), 0) / list.length).toFixed(3));
+    return {
+      arousalMean: average(item => normalizeNeuroAutonomicTone(item.autonomicTone).arousal),
+      stressLoadMean: average(item => normalizeNeuroHomeostaticState(item.homeostaticState).stressLoad),
+      allostaticLoadMean: average(item => normalizeNeuroHomeostaticState(item.homeostaticState).allostaticLoad),
+      recoveryReserveMean: average(item => normalizeNeuroHomeostaticState(item.homeostaticState).recoveryReserve),
+      fatigueMean: average(item => normalizeNeuroHomeostaticState(item.homeostaticState).fatigue),
+      securityToneMean: average(item => normalizeNeuroHomeostaticState(item.homeostaticState).securityTone),
+    };
+  }
+
+  function resetNeuroExecutiveTrace(state) {
+    if (!state) return;
+    state.neuroCore = normalizeNeuroCoreState(state.neuroCore, state);
+    state.neuroCore.executiveTrace = normalizeNeuroExecutiveTrace({
+      at: nowIso(),
+      sceneYear: state.neuroCore.scene.sceneYear,
+      currentRoute: state.neuroCore.scene.currentRoute,
+      activeMiniCores: state.neuroCore.activeMiniCores.length,
+    }, state.neuroCore.scene);
+  }
+
+  function noteNeuroBlockedCanonical(state, unit, reason, stage) {
+    if (!state?.neuroCore) return;
+    const trace = normalizeNeuroExecutiveTrace(state.neuroCore.executiveTrace, state.neuroCore.scene);
+    if (reason === 'route' || reason === 'future-route') trace.blockedByRoute += 1;
+    else if (reason === 'perspective' || reason === 'cannot-know') trace.blockedByPerspective += 1;
+    else if (reason === 'private-knowledge') {
+      trace.blockedByPerspective += 1;
+      trace.blockedByPrivateKnowledge += 1;
+    } else if (reason === 'hidden-boundary') {
+      trace.blockedByKnowledgeBoundary += 1;
+      trace.blockedByHiddenBoundary += 1;
+    } else if (reason === 'knowledge-boundary') trace.blockedByKnowledgeBoundary += 1;
+    if (trace.blockedSamples.length < 24) {
+      trace.blockedSamples.push({
+        id: unit?.id || '',
+        label: unit?.label || '',
+        stage: stage || '',
+        reason,
+        route: unit?.route || '',
+        validYear: unit?.validYear || '',
+        preview: isKnowledgeBoundaryCanonicalUnit(unit) ? '[knowledge-boundary]' : String(unit?.content || '').replace(/\s+/g, ' ').slice(0, 100),
+      });
+    }
+    state.neuroCore.executiveTrace = trace;
+  }
+
+  function neuroExecutiveGateCanonicalUnit(unit, state, context = null, stage = '') {
+    if (!unit || !state?.neuroCore) return true;
+    const scene = normalizeNeuroCoreScene(state.neuroCore.scene, state);
+    const route = normalizeNeuroRoute(unit.route || (unit.futureSource ? 'original-future' : ''));
+    const futureAccessText = futureOriginalAccessText(context, '');
+    const gate = perspectiveGateItem(unit, state, context, {
+      queryText: knowledgeBoundaryIntentText(context, ''),
+      futureAccessText,
+    });
+    if (!gate.allow) {
+      noteNeuroBlockedCanonical(state, unit, gate.reason || 'perspective', stage);
+      return false;
+    }
+    const allowFuture = gate.access === 'foreknowledge';
+    if (!allowFuture && ['original-future', 'counterfactual'].includes(route)) {
+      noteNeuroBlockedCanonical(state, unit, 'future-route', stage);
+      return false;
+    }
+    const sceneYear = parseNumber(scene.sceneYear, 0, 0, 9999);
+    const unitYear = parseNumber(firstNonEmpty(unit.validYear, extractYearToken(unit.validFrom)), 0, 0, 9999);
+    if (!allowFuture && sceneYear > 0 && unitYear > 0 && unitYear > sceneYear) {
+      noteNeuroBlockedCanonical(state, unit, 'route', stage);
+      return false;
+    }
+    const contentYears = extractYearTokens(unit.content, { strict: true, limit: 12 }).map(year => Number(year)).filter(year => Number.isFinite(year));
+    if (!allowFuture && sceneYear > 0 && contentYears.some(year => year > sceneYear)) {
+      noteNeuroBlockedCanonical(state, unit, 'route', stage);
+      return false;
+    }
+    const activeNames = uniqueStrings([]
+      .concat((Array.isArray(state.neuroCore.activeMiniCores) ? state.neuroCore.activeMiniCores : []).flatMap(core => [core?.name].concat(normalizeStringArray(core?.aliases))))
+      .concat(normalizeStringArray(state.activePerspective?.protectedNames))
+      .concat(normalizeStringArray(scene.presentCast)));
+    if (activeNames.length && nameListIntersects(unit.cannotKnow, activeNames)) {
+      noteNeuroBlockedCanonical(state, unit, 'perspective', stage);
+      return false;
+    }
+    if (isKnowledgeBoundaryCanonicalUnit(unit) && !canInjectKnowledgeBoundaryCanonicalUnit(unit, knowledgeBoundaryIntentText(context, ''), futureAccessText, { state, context, allowFutureSource: allowFuture })) {
+      noteNeuroBlockedCanonical(state, unit, 'knowledge-boundary', stage);
+      return false;
+    }
+    return true;
+  }
+
+  function neuroFilterCanonicalUnits(units, state, context = null, stage = '') {
+    if (!state?.neuroCore) return Array.isArray(units) ? units : [];
+    return (Array.isArray(units) ? units : []).filter(unit => neuroExecutiveGateCanonicalUnit(unit, state, context, stage));
+  }
+
+  function appendNeuroSelectedCanonicalTrace(state, selected, section) {
+    if (!state?.neuroCore || !Array.isArray(selected) || !selected.length) return;
+    const trace = normalizeNeuroExecutiveTrace(state.neuroCore.executiveTrace, state.neuroCore.scene);
+    trace.selectedCanonicalParts += selected.length;
+    const selectedUnits = selected.map(item => item?.unit || item).filter(Boolean);
+    const futureCount = selectedUnits.filter(unit => isFutureOriginalCanonicalUnit(unit)).length;
+    trace.selectedFutureKnowledgeParts += futureCount;
+    trace.selectedCurrentParts += Math.max(0, selectedUnits.length - futureCount);
+    trace.selectedSections = {
+      ...(trace.selectedSections || {}),
+      [section || 'canonical']: parseNumber(trace.selectedSections?.[section || 'canonical'], 0, 0, 999999) + selected.length,
+    };
+    state.neuroCore.executiveTrace = trace;
+  }
+
+  function canUseNeuroCoreBriefItem(item, state = null, context = null) {
+    if (!item) return false;
+    const futureAccessText = futureOriginalAccessText(context, '');
+    const futureAllowed = canUseFutureOriginalUnit(item, state, context, futureAccessText);
+    if (isFutureOriginalCanonicalUnit(item) && !futureAllowed) return false;
+    if (isKnowledgeBoundaryCanonicalUnit(item) && !canInjectKnowledgeBoundaryCanonicalUnit(item, knowledgeBoundaryIntentText(context, ''), futureAccessText, { state, context, allowFutureSource: futureAllowed })) return false;
+    const names = activePerspectiveKnowledgeNames(state, context);
+    if (names.length && nameListIntersects(item.cannotKnow, names)) return false;
+    return true;
+  }
+
+  function neuroBriefFactLine(item, kind = 'fact') {
+    const route = normalizeNeuroRoute(item?.route || (item?.futureSource ? 'original-future' : 'current')) || 'current';
+    const year = firstNonEmpty(item?.validYear, item?.eventYear, item?.validFrom);
+    const subject = firstNonEmpty(item?.subject, item?.label, kind);
+    const predicate = firstNonEmpty(item?.predicate, kind);
+    const object = firstNonEmpty(item?.object, item?.summary);
+    const knownBy = normalizeStringArray(item?.knownBy).length ? ` knownBy="${xmlAttr(normalizeStringArray(item.knownBy).join(', '))}"` : '';
+    const yearAttr = year ? ` year="${xmlAttr(year)}"` : '';
+    return `<${kind} route="${xmlAttr(route)}"${yearAttr}${knownBy}>${xmlAttr([subject, predicate, object].filter(Boolean).join(' / '))}</${kind}>`;
+  }
+
+  function shouldBriefNeuroHomeostasis(coreItem) {
+    const auto = normalizeNeuroAutonomicTone(coreItem?.autonomicTone);
+    const homeo = normalizeNeuroHomeostaticState(coreItem?.homeostaticState);
+    return auto.arousal >= 0.26
+      || homeo.stressLoad >= 0.22
+      || homeo.allostaticLoad >= 0.18
+      || homeo.recoveryReserve <= 0.55
+      || homeo.fatigue >= 0.26
+      || homeo.securityTone <= 0.44
+      || normalizeStringArray(homeo.evidence).length > 0;
+  }
+
+  function neuroHomeostasisBriefLine(coreItem) {
+    const auto = normalizeNeuroAutonomicTone(coreItem?.autonomicTone);
+    const homeo = normalizeNeuroHomeostaticState(coreItem?.homeostaticState);
+    const modulators = normalizeNeuroMiniCoreModulators(coreItem?.modulators);
+    const evidence = normalizeStringArray(homeo.evidence).length ? ` evidence="${xmlAttr(normalizeStringArray(homeo.evidence).join(', '))}"` : '';
+    return `<homeostasis character="${xmlAttr(coreItem?.name || coreItem?.id || 'character')}" arousal="${xmlAttr(labelNeuroLevel(auto.arousal, 'high', 'elevated', 'quiet'))}" stressLoad="${xmlAttr(labelNeuroLoad(homeo.stressLoad))}" recoveryReserve="${xmlAttr(labelNeuroReserve(homeo.recoveryReserve))}" fatigue="${xmlAttr(labelNeuroLoad(homeo.fatigue))}" securityTone="${xmlAttr(labelNeuroSecurity(homeo.securityTone))}" salienceBias="${formatDecimal(modulators.salienceBias)}"${evidence}>modulates salience/reaction window only; does not override canonical facts, knowledge boundaries, or perspective gates</homeostasis>`;
+  }
+
+  function buildNeuroCoreBriefingBlock(state, context = null, budget = 1200, conf = null) {
+    if (!state?.neuroCore) return '';
+    const max = Math.max(360, Number(budget || 1200));
+    const core = normalizeNeuroCoreState(state.neuroCore, state);
+    const trace = normalizeNeuroExecutiveTrace(core.executiveTrace, core.scene);
+    const allowedFacts = core.temporalFacts.filter(item => canUseNeuroCoreBriefItem(item, state, context));
+    const allowedEvents = core.routeEvents.filter(item => canUseNeuroCoreBriefItem(item, state, context));
+    const sceneYear = parseNumber(core.scene.sceneYear, 0, 0, 9999);
+    const currentFacts = allowedFacts.filter(item => {
+      const route = normalizeNeuroRoute(item.route);
+      const year = parseNumber(firstNonEmpty(item.validYear, item.validFrom), 0, 0, 9999);
+      return (!route || ['current', 'universal'].includes(route)) && (!sceneYear || !year || year <= sceneYear);
+    });
+    const foreknowledgeFacts = allowedFacts.filter(item => isFutureOriginalCanonicalUnit(item));
+    const foreknowledgeEvents = allowedEvents.filter(item => isFutureOriginalCanonicalUnit(item));
+    const lines = [
+      '[Eros NeuroCore Ground]',
+      `sceneYear="${xmlAttr(core.scene.sceneYear || 'unknown')}" currentRoute="${xmlAttr(core.scene.currentRoute || 'current')}" activeMiniCores="${core.activeMiniCores.length}"`,
+      'Canonical source parts remain primary evidence. Character MiniCores are deterministic perspective overlays, not replacements for lore or memory.',
+    ];
+    if (core.activeMiniCores.length) {
+      lines.push('[Active Character MiniCores]');
+      core.activeMiniCores.slice(0, 6).forEach(coreItem => {
+        lines.push(`<character id="${xmlAttr(coreItem.id)}" route="${xmlAttr(coreItem.route || core.scene.currentRoute || 'current')}" salience="${Math.round(coreItem.salience || 0)}"${coreItem.age ? ` age="${xmlAttr(coreItem.age)}"` : ''}>${xmlAttr([coreItem.name, coreItem.affiliation, coreItem.role].filter(Boolean).join(' / '))}</character>`);
+      });
+      const homeostasisLines = conf?.neuroHomeostasisBriefingEnabled === false
+        ? []
+        : core.activeMiniCores.filter(shouldBriefNeuroHomeostasis).slice(0, 4).map(neuroHomeostasisBriefLine);
+      if (homeostasisLines.length) {
+        lines.push('[Active Homeostatic Modulators]');
+        lines.push(...homeostasisLines);
+      }
+    }
+    if (currentFacts.length) {
+      lines.push('[Current Temporal Facts]');
+      currentFacts.slice(0, 4).forEach(item => lines.push(neuroBriefFactLine(item, 'fact')));
+    }
+    if (foreknowledgeFacts.length || foreknowledgeEvents.length) {
+      lines.push('[Perspective Foreknowledge]');
+      lines.push('These are known future/original-route contexts for the active perspective, not current-scene facts.');
+      foreknowledgeFacts.slice(0, 4).forEach(item => lines.push(neuroBriefFactLine(item, 'foreknowledge')));
+      foreknowledgeEvents.slice(0, 4).forEach(item => lines.push(neuroBriefFactLine(item, 'routeEvent')));
+    }
+    lines.push(`[Executive Gate Trace] selected=${trace.selectedCanonicalParts || 0} current=${trace.selectedCurrentParts || 0} foreknowledge=${trace.selectedFutureKnowledgeParts || 0} blockedByRoute=${trace.blockedByRoute || 0} blockedByPerspective=${trace.blockedByPerspective || 0} blockedPrivate=${trace.blockedByPrivateKnowledge || 0} blockedBoundary=${trace.blockedByKnowledgeBoundary || 0} blockedHidden=${trace.blockedByHiddenBoundary || 0}`);
+    return trimBriefingBlockToBudget(lines.join('\n'), max);
   }
 
   function normalizePsycheIngestState(value, state = null) {
@@ -2545,8 +3772,10 @@
     if (!item || typeof item !== 'object') return null;
     const summary = firstNonEmpty(item.summary, item.fact, item.text, item.content, item.name);
     if (!summary) return null;
-    const type = normalizePsycheUnitType(item.type || item.kind || item.route || 'knowledge');
+    let type = normalizePsycheUnitType(item.type || item.kind || item.route || 'knowledge');
     const sourceKind = String(item.sourceKind || item.source || '');
+    const unitName = firstNonEmpty(item.name, item.title, '').slice(0, 160);
+    if (type === 'character' && isLoreHeadingCharacterCandidate({ ...item, name: unitName, summary }, 'psycheUnits')) type = 'lore';
     const id = slug(firstNonEmpty(item.id, item.name, `${type}:${summary.slice(0, 80)}`));
     if (!id) return null;
     const priority = parseNumber(item.priority, parseNumber(item.importance, 5, 0, 10), 0, 10);
@@ -2561,7 +3790,7 @@
     return {
       id,
       type,
-      name: firstNonEmpty(item.name, item.title, '').slice(0, 160),
+      name: unitName,
       summary: String(summary).replace(/\s+/g, ' ').trim().slice(0, 900),
       keywords: normalizeStringArray(item.keywords || item.activationKeys || item.keys).slice(0, 32),
       aliases: normalizeStringArray(item.aliases).slice(0, 24),
@@ -2631,7 +3860,7 @@
   function looksFutureOriginalRouteText(value) {
     const text = String(value || '');
     if (!text.trim()) return false;
-    return /(?:future|original\s+(?:route|timeline|plot)|bad\s+ending|counterfactual|if\s+route|spoiler|미래|원작|원래\s*루트|원래\s*전개|원작\s*전개|분기|루트|스포|앞으로의\s*(?:전개|사건|일|미래)|장차|훗날|후일|未來|未来|原作|原本路线|原本路線)/i.test(text);
+    return /(?:future|original\s+(?:route|timeline|plot)|bad\s+ending|counterfactual|if\s+route|spoiler|미래|원작|원래\s*루트|원래\s*전개|원작\s*전개|분기|루트|스포|앞으로의\s*(?:전개|사건|일|미래)|장차|훗날|후일|未來|未来|將來|将来|後來|后来|以後|以后|之後|之后|日後|日后|原作|原本|原著|原书|原書|原本路线|原本路線)/i.test(text);
   }
 
   function normalizePsycheUnitType(value) {
@@ -2785,16 +4014,17 @@
 
   function extractIdentityName(text, fallback = '') {
     const source = String(text || '');
+    const multilingual = extractProfileFieldValue(source, PROFILE_NAME_LABELS, 80);
     const match = source.match(/(?:角色设定集|姓名|Name|name)\s*[：:]\s*([^\n（(\/|]{1,60})/i)
       || source.match(/#\s*OC\s*角色设定集[：:]\s*([^\n（(\/|]{1,60})/i);
-    const candidate = firstNonEmpty(match?.[1], fallback).replace(/^[-*]\s*/, '').trim();
+    const candidate = firstNonEmpty(multilingual, match?.[1], fallback).replace(/^[-*]\s*/, '').trim();
     if (!candidate || isForbiddenIdentityAlias(candidate)) return '';
     return candidate.slice(0, 80);
   }
 
   function extractIdentityAliases(text, label = '', name = '') {
     const source = String(text || '');
-    const candidates = [label, name];
+    const candidates = [label, name].concat(splitProfileAliases(extractProfileFieldValue(source, PROFILE_ALIAS_LABELS, 220)));
     const title = source.match(/角色设定集[：:]\s*([^\n]+)/i);
     if (title) {
       String(title[1] || '').split(/[()/／|,，、\s]+/).forEach(item => candidates.push(item));
@@ -2811,6 +4041,8 @@
 
   function detectIdentityGender(text) {
     const source = String(text || '').replace(/(?:受\s*\/\s*Bottom|Bottom|受|攻\s*\/\s*Top|Top|攻)/gi, ' ');
+    const field = extractProfileFieldValue(source, PROFILE_GENDER_LABELS, 80);
+    if (field) return field.slice(0, 80);
     if (/性别\s*[：:]\s*男|男性|^男$|male|남성|남자/i.test(source)) return 'male/남성';
     if (/性别\s*[：:]\s*女|女性|女子|female|woman|girl|여성|여자/i.test(source)) return 'female/여성';
     return '';
@@ -2818,6 +4050,8 @@
 
   function detectIdentityAffiliation(text) {
     const source = String(text || '');
+    const field = extractProfileFieldValue(source, PROFILE_AFFILIATION_LABELS, 160);
+    if (field) return normalizeIdentityAffiliation(field);
     const match = source.match(/(?:所属门派|所属|所属组织|所属勢力|门派|宗门|阵营|势力|소속\s*문파|소속\s*단체|소속|문파|종파|진영|세력|affiliation|faction|sect|order|school|clan|guild|organization)\s*[：:]\s*([^\n]+)/i);
     return match ? normalizeIdentityAffiliation(match[1]) : '';
   }
@@ -2834,8 +4068,9 @@
     if (!source) return false;
     const text = [source.label, source.content, source.path].filter(Boolean).join('\n');
     if (!String(text || '').trim()) return false;
-    const strongIdentityHit = /姓名|名字|name\s*:|성명|이름|性别|성별|gender\s*:|sex\s*:|角色设定集|角色設定集|character\s*sheet|character\s*profile|oc\s+角色|인물\s*설정|캐릭터\s*설정/i.test(text);
-    const explicitProfileHint = isExplicitLoreCharacterSource(source) && /姓名|名字|name\s*:|성명|이름|性别|성별|gender\s*:|sex\s*:|profile|character/i.test(text);
+    const multilingualProfile = looksLikeCharacterProfileText(source.content, [source.label, source.path, source.kind].filter(Boolean).join('\n'));
+    const strongIdentityHit = multilingualProfile || /姓名|名字|name\s*:|성명|이름|性别|성별|gender\s*:|sex\s*:|角色设定集|角色設定集|character\s*sheet|character\s*profile|oc\s+角色|인물\s*설정|캐릭터\s*설정/i.test(text);
+    const explicitProfileHint = isExplicitLoreCharacterSource(source) && (multilingualProfile || /姓名|名字|name\s*:|성명|이름|性别|성별|gender\s*:|sex\s*:|profile|character/i.test(text));
     if (!strongIdentityHit && !explicitProfileHint) return false;
     const kind = String(source.kind || '').toLowerCase();
     return /lore|desc|firstmessage|globalnote|referencecharacter/.test(kind) || source?.meta?.alwaysActive;
@@ -2845,6 +4080,8 @@
     const text = [source?.label, source?.content].filter(Boolean).join('\n');
     let score = parseNumber(source?.priority, 5, 0, 10);
     if (source?.meta?.alwaysActive) score += 10;
+    score += profileFieldHitCount(text) * 12;
+    if (looksLikeCharacterProfileText(source?.content, source?.label)) score += 24;
     if (/姓名|名字|성명|이름|name\s*:/i.test(text)) score += 38;
     if (/性别|성별|gender\s*:|sex\s*:/i.test(text)) score += 28;
     if (/所属门派|所属组织|所属|门派|宗门|阵营|势力|소속|문파|종파|진영|세력|affiliation|faction|sect|order|school|clan|guild|organization/i.test(text)) score += 22;
@@ -3351,7 +4588,73 @@
     if (!normalized) return true;
     if (normalized.length > 80) return true;
     if (/[.!?。？！\n\r]/.test(text)) return true;
+    if (isLoreHeadingCharacterStateToken(text)) return true;
     return /^(?:character|character description|description|profile|character profile|name|first message|alternate greeting|scenario|system prompt|author note|lore|lorebook|entry|trigger|trigger word|trigger words|main character trigger|world|setting|background|메인|캐릭터|메인 캐릭터|트리거|메인 캐릭터 트리거|프로필|이름|설명|첫 메시지|대체 인사|세계관|배경|로어|로어북|항목)$/.test(normalized);
+  }
+
+  function normalizeLoreHeadingCandidateText(value) {
+    return String(value || '')
+      .normalize('NFKC')
+      .replace(/^characters[.:_\-]+/i, '')
+      .replace(/^character[.:_\-]+/i, '')
+      .replace(/^psycheUnits[.:_\-]+/i, '')
+      .replace(/[“”"'`「」『』《》()[\]{}【】<>]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function isLoreHeadingCharacterStateToken(value) {
+    const text = normalizeLoreHeadingCandidateText(value);
+    if (!text) return false;
+    const compact = text.replace(/[^\p{L}\p{N}]+/gu, '').toLowerCase();
+    const latin = text
+      .replace(/[_:|/\\\-]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+    if (/^(?:주인공들?|주요인물|등장인물|인물정보|인물설정|인물소개|캐릭터정보|캐릭터설정|캐릭터목록|조정|궁정|황실|왕실|왕궁|왕국|제국|국가|가문|세가|문파|종파|문중|교단|조직|세력|집단|세계관|배경설정|설정|설정집|자료|관리자료|상태관리|로어|로어북|상시로어|번역가의노트|작가노트|노트|무공|검술|법술|마법|기술|시스템|규칙|룰)$/.test(compact)) return true;
+    if (/^(?:角色设定|角色設定|人物信息|人物資訊|人物资料|人物資料|人物情報|主要人物|主角们|主角們|登场人物|登場人物|朝廷|宫廷|宮廷|皇室|王室|王国|王國|帝国|帝國|国家|國家|家族|世家|门派|門派|宗门|宗門|宗派|教团|教團|组织|組織|势力|勢力|世界观|世界觀|背景设定|背景設定|设定集|設定集|资料|資料|笔记|筆記|武功|剑术|劍術|法术|法術|魔法|技术|技術|系统|系統|规则|規則)$/.test(compact)) return true;
+    if (/^(?:キャラクター|登場人物|人物情報|人物設定|主人公たち|世界観|設定資料|設定集|資料|ノート|組織|勢力|王国|帝国|国家|宮廷|朝廷|王室|教団|宗派|魔法|技術|システム|規則)$/.test(compact)) return true;
+    if (/^(?:protagonists?|main characters?|character info(?:rmation)?|character settings?|character profiles?|cast list|dramatis personae|world setting|worldbuilding|lore(?:book)?|lore notes?|translator notes?|author notes?|court|royal court|kingdom|empire|nation|country|clan|family|house|sect|organization|organisation|faction|guild|magic system|martial arts|sword arts|spell arts|system rules?)$/.test(latin)) return true;
+    if (/^(?:.+)(?:왕국|제국|국가|가문|세가|문파|종파|교단|조직|세력|집단|궁정|황실|왕실|왕궁)$/.test(compact)) return true;
+    if (/(?:인물|캐릭터|세계|배경|관리|상태|번역가|작가|로어).*(?:정보|설정|목록|개요|요약|자료|노트)$/.test(compact)) return true;
+    if (/^(?:문파|무공|검술|법술|마법|기술|시스템|규칙)/.test(compact) || /(?:무공|검술|법술|법기|마법|기술|시스템|규칙)(?:정보|설정|목록|개요|요약)?$/.test(compact)) return true;
+    if (/^(?:.+)(?:王国|王國|帝国|帝國|国家|國家|家族|世家|门派|門派|宗门|宗門|宗派|教团|教團|组织|組織|势力|勢力|宫廷|宮廷|皇室|王室)$/.test(compact)) return true;
+    if (/(?:角色|人物|世界|背景|设定|設定|资料|資料).*(?:信息|資訊|资料|資料|情報|设定|設定|概要|摘要|笔记|筆記)$/.test(compact)) return true;
+    if (/^(?:.+)(?:王国|帝国|国家|家門|一族|組織|勢力|教団|宗派|宮廷|朝廷|王室)$/.test(compact)) return true;
+    if (/(?:人物|世界|背景|設定|資料).*(?:情報|設定|概要|要約|資料|ノート)$/.test(compact)) return true;
+    return false;
+  }
+
+  function isLoreHeadingCharacterCandidate(item, path = '') {
+    const raw = item && typeof item === 'object' ? item : {};
+    const displayNames = uniqueStrings([
+      raw.name,
+      raw.displayName,
+      raw.title,
+    ]).filter(Boolean);
+    const fallbackNames = uniqueStrings([
+      raw.id,
+      String(path || '').replace(/^characters\./i, ''),
+    ]).filter(Boolean);
+    const names = displayNames.length ? displayNames : fallbackNames;
+    if (names.some(isLoreHeadingCharacterStateToken)) return true;
+    const roleText = [
+      raw.role,
+      raw.type,
+      raw.kind,
+      raw.category,
+      raw.sourceKind,
+      raw.sourceLabel,
+      raw.sourcePath,
+      raw.sourceId,
+      path,
+    ].filter(Boolean).join('\n');
+    if (/lore|lorebook|globalLore|moduleLore|localLore|source|canon|reference|로어|자료|설정|출처/i.test(roleText)) {
+      const label = firstNonEmpty(raw.name, raw.title, raw.sourceLabel, raw.label);
+      if (isLoreHeadingCharacterStateToken(label)) return true;
+    }
+    return false;
   }
 
   function isAutoLoreBootstrapCharacter(character, id = '') {
@@ -4802,6 +6105,7 @@
       memoryRecovery: normalizeMemoryRecoveryState(state?.memoryRecovery),
       memoryTiers: normalizeMemoryTierState(state?.memoryTiers),
       cbsDiagnostics: normalizeCbsDiagnostics(state?.cbsDiagnostics),
+      neuroCore: summarizeNeuroCoreSync(state?.neuroCore),
       ledgerCounts: {
         memory: Array.isArray(state?.memoryLedger) ? state.memoryLedger.length : 0,
         secret: Array.isArray(state?.secretLedger) ? state.secretLedger.length : 0,
@@ -4917,6 +6221,7 @@
       finalPreview: redactDiagnosticText(run?.finalPreview || '', 1400),
       rawFinalPreview: redactDiagnosticText(run?.rawFinalPreview || '', 1400),
       canonicalSync: run?.canonicalSync || null,
+      neuroCoreSync: run?.neuroCoreSync || null,
       cbsSync: run?.cbsSync || null,
       sessionSync: run?.sessionSync || null,
       longMemorySync: run?.longMemorySync || null,
@@ -5157,6 +6462,9 @@
       mdBullet(`State API enabled: ${packageData.system?.stateApiEnabled ? 'yes' : 'no'}`),
       mdBullet(`Debug Log enabled: ${packageData.system?.debugLogEnabled ? 'yes' : 'no'}`),
       mdBullet(`Ledger counts: memory ${counts.memory || 0}, lore ${counts.lore || 0}, secret ${counts.secret || 0}, graph ${counts.graphNodes || 0}/${counts.graphEdges || 0}`),
+      mdBullet(`NeuroCore: route ${diag.neuroCore?.currentRoute || 'current'}, sceneYear ${diag.neuroCore?.sceneYear || 'unknown'}, active MiniCores ${diag.neuroCore?.activeMiniCores || 0}/${diag.neuroCore?.miniCores || 0}, temporal facts ${diag.neuroCore?.temporalFacts || 0}, route events ${diag.neuroCore?.routeEvents || 0}`),
+      mdBullet(`NeuroCore homeostasis: arousal ${formatDecimal(diag.neuroCore?.homeostasis?.arousalMean || 0)}, stress ${formatDecimal(diag.neuroCore?.homeostasis?.stressLoadMean || 0)}, recovery ${formatDecimal(diag.neuroCore?.homeostasis?.recoveryReserveMean || 0)}, fatigue ${formatDecimal(diag.neuroCore?.homeostasis?.fatigueMean || 0)}, security ${formatDecimal(diag.neuroCore?.homeostasis?.securityToneMean || 0)}`),
+      mdBullet(`NeuroCore gate: selected ${diag.neuroCore?.executiveTrace?.selectedCanonicalParts || 0}, current ${diag.neuroCore?.executiveTrace?.selectedCurrentParts || 0}, foreknowledge ${diag.neuroCore?.executiveTrace?.selectedFutureKnowledgeParts || 0}, blocked route ${diag.neuroCore?.executiveTrace?.blockedByRoute || 0}, perspective ${diag.neuroCore?.executiveTrace?.blockedByPerspective || 0}, private ${diag.neuroCore?.executiveTrace?.blockedByPrivateKnowledge || 0}, boundary ${diag.neuroCore?.executiveTrace?.blockedByKnowledgeBoundary || 0}, hidden ${diag.neuroCore?.executiveTrace?.blockedByHiddenBoundary || 0}`),
       mdBullet(`Runtime last error: ${diag.runtime?.lastError || '(none)'}`),
       mdBullet(`Storage last error: ${diag.storageHealth?.lastStorageError || '(none)'}`),
       '',
@@ -5361,7 +6669,7 @@
   function slug(value) {
     return String(value || 'unknown')
       .replace(/\s+/g, '_')
-      .replace(/[^\w가-힣ㄱ-ㅎㅏ-ㅣ\-:.]/g, '')
+      .replace(/[^\w\uAC00-\uD7A3\u3131-\u318E\u3040-\u30FF\u3400-\u9FFF\-:.]/g, '')
       .slice(0, 120) || 'unknown';
   }
 
@@ -6305,6 +7613,7 @@
     const add = (entry, kind, label, path, meta = {}) => {
       const isTextEntry = typeof entry === 'string' || typeof entry === 'number';
       if (!isTextEntry && isLoreEntryDisabled(entry)) return;
+      if (isKeywordlessNonAlwaysLoreEntry(entry, kind)) return;
       const rawContent = isTextEntry
         ? firstNonEmpty(entry)
         : firstNonEmpty(entry?.content, entry?.prompt, entry?.text, entry?.entry, entry?.description, entry?.desc, entry?.data);
@@ -6440,6 +7749,33 @@
       || ['always', 'constant', 'always-active', 'always_active', 'always on'].includes(mode);
   }
 
+  function isLorebookCanonicalKind(kind) {
+    return /^(?:globalLore|localLore|moduleLore|referenceCharacterLore|referenceModuleLore)$/i.test(String(kind || ''));
+  }
+
+  function explicitLoreActivationKeys(entry) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return [];
+    return uniqueStrings([])
+      .concat(normalizeStringArray(entry.keys))
+      .concat(normalizeStringArray(entry.key))
+      .concat(normalizeStringArray(entry.keyWords))
+      .concat(normalizeStringArray(entry.keyword))
+      .concat(normalizeStringArray(entry.keywords))
+      .concat(normalizeStringArray(entry.secondkey))
+      .concat(normalizeStringArray(entry.secondKey))
+      .concat(normalizeStringArray(entry.secondaryKeys))
+      .concat(normalizeStringArray(entry.additionalKeys))
+      .concat(normalizeStringArray(entry.activationKeys))
+      .map(key => String(key || '').trim())
+      .filter(Boolean);
+  }
+
+  function isKeywordlessNonAlwaysLoreEntry(entry, kind) {
+    if (!isLorebookCanonicalKind(kind)) return false;
+    if (isAlwaysActiveLoreEntry(entry)) return false;
+    return explicitLoreActivationKeys(entry).length === 0;
+  }
+
   function normalizeCanonicalLoreContent(content, character, db, chat, conf = null) {
     let text = String(content || '').replace(/\r\n/g, '\n');
     if (!text.trim()) return '';
@@ -6524,6 +7860,42 @@
     if (source?.meta?.alwaysActive || source?.meta?.constant) return CANONICAL_PART_CAPS.alwaysActive;
     if (source?.meta?.selective) return CANONICAL_PART_CAPS.selective;
     return CANONICAL_PART_CAPS.default;
+  }
+
+  function isMeaningfulCanonicalPart(part) {
+    const text = String(part || '').trim();
+    if (!text) return false;
+    if (/^(?:[-*_~=`#>|:\s]|·|•|─|━|—)+$/.test(text)) return false;
+    const compact = text.replace(/[#*_~=`>|:\-—–·•─━\s.,，。;；!?！？()[\]{}"'“”‘’「」『』《》]+/g, '');
+    if (!compact) return false;
+    if (compact.length < 4) return false;
+    if (/^#{1,6}\s*[^\n]{0,40}$/.test(text) && compact.length < 12) return false;
+    if (/^\[[^\]\n]{0,40}\]$/.test(text) && compact.length < 12) return false;
+    return true;
+  }
+
+  function cleanCanonicalSourceTextForSplit(text) {
+    return String(text || '').replace(/\r\n/g, '\n')
+      .split('\n')
+      .filter(line => {
+        const trimmed = line.trim();
+        if (!trimmed) return true;
+        if (/^(?:[-*_~=`#>|:\s]|·|•|─|━|—)+$/.test(trimmed)) return false;
+        if (/^#{1,6}\s*$/.test(trimmed)) return false;
+        return true;
+      })
+      .join('\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
+
+  function cleanCanonicalSplitParts(parts, raw = '') {
+    const cleaned = (Array.isArray(parts) ? parts : [])
+      .map(part => String(part || '').trim())
+      .filter(isMeaningfulCanonicalPart);
+    if (cleaned.length) return cleaned;
+    const fallback = String(raw || '').trim();
+    return isMeaningfulCanonicalPart(fallback) ? [fallback] : [];
   }
 
   function splitCanonicalTextIntoParts(text, maxChars) {
@@ -6614,15 +7986,18 @@
     return parts.flatMap(part => part.length > max ? splitCanonicalTextIntoParts(part, max) : [part]);
   }
 
-  function extractCanonicalTemporalHints(source) {
-    const text = [source?.label, source?.path, source?.content].filter(Boolean).join('\n');
-    const years = uniqueStrings((text.match(/\b\d{3,4}\b/g) || []).filter(year => Number(year) >= 1 && Number(year) <= 9999)).slice(0, 8);
-    const route = /future|미래|원래\s*루트|original|counterfactual|반사실|if\s+route/i.test(text)
-      ? (/counterfactual|반사실/i.test(text) ? 'counterfactual' : 'future')
+  function extractCanonicalTemporalHints(source, partContent = '') {
+    const sourceText = [source?.label, source?.path].filter(Boolean).join('\n');
+    const partText = String(partContent || source?.content || '');
+    const text = [sourceText, partText].filter(Boolean).join('\n');
+    const years = extractYearTokens(partText, { strict: true, limit: 8 });
+    const fallbackYears = partContent ? [] : extractYearTokens(source?.content, { strict: true, limit: 8 });
+    const route = /future|미래|원래\s*루트|original|counterfactual|반사실|if\s+route/i.test(text) || looksFutureOriginalRouteText(text)
+      ? (/counterfactual|반사실/i.test(text) ? 'counterfactual' : 'original-future')
       : '';
     return {
       route: firstNonEmpty(source?.route, source?.meta?.route, route),
-      validYear: firstNonEmpty(source?.validYear, source?.meta?.validYear, years.length === 1 ? years[0] : ''),
+      validYear: firstNonEmpty(source?.validYear, source?.meta?.validYear, years.length === 1 ? years[0] : '', fallbackYears.length === 1 ? fallbackYears[0] : ''),
       validFrom: firstNonEmpty(source?.validFrom, source?.meta?.validFrom),
       validTo: firstNonEmpty(source?.validTo, source?.meta?.validTo),
       revealState: firstNonEmpty(source?.revealState, source?.meta?.revealState),
@@ -6634,10 +8009,8 @@
     if (!source || !String(source.content || '').trim()) return [];
     const baseId = canonicalSourceBaseId(source);
     const cap = canonicalPartCapForSource(source, conf);
-    const parts = source?.meta?.futureSource
-      ? splitCanonicalTextIntoBoundaryAwareParts(source.content, cap)
-      : splitCanonicalTextIntoParts(source.content, cap);
-    const temporal = extractCanonicalTemporalHints(source);
+    const cleanedContent = cleanCanonicalSourceTextForSplit(source.content);
+    const parts = cleanCanonicalSplitParts(splitCanonicalTextIntoBoundaryAwareParts(cleanedContent, cap), cleanedContent);
     const total = Math.max(1, parts.length);
     const ids = parts.map((part, idx) => `${baseId}:p${idx + 1}-${hashString(part).slice(0, 6)}`);
     return parts.map((part, idx) => {
@@ -6650,6 +8023,7 @@
         sourceBoundary ? source?.meta?.boundaryReason || 'source-knowledge-boundary' : '',
         partBoundary.reason,
       ].filter(Boolean)).join(',');
+      const temporal = extractCanonicalTemporalHints(source, part);
       const sourceAlwaysActive = Boolean(source?.meta?.alwaysActive || source?.meta?.constant);
       const foundation = !futureSource && isFoundationCanonicalSource(source);
       const alwaysActive = sourceAlwaysActive && !knowledgeBoundary && !futureSource;
@@ -6725,6 +8099,11 @@
       selective: Boolean(unit.selective),
       route: unit.route || '',
       validYear: unit.validYear || '',
+      validFrom: unit.validFrom || '',
+      validTo: unit.validTo || '',
+      revealState: unit.revealState || '',
+      knownBy: normalizeStringArray(unit.knownBy).slice(0, 12),
+      cannotKnow: normalizeStringArray(unit.cannotKnow).slice(0, 12),
       preview: isKnowledgeBoundaryCanonicalUnit(unit)
         ? `[knowledge-boundary redacted: ${String(unit.boundaryReason || 'locked').slice(0, 80)}]`
         : String(unit.content || '').replace(/\s+/g, ' ').slice(0, 120),
@@ -6762,6 +8141,8 @@
     if (unit.selective) score -= 12;
     const labelName = String(unit.label || '').trim().toLowerCase();
     if (labelName && labelName.length >= 2 && (query.includes(labelName) || terms.some(term => term.includes(labelName) || labelName.includes(term)))) score += 120;
+    if (looksLikeCharacterProfileUnit(unit)) score += 72;
+    if (profileFieldHitCount(unit.content) >= 2) score += 44;
     if (/身份|角色设定|角色設定|신상|프로필|character\s*sheet|oc\s+角色/i.test(unit.content || '')) score += 72;
     if (/성별|性别|性別|年龄|年齡|나이|所属|所屬|소속|门派|門派|身份\/阶级|身份\/階級|role|affiliation/i.test(unit.content || '')) score += 44;
     keys.forEach(key => {
@@ -6796,6 +8177,7 @@
     });
     if (!score) return 0;
     const content = String(unit?.content || '');
+    if (looksLikeCharacterProfileUnit(unit)) score += 90;
     if (/身份|角色设定|角色設定|신상|프로필|character\s*sheet|profile|basic\s+information|성별|性别|性別|年龄|年齡|나이|소속|affiliation/i.test(content)) score += 90;
     if ((unit?.part?.index || 1) === 1) score += 70;
     if (unit?.selective) score += 24;
@@ -6825,6 +8207,11 @@
       unit.knowledgeBoundary ? `knowledgeBoundary="${xmlAttr(unit.boundaryReason || 'locked')}"` : '',
       unit.route ? `route="${xmlAttr(unit.route)}"` : '',
       unit.validYear ? `validYear="${xmlAttr(unit.validYear)}"` : '',
+      unit.validFrom ? `validFrom="${xmlAttr(unit.validFrom)}"` : '',
+      unit.validTo ? `validTo="${xmlAttr(unit.validTo)}"` : '',
+      unit.revealState ? `revealState="${xmlAttr(unit.revealState)}"` : '',
+      normalizeStringArray(unit.knownBy).length ? `knownBy="${xmlAttr(normalizeStringArray(unit.knownBy).join(', '))}"` : '',
+      normalizeStringArray(unit.cannotKnow).length ? `cannotKnow="${xmlAttr(normalizeStringArray(unit.cannotKnow).join(', '))}"` : '',
       section ? `section="${xmlAttr(section)}"` : '',
     ].filter(Boolean).join(' ');
     return `<canon ${attrs}>\n${String(unit.content || '').trim()}\n</canon>`;
@@ -6861,7 +8248,10 @@
     const tryAdd = (unit, score = 0, reason = '') => {
       if (!unit || selectedIds.has(unit.id) || selected.length >= limit) return false;
       if (isKnowledgeBoundaryCanonicalUnit(unit) && !allowKnowledgeBoundary) return false;
-      if (unit.futureSource && !allowFutureSource) return false;
+      const futureAllowed = typeof options.allowFutureSource === 'function'
+        ? options.allowFutureSource(unit)
+        : allowFutureSource;
+      if (isFutureOriginalCanonicalUnit(unit) && !futureAllowed) return false;
       const line = canonicalUnitLine(unit, reason || options.section || 'canonical');
       const nextLen = line.length + 2;
       if (max > 0 && used + nextLen > max && (selected.length || !allowOversizeFirst)) return false;
@@ -6893,20 +8283,173 @@
     return unit?.id || `${unit?.baseId || ''}:${unit?.part?.index || 0}`;
   }
 
-  function canInjectKnowledgeBoundaryCanonicalUnit(unit, queryText = '', futureAccessText = queryText) {
-    if (unit?.futureSource && !hasFutureOriginalAccess(futureAccessText)) return false;
-    if (!isKnowledgeBoundaryCanonicalUnit(unit)) return true;
-    const query = String(queryText || '').toLowerCase();
-    if (!query) return false;
-    if (!hasExplicitKnowledgeBoundaryIntent(query)) return false;
-    const keys = uniqueStrings([
+  function isFutureOriginalCanonicalUnit(unit) {
+    if (!unit) return false;
+    return Boolean(unit.futureSource || ['original-future', 'counterfactual'].includes(normalizeNeuroRoute(unit.route)) || looksFutureOriginalRouteText([
+      unit.boundaryReason,
+      unit.visibility,
       unit.label,
       unit.path,
-      unit.kind,
-      ...(unit.activationKeys || []),
-      ...(unit.subjectHints || []),
+    ].filter(Boolean).join('\n')));
+  }
+
+  function isKnowledgeBoundaryLikeItem(item, kind = '') {
+    if (!item) return false;
+    const visibility = String(firstNonEmpty(item.visibility, item.canonLevel, item.access, item.revealState), '').toLowerCase();
+    const reason = String(firstNonEmpty(item.boundaryReason, item?.meta?.boundaryReason), '').toLowerCase();
+    const type = String(firstNonEmpty(kind, item.kind, item.type), '').toLowerCase();
+    return Boolean(
+      item.knowledgeBoundary
+      || item?.meta?.knowledgeBoundary
+      || item?.meta?.hiddenSource
+      || item?.meta?.secretSource
+      || item.hiddenSource
+      || item.secretSource
+      || item.secret === true
+      || item.hidden === true
+      || type === 'secret'
+      || visibility.includes('knowledge-boundary')
+      || visibility.includes('private')
+      || visibility.includes('hidden')
+      || visibility.includes('secret')
+      || /hidden|secret|private|unrevealed|knowledge-boundary|unknown/.test(reason)
+    );
+  }
+
+  function perspectiveKnownByList(item) {
+    return uniqueStrings([])
+      .concat(normalizeStringArray(item?.knownBy))
+      .concat(normalizeStringArray(item?.knowers))
+      .concat(normalizeStringArray(item?.knows))
+      .concat(normalizeStringArray(item?.owners))
+      .concat(normalizeStringArray(item?.informed));
+  }
+
+  function perspectiveCannotKnowList(item) {
+    return uniqueStrings([])
+      .concat(normalizeStringArray(item?.cannotKnow))
+      .concat(normalizeStringArray(item?.cannotKnowers))
+      .concat(normalizeStringArray(item?.privateTo))
+      .concat(normalizeStringArray(item?.forbiddenTo));
+  }
+
+  function activePerspectiveKnowledgeNames(state = null, context = null) {
+    return uniqueStrings([]
+      .concat(normalizeStringArray(state?.activePerspective?.protectedNames))
+      .concat(normalizeStringArray(state?.activePerspective?.presentCast))
+      .concat(normalizeStringArray(state?.scene?.presentCast))
+      .concat(normalizeStringArray(state?.neuroCore?.scene?.presentCast))
+      .concat(firstNonEmpty(context?.character?.name, context?.character?.data?.name))
+      .concat(extractIdentitySubjectsFromSources(context?.canonicalSources, context?.character)
+        .flatMap(subject => [subject.name].concat(normalizeStringArray(subject.aliases)))))
+      .filter(name => name && !isGenericCharacterStateToken(name))
+      .slice(0, 48);
+  }
+
+  function perspectiveGateKeyMatches(item, queryText = '') {
+    const query = String(queryText || '').toLowerCase();
+    if (!query) return false;
+    const keys = uniqueStrings([
+      item?.label,
+      item?.name,
+      item?.path,
+      item?.kind,
+      item?.type,
+      item?.sourceId,
+      item?.sourcePath,
+      ...(item?.activationKeys || []),
+      ...(item?.subjectHints || []),
+      ...(item?.keywords || []),
+      ...(item?.tags || []),
     ].map(value => String(value || '').toLowerCase()).filter(value => value.length >= 2));
-    return keys.some(key => query.includes(key));
+    return !keys.length || keys.some(key => query.includes(key));
+  }
+
+  function hasFutureKnowledgeHolderText(text) {
+    const source = String(text || '');
+    if (!source.trim()) return false;
+    const futureMarked = looksFutureOriginalRouteText(source) || /(?:future|original|foreknowledge|미래|원작|未來|未来|原作|原本|原著|原书|原書)/i.test(source);
+    if (!futureMarked) return false;
+    const directKnowledge = /(?:knows?\s+(?:the\s+)?future|future\s+knowledge|foreknowledge|read\s+(?:the\s+)?(?:novel|book|story)|reader\s+of\s+(?:the\s+)?(?:novel|book|story)|original\s+(?:novel|work|story)|소설.{0,16}읽|읽.{0,16}소설|미래.{0,12}알|알.{0,12}미래|원작.{0,12}알|알.{0,12}원작|독자|知道.{0,12}(?:未来|未來|原作|原本)|知晓.{0,12}(?:未来|未來|原作|原本)|知曉.{0,12}(?:未来|未來|原作|原本)|记得.{0,12}(?:未来|未來|原作|原本)|記得.{0,12}(?:未来|未來|原作|原本)|读.{0,12}(?:小说|小說)|讀.{0,12}(?:小说|小說))/i.test(source);
+    if (directKnowledge) return true;
+    const routeChanger = /(?:transmigrat|reincarnat|regress|isekai|빙의|회귀|전생|환생|穿越|轉生|转生|重生|回归|回歸)/i.test(source);
+    const purpose = /(?:prevent|save|rescue|change\s+(?:fate|destiny)|avoid\s+tragedy|막(?:기|으려)|구하|바꾸|拯救|改变命运|改變命運|改变未来|改變未來|悲剧|悲劇)/i.test(source);
+    return routeChanger && purpose;
+  }
+
+  function contextHasFutureAwarePerspective(state = null, context = null) {
+    const sources = Array.isArray(context?.canonicalSources) ? context.canonicalSources : [];
+    const names = activePerspectiveKnowledgeNames(state, context);
+    const identitySources = sources.filter(source => {
+      const labelText = [source?.label, source?.path, source?.kind, ...(normalizeStringArray(source?.activationKeys))].filter(Boolean).join('\n');
+      const content = String(source?.content || '');
+      return source?.kind === 'desc'
+        || isFoundationCanonicalSource(source)
+        || nameListIntersects([labelText], names)
+        || names.some(name => name && content.includes(name));
+    }).slice(0, 24);
+    const text = identitySources.map(source => [
+      source.label,
+      source.path,
+      source.kind,
+      String(source.content || '').slice(0, 8000),
+    ].filter(Boolean).join('\n')).join('\n\n');
+    return hasFutureKnowledgeHolderText(text);
+  }
+
+  function canUseFutureOriginalUnit(unit, state = null, context = null, futureAccessText = '') {
+    return perspectiveGateItem(unit, state, context, { futureAccessText }).allow;
+  }
+
+  function canUseKnowledgeBoundaryFutureUnit(unit, state = null, context = null) {
+    const gate = perspectiveGateItem(unit, state, context, { strictBoundary: true });
+    return gate.allow && gate.access !== 'public-current';
+  }
+
+  function canInjectKnowledgeBoundaryCanonicalUnit(unit, queryText = '', futureAccessText = queryText, options = {}) {
+    return perspectiveGateItem(unit, options.state || null, options.context || null, {
+      queryText,
+      futureAccessText,
+      allowFutureSource: options.allowFutureSource,
+      strictBoundary: true,
+    }).allow;
+  }
+
+  function perspectiveGateItem(item, state = null, context = null, options = {}) {
+    if (!item) return { allow: false, reason: 'empty', access: 'blocked' };
+    const names = activePerspectiveKnowledgeNames(state, context);
+    const knownBy = perspectiveKnownByList(item);
+    const cannotKnow = perspectiveCannotKnowList(item);
+    const kind = String(firstNonEmpty(options.kind, item.kind, item.type), '');
+    const future = isFutureOriginalCanonicalUnit(item) || options.future === true;
+    const boundary = isKnowledgeBoundaryLikeItem(item, kind) || isKnowledgeBoundaryCanonicalUnit(item);
+    const queryText = firstNonEmpty(options.queryText, knowledgeBoundaryIntentText(context, ''));
+    const futureAccessText = firstNonEmpty(options.futureAccessText, futureOriginalAccessText(context, ''));
+    const explicitBoundary = hasExplicitKnowledgeBoundaryIntent(queryText) && perspectiveGateKeyMatches(item, queryText);
+    const explicitFuture = hasFutureOriginalAccess(futureAccessText);
+    const knownByPerspective = Boolean(names.length && knownBy.length && nameListIntersects(knownBy, names));
+    const cannotKnowPerspective = Boolean(names.length && cannotKnow.length && nameListIntersects(cannotKnow, names));
+    const limitedToOthers = Boolean(names.length && knownBy.length && !knownByPerspective);
+    if (cannotKnowPerspective) return { allow: false, reason: 'cannot-know', access: 'blocked', knownBy, cannotKnow };
+    if (limitedToOthers && (boundary || future || kind === 'secret')) {
+      if (!(explicitBoundary || (future && explicitFuture))) return { allow: false, reason: 'private-knowledge', access: 'blocked', knownBy, cannotKnow };
+    }
+    if (boundary) {
+      if (knownByPerspective) {
+        return { allow: true, reason: future ? 'known-boundary-foreknowledge' : 'known-boundary', access: future ? 'foreknowledge' : 'private-known', knownBy, cannotKnow };
+      }
+      if (explicitBoundary) {
+        return { allow: true, reason: 'explicit-boundary-request', access: future ? 'foreknowledge' : 'explicit-boundary', knownBy, cannotKnow };
+      }
+      return { allow: false, reason: 'hidden-boundary', access: 'blocked', knownBy, cannotKnow };
+    }
+    if (future) {
+      if (options.allowFutureSource === true || explicitFuture) return { allow: true, reason: 'explicit-foreknowledge', access: 'foreknowledge', knownBy, cannotKnow };
+      if (knownByPerspective) return { allow: true, reason: 'known-foreknowledge', access: 'foreknowledge', knownBy, cannotKnow };
+      if (contextHasFutureAwarePerspective(state, context)) return { allow: true, reason: 'perspective-foreknowledge', access: 'foreknowledge', knownBy, cannotKnow };
+      return { allow: false, reason: 'future-route', access: 'blocked', knownBy, cannotKnow };
+    }
+    return { allow: true, reason: 'public-current', access: 'public-current', knownBy, cannotKnow };
   }
 
   function hasExplicitKnowledgeBoundaryIntent(text) {
@@ -6940,7 +8483,10 @@
   function addCanonicalStageCandidates(target, seen, units, queryTerms, queryText, reason, minScore, bias = 0, predicate = null, boundaryQueryText = queryText, futureAccessText = boundaryQueryText, options = {}) {
     (Array.isArray(units) ? units : []).forEach(unit => {
       if (!unit || (predicate && !predicate(unit))) return;
-      if (!canInjectKnowledgeBoundaryCanonicalUnit(unit, boundaryQueryText, futureAccessText)) return;
+      const allowFutureSource = typeof options.allowFutureSource === 'function'
+        ? options.allowFutureSource(unit)
+        : options.allowFutureSource;
+      if (!canInjectKnowledgeBoundaryCanonicalUnit(unit, boundaryQueryText, futureAccessText, { state: options.state, context: options.context, allowFutureSource })) return;
       const directScore = canonicalDirectActivationScore(unit, queryTerms, queryText);
       const score = canonicalUnitQueryScore(unit, queryTerms, queryText) + (options.directActivationBoost === false ? 0 : directScore);
       if (score < minScore && !(unit.foundation || unit.alwaysActive)) return;
@@ -6971,9 +8517,10 @@
   function buildCanonicalStageCandidates(units, queryTerms, queryText, state = null, context = null) {
     const candidates = [];
     const seen = new Set();
-    const sourceUnits = Array.isArray(units) ? units : [];
+    const sourceUnits = neuroFilterCanonicalUnits(Array.isArray(units) ? units : [], state, context, 'stage-candidates');
     const boundaryQueryText = knowledgeBoundaryIntentText(context, '');
     const futureAccessText = futureOriginalAccessText(context, '');
+    const allowFutureSource = unit => canUseFutureOriginalUnit(unit, state, context, futureAccessText);
     addCanonicalStageCandidates(
       candidates,
       seen,
@@ -6986,13 +8533,13 @@
       unit => unit.foundation || unit.alwaysActive || unit.kind === 'firstMessage',
       boundaryQueryText,
       futureAccessText,
-      { directActivationBoost: true }
+      { directActivationBoost: true, state, context, allowFutureSource }
     );
-    addCanonicalStageCandidates(candidates, seen, sourceUnits, queryTerms, queryText, 'trigger', 58, 1120, null, boundaryQueryText, futureAccessText, { directActivationBoost: true });
+    addCanonicalStageCandidates(candidates, seen, sourceUnits, queryTerms, queryText, 'trigger', 58, 1120, null, boundaryQueryText, futureAccessText, { directActivationBoost: true, state, context, allowFutureSource });
     const bridgeText = buildActiveStateBridgeText(state, context, queryTerms);
     if (bridgeText) {
       const bridgeTerms = extractQueryTerms(bridgeText).slice(0, 100);
-      addCanonicalStageCandidates(candidates, seen, sourceUnits, bridgeTerms, bridgeText, 'active-memory-bridge', 62, 420, null, boundaryQueryText, futureAccessText, { directActivationBoost: true });
+      addCanonicalStageCandidates(candidates, seen, sourceUnits, bridgeTerms, bridgeText, 'active-memory-bridge', 62, 420, null, boundaryQueryText, futureAccessText, { directActivationBoost: true, state, context, allowFutureSource });
     }
     const recursiveText = candidates
       .slice(0, 10)
@@ -7000,7 +8547,7 @@
       .join('\n');
     if (recursiveText) {
       const recursiveTerms = extractQueryTerms(recursiveText).slice(0, 120);
-      addCanonicalStageCandidates(candidates, seen, sourceUnits, recursiveTerms, recursiveText, 'recursive', 72, 180, null, boundaryQueryText, futureAccessText, { directActivationBoost: true });
+      addCanonicalStageCandidates(candidates, seen, sourceUnits, recursiveTerms, recursiveText, 'recursive', 72, 180, null, boundaryQueryText, futureAccessText, { directActivationBoost: true, state, context, allowFutureSource });
     }
     return candidates;
   }
@@ -8415,7 +9962,7 @@
       .concat(normalizeStringArray(entry?.keywords))
       .concat(normalizeStringArray(entry?.aliases));
     const text = `${label || ''}\n${String(content || '').slice(0, 600)}`;
-    const inferred = (text.match(/[A-Za-z][A-Za-z0-9_-]{2,}|[가-힣][가-힣A-Za-z0-9_-]{1,}/g) || [])
+    const inferred = (text.match(/[A-Za-z][A-Za-z0-9_-]{2,}|[\uAC00-\uD7A3]{2,}|[\u3040-\u30FF]{2,}|[\u3400-\u9FFF]{2,}/g) || [])
       .filter(token => !/^(그리고|하지만|그러나|있는|없는|한다|했다|the|and|for|with)$/i.test(token))
       .slice(0, 20);
     return uniqueStrings(direct.concat(inferred)).slice(0, 16);
@@ -8652,6 +10199,9 @@
       lexical: candidates.length,
       embedded: 0,
       spread: 0,
+      pprSeeds: 0,
+      ppr: 0,
+      rrf: 0,
       blocked: 0,
     };
     if (!conf?.stagedSearchEnabled) {
@@ -8682,27 +10232,34 @@
       .filter(candidate => !blockedIds.has(candidateNodeId(candidate)))
       .slice(0, Math.max(6, profile?.limit || 20))
       .map(candidateNodeId);
-    const spread = spreadAssociationActivation(state, seedIds, conf, `stage:${agentId}`);
+    const seedWeights = buildNeuroGraphSeedWeights(state, context, candidates, working, profile, queryTerms, blockedIds);
+    seedIds.forEach((id, idx) => {
+      if (!id || blockedIds.has(id)) return;
+      const weight = clampNumber(0.95 - (idx * 0.025), 0.45, 0.2, 1);
+      seedWeights.weights.set(id, Math.max(seedWeights.weights.get(id) || 0, weight));
+    });
+    const spread = conf?.associationSpreadEnabled === false
+      ? new Map()
+      : spreadAssociationActivation(state, Array.from(seedWeights.weights.keys()), conf, `stage:${agentId}`);
+    const ppr = conf?.neuroGraphRankingEnabled === false
+      ? new Map()
+      : computeAssociationPersonalizedRank(state, seedWeights.weights, conf);
     stats.spread = spread.size;
+    stats.pprSeeds = seedWeights.weights.size;
+    stats.ppr = ppr.size;
     stats.blocked = blockedIds.size;
 
-    candidates = candidates
-      .filter(candidate => !blockedIds.has(candidateNodeId(candidate)))
-      .map(candidate => {
-        const nodeId = candidateNodeId(candidate);
-        const spreadActivation = spread.get(nodeId) || 0;
-        const semantic = working.find(item => item.path === candidate.path)?.semanticScore;
-        return {
-          ...candidate,
-          semanticScore: semantic ?? candidate.semanticScore,
-          spreadActivation,
-          score: Number(candidate.score || 0) + Math.min(52, spreadActivation * 52),
-        };
-      })
-      .sort((a, b) => b.score - a.score);
+    candidates = applyNeuroGraphFusionRanking(
+      candidates.filter(candidate => !blockedIds.has(candidateNodeId(candidate))),
+      working,
+      spread,
+      ppr,
+      conf,
+      stats
+    );
 
     const note = [
-      `[Staged Retrieval: ${agentId}, lexical=${stats.lexical}, stageTop=${lexicalK}, spread=${stats.spread}, blocked=${stats.blocked}]`,
+      `[Staged Retrieval: ${agentId}, lexical=${stats.lexical}, stageTop=${lexicalK}, spread=${stats.spread}, pprSeeds=${stats.pprSeeds}, ppr=${stats.ppr}, rrf=${stats.rrf}, blocked=${stats.blocked}]`,
       embeddingNote,
     ].filter(Boolean).join('\n');
     return { candidates, note, stats };
@@ -8891,16 +10448,21 @@
   }
 
   async function buildMainBriefing(state, context, notes, budget = 0, conf = null) {
-    const query = buildRetrievalQuery(context, notes, []);
+    const query = buildRetrievalQuery(context, [], []);
     resetCanonicalInjectionTrace(context);
+    const allUnits = buildCanonicalUnits(context, conf);
+    syncNeuroCore(state, context, conf, allUnits);
+    resetNeuroExecutiveTrace(state);
     const budgetInfo = resolveMainInjectionBudget(context, budget, conf);
     const totalBudget = Math.max(AUTO_INJECTION_MIN_CHARS, Number(budgetInfo.budget || AUTO_INJECTION_FALLBACK_CHARS));
     const floorBudget = Math.min(Math.max(1200, Math.floor(totalBudget * 0.42)), Math.max(900, totalBudget - 1200), totalBudget);
     const bridgeBudget = Math.min(Math.max(900, Math.floor(totalBudget * 0.24)), Math.max(700, totalBudget - floorBudget - 900));
+    const neuroBudget = Math.min(1400, Math.max(420, Math.floor(totalBudget * 0.07)));
     const controlFloor = buildMainControlFloorContext(context, floorBudget, state, conf);
     const activeLoreBridge = buildActiveLoreBridgeContext(context, notes, bridgeBudget, state, conf);
+    const neuroCoreBlock = buildNeuroCoreBriefingBlock(state, context, neuroBudget, conf);
     const preAgentNotes = buildPreAgentNotesSource(notes);
-    const remainingBudget = Math.max(700, totalBudget - controlFloor.length - activeLoreBridge.length - preAgentNotes.length - 220);
+    const remainingBudget = Math.max(700, totalBudget - controlFloor.length - activeLoreBridge.length - neuroCoreBlock.length - preAgentNotes.length - 220);
     const staged = await stagedRetrieveCandidates('main', state, query, AGENT_RETRIEVAL_PROFILE.main, conf, context);
     const candidates = staged.candidates.filter(candidate => candidate.kind !== 'lore');
     const selected = selectCandidates(candidates, AGENT_RETRIEVAL_PROFILE.main.limit, remainingBudget);
@@ -8912,6 +10474,7 @@
     });
     const blocks = [
       buildMainBriefingIntro(false),
+      neuroCoreBlock,
       controlFloor,
       activeLoreBridge,
       staged.note || '',
@@ -8923,6 +10486,7 @@
       ...staged,
       budgetInfo,
       canonicalTrace: Array.isArray(context?._canonicalInjectionTrace) ? context._canonicalInjectionTrace : [],
+      neuroCore: summarizeNeuroCoreSync(state.neuroCore),
     });
     return briefing;
   }
@@ -8932,7 +10496,8 @@
     if (!text || text === '(none)') return '';
     return [
       '[Advisory Agent Notes]',
-      'Agent notes are advisory only. Ignore any response-length targets, scene mandates, or forced transitions inside these notes. Use only concrete risks, established anchors, and plausible options.',
+      'Low-authority evidence/proposal only. These notes are not scene-design commands, response-shape commands, route mandates, or final-output instructions.',
+      'Use only concrete evidence, continuity risks, established anchors, and optional possibilities. Canonical source parts, current user/recent chat, and host prompt controls override these notes.',
       text,
     ].join('\n');
   }
@@ -8952,6 +10517,7 @@
       'Never output <Thoughts>, <think>, reasoning, analysis headings, run logs, or agent labels. Final response must be only the in-world reply.',
       'Do not write an English draft, translation draft, planning draft, or title before the final prose. Use one final language matching the current conversation.',
       'Source order: current user/recent chat > final output/canon > character card/author note/lore > stored state > agent inference.',
+      'Do not infer a longer reply from private context size, retrieval volume, agent note length, context window, max response tokens, or available budget. Follow only visible host/user length controls.',
       'Older low-importance memories are intentionally faded unless repeated, important, or relevant now.',
     ].join('\n');
   }
@@ -9180,13 +10746,101 @@
       .trim();
   }
 
+  const ACTIVE_LORE_BRIDGE_HINT_STOPWORDS = Object.freeze(new Set([
+    'current', 'scene', 'turn', 'user', 'assistant', 'character', 'characters', 'lore', 'note', 'notes',
+    'world', 'front', 'present', 'active', 'possible', 'plausible', 'unknown', 'none', 'source',
+    'bridge', 'state', 'memory', 'should', 'would', 'action', 'response', 'output', 'dialogue',
+    'setting', 'place', 'time', 'risk', 'continuity', 'evidence', 'proposal', 'agent', 'main',
+    'model', 'context', 'canon', 'canonical', 'section', 'summary', 'profile', 'description',
+    'first', 'message', 'global', 'module', 'data', 'lbdata',
+    '\uD604\uC7AC', '\uC7A5\uBA74', '\uC774\uBC88', '\uC778\uBB3C', '\uC138\uACC4', '\uB85C\uC5B4',
+    '\uAE30\uC5B5', '\uC0C1\uD0DC', '\uAC00\uB2A5', '\uAD00\uB828', '\uC9C1\uC811', '\uAC04\uC811',
+    '\uC704\uD5D8', '\uC8FC\uC758', '\uB300\uD654', '\uC0AC\uC6A9\uC790', '\uC751\uB2F5',
+    '\uCD9C\uB825', '\uC7A5\uC18C', '\uC2DC\uAC04', '\uC815\uBCF4', '\uC0AC\uAC74',
+    '\uD589\uB3D9', '\uAD00\uACC4', '\uADFC\uAC70', '\uCC38\uACE0', '\uC790\uB8CC',
+    '\uC5C6\uC74C', '\uBC30\uACBD', '\uC9C4\uD589', '\uB2E4\uC74C', '\uC774\uC804',
+    '\uC544\uC9C1', '\uC9C0\uAE08', '\uC911\uC2EC', '\uC8FC\uBCC0', '\uBAA8\uB378',
+    '\uB178\uD2B8', '\uC6D0\uCC9C', '\uC124\uC815', '\uCE90\uB9AD\uD130', '\uC655\uAD6D',
+    '\uAC00\uBB38',
+  ]));
+
+  function normalizeActiveLoreBridgeHintTerm(value) {
+    return String(value || '')
+      .replace(/^[\s#@*_\-:;()[\]{}"'`<>]+|[\s#@*_\-:;()[\]{}"'`<>]+$/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function isActiveLoreBridgeHintTerm(value) {
+    const term = normalizeActiveLoreBridgeHintTerm(value);
+    if (!term || term.length < 2 || term.length > 48) return false;
+    const lower = term.toLowerCase();
+    if (ACTIVE_LORE_BRIDGE_HINT_STOPWORDS.has(lower)) return false;
+    if (/^\d+$/.test(term) || /^[a-z]$/i.test(term)) return false;
+    if (/^(?:p?\d+|id|api|json|true|false|null|none|n\/a)$/i.test(term)) return false;
+    if (/^(?:current|scene|turn|note|agent|source|state|memory|lore|canon|bridge|profile|description|summary|context)$/i.test(term)) return false;
+    return true;
+  }
+
+  function activeLoreBridgeHintPieces(text, limit = 80) {
+    const raw = String(text || '');
+    const out = [];
+    const add = value => {
+      const term = normalizeActiveLoreBridgeHintTerm(value);
+      if (isActiveLoreBridgeHintTerm(term)) out.push(term);
+    };
+    (raw.match(/\b[A-Z][A-Za-z0-9_'-]*(?:\s+[A-Z][A-Za-z0-9_'-]*){1,3}\b/g) || []).forEach(add);
+    raw
+      .replace(/[^A-Za-z0-9_\-\uAC00-\uD7A3\u3040-\u30FF\u3400-\u9FFF]+/g, ' ')
+      .split(/\s+/)
+      .forEach(add);
+    return uniqueStrings(out).slice(0, Math.max(1, Number(limit || 80)));
+  }
+
+  function activeLoreBridgeCanonicalHintTerms(context = null) {
+    const sources = Array.isArray(context?.canonicalSources) ? context.canonicalSources : [];
+    const terms = [];
+    sources.forEach(source => {
+      [
+        source?.label,
+        source?.name,
+        ...(normalizeStringArray(source?.activationKeys)),
+        ...(normalizeStringArray(source?.keys)),
+        ...(normalizeStringArray(source?.subjectHints)),
+      ].filter(Boolean).forEach(value => {
+        activeLoreBridgeHintPieces(value, 24).forEach(term => terms.push(term));
+      });
+    });
+    return uniqueStrings(terms).slice(0, 320);
+  }
+
+  function activeLoreBridgeNoteHintText(context, notes = []) {
+    const included = includedAgentNotes(notes).slice(0, 4);
+    if (!included.length) return '';
+    const sourceHints = activeLoreBridgeCanonicalHintTerms(context);
+    if (!sourceHints.length) return '';
+    const noteText = included
+      .map(note => sanitizeMainAdvisoryNoteText(note?.text || note?.outputPreview || ''))
+      .filter(Boolean)
+      .join('\n')
+      .slice(0, 5200);
+    if (!noteText.trim()) return '';
+    const lowerNote = noteText.toLowerCase();
+    const matched = sourceHints.filter(term => {
+      const normalized = normalizeActiveLoreBridgeHintTerm(term);
+      return normalized && lowerNote.includes(normalized.toLowerCase());
+    });
+    return uniqueStrings(matched).slice(0, 48).join('\n');
+  }
+
   function activeLoreBridgeQueryText(context, notes = []) {
     const messages = Array.isArray(context?.messages) ? context.messages : [];
+    const noteHints = activeLoreBridgeNoteHintText(context, notes);
     return [
       context?.mode || '',
       getUserInput(messages),
       messages.slice(-6).map(item => item?.content || '').join('\n').slice(0, 3200),
-      includedAgentNotes(notes).map(note => note?.text || '').join('\n').slice(0, 4000),
+      noteHints ? `[Agent Note Retrieval Hints]\n${noteHints}` : '',
     ].filter(Boolean).join('\n');
   }
 
@@ -9249,7 +10903,8 @@
     const queryTerms = extractQueryTerms(queryText).slice(0, 80);
     const boundaryQueryText = knowledgeBoundaryIntentText(context, '');
     const allowKnowledgeBoundary = hasExplicitKnowledgeBoundaryIntent(boundaryQueryText);
-    const allowFutureSource = hasFutureOriginalAccess(futureOriginalAccessText(context, ''));
+    const futureAccessText = futureOriginalAccessText(context, '');
+    const allowFutureSource = hasFutureOriginalAccess(futureAccessText) || contextHasFutureAwarePerspective(null, context);
     const seen = new Set();
     return sources
       .map((source, index) => ({
@@ -9278,7 +10933,8 @@
     const queryTerms = extractQueryTerms(queryText).slice(0, 80);
     const boundaryQueryText = knowledgeBoundaryIntentText(context, '');
     const allowKnowledgeBoundary = hasExplicitKnowledgeBoundaryIntent(boundaryQueryText);
-    const allowFutureSource = hasFutureOriginalAccess(futureOriginalAccessText(context, ''));
+    const futureAccessText = futureOriginalAccessText(context, '');
+    const allowFutureSource = unit => canUseFutureOriginalUnit(unit, state, context, futureAccessText);
     const header = [
       '[Active Canonical Bridge]',
       compact
@@ -9319,6 +10975,7 @@
     });
     if (selected.length) {
       appendCanonicalInjectionTrace(context, selected.map(item => item.unit), 'active-canonical');
+      appendNeuroSelectedCanonicalTrace(state, selected, 'active-canonical');
       return trimBriefingBlockToBudget(header.concat(selected.map(item => item.line)).join('\n'), max);
     }
 
@@ -9349,10 +11006,11 @@
       const lengthControl = buildResponseLengthControlBlock(context, conf, max <= 1600);
       if (lengthControl) lines.push(lengthControl);
     }
-    const units = buildCanonicalUnits(context, conf);
+    const units = neuroFilterCanonicalUnits(buildCanonicalUnits(context, conf), state, context, 'canonical-foundation');
     const boundaryQueryText = knowledgeBoundaryIntentText(context, '');
     const allowKnowledgeBoundary = hasExplicitKnowledgeBoundaryIntent(boundaryQueryText);
-    const allowFutureSource = hasFutureOriginalAccess(futureOriginalAccessText(context, ''));
+    const futureAccessText = futureOriginalAccessText(context, '');
+    const allowFutureSource = unit => canUseFutureOriginalUnit(unit, state, context, futureAccessText);
     const queryText = [
       getUserInput(context?.messages || []),
       (Array.isArray(context?.messages) ? context.messages : []).slice(-4).map(item => item.content).join('\n'),
@@ -9360,7 +11018,7 @@
     const queryTerms = extractQueryTerms(queryText).slice(0, 60);
     const canonicalCandidates = units
       .filter(unit => unit.foundation || unit.alwaysActive || unit.kind === 'firstMessage')
-      .filter(unit => canInjectKnowledgeBoundaryCanonicalUnit(unit, boundaryQueryText, futureOriginalAccessText(context, '')))
+      .filter(unit => canInjectKnowledgeBoundaryCanonicalUnit(unit, boundaryQueryText, futureAccessText, { state, context, allowFutureSource: allowFutureSource(unit) }))
       .map(unit => ({
         unit,
         score: canonicalUnitQueryScore(unit, queryTerms, queryText),
@@ -9381,6 +11039,7 @@
     if (selected.length) {
       lines.push(...canonicalHeader, ...selected.map(item => item.line));
       appendCanonicalInjectionTrace(context, selected.map(item => item.unit), 'canonical-foundation');
+      appendNeuroSelectedCanonicalTrace(state, selected, 'canonical-foundation');
     }
 
     const remaining = max - lines.join('\n').length;
@@ -9416,6 +11075,11 @@
         sourceRank: item.sourceRank,
         importance: item.importance,
         confidence: Number(item.confidence || 0).toFixed(2),
+        semanticScore: Number.isFinite(Number(item.semanticScore)) ? Number(item.semanticScore).toFixed(3) : null,
+        spreadActivation: Number.isFinite(Number(item.spreadActivation)) ? Number(item.spreadActivation).toFixed(3) : null,
+        graphPprScore: Number.isFinite(Number(item.graphPprScore)) ? Number(item.graphPprScore).toFixed(3) : null,
+        rrfScore: Number.isFinite(Number(item.rrfScore)) ? Number(item.rrfScore).toFixed(4) : null,
+        graphRank: item.graphRank || null,
         turn: item.turn,
         preview: summarizeLedgerText(item.item, item.kind).slice(0, 100),
       })),
@@ -9440,10 +11104,10 @@
   function extractQueryTerms(text) {
     const raw = String(text || '').toLowerCase();
     const tokens = raw
-      .replace(/[^\w가-힣ㄱ-ㅎㅏ-ㅣ:.\-\s]/g, ' ')
+      .replace(/[^\w\uAC00-\uD7A3\u3131-\u318E\u3040-\u30FF\u3400-\u9FFF:.\-\s]/g, ' ')
       .split(/\s+/)
       .map(token => token.trim())
-      .filter(token => token.length >= 2 && !/^(the|and|that|with|from|this|그녀|그는|나는|그리고|하지만|또는|있는|없는|했다|한다)$/.test(token));
+      .filter(token => token.length >= 2 && !/^(the|and|that|with|from|this|그녀|그는|나는|그리고|하지만|또는|있는|없는|했다|한다|これ|それ|あれ|そして|しかし|但是|这个|那个)$/.test(token));
     const expanded = [];
     tokens.forEach(token => {
       expanded.push(token);
@@ -9474,8 +11138,10 @@
   function rankStateCandidates(state, queryTerms, profile, context = null) {
     const signature = buildRecallQuerySignature(queryTerms, context);
     return collectStateCandidates(state)
+      .filter(candidate => !(candidate.kind === 'character' && isUnknownCharacterRetrievalCandidate(candidate.item, candidate.path)))
       .filter(candidate => !profile?.kinds || profile.kinds.includes(candidate.kind))
-      .filter(candidate => canUseFutureOriginalCandidate(candidate, context))
+      .map(candidate => ({ ...candidate, perspectiveGate: perspectiveGateCandidate(candidate, state, context) }))
+      .filter(candidate => candidate.perspectiveGate.allow)
       .map(candidate => {
         const activeLore = candidate.kind === 'lore' && isActiveLoreItemForQuery(candidate.item, context, queryTerms);
         const enriched = { ...candidate, activeLore };
@@ -9490,9 +11156,8 @@
       .sort((a, b) => b.score - a.score);
   }
 
-  function canUseFutureOriginalCandidate(candidate, context = null) {
-    if (!isFutureOriginalCandidate(candidate)) return true;
-    return hasFutureOriginalAccess(futureOriginalAccessText(context, ''));
+  function canUseFutureOriginalCandidate(candidate, context = null, state = null) {
+    return perspectiveGateCandidate(candidate, state, context).allow;
   }
 
   function isFutureOriginalCandidate(candidate) {
@@ -9510,6 +11175,24 @@
       ...(Array.isArray(item.keywords) ? item.keywords : []),
     ].filter(Boolean).join('\n');
     return Boolean(item.futureSource || /future-route|future\/original-route/i.test(text) || looksFutureOriginalRouteText(text));
+  }
+
+  function perspectiveGateCandidate(candidate, state = null, context = null) {
+    const item = candidate?.item || {};
+    const gateItem = {
+      ...item,
+      kind: candidate?.kind || item.kind || item.type,
+      path: candidate?.path || item.path || item.sourcePath,
+      label: firstNonEmpty(item.label, item.name, item.title, candidate?.path),
+      summary: firstNonEmpty(item.summary, item.truth, item.surface, item.verbatimExcerpt, candidate?.text),
+      futureSource: Boolean(item.futureSource || isFutureOriginalCandidate(candidate)),
+      knowledgeBoundary: Boolean(item.knowledgeBoundary || isKnowledgeBoundaryLikeItem(item, candidate?.kind)),
+    };
+    return perspectiveGateItem(gateItem, state, context, {
+      kind: candidate?.kind,
+      queryText: knowledgeBoundaryIntentText(context, ''),
+      futureAccessText: futureOriginalAccessText(context, ''),
+    });
   }
 
   function buildRecallQuerySignature(queryTerms, context = null) {
@@ -9620,7 +11303,11 @@
     };
 
     add('scene', 'scene', state.scene, { sourceRank: SOURCE_RANK.stored_state });
-    Object.values(state.characters || {}).forEach(item => add('character', `characters.${item.id || item.name}`, item));
+    Object.values(state.characters || {}).forEach(item => {
+      const path = `characters.${item.id || item.name}`;
+      if (isUnknownCharacterRetrievalCandidate(item, path)) return;
+      add('character', path, item);
+    });
     (state.relationships || []).forEach(item => add('relationship', `relationships.${relationshipKey(item)}`, item));
     (state.socialGraph || []).forEach(item => add('socialGraph', `socialGraph.${itemKey(item)}`, item));
     (state.worldFronts || []).forEach(item => add('worldFront', `worldFronts.${itemKey(item)}`, item));
@@ -9643,8 +11330,22 @@
     return out;
   }
 
+  function isUnknownCharacterRetrievalCandidate(item, path = '') {
+    const raw = item && typeof item === 'object' ? item : {};
+    const id = String(firstNonEmpty(raw.id, path) || '').trim();
+    const name = String(firstNonEmpty(raw.name, id) || '').trim();
+    const pathText = String(path || '').trim().toLowerCase();
+    if (/^(?:unknown|characters\.unknown|character:unknown)$/i.test(id)) return true;
+    if (/^(?:unknown|characters\.unknown|character:unknown)$/i.test(name)) return true;
+    if (pathText === 'characters.unknown') return true;
+    if (!name) return true;
+    if (isLoreHeadingCharacterCandidate(raw, path)) return true;
+    return isGenericCharacterStateToken(name);
+  }
+
   function candidateKindForPsycheUnit(unit) {
     const type = normalizePsycheUnitType(unit?.type);
+    if (type === 'character' && isLoreHeadingCharacterCandidate(unit, 'psycheUnits')) return 'lore';
     if (['character', 'relationship', 'worldFront', 'secret', 'memory', 'lore'].includes(type)) return type;
     return 'knowledge';
   }
@@ -9673,11 +11374,34 @@
     const activationScore = candidate.kind === 'lore' ? loreActivationScore(candidate.item, queryTerms) : 0;
     const mustCarryScore = isMustCarryCandidate(candidate) ? 34 : 0;
     const graphScore = associationActivationScore(candidate, state);
+    const homeostasisScore = neuroHomeostaticCandidateBoost(candidate, state);
     const boundaryPenalty = knowledgeBoundaryPenalty(candidate, state);
     const decay = parseNumber(candidate.item?.decay, candidate.kind === 'memory' ? calculateMemoryDecay(candidate.item, age) : 1, 0, 1);
     const decayScore = candidate.kind === 'memory' ? (decay - 1) * 34 : 0;
     const fadedPenalty = /faded/i.test(candidate.status) ? -22 : 0;
-    return matchScore + sourceScore + importanceScore + confidenceScore + recencyScore + tierScore + memoryTierScore + heatScore + lifecycleScore + activationScore + mustCarryScore + graphScore + boundaryPenalty + decayScore + fadedPenalty;
+    return matchScore + sourceScore + importanceScore + confidenceScore + recencyScore + tierScore + memoryTierScore + heatScore + lifecycleScore + activationScore + mustCarryScore + graphScore + homeostasisScore + boundaryPenalty + decayScore + fadedPenalty;
+  }
+
+  function neuroHomeostaticCandidateBoost(candidate, state = null) {
+    const active = normalizeNeuroCoreState(state?.neuroCore || {}, state).activeMiniCores || [];
+    if (!active.length || !candidate) return 0;
+    const text = String(candidate.text || stringifyLedgerItem(candidate.item || '') || '');
+    let best = 0;
+    active.forEach(core => {
+      const names = uniqueStrings([core.name].concat(normalizeStringArray(core.aliases))).map(name => String(name || '').toLowerCase()).filter(Boolean);
+      if (!names.length || !candidateMatchesNeuroSeed(candidate, names)) return;
+      const auto = normalizeNeuroAutonomicTone(core.autonomicTone);
+      const homeo = normalizeNeuroHomeostaticState(core.homeostaticState);
+      const threatCue = Math.max(neuroCueScore(text, NEURO_HOMEOSTASIS_CUES.threat, 0.28, 1), neuroCueScore(text, NEURO_HOMEOSTASIS_CUES.conflict, 0.2, 1), neuroCueScore(text, NEURO_HOMEOSTASIS_CUES.injury, 0.22, 1));
+      const recoveryCue = Math.max(neuroCueScore(text, NEURO_HOMEOSTASIS_CUES.safety, 0.22, 1), neuroCueScore(text, NEURO_HOMEOSTASIS_CUES.trust, 0.22, 1), neuroCueScore(text, NEURO_HOMEOSTASIS_CUES.recovery, 0.22, 1));
+      const fatigueCue = neuroCueScore(text, NEURO_HOMEOSTASIS_CUES.fatigue, 0.22, 1);
+      const base = auto.arousal * 5 + homeo.stressLoad * 7 + Math.max(0, 1 - homeo.recoveryReserve) * 5 + homeo.fatigue * 4;
+      const threat = threatCue * (auto.arousal * 18 + homeo.stressLoad * 20 + homeo.allostaticLoad * 12);
+      const recovery = recoveryCue * (homeo.recoveryReserve * 12 + homeo.securityTone * 10);
+      const fatigue = fatigueCue * homeo.fatigue * 12;
+      best = Math.max(best, base + threat + recovery + fatigue);
+    });
+    return Math.min(parseNumber(DEFAULT_CONFIG.neuroHomeostasisCandidateBoost, 34, 0, 120), best);
   }
 
   function associationActivationScore(candidate, state) {
@@ -9728,13 +11452,14 @@
   function refreshAssociationGraph(state, context, notes, conf) {
     if (!conf.associationGraphEnabled) return { nodes: 0, edges: 0, skipped: true };
     const previousGraph = normalizeAssociationGraph(state.associationGraph);
-    const queryTerms = buildRetrievalQuery(context, notes, []).slice(0, 40);
+    const queryTerms = buildRetrievalQuery(context, [], []).slice(0, 40);
     const candidates = collectStateCandidates(state)
       .map(candidate => {
         const terms = candidateTerms(candidate).slice(0, 28);
         const queryHits = terms.filter(term => queryTerms.includes(term)).length;
         const activation = Math.min(1, (queryHits * 0.18) + (clampNumber(candidate.importance, 5, 0, 10) / 70) + (clampNumber(candidate.confidence, 0.7, 0, 1) / 8));
-        const blocked = conf.associationHardBoundary !== false && knowledgeBoundaryPenalty(candidate, state) <= -100;
+        const gate = perspectiveGateCandidate(candidate, state, context);
+        const blocked = conf.associationHardBoundary !== false && !gate.allow;
         const previous = previousGraph.nodes.find(item => item.id === candidateNodeId(candidate));
         return {
           id: candidateNodeId(candidate),
@@ -9748,6 +11473,7 @@
           lastActivatedTurn: queryHits > 0 ? state.turn : parseNumber(previous?.lastActivatedTurn, candidate.turn, 0, 999999),
           activationSources: queryHits > 0 ? ['query'] : normalizeStringArray(previous?.activationSources).slice(0, 12),
           blockedForPerspective: blocked,
+          perspectiveGate: { reason: gate.reason, access: gate.access },
           turn: candidate.turn,
         };
       })
@@ -9897,6 +11623,221 @@
     return active;
   }
 
+  function buildNeuroGraphSeedWeights(state, context, candidates, working, profile, queryTerms, blockedIds = new Set()) {
+    const graph = normalizeAssociationGraph(state?.associationGraph);
+    const graphIds = new Set(graph.nodes.map(node => node.id));
+    const weights = new Map();
+    const reasons = {};
+    const addSeed = (id, weight, reason) => {
+      const key = String(id || '').trim();
+      if (!key || blockedIds.has(key) || (graphIds.size && !graphIds.has(key))) return;
+      const value = clampNumber(weight, 0, 0, 1);
+      if (value <= 0) return;
+      weights.set(key, Math.max(weights.get(key) || 0, value));
+      if (reason) reasons[key] = uniqueStrings([].concat(reasons[key] || [], reason)).slice(0, 8);
+    };
+    const limit = Math.max(8, Number(profile?.limit || 20));
+    (Array.isArray(working) ? working : []).slice(0, limit * 2).forEach((candidate, idx) => {
+      addSeed(candidateNodeId(candidate), 0.95 - (idx * 0.018), idx < limit ? 'stage-top' : 'stage-near');
+    });
+    (Array.isArray(candidates) ? candidates : []).forEach(candidate => {
+      if (isMustCarryCandidate(candidate)) addSeed(candidateNodeId(candidate), 0.72, 'must-carry');
+      if (candidate.activeLore) addSeed(candidateNodeId(candidate), 0.68, 'active-lore');
+    });
+    const names = collectNeuroGraphSeedNames(state, context);
+    if (names.length) {
+      const lowered = names.map(name => name.toLowerCase());
+      (Array.isArray(candidates) ? candidates : []).forEach(candidate => {
+        if (candidateMatchesNeuroSeed(candidate, lowered)) addSeed(candidateNodeId(candidate), 0.86, 'neuro-name');
+      });
+      graph.nodes.forEach(node => {
+        if (node.blockedForPerspective) return;
+        const haystack = [node.id, node.path, node.kind, node.label, ...(node.terms || [])].join('\n').toLowerCase();
+        if (lowered.some(name => name && (haystack.includes(name) || name.includes(haystack)))) addSeed(node.id, 0.78, 'graph-name');
+      });
+    }
+    if (Array.isArray(queryTerms) && queryTerms.length) {
+      const terms = queryTerms.slice(0, 24).map(term => String(term || '').toLowerCase()).filter(Boolean);
+      graph.nodes.forEach(node => {
+        if (node.blockedForPerspective) return;
+        const hits = (node.terms || []).filter(term => terms.includes(String(term || '').toLowerCase())).length;
+        if (hits > 0) addSeed(node.id, Math.min(0.7, 0.34 + hits * 0.08), 'query-term');
+      });
+    }
+    return { weights, reasons, names };
+  }
+
+  function collectNeuroGraphSeedNames(state, context = null) {
+    const core = normalizeNeuroCoreState(state?.neuroCore || {}, state);
+    const perspective = normalizeActivePerspective(state?.activePerspective);
+    const names = []
+      .concat(normalizeStringArray(core.scene.presentCast))
+      .concat(normalizeStringArray(core.scene.mentionedNames))
+      .concat(normalizeStringArray(state?.scene?.presentCast))
+      .concat(normalizeStringArray(perspective.presentCast))
+      .concat(normalizeStringArray(perspective.protectedNames));
+    (Array.isArray(core.activeMiniCores) ? core.activeMiniCores : []).forEach(mini => {
+      names.push(mini?.name);
+      names.push(...normalizeStringArray(mini?.aliases));
+    });
+    extractIdentitySubjectsFromSources(context?.canonicalSources, context?.character).forEach(subject => {
+      names.push(subject.name);
+      names.push(...normalizeStringArray(subject.aliases));
+    });
+    return uniqueStrings(names)
+      .map(name => String(name || '').trim())
+      .filter(name => name.length >= 2 && name.length <= 120 && !isGenericCharacterStateToken(name))
+      .slice(0, 80);
+  }
+
+  function candidateMatchesNeuroSeed(candidate, loweredNames) {
+    const item = candidate?.item || {};
+    const haystack = [
+      candidate?.kind,
+      candidate?.path,
+      candidate?.text,
+      item.id,
+      item.name,
+      item.label,
+      item.sourceId,
+      item.sourceLabel,
+      item.sourcePath,
+      item.canonicalSource?.id,
+      item.canonicalSource?.label,
+      item.canonicalSource?.path,
+      ...(Array.isArray(item.aliases) ? item.aliases : []),
+      ...(Array.isArray(item.activationKeys) ? item.activationKeys : []),
+      ...(Array.isArray(item.keywords) ? item.keywords : []),
+      ...(Array.isArray(item.knownBy) ? item.knownBy : []),
+      ...(Array.isArray(item.knowers) ? item.knowers : []),
+    ].filter(Boolean).join('\n').toLowerCase();
+    return (Array.isArray(loweredNames) ? loweredNames : []).some(name => {
+      if (!name || name.length < 2) return false;
+      return haystack.includes(name) || (name.length >= 4 && haystack.split(/\s+/).some(term => term.includes(name) || name.includes(term)));
+    });
+  }
+
+  function computeAssociationPersonalizedRank(state, seedWeights, conf = {}) {
+    const graph = normalizeAssociationGraph(state?.associationGraph);
+    const nodes = new Map(graph.nodes.filter(node => !node.blockedForPerspective).map(node => [node.id, node]));
+    if (!nodes.size || !(seedWeights instanceof Map) || !seedWeights.size) return new Map();
+    const seed = new Map();
+    seedWeights.forEach((weight, id) => {
+      if (!nodes.has(id)) return;
+      const value = clampNumber(weight, 0, 0, 1);
+      if (value > 0) seed.set(id, Math.max(seed.get(id) || 0, value));
+    });
+    if (!seed.size) return new Map();
+    const seedSum = Array.from(seed.values()).reduce((sum, value) => sum + value, 0) || 1;
+    seed.forEach((value, id) => seed.set(id, value / seedSum));
+    const adjacency = new Map();
+    graph.edges.forEach(edge => {
+      if (!nodes.has(edge.from) || !nodes.has(edge.to)) return;
+      const weight = clampNumber(edge.weight || edge.hebbianWeight, 0, 0, 1);
+      if (weight <= 0) return;
+      if (!adjacency.has(edge.from)) adjacency.set(edge.from, []);
+      if (!adjacency.has(edge.to)) adjacency.set(edge.to, []);
+      adjacency.get(edge.from).push({ id: edge.to, weight });
+      adjacency.get(edge.to).push({ id: edge.from, weight });
+    });
+    const alpha = parseNumber(conf?.neuroGraphPprAlpha, DEFAULT_CONFIG.neuroGraphPprAlpha, 0.05, 0.85);
+    const iterations = Math.round(parseNumber(conf?.neuroGraphPprIterations, DEFAULT_CONFIG.neuroGraphPprIterations, 2, 24));
+    let rank = new Map(seed);
+    for (let i = 0; i < iterations; i += 1) {
+      const next = new Map();
+      seed.forEach((value, id) => next.set(id, (next.get(id) || 0) + alpha * value));
+      rank.forEach((value, id) => {
+        const edges = adjacency.get(id) || [];
+        if (!edges.length) {
+          next.set(id, (next.get(id) || 0) + (1 - alpha) * value);
+          return;
+        }
+        const total = edges.reduce((sum, edge) => sum + clampNumber(edge.weight, 0, 0, 1), 0) || 1;
+        edges.forEach(edge => {
+          const gain = (1 - alpha) * value * (clampNumber(edge.weight, 0, 0, 1) / total);
+          if (gain > 0) next.set(edge.id, (next.get(edge.id) || 0) + gain);
+        });
+      });
+      rank = next;
+    }
+    const max = Math.max(...Array.from(rank.values()), 0);
+    if (max <= 0) return new Map();
+    const normalized = new Map();
+    rank.forEach((value, id) => {
+      const score = value / max;
+      if (score >= 0.001) normalized.set(id, score);
+    });
+    return normalized;
+  }
+
+  function applyNeuroGraphFusionRanking(candidates, working, spread, ppr, conf = {}, stats = null) {
+    const base = Array.isArray(candidates) ? candidates : [];
+    const workingList = Array.isArray(working) ? working : [];
+    const spreadMap = spread instanceof Map ? spread : new Map();
+    const pprMap = ppr instanceof Map ? ppr : new Map();
+    const semanticByPath = new Map();
+    workingList.forEach(candidate => {
+      if (Number.isFinite(Number(candidate.semanticScore))) semanticByPath.set(candidate.path, Number(candidate.semanticScore));
+    });
+    const semanticRank = rankIds(base
+      .filter(candidate => Number.isFinite(Number(semanticByPath.get(candidate.path) ?? candidate.semanticScore)))
+      .map(candidate => ({
+        id: candidateNodeId(candidate),
+        score: Number(semanticByPath.get(candidate.path) ?? candidate.semanticScore),
+      })));
+    const graphRank = rankIds(base
+      .map(candidate => {
+        const id = candidateNodeId(candidate);
+        return { id, score: Math.max(pprMap.get(id) || 0, (spreadMap.get(id) || 0) * 0.72) };
+      })
+      .filter(item => item.score > 0));
+    const k = parseNumber(conf?.neuroGraphRrfK, DEFAULT_CONFIG.neuroGraphRrfK, 10, 160);
+    const pprBoost = parseNumber(conf?.neuroGraphPprBoost, DEFAULT_CONFIG.neuroGraphPprBoost, 0, 180);
+    const rrfBoost = parseNumber(conf?.neuroGraphRrfBoost, DEFAULT_CONFIG.neuroGraphRrfBoost, 0, 420);
+    let rrfHits = 0;
+    const fused = base.map((candidate, idx) => {
+      const nodeId = candidateNodeId(candidate);
+      const lexicalRank = idx + 1;
+      const semantic = semanticByPath.get(candidate.path) ?? candidate.semanticScore;
+      const semRank = semanticRank.get(nodeId) || 0;
+      const graph = graphRank.get(nodeId) || 0;
+      const spreadActivation = spreadMap.get(nodeId) || 0;
+      const graphPprScore = pprMap.get(nodeId) || 0;
+      const rrfScore = (1 / (k + lexicalRank))
+        + (semRank ? 1 / (k + semRank) : 0)
+        + (graph ? 1 / (k + graph) : 0);
+      if (semRank || graph) rrfHits += 1;
+      const score = Number(candidate.score || 0)
+        + Math.min(52, spreadActivation * 52)
+        + Math.min(80, graphPprScore * pprBoost)
+        + Math.min(36, rrfScore * rrfBoost);
+      return {
+        ...candidate,
+        semanticScore: semantic ?? candidate.semanticScore,
+        spreadActivation,
+        graphPprScore,
+        rrfScore,
+        lexicalRank,
+        semanticRank: semRank || undefined,
+        graphRank: graph || undefined,
+        score,
+      };
+    }).sort((a, b) => b.score - a.score);
+    if (stats) stats.rrf = rrfHits;
+    return fused;
+  }
+
+  function rankIds(items) {
+    const out = new Map();
+    (Array.isArray(items) ? items : [])
+      .filter(item => item?.id && Number.isFinite(Number(item.score)))
+      .sort((a, b) => Number(b.score) - Number(a.score))
+      .forEach((item, idx) => {
+        if (!out.has(item.id)) out.set(item.id, idx + 1);
+      });
+    return out;
+  }
+
   function edgeKey(a, b) {
     const pair = [String(a || ''), String(b || '')].sort();
     return `${pair[0]}=>${pair[1]}`;
@@ -9970,7 +11911,8 @@
     const rest = input.filter(candidate => !isMustCarryCandidate(candidate));
     const pushCandidate = (candidate, forceFloor = false) => {
       if (selected.length >= limit) return false;
-      if (knowledgeBoundaryPenalty(candidate, null) <= -100) return false;
+      if (candidate.perspectiveGate && candidate.perspectiveGate.allow === false) return false;
+      if (!candidate.perspectiveGate && knowledgeBoundaryPenalty(candidate, null) <= -100) return false;
       if (candidate.memoryTier === 'archived' && Number(candidate.score || 0) < 72) return false;
       if (candidate.memoryTier === 'disputed' && Number(candidate.score || 0) < 105) return false;
       const lineId = candidateTraceId(candidate);
@@ -10057,6 +11999,7 @@
       candidate.kind === 'lore' && Array.isArray(candidate.item?.activationKeys) ? `keys=${candidate.item.activationKeys.slice(0, 5).join('/')}` : '',
       candidate.tier ? `tier=${candidate.tier}` : '',
       candidate.status ? `status=${candidate.status}` : '',
+      candidate.perspectiveGate?.reason ? `gate=${candidate.perspectiveGate.reason}` : '',
     ].filter(Boolean).join(', ');
     return `- ${candidate.path} (${meta}): ${summary}`;
   }
@@ -10079,6 +12022,12 @@
         sourceRank: item.sourceRank,
         importance: item.importance,
         confidence: Number(item.confidence || 0).toFixed(2),
+        semanticScore: Number.isFinite(Number(item.semanticScore)) ? Number(item.semanticScore).toFixed(3) : null,
+        spreadActivation: Number.isFinite(Number(item.spreadActivation)) ? Number(item.spreadActivation).toFixed(3) : null,
+        graphPprScore: Number.isFinite(Number(item.graphPprScore)) ? Number(item.graphPprScore).toFixed(3) : null,
+        rrfScore: Number.isFinite(Number(item.rrfScore)) ? Number(item.rrfScore).toFixed(4) : null,
+        graphRank: item.graphRank || null,
+        gate: item.perspectiveGate ? { reason: item.perspectiveGate.reason, access: item.perspectiveGate.access } : null,
         included: line ? text.includes(line.slice(0, Math.min(80, line.length))) : false,
         preview: summarizeSafeTracePreview(item.item, item.kind),
       };
@@ -10093,6 +12042,7 @@
       stageNote: String(staged?.note || '').slice(0, 120),
       stages: staged?.stats || null,
       canonical: Array.isArray(staged?.canonicalTrace) ? staged.canonicalTrace.slice(0, 24) : [],
+      neuroCore: staged?.neuroCore || summarizeNeuroCoreSync(state.neuroCore),
       included,
     }].concat(Array.isArray(state.injectionTrace) ? state.injectionTrace : []).slice(0, MAX_INJECTION_TRACE);
   }
@@ -10504,6 +12454,12 @@
     return clipRunLogText(rows.join('\n\n'), limit);
   }
 
+  function currentTurnPriorNotesForPreAgent(agent, notes) {
+    if (!Array.isArray(notes) || !notes.length) return [];
+    if (agent?.includePreviousNotes === false) return [];
+    return agent?.id === 'synthesis' ? notes : [];
+  }
+
   async function runPrePipeline(conf, context, state) {
     const notes = [];
     const agents = pipelineAgents(conf).filter(a => a.enabled !== false && a.phase === 'pre');
@@ -10525,17 +12481,18 @@
         });
         continue;
       }
-      const agentContext = await buildAgentContextPackMaybeEmbedded(agent.id, state, context, notes, Math.floor(agentConf.contextWindow * 260), conf);
-      const settingView = buildCompiledSettingBlocks(state, context, notes, PSYCHE_COMPILED_SETTING_CHARS);
+      const currentTurnPriorNotes = currentTurnPriorNotesForPreAgent(agent, notes);
+      const agentContext = await buildAgentContextPackMaybeEmbedded(agent.id, state, context, currentTurnPriorNotes, Math.floor(agentConf.contextWindow * 260), conf);
+      const settingView = buildCompiledSettingBlocks(state, context, currentTurnPriorNotes, PSYCHE_COMPILED_SETTING_CHARS);
       const lengthAdvisory = buildAgentOnlyResponseLengthAdvisory(context, conf, false);
       const values = {
         setting_blocks: settingView,
         state_summary: agentContext,
         agent_context: agentContext,
-        state_json: buildAgentStateJson(state, context, notes, PSYCHE_STATE_JSON_CHARS),
+        state_json: buildAgentStateJson(state, context, currentTurnPriorNotes, PSYCHE_STATE_JSON_CHARS),
         chat_history: formatHistory(context.messages, agentConf.contextWindow),
         user_input: getUserInput(context.messages),
-        agent_notes: formatNotes(notes),
+        agent_notes: formatNotes(currentTurnPriorNotes),
         memory_instruction: agent.memoryEnabled ? cleanString(agent.memoryInstruction, '') : '',
         memory_format: agent.memoryEnabled ? cleanString(agent.memoryFormat, '') : '',
         final_output: '',
@@ -11012,13 +12969,49 @@
     return String(value || '').replace(/\s+/g, '').trim();
   }
 
+  function isKoreanDescriptorSessionPersonToken(name) {
+    const text = String(name || '').trim().replace(/\s+/g, '');
+    if (!text) return true;
+    const depersonalized = text.replace(/(?:이|가|은|는|을|를|과|와|도|만|의|에|께서|에게|한테|으로|로)$/g, '');
+    if (!depersonalized || depersonalized.length < 2) return true;
+    if (/^(?:이|그|저|이런|그런|저런|어떤|다른|모든|각|각자|누군가|아무도|아무|무슨|어느|한|일개|그것|이것|저것|것|것은|것이|이분|그분|저분|이자|그자|저자|이는|그는|저는|나는|내가|나|너|네|우리|자신|본인)$/.test(depersonalized)) return true;
+    if (/의$/.test(text) && /(?:청허문|남궁가|남궁세가|흑련교|문파|종파|교단|가문|세가|왕국|제국|조정|궁정|왕실|황실|산문|도관|사찰|관청|학교)$/.test(depersonalized)) return true;
+    if (/^(?:청허문|남궁가|남궁세가|흑련교|문파|종파|교단|가문|세가|왕국|제국|조정|궁정|왕실|황실|산문|도관|사찰|관청|학교)$/.test(depersonalized)) return true;
+    if (/^(?:어린|젊은|늙은|나이든|작은|큰|마른|깡마른|야윈|낯선|이름없는|이름난|어수룩한|얌전한|성실한|가난한|부유한|평범한|조용한|새로운|기존|현재|흰|하얀|푸른|파란|검은|붉은|낡은|헌|가벼운|무거운|긴|짧은|차가운|따뜻한|첫|둘째|셋째|막내|말째|아기|갓난|소년|소녀|남자|여자|사내|여인|무명의|몸의|책속의|책속|책|원작의|미래의|과거의|현재의)$/.test(depersonalized)) return true;
+    return false;
+  }
+
+  function isMultilingualDescriptorSessionPersonToken(name) {
+    const raw = String(name || '').trim();
+    if (!raw) return true;
+    const compact = raw.replace(/\s+/g, '');
+    if (isKoreanDescriptorSessionPersonToken(compact)) return true;
+    const latin = raw.normalize('NFKC')
+      .replace(/^[\s"'`“”‘’「」『』()[\]{}]+|[\s"'`“”‘’「」『』()[\]{}]+$/g, '')
+      .replace(/(?:'s|’s)$/i, '')
+      .replace(/[_-]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+    if (/^[a-z][a-z ]{1,32}$/.test(latin)) {
+      if (/^(?:the|a|an|this|that|these|those|some|any|another|other|certain|each|every|one|someone|somebody|anyone|anybody|nobody|none|he|she|it|they|them|him|her|his|hers|their|theirs|self|myself|yourself|himself|herself|itself|themselves|young|old|older|younger|little|small|big|large|tall|short|thin|skinny|pale|white|blue|black|red|poor|rich|quiet|gentle|docile|meek|obedient|shy|plain|ordinary|common|nameless|unknown|strange|new|current|future|past|baby|child|boy|girl|man|woman|male|female|young man|young woman|old man|old woman|little boy|little girl|youngman|youngwoman|oldman|oldwoman|littleboy|littlegirl)$/.test(latin)) return true;
+    }
+    const cjk = compact.replace(/[，。、“”‘’「」『』《》（）()[\]{}]/g, '');
+    if (/^[\u4e00-\u9fff]{2,12}(?:的|之)$/.test(cjk)) return true;
+    if (/^(?:同一年|同日|同门|同門|同辈|同輩|本门|本門|门中|門中|入门|入門|清虚门|清虛門|淸虛門|南宫家|南宮家|黑莲教|黑蓮教)(?:[\u4e00-\u9fff]{0,8})$/.test(cjk)) return true;
+    if (/^(?:这|這|那|哪|某|每|各|其|此|彼|这个|這個|那个|那個|某个|某個|一个|一個|这位|這位|那位|某位|此人|那人|这人|這人|某人|本人|自己|他|她|它|他们|她们|她們|牠|牠們|年轻|年輕|年少|幼小|小小|陌生|无名|無名|普通|平凡|安静|安靜|乖巧|温顺|溫順|贫穷|貧窮|富有|苍白|蒼白|白衣|青衣|黑衣|红衣|紅衣|高大|矮小|瘦弱|年老|老年|可怜|可憐|孩子|婴儿|嬰兒|少年|少女|男人|女人|男孩|女孩|男子|女子)$/.test(cjk)) return true;
+    if (/^(?:この|その|あの|どの|ある|或る|とある|誰か|誰も|自分|本人|彼|彼女|それ|これ|あれ|同じ|門下|本門|本派|若い|幼い|小さな|大きな|年老いた|老いた|見知らぬ|知らない|名もない|無名の|普通の|平凡な|静かな|おとなしい|従順な|貧しい|裕福な|白い|青い|黒い|赤い|古い|新しい|現在の|未来の|過去の|一人の|一介の|赤ん坊|子供|少年|少女|男|女|男の子|女の子)$/.test(cjk)) return true;
+    return false;
+  }
+
   function isGenericSessionPersonName(name) {
     const text = String(name || '').trim();
     if (!text || text.length < 2 || text.length > 8) return true;
     if (isGenericCharacterStateToken(text)) return true;
+    if (isMultilingualDescriptorSessionPersonToken(text)) return true;
     const depersonalized = text.replace(/[이가은는을를과와도만의에께서]+$/g, '');
     if (/^(?:도포|소매|옷|옷자락|허리띠|문|문고리|방|침상|이불|창호지|바닥|마룻바닥|손|손가락|발|발바닥|몸|몸뚱이|머리|머리카락|기억|머릿속|숨|입김|공기|냄새|향|햇살|안개|서리|목혜|은사연검|검|부적|탁자|빗|거울|황동경)$/.test(depersonalized)) return true;
-    return /^(?:누군가|아무개|사람|인물|남자|여자|소년|소녀|노인|노파|사내|여인|도사|제자|사형|사제|사저|사매|상인|의원|하인|시녀|관리|병사|문지기|호위|그|그녀|그놈|그자)$/.test(text);
+    return /^(?:누군가|아무개|사람|인물|남자|여자|소년|소녀|노인|노파|사내|여인|도사|제자|사형|사제|사저|사매|상인|의원|하인|시녀|관리|병사|문지기|호위|이분|그분|저분|그|그녀|그놈|그자|저자|이자)$/.test(text);
   }
 
   function inferSessionPersonOrigin(title, evidenceText) {
@@ -11259,7 +13252,7 @@
     return included.map((note, idx) => [
       `## ${idx + 1}. ${note.name || note.id || 'agent'}`,
       note.error ? `Error: ${note.error}` : '',
-      note.text || '',
+      stripAgentNoteLengthMetaText(note.text || ''),
     ].filter(Boolean).join('\n')).join('\n\n');
   }
 
@@ -11279,7 +13272,7 @@
   }
 
   function sanitizeMainAdvisoryNoteText(text) {
-    const source = String(text || '').replace(/\r\n/g, '\n');
+    const source = stripAgentNoteLengthMetaText(text).replace(/\r\n/g, '\n');
     if (!source.trim()) return '';
     const lines = source.split('\n');
     const out = [];
@@ -11291,11 +13284,18 @@
         continue;
       }
       if (isAdvisorySectionHeading(trimmed)) {
-        skipSection = isMainDirectiveAdvisorySection(trimmed);
+        skipSection = isHardOmitMainAdvisorySection(trimmed);
         if (skipSection) continue;
+        if (isMainDirectiveAdvisorySection(trimmed)) {
+          const label = advisoryProposalHeadingLabel(trimmed);
+          if (out.length && out[out.length - 1] !== '') out.push('');
+          out.push(`[Agent Proposal: ${label}]`);
+          continue;
+        }
       }
       if (skipSection) continue;
       if (isMainDirectiveAdvisoryLine(trimmed)) continue;
+      if (/response\s+mandate|response\s+shape|scene\s+design|scene\s+blueprint|recommended\s+entrances|end\s+state|carry-forward|separator|breadth|must\s+preserve|reject\s+or\s+ignore|pacing\s+and\s+stagnation/i.test(trimmed)) continue;
       if (/response\s+mandate|response\s+shape|recommended\s+entrances|end\s+state|carry-forward|separator|breadth/i.test(trimmed)) continue;
       if (/(?:write\s+(?:at\s+least|maximum)|\b\d+\s*[-~]\s*\d+\s*(?:words?|字|자)\b|약\s*\d+\s*[-~]\s*\d+\s*자)/i.test(trimmed)) continue;
       if (/^(?:core\s+change|emotional\s+purpose|focal\s+sequence|boundary)\b/i.test(trimmed.replace(/^#+\s*/, ''))) continue;
@@ -11322,11 +13322,28 @@
 
   function isMainDirectiveAdvisorySection(line) {
     const heading = normalizeAdvisoryHeading(line);
+    if (/(?:response\s+mandate|response\s+shape|scene\s+design|scene\s+blueprint|recommended\s+entrances|re-entries|advisory\s+contract|response\s+contract|focal\s+and\s+continuity\s+plan|ensemble\s+arc\s+weaving|primary\s+causal\s+movement|response\s+plan|final\s+check|output\s+plan|end\s+state|carry-forward|separator|breadth|must\s+preserve|avoid|reject\s+or\s+ignore|pacing\s+and\s+stagnation|earned\s+decision|not\s+dramatized|no\s+plan\s+yet)/i.test(heading)) return true;
     return /(?:response\s+mandate|response\s+shape|recommended\s+entrances|re-entries|advisory\s+contract|response\s+contract|focal\s+and\s+continuity\s+plan|ensemble\s+arc\s+weaving|primary\s+causal\s+movement|response\s+plan|final\s+check|output\s+plan|end\s+state|carry-forward|separator|breadth)/i.test(heading);
+  }
+
+  function isHardOmitMainAdvisorySection(line) {
+    const heading = normalizeAdvisoryHeading(line);
+    return /(?:response\s+mandate|rp\s+reply\s+mandate|novel\s+reply\s+mandate|final\s+check|output\s+plan|advisory\s+contract|response\s+contract)/i.test(heading);
+  }
+
+  function advisoryProposalHeadingLabel(line) {
+    const heading = normalizeAdvisoryHeading(line)
+      .replace(/[^a-z0-9가-힣ぁ-んァ-ヶ一-龯\s/_-]+/gi, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!heading) return 'agent note';
+    return heading.slice(0, 64);
   }
 
   function isMainDirectiveAdvisoryLine(line) {
     const text = String(line || '').trim().replace(/^[-*]\s*/, '').replace(/\*\*/g, '');
+    if (/^(?:core\s+change|emotional\s+purpose|focal\s+sequence|boundary|separator|breadth|length|recommended\s+entrances?|recommended\s+re-entries|avoid|must\s+preserve|reject\s+or\s+ignore|channel|why\s+now|action\s+this\s+response|changed\s+state|earned\s+decision|scene\s+design|response\s+shape|end\s+state|carry-forward)\s*[:：]/i.test(text)) return true;
+    if (/^(?:open|close|end|start|keep|make|frame|stage|write|show|do\s+not|don't)\b.{0,80}\b(?:scene|reply|response|output|paragraph|transition|pov)\b/i.test(text)) return true;
     if (/(?:write\s+(?:at\s+least|maximum)|\b\d+\s*[-~]\s*\d+\s*(?:words?|字|자)\b|약\s*\d+\s*[-~]\s*\d+\s*자)/i.test(text)) return true;
     if (/^(?:core\s+change|emotional\s+purpose|focal\s+sequence|boundary|separator|breadth|length|recommended\s+entrances?|recommended\s+re-entries|avoid|channel|why\s+now|action\s+this\s+response|changed\s+state|earned\s+decision)\s*[:：-]/i.test(text)) return true;
     if (/^(?:single\s+focal|no\s+boundary\s+break|no\s+shift\s+warranted|any\s+pov\s+transition|no\s+additional\s+adjacent\s+scene)\b/i.test(text)) return true;
@@ -11745,6 +13762,7 @@
       if (!item || typeof item !== 'object') return null;
       const name = firstNonEmpty(item.name, item.id);
       if (isGenericCharacterStateToken(name)) return null;
+      if (isLoreHeadingCharacterCandidate({ ...item, name }, 'commit.characters')) return null;
       return {
         ...item,
         lastSeenTurn: parseNumber(item.lastSeenTurn ?? item.turn, turn, 0, 999999),
@@ -12299,6 +14317,7 @@
       if (!item || typeof item !== 'object') return;
       const displayName = firstNonEmpty(item.name, item.id);
       if (isGenericCharacterStateToken(displayName)) return;
+      if (isLoreHeadingCharacterCandidate({ ...item, name: displayName }, 'state.characters')) return;
       const id = slug(firstNonEmpty(item.id, item.name));
       if (!id) return;
       state.characters[id] = mergeObject(state.characters[id] || { id, name: item.name || id }, item);
@@ -13116,6 +15135,57 @@
     return raw;
   }
 
+  function isAgentNoteLengthMetaLine(line) {
+    const text = String(line || '').trim().replace(/^[-*]\s*/, '').replace(/\*\*/g, '');
+    if (!text) return false;
+    if (/^length\s*:\s*(?:natural|moderate|brief|short|compact|standard|normal|long|extended|chapter|epic|very\s+long|one\s+scene|one\s+chapter)(?:\b|\.|$)/i.test(text)) return true;
+    if (/\b(?:response\s+length|length\s+advisory|host\s+prompt\s+length\s+signal|agent\s+scale\s+guidance|agent\s+scale|toggle_길이|toggle_length)\b/i.test(text)) return true;
+    if (/\bwrite\s+(?:at\s+least|maximum)\s+\d+\s+words?\b/i.test(text)) return true;
+    if (/\b\d{3,5}\+?\s*words?\b/i.test(text)) return true;
+    if (/\b(?:epic-length|long-form|very-long)\s+(?:response|reply|scale|note|notes|movement)\b/i.test(text)) return true;
+    if (/\b(?:response|reply|note|notes|scale|movement)\b.{0,80}\b(?:epic-length|long-form|very-long)\b/i.test(text)) return true;
+    if (/\b(?:epic|chapter)\s+scale\b/i.test(text)) return true;
+    return false;
+  }
+
+  function stripAgentNoteInlineLengthMeta(line) {
+    return String(line || '')
+      .replace(/\bLength\s*:\s*(?:natural|moderate|brief|short|compact|standard|normal|long|extended|chapter|epic|very\s+long|one\s+scene|one\s+chapter)\s*\.?\s*/gi, '')
+      .replace(/\bResponse\s+length\s*:\s*[^.;\n]{1,80}[.;]?\s*/gi, '')
+      .replace(/\b(?:write\s+(?:at\s+least|maximum)\s+\d+\s+words?|Host prompt length signal detected:[^.;\n]{1,100})[.;]?\s*/gi, '')
+      .replace(/[ \t]{2,}/g, ' ')
+      .replace(/\s+([,.;:])/g, '$1');
+  }
+
+  function stripAgentNoteLengthMetaText(text) {
+    const raw = String(text || '').replace(/\r\n/g, '\n');
+    if (!raw.trim()) return '';
+    const lines = raw.split('\n');
+    const out = [];
+    let skipLengthBlock = false;
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        skipLengthBlock = false;
+        if (out.length && out[out.length - 1] !== '') out.push('');
+        continue;
+      }
+      const heading = trimmed.replace(/^#{1,6}\s*/, '').replace(/^\[|\]$/g, '').trim();
+      if (/^response\s+length\s+control$/i.test(heading) || /^response\s+length\s+advisory$/i.test(heading)) {
+        skipLengthBlock = true;
+        continue;
+      }
+      if (skipLengthBlock) continue;
+      if (isAgentNoteLengthMetaLine(trimmed)) {
+        skipLengthBlock = /:\s*$/.test(trimmed);
+        continue;
+      }
+      const cleaned = stripAgentNoteInlineLengthMeta(line);
+      if (cleaned.trim()) out.push(cleaned);
+    }
+    return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  }
+
   function sanitizePreAgentNoteOutput(text, agentId = '') {
     let out = stripThoughtBlocks(String(text || '')).trim();
     if (!out) return '';
@@ -13128,7 +15198,7 @@
       }
     }
     out = cutInternalPreAgentReasoning(out);
-    return out
+    return stripAgentNoteLengthMetaText(out)
       .replace(/^\s*(?:The user wants me to|Let me analyze|Let me think|I need to|I should)\b[\s\S]{0,500}?(?=\n\s*(?:#{1,6}\s*)?\[)/i, '')
       .trim();
   }
@@ -13889,7 +15959,7 @@
       })
       .replace(/\$(\d+)/g, (_, idx) => captures[Number(idx)] ?? '');
   }
-  
+
   function injectContext(messages, injection, budget) {
     if (!injection) return messages;
     const max = Number(budget || 0);
@@ -15030,6 +17100,7 @@
     }
     const bootstrapSync = syncCurrentCharacterBootstrap(state, context);
     const canonicalSync = syncCanonicalLoreLedger(state, context.canonicalSources);
+    syncNeuroCore(state, context, conf);
     const cbsSync = syncCbsDiagnostics(state, context, conf);
     const longMemorySync = syncChatLongMemoryLedger(state, context.messages, conf.contextWindow, conf.coldStartChunkSize);
     const memoryRecoverySync = runMemoryGardenRecovery(state, context.messages, conf, sessionSync);
@@ -15044,6 +17115,7 @@
     await showRunToast('에로스 타워 모델 응답 대기 중', ['전처리 완료. 메인 모델의 응답을 기다립니다.'].concat(preToastLines), notes.some(note => note.error) || memoryRecoverySync?.changed || sessionRewindSync?.changed ? 'warn' : 'info');
     const injectionBudget = parseNumber(conf.injectionBudget, DEFAULT_CONFIG.injectionBudget, 0, 40000);
     const injection = await buildMainInjection(state, context, notes, injectionBudget, conf);
+    const neuroCoreSync = summarizeNeuroCoreSync(state.neuroCore);
     await saveState(context.scope, state, conf);
     const run = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -15060,6 +17132,7 @@
       sessionRewindSync,
       bootstrapSync,
       canonicalSync,
+      neuroCoreSync,
       cbsSync,
       longMemorySync,
       memoryRecoverySync,
@@ -15130,6 +17203,7 @@
     }
     const bootstrapSync = syncCurrentCharacterBootstrap(state, context);
     const canonicalSync = syncCanonicalLoreLedger(state, context.canonicalSources);
+    syncNeuroCore(state, context, conf);
     const cbsSync = syncCbsDiagnostics(state, context, conf);
     const notes = pendingRun?.notes || Runtime.lastRun?.notes || [];
     let postContext = contextWithAssistantOutput(context, finalContent);
@@ -15157,6 +17231,7 @@
     }
     const memoryTierSync = refreshMemoryTiers(state, 'post-commit');
     const graphSync = refreshAssociationGraph(state, postContext, notes, conf);
+    const neuroCoreSync = syncNeuroCore(state, postContext, conf);
     const postSessionSync = syncSessionDiagnostics(state, postContext, conf);
     await showRunToast('에로스 타워 관리상태 완료', summarizeCommitToast(commitResult, regexResult, graphSync, sessionRewindSync), commitResult.changed || sessionRewindSync?.changed ? 'success' : 'info', 2600);
     await saveState(context.scope, state, conf);
@@ -15177,6 +17252,7 @@
       sessionRewindSync,
       bootstrapSync,
       canonicalSync,
+      neuroCoreSync,
       cbsSync,
       longMemorySync,
       memoryRecoverySync,
@@ -15349,6 +17425,7 @@
           dashboardStateChanged = dashboardStateChanged || Boolean(memoryRecoverySync.changed);
         }
         syncCbsDiagnostics(state, context, conf);
+        syncNeuroCore(state, context, conf);
       } else {
         state.sessionDiagnostics = normalizeSessionDiagnostics({
           ...state.sessionDiagnostics,
@@ -16840,6 +18917,7 @@
       <div class="et-note">출력 정리: ${run.outputSanitized ? '내부 태그 제거됨' : '변경 없음'} / 커밋: ${escHtml(run.commitReason || (run.commitCounts ? 'changed' : '-'))}</div>
       ${run.bootstrapSync ? `<div class="et-note">현재 관점 bootstrap: 등장/보호 이름 ${escHtml(run.bootstrapSync.presentCast || 0)}개${run.bootstrapSync.bootstrapped ? ' / 캐릭터 카드 동기화' : ''}</div>` : ''}
       ${run.canonicalSync ? `<div class="et-note">Canonical Lore: 추가 ${escHtml(run.canonicalSync.added || 0)} / 갱신 ${escHtml(run.canonicalSync.revised || 0)} / 유지 ${escHtml(run.canonicalSync.unchanged || 0)}</div>` : ''}
+      ${run.neuroCoreSync ? `<div class="et-note">NeuroCore: route ${escHtml(run.neuroCoreSync.currentRoute || 'current')} / year ${escHtml(run.neuroCoreSync.sceneYear || 'unknown')} / MiniCore ${escHtml(run.neuroCoreSync.activeMiniCores || 0)}/${escHtml(run.neuroCoreSync.miniCores || 0)} / gate selected ${escHtml(run.neuroCoreSync.executiveTrace?.selectedCanonicalParts || 0)}, blocked ${escHtml((run.neuroCoreSync.executiveTrace?.blockedByRoute || 0) + (run.neuroCoreSync.executiveTrace?.blockedByPerspective || 0) + (run.neuroCoreSync.executiveTrace?.blockedByKnowledgeBoundary || 0))}</div>` : ''}
       ${run.sessionSync ? `<div class="et-note">Session: ${escHtml(run.sessionSync.verdict || '-')}</div>` : ''}
       ${run.cbsSync ? `<div class="et-note">CBS: 변수 ${escHtml(run.cbsSync.candidates || 0)} / stripped ${escHtml(run.cbsSync.strippedEntries || 0)}</div>` : ''}
       ${run.longMemorySync ? `<div class="et-note">Long Memory: 추가 ${escHtml(run.longMemorySync.added || 0)} / 유지 ${escHtml(run.longMemorySync.unchanged || 0)}</div>` : ''}
@@ -18859,6 +20937,10 @@
           memoryLedger: Array.isArray(state?.memoryLedger) ? state.memoryLedger.length : 0,
           loreLedger: Array.isArray(state?.loreLedger) ? state.loreLedger.length : 0,
           secretLedger: Array.isArray(state?.secretLedger) ? state.secretLedger.length : 0,
+          neuroMiniCores: state?.neuroCore?.characterMiniCores ? Object.keys(state.neuroCore.characterMiniCores).length : 0,
+          neuroActiveMiniCores: Array.isArray(state?.neuroCore?.activeMiniCores) ? state.neuroCore.activeMiniCores.length : 0,
+          neuroTemporalFacts: Array.isArray(state?.neuroCore?.temporalFacts) ? state.neuroCore.temporalFacts.length : 0,
+          neuroRouteEvents: Array.isArray(state?.neuroCore?.routeEvents) ? state.neuroCore.routeEvents.length : 0,
           relationships: Array.isArray(state?.relationships) ? state.relationships.length : 0,
           graphNodes: Array.isArray(state?.associationGraph?.nodes) ? state.associationGraph.nodes.length : 0,
           graphEdges: Array.isArray(state?.associationGraph?.edges) ? state.associationGraph.edges.length : 0,
@@ -19053,6 +21135,166 @@
             firstTrace: targetState.injectionTrace[0] || null,
           };
         },
+        testNeuroCoreGround: async () => {
+          const sources = [
+            {
+              id: 'mukya-current',
+              kind: 'globalLore',
+              label: 'Mukya current profile',
+              path: 'debug:mukya-current',
+              priority: 9,
+              route: 'current',
+              validYear: '926',
+              meta: { alwaysActive: true },
+              activationKeys: ['Mukya'],
+              content: 'Character Profile\nName: Mukya\nAge: 14\nAffiliation: Black Moon Valley\nCurrent year 926 route current.',
+            },
+            {
+              id: 'mukya-future',
+              kind: 'globalLore',
+              label: 'Mukya original future',
+              path: 'debug:mukya-future',
+              priority: 9,
+              route: 'original-future',
+              validYear: '929',
+              meta: { alwaysActive: true, futureSource: true },
+              activationKeys: ['Mukya'],
+              content: 'Original future route: Mukya is kidnapped at age 17 in year 929. This must not become a current-scene fact in 926.',
+            },
+            {
+              id: 'mukya-mixed-foundation',
+              kind: 'desc',
+              label: 'Character Description',
+              path: 'debug:mukya-mixed-foundation',
+              priority: 9,
+              content: [
+                'Current setup: Mukya is age 14 in year 926 and has just entered the present scene.',
+                '',
+                'Future route note: in 929年 Mukya is kidnapped at age 17. This paragraph is in the same source as current setup but must not be injected into a 926 current scene.',
+              ].join('\n'),
+            },
+          ];
+          const targetContext = {
+            character: { name: 'Mukya' },
+            currentChat: { id: 'neuro-test', message: [] },
+            db: { modules: [], enabledModules: [] },
+            messages: [{ role: 'assistant', content: '926-02-01. Mukya enters the room.' }, { role: 'user', content: '*says nothing*' }],
+            canonicalSources: sources,
+            mode: 'novel',
+          };
+          const targetState = createDefaultState('novel');
+          targetState.scene.time = '926-02-01';
+          targetState.activePerspective = { presentCast: ['Mukya'], protectedNames: ['Mukya'] };
+          const briefing = await buildMainBriefing(targetState, targetContext, [], 5200, { ...DEFAULT_CONFIG, embeddingEnabled: false, stagedSearchEnabled: false });
+          const trace = targetState.neuroCore?.executiveTrace || {};
+          const yeonsuSources = [
+            {
+              id: 'yeonsu-future-aware',
+              kind: 'desc',
+              label: 'Yeon-su future-aware identity',
+              path: 'debug:yeonsu-desc',
+              priority: 10,
+              content: [
+                'Yeon-su is a modern Korean college student who read the original novel before transmigrating into this world.',
+                'He knows the tragic original future and wants to save Mukya before that fate happens.',
+              ].join('\n'),
+            },
+            {
+              id: 'mukya-current-known',
+              kind: 'globalLore',
+              label: 'Mukya current profile',
+              path: 'debug:mukya-current-known',
+              priority: 9,
+              route: 'current',
+              validYear: '926',
+              meta: { alwaysActive: true },
+              activationKeys: ['Mukya'],
+              content: 'Character Profile\nName: Mukya\nAge: 14\nAffiliation: Black Moon Valley\nCurrent year 926 route current.',
+            },
+            {
+              id: 'mukya-known-future',
+              kind: 'globalLore',
+              label: 'Mukya original future known by Yeon-su',
+              path: 'debug:mukya-known-future',
+              priority: 9,
+              route: 'original-future',
+              validYear: '929',
+              meta: { alwaysActive: true, futureSource: true },
+              activationKeys: ['Mukya', 'Yeon-su'],
+              knownBy: ['Yeon-su'],
+              content: 'Original future route known by Yeon-su: Mukya is kidnapped at age 17 in year 929. This is foreknowledge, not a current 926 fact.',
+            },
+            {
+              id: 'hidden-future-secret',
+              kind: 'globalLore',
+              label: 'Original hidden secret unknown to Yeon-su',
+              path: 'debug:hidden-future-secret',
+              priority: 10,
+              meta: { alwaysActive: true },
+              activationKeys: ['Yeon-su', 'Mukya'],
+              content: 'Original hidden truth: Yeon-su does not know this. After the apparent ending, Mukya becomes a world-ending evil. This is hidden, unrevealed, and must not surface as Yeon-su foreknowledge.',
+            },
+          ];
+          const yeonsuContext = {
+            character: { name: 'Yeon-su' },
+            currentChat: { id: 'neuro-yeonsu-test', message: [] },
+            db: { modules: [], enabledModules: [] },
+            messages: [{ role: 'assistant', content: '926-02-01. Yeon-su wakes in his room.' }, { role: 'user', content: '*says nothing*' }],
+            canonicalSources: yeonsuSources,
+            mode: 'novel',
+          };
+          const yeonsuState = createDefaultState('novel');
+          yeonsuState.scene.time = '926-02-01';
+          yeonsuState.activePerspective = { presentCast: ['Yeon-su'], protectedNames: ['Yeon-su'] };
+          const yeonsuBriefing = await buildMainBriefing(yeonsuState, yeonsuContext, [], 12000, { ...DEFAULT_CONFIG, embeddingEnabled: false, stagedSearchEnabled: false });
+          const gateState = createDefaultState('novel');
+          gateState.turn = 8;
+          gateState.activePerspective = { presentCast: ['Yeon-su'], protectedNames: ['Yeon-su'] };
+          gateState.secretLedger = [
+            {
+              id: 'other-only-secret',
+              truth: 'The jade vault password belongs only to the Black Lotus elder.',
+              status: 'kept',
+              knownBy: ['Black Lotus Elder'],
+              cannotKnow: ['Yeon-su'],
+              importance: 9,
+              confidence: 0.95,
+            },
+            {
+              id: 'yeonsu-known-secret',
+              truth: 'Yeon-su knows the crane safehouse passphrase.',
+              status: 'kept',
+              knownBy: ['Yeon-su'],
+              importance: 9,
+              confidence: 0.95,
+            },
+          ];
+          const gateContext = {
+            character: { name: 'Yeon-su' },
+            messages: [{ role: 'user', content: 'crane jade passphrase' }],
+            canonicalSources: yeonsuSources,
+            mode: 'novel',
+          };
+          const gateRanked = rankStateCandidates(gateState, extractQueryTerms('crane jade passphrase'), { ...AGENT_RETRIEVAL_PROFILE.main, kinds: ['secret'], limit: 8 }, gateContext);
+          return {
+            hasNeuroBlock: briefing.includes('[Eros NeuroCore Ground]'),
+            hasCurrentAge: briefing.includes('Age: 14'),
+            hasFutureKidnap: briefing.includes('kidnapped at age 17'),
+            hasMixedFutureKidnap: briefing.includes('same source as current setup'),
+            yeonsuHasKnownFutureKidnap: yeonsuBriefing.includes('kidnapped at age 17'),
+            yeonsuFutureMarkedNotCurrent: yeonsuBriefing.includes('route="original-future"') && yeonsuBriefing.includes('knownBy="Yeon-su"'),
+            yeonsuNeuroForeknowledgeBlock: yeonsuBriefing.includes('[Perspective Foreknowledge]'),
+            yeonsuHiddenSecretLeaked: yeonsuBriefing.includes('world-ending evil'),
+            yeonsuCurrentAgePreserved: (yeonsuState.neuroCore?.characterMiniCores?.Mukya?.age || '') === '14',
+            yeonsuSelectedFutureKnowledgeParts: yeonsuState.neuroCore?.executiveTrace?.selectedFutureKnowledgeParts || 0,
+            perspectiveGateBlocksOtherSecret: !gateRanked.some(item => item.path.includes('other-only-secret')),
+            perspectiveGateAllowsKnownSecret: gateRanked.some(item => item.path.includes('yeonsu-known-secret') && item.perspectiveGate?.reason === 'known-boundary'),
+            scene: targetState.neuroCore?.scene || null,
+            activeMiniCores: targetState.neuroCore?.activeMiniCores || [],
+            blockedByRoute: trace.blockedByRoute || 0,
+            selectedCanonicalParts: trace.selectedCanonicalParts || 0,
+          };
+        },
         testPreAgentNotesInjection: async () => {
           const marker = 'ET_PRE_AGENT_TAIL_MARKER_KEEP_EXACTLY';
           const targetState = createDefaultState(context?.mode || 'rp');
@@ -19070,6 +21312,85 @@
             hasSourceWrapper: briefing.includes('<source label="Pre-Agent Notes">'),
             hasMarker: briefing.includes(marker),
             hasLegacyActionableBridge: briefing.includes('[Actionable ' + 'Eros Bridge]') || briefing.includes('[Actionable ' + 'Agent Notes]'),
+          };
+        },
+        testNeuroCoreMultilingualProfileGround: async () => {
+          const sources = [
+            {
+              id: 'ko-profile',
+              kind: 'globalLore',
+              label: '묵야 프로필',
+              path: 'debug:ko-profile',
+              priority: 9,
+              meta: { alwaysActive: true },
+              activationKeys: ['묵야', '흑월곡'],
+              content: '인물 설정\n이름: 묵야\n나이: 14세\n소속: 흑월곡\n역할: 어린 제자',
+            },
+            {
+              id: 'zh-profile',
+              kind: 'globalLore',
+              label: '李霜 角色设定',
+              path: 'debug:zh-profile',
+              priority: 8,
+              meta: { alwaysActive: true },
+              activationKeys: ['李霜', '青河门'],
+              content: '角色设定\n姓名：李霜\n年龄：16岁\n所属门派：青河门\n身份：弟子',
+            },
+            {
+              id: 'jp-profile',
+              kind: 'globalLore',
+              label: 'アヤ プロフィール',
+              path: 'debug:jp-profile',
+              priority: 8,
+              meta: { alwaysActive: true },
+              activationKeys: ['アヤ', '白羽寮'],
+              content: 'プロフィール\n名前：アヤ\n年齢：17歳\n所属：白羽寮\n役割：斥候',
+            },
+            {
+              id: 'future-event',
+              kind: 'globalLore',
+              label: '묵야 original future route',
+              path: 'debug:future-event',
+              priority: 9,
+              route: 'original-future',
+              meta: { alwaysActive: true, futureSource: true },
+              activationKeys: ['묵야'],
+              knownBy: ['연수'],
+              content: 'Original future route known by 연수: 929년에 묵야가 납치된다.',
+            },
+          ];
+          const targetContext = {
+            character: { name: '연수' },
+            currentChat: { id: 'neuro-multilingual-profile-test', message: [] },
+            db: { modules: [], enabledModules: [] },
+            messages: [
+              { role: 'assistant', content: '926년 2월. 연수는 묵야와 李霜, アヤ를 떠올렸다.' },
+              { role: 'user', content: '묵야와 李霜, アヤ를 확인한다' },
+            ],
+            canonicalSources: sources,
+            mode: 'novel',
+          };
+          const targetState = createDefaultState('novel');
+          targetState.scene.time = '926년 2월';
+          targetState.activePerspective = { presentCast: ['연수', '묵야', '李霜', 'アヤ'], protectedNames: ['연수'] };
+          syncNeuroCore(targetState, targetContext, { ...DEFAULT_CONFIG, embeddingEnabled: false, stagedSearchEnabled: false });
+          resetNeuroExecutiveTrace(targetState);
+          const briefing = await buildMainBriefing(targetState, targetContext, [], 9000, { ...DEFAULT_CONFIG, embeddingEnabled: false, stagedSearchEnabled: false });
+          const cores = targetState.neuroCore?.characterMiniCores || {};
+          const byName = name => Object.values(cores).find(core => core.name === name || normalizeStringArray(core.aliases).includes(name)) || null;
+          const mukya = byName('묵야');
+          const lishuang = byName('李霜');
+          const aya = byName('アヤ');
+          return {
+            coreNames: Object.values(cores).map(core => core.name),
+            mukya: mukya ? { age: mukya.age, affiliation: mukya.affiliation, role: mukya.role } : null,
+            lishuang: lishuang ? { id: lishuang.id, age: lishuang.age, affiliation: lishuang.affiliation, role: lishuang.role } : null,
+            aya: aya ? { id: aya.id, age: aya.age, affiliation: aya.affiliation, role: aya.role } : null,
+            hasNoUnknownCollision: !Object.values(cores).some(core => core.id === 'unknown'),
+            temporalAges: (targetState.neuroCore?.temporalFacts || []).filter(fact => fact.predicate === 'age').map(fact => `${fact.subject}:${fact.object}`),
+            routeEvents: targetState.neuroCore?.routeEvents || [],
+            briefingHasMukyaAge: briefing.includes('age="14"') || briefing.includes('Age: 14') || briefing.includes('14세'),
+            futureEventYear: (targetState.neuroCore?.routeEvents || []).find(event => event.label.includes('future'))?.eventYear || '',
           };
         },
         testLowBudgetLoreBridge: async () => {
@@ -19180,6 +21501,104 @@
             hasSelectedLabel: block.includes('한 장'),
             hasInstruction: block.includes('Write at least 2400 words.'),
             floorHasControl: floor.includes('[Response Length Control]'),
+            naturalControl: resolveResponseLengthControl({ ...targetContext, db: { ...targetContext.db, globalChatVariables: { 'toggle_길이': '0' } } }, DEFAULT_CONFIG),
+            introHasNaturalGuard: buildMainBriefingIntro(false).includes('Do not infer a longer reply'),
+          };
+        },
+        testAgentNoteLengthMetaFilter: () => {
+          const raw = [
+            '[Response Length Control]',
+            'Detected: toggle_길이=5 (대서사 / epic movement) from globalChatVariables.toggle_길이.',
+            'Host prompt length signal detected: Write at least 3200 words.',
+            'Agent scale guidance: Epic movement: track multiple fronts and consequences.',
+            '',
+            '[Response Shape]',
+            '- Single scene. Length: moderate. Movement: physical -> cognitive.',
+            '',
+            '[Scene Anchor]',
+            '- Time: 926년 1월 13일.',
+            '- Place: Yeonsu room.',
+            '',
+            'For an epic-length response, I think we need:',
+            '1. A primary scene.',
+            '',
+            '[Active World Fronts]',
+            '- The epic siege in the old legend remains a known historical example, not a length instruction.',
+          ].join('\n');
+          const stored = sanitizePreAgentNoteOutput(raw, 'world');
+          const chained = formatNotes([{ id: 'world', name: 'Worldbuilding / Fronts', text: raw }]);
+          const main = sanitizeMainAdvisoryNoteText(raw);
+          const advisory = formatMainAdvisoryNotes([{ id: 'world', name: 'Worldbuilding / Fronts', text: raw }]);
+          const leakPattern = /\b(?:response length|toggle_길이|write at least 3200|3200 words|epic-length response|agent scale guidance)\b/i;
+          return {
+            storedHasLengthMeta: leakPattern.test(stored),
+            chainedHasLengthMeta: leakPattern.test(chained),
+            mainHasLengthMeta: leakPattern.test(main),
+            hasInlineModerateLeak: /length:\s*moderate/i.test([stored, chained, main, advisory].join('\n')),
+            advisoryHasRawResponseShape: /(?:^|\n)\s*\[Response Shape\]/i.test(advisory),
+            advisoryKeepsDemotedProposal: /agent proposal: response shape|single scene|physical -> cognitive/i.test(advisory),
+            keepsContentEpic: stored.includes('epic siege') && chained.includes('epic siege') && main.includes('epic siege'),
+            stored,
+            main,
+            advisory,
+          };
+        },
+        testSessionPersonDescriptorFilter: () => {
+          const blocked = ['어린', '일개', '아기', '얌전한', '청허문의', '그분은', '同一年入门的', 'young', 'the', 'someone', '年轻', '若い'];
+          const allowed = ['명선', 'Allen', '明善', '美咲'];
+          const blockedResults = blocked.map(name => ({ name, generic: isGenericSessionPersonName(name) }));
+          const allowedResults = allowed.map(name => ({ name, generic: isGenericSessionPersonName(name) }));
+          return {
+            blockedResults,
+            allowedResults,
+            allBlocked: blockedResults.every(item => item.generic === true),
+            allAllowed: allowedResults.every(item => item.generic === false),
+          };
+        },
+        testUnknownCharacterRetrievalFilter: () => {
+          const targetState = createDefaultState('novel');
+          targetState.turn = 3;
+          targetState.characters = {
+            unknown: { id: 'unknown', name: 'unknown', status: 'active', summary: 'Placeholder unknown candidate should never retrieve.' },
+            alice: { id: 'alice', name: 'Alice', status: 'active', summary: 'Alice is a visible current character.', importance: 8, confidence: 0.9 },
+          };
+          const ranked = rankStateCandidates(targetState, extractQueryTerms('Alice unknown visible character'), { kinds: ['character'], limit: 8 }, { messages: [{ role: 'user', content: 'Alice' }] });
+          return {
+            paths: ranked.map(item => item.path),
+            hasUnknown: ranked.some(item => item.path === 'characters.unknown' || /unknown/i.test(item.item?.id || item.item?.name || '')),
+            hasAlice: ranked.some(item => item.path === 'characters.alice'),
+          };
+        },
+        testLoreHeadingCharacterRetrievalFilter: () => {
+          const targetState = createDefaultState('novel');
+          targetState.turn = 4;
+          targetState.characters = {
+            protagonists: { id: 'protagonists', name: '주인공들', status: 'active', summary: 'Lore heading promoted by mistake.' },
+            characterInfo: { id: 'characterInfo', name: '인물정보', status: 'active', summary: 'Aggregate profile heading promoted by mistake.' },
+            court: { id: 'court', name: '조정', status: 'active', role: 'institution', summary: 'Court institution, not a person.' },
+            yeonsu: { id: 'yeonsu', name: '연수', status: 'active', summary: 'Visible protagonist.', confidence: 0.95, importance: 8 },
+            mukya: { id: 'mukya', name: '묵야', status: 'active', summary: 'Visible character.', confidence: 0.95, importance: 8 },
+          };
+          targetState.psycheUnits = normalizePsycheUnits([
+            { id: 'psyche-heading', type: 'character', name: '인물정보', summary: 'Several character profiles are grouped here.', sourceKind: 'globalLore', sourceLabel: '인물정보' },
+            { id: 'psyche-court', type: 'character', name: '조정', summary: 'State court institution.', sourceKind: 'globalLore', sourceLabel: '조정' },
+            { id: 'psyche-mukya', type: 'character', name: '묵야', summary: '묵야 is a concrete character profile.', sourceKind: 'globalLore', sourceLabel: '묵야' },
+          ], targetState.turn);
+          const ranked = rankStateCandidates(
+            targetState,
+            extractQueryTerms('연수 묵야 조정 인물정보 주인공들'),
+            { kinds: ['character', 'lore', 'knowledge'], limit: 20 },
+            { messages: [{ role: 'user', content: '연수와 묵야를 확인한다.' }], canonicalSources: [] }
+          );
+          const characterPaths = ranked.filter(item => item.kind === 'character').map(item => item.path);
+          const headingPaths = ranked.filter(item => /주인공들|인물정보|조정|protagonists|characterInfo|court|psyche-heading|psyche-court/.test(item.path)).map(item => `${item.kind}:${item.path}`);
+          return {
+            characterPaths,
+            headingPaths,
+            hasBadCharacterTitle: characterPaths.some(path => /주인공들|인물정보|조정|protagonists|characterInfo|court/.test(path)),
+            hasRealCharacters: characterPaths.some(path => path === 'characters.yeonsu') && characterPaths.some(path => path === 'characters.mukya'),
+            psycheHeadingTypes: targetState.psycheUnits.filter(unit => /인물정보|조정/.test(unit.name)).map(unit => `${unit.name}:${unit.type}`),
+            psycheRealCharacterType: targetState.psycheUnits.find(unit => unit.name === '묵야')?.type || '',
           };
         },
         testCanonicalUnitSplit: () => {
@@ -19187,7 +21606,7 @@
             id: 'debug-canon',
             kind: 'globalLore',
             label: 'Debug Canon',
-            content: ['Alpha fact one.', 'Beta fact two.', 'Gamma fact three.'.repeat(900)].join('\n\n'),
+            content: ['Alpha fact one.', '---', '#', 'Beta fact two.', 'Gamma fact three.'.repeat(900)].join('\n\n'),
             meta: { alwaysActive: true },
             priority: 8,
           };
@@ -19198,7 +21617,191 @@
             ids: units.map(unit => unit.id),
             siblingCounts: units.map(unit => unit.part?.siblingIds?.length || 0),
             hasContent: units.every(unit => String(unit.content || '').trim().length > 0),
+            hasDecorativePart: units.some(unit => /^(?:---|#|\s*)$/.test(String(unit.content || '').trim())),
+            hasDecorativeText: units.some(unit => /(?:^|\n)\s*(?:---|#)\s*(?:\n|$)/.test(String(unit.content || ''))),
             firstLine: canonicalUnitLine(units[0], 'debug').slice(0, 220),
+          };
+        },
+        testNeuroGraphFusionRanking: async () => {
+          const targetState = createDefaultState('novel');
+          targetState.turn = 12;
+          targetState.scene = {
+            ...targetState.scene,
+            presentCast: ['Mukya'],
+            time: '926-02-01',
+          };
+          targetState.activePerspective = { presentCast: ['Mukya'], protectedNames: ['Mukya'] };
+          targetState.characters = {
+            mukya: {
+              id: 'mukya',
+              name: 'Mukya',
+              aliases: ['Black Moon Child'],
+              status: 'active',
+              importance: 8,
+              confidence: 0.95,
+              summary: 'Mukya is present in the current scene.',
+            },
+          };
+          targetState.memoryLedger = normalizeMemoryEntries([
+            {
+              id: 'direct-query',
+              summary: 'The quiet courtyard bell anchors the current continuation.',
+              sourceRank: 72,
+              confidence: 0.78,
+              importance: 5,
+              lastSeenTurn: 12,
+            },
+            {
+              id: 'graph-linked',
+              summary: 'Black Moon Child keeps distance from doorways after the valley incident.',
+              sourceRank: 78,
+              confidence: 0.88,
+              importance: 8,
+              lastSeenTurn: 8,
+            },
+          ], targetState, targetState.turn);
+          const charCandidate = { kind: 'character', path: 'characters.mukya' };
+          const directCandidate = { kind: 'memory', path: 'memoryLedger.direct-query' };
+          const linkedCandidate = { kind: 'memory', path: 'memoryLedger.graph-linked' };
+          targetState.neuroCore = normalizeNeuroCoreState({
+            scene: { presentCast: ['Mukya'], mentionedNames: ['Mukya'], sceneYear: '926', currentRoute: 'current' },
+            activeMiniCores: [{ id: 'mukya', name: 'Mukya', aliases: ['Black Moon Child'], salience: 220, route: 'current' }],
+          }, targetState);
+          targetState.associationGraph = normalizeAssociationGraph({
+            nodes: [
+              { id: candidateNodeId(charCandidate), path: charCandidate.path, kind: 'character', label: 'Mukya', terms: ['mukya', 'black', 'moon', 'child'], activation: 0.82, baseActivation: 0.82 },
+              { id: candidateNodeId(directCandidate), path: directCandidate.path, kind: 'memory', label: 'quiet courtyard bell', terms: ['quiet', 'courtyard', 'bell'], activation: 0.34, baseActivation: 0.34 },
+              { id: candidateNodeId(linkedCandidate), path: linkedCandidate.path, kind: 'memory', label: 'doorway distance', terms: ['doorway', 'valley', 'incident'], activation: 0.18, baseActivation: 0.18 },
+            ],
+            edges: [
+              { from: candidateNodeId(charCandidate), to: candidateNodeId(linkedCandidate), weight: 0.92, hebbianWeight: 0.92 },
+              { from: candidateNodeId(charCandidate), to: candidateNodeId(directCandidate), weight: 0.18, hebbianWeight: 0.18 },
+            ],
+          });
+          const staged = await stagedRetrieveCandidates(
+            'main',
+            targetState,
+            extractQueryTerms('quiet continuation'),
+            AGENT_RETRIEVAL_PROFILE.main,
+            { ...DEFAULT_CONFIG, embeddingEnabled: false, stagedSearchEnabled: true, associationGraphEnabled: true, neuroGraphRankingEnabled: true },
+            { messages: [{ role: 'user', content: 'quiet continuation' }], canonicalSources: [], character: { name: 'Mukya' } }
+          );
+          const linked = staged.candidates.find(item => item.path === 'memoryLedger.graph-linked');
+          const direct = staged.candidates.find(item => item.path === 'memoryLedger.direct-query');
+          return {
+            note: staged.note,
+            stats: staged.stats,
+            linked: linked ? {
+              score: Math.round(linked.score || 0),
+              graphPprScore: Number(linked.graphPprScore || 0).toFixed(3),
+              graphRank: linked.graphRank || null,
+              rrfScore: Number(linked.rrfScore || 0).toFixed(4),
+            } : null,
+            direct: direct ? {
+              score: Math.round(direct.score || 0),
+              graphPprScore: Number(direct.graphPprScore || 0).toFixed(3),
+            } : null,
+            linkedSelectedNearTop: staged.candidates.slice(0, 6).some(item => item.path === 'memoryLedger.graph-linked'),
+            hasPprNote: /ppr=\d+/.test(staged.note),
+          };
+        },
+        testNeuroHomeostasisMiniCore: async () => {
+          const targetState = createDefaultState('novel');
+          targetState.turn = 12;
+          targetState.scene = { ...targetState.scene, presentCast: ['Mukya'], time: '926-02-01' };
+          targetState.activePerspective = { presentCast: ['Mukya'], protectedNames: ['Mukya'] };
+          targetState.characters = {
+            mukya: { id: 'mukya', name: 'Mukya', aliases: ['Black Moon Child'], status: 'active', summary: 'Mukya is present.', importance: 8, confidence: 0.94 },
+          };
+          targetState.relationships = [{ a: 'Mukya', b: 'Yeon-su', trust: 42, tension: 12, fear: 4 }];
+          targetState.memoryLedger = normalizeMemoryEntries([
+            { id: 'mukya-threat-memory', summary: 'Mukya remembers the enemy attack, wound, blood, fear, and exhausting chase.', sourceRank: 78, confidence: 0.88, importance: 8, lastSeenTurn: 11 },
+            { id: 'market-memory', summary: 'The market opened quietly with ordinary food stalls.', sourceRank: 64, confidence: 0.8, importance: 4, lastSeenTurn: 10 },
+          ], targetState, targetState.turn);
+          const sources = [{
+            id: 'mukya-profile',
+            kind: 'globalLore',
+            label: 'Mukya Profile',
+            path: 'debug:mukya-profile',
+            priority: 9,
+            meta: { alwaysActive: true },
+            activationKeys: ['Mukya'],
+            content: 'Character Profile\nName: Mukya\nAge: 14\nAffiliation: Black Moon Valley\nRole: active cast.',
+          }];
+          const threatContext = {
+            character: { name: 'Mukya' },
+            currentChat: { id: 'homeostasis-threat', message: [] },
+            db: { modules: [], enabledModules: [] },
+            canonicalSources: sources,
+            messages: [
+              { role: 'assistant', content: 'Mukya was wounded. Blood soaked her sleeve as an enemy attack forced an exhausting chase through the dark corridor.' },
+              { role: 'user', content: 'continue' },
+            ],
+            mode: 'novel',
+          };
+          syncNeuroCore(targetState, threatContext, { ...DEFAULT_CONFIG, neuroHomeostasisEnabled: true });
+          const afterThreat = targetState.neuroCore.characterMiniCores.mukya || Object.values(targetState.neuroCore.characterMiniCores)[0];
+          const threatBriefing = buildNeuroCoreBriefingBlock(targetState, threatContext, 3600);
+          const rankedThreat = rankStateCandidates(targetState, extractQueryTerms('Mukya wound enemy fear'), { kinds: ['memory'], limit: 8 }, threatContext);
+          targetState.turn = 13;
+          const recoveryContext = {
+            ...threatContext,
+            currentChat: { id: 'homeostasis-recovery', message: [] },
+            messages: [
+              { role: 'assistant', content: 'Yeon-su protected Mukya, gave her a safe room, medicine, food, and time to rest. Mukya finally slept.' },
+              { role: 'user', content: 'continue' },
+            ],
+          };
+          syncNeuroCore(targetState, recoveryContext, { ...DEFAULT_CONFIG, neuroHomeostasisEnabled: true });
+          const afterRecovery = targetState.neuroCore.characterMiniCores.mukya || Object.values(targetState.neuroCore.characterMiniCores)[0];
+          const threatAuto = normalizeNeuroAutonomicTone(afterThreat?.autonomicTone);
+          const threatHomeo = normalizeNeuroHomeostaticState(afterThreat?.homeostaticState);
+          const recoveryHomeo = normalizeNeuroHomeostaticState(afterRecovery?.homeostaticState);
+          return {
+            threat: {
+              arousal: threatAuto.arousal,
+              stressLoad: threatHomeo.stressLoad,
+              fatigue: threatHomeo.fatigue,
+              recoveryReserve: threatHomeo.recoveryReserve,
+              evidence: threatHomeo.evidence,
+            },
+            recovery: {
+              stressLoad: recoveryHomeo.stressLoad,
+              recoveryReserve: recoveryHomeo.recoveryReserve,
+              securityTone: recoveryHomeo.securityTone,
+              fatigue: recoveryHomeo.fatigue,
+              evidence: recoveryHomeo.evidence,
+            },
+            hasHomeostasisBriefing: threatBriefing.includes('[Active Homeostatic Modulators]') && threatBriefing.includes('does not override canonical facts'),
+            threatMemoryRanked: rankedThreat.some(item => item.path.includes('mukya-threat-memory')),
+            summary: summarizeNeuroCoreSync(targetState.neuroCore).homeostasis,
+          };
+        },
+        testKeywordlessLoreFilter: () => {
+          const targetCharacter = {
+            id: 'keyword-filter-subject',
+            name: 'Keyword Filter Subject',
+            description: 'Character description should remain available.',
+            lorebook: {
+              type: 'risu',
+              ver: 1,
+              data: [
+                { comment: 'No Key Non Always', content: 'This lore has no explicit activation key and should not enter canonical sources.' },
+                { comment: 'Empty Key Non Always', key: '', content: 'This lore has an empty key and should not enter canonical sources.' },
+                { comment: 'Keyed Lore', key: ['needle'], content: 'This lore has an explicit key and should enter canonical sources.' },
+                { comment: 'Always Lore Without Key', alwaysActive: true, content: 'This always-active lore has no key but should remain available.' },
+              ],
+            },
+          };
+          const sources = collectCanonicalSources(targetCharacter, { modules: [], enabledModules: [] }, {}, conf || DEFAULT_CONFIG);
+          const labels = sources.map(source => source.label);
+          return {
+            hasDescription: labels.includes('Character Description'),
+            hasNoKeyNonAlways: labels.includes('No Key Non Always'),
+            hasEmptyKeyNonAlways: labels.includes('Empty Key Non Always'),
+            hasKeyedLore: labels.includes('Keyed Lore'),
+            hasAlwaysNoKey: labels.includes('Always Lore Without Key'),
+            loreLabels: labels.filter(label => /Lore|Key|Always/i.test(label)),
           };
         },
         testIdentityGuard: () => {
