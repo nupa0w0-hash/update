@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.65
+//@display-name ☸Eros Tower 1.1.66
 //@api 3.0
-//@version 1.1.65
+//@version 1.1.66
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -35,18 +35,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.65
+ * Eros Tower 1.1.66
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.65 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.66 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.65';
+  const VERSION = '1.1.66';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.65`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.66`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -67,7 +67,7 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.65 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.66 analysis context';
   const MAIN_INJECTION_PLACEHOLDER_RE = /\{\{et\.(canonical|memory|state|characters|executive)\}\}/gi;
   const AUTO_INJECTION_FALLBACK_CHARS = 22000;
   const AUTO_INJECTION_MIN_CHARS = 3200;
@@ -83,6 +83,11 @@
     { index: 7, label: '초장편', englishLabel: 'very long-form', instruction: 'Write at least 9000 words.', scale: 'Very long-form: prepare dense continuity, layered character movement, multiple world threads, and long-range setup while preserving knowledge boundaries.' },
   ]);
   const SYSTEM_PATCH_NOTES = Object.freeze([
+    {
+      version: '1.1.66',
+      kind: 'session-deferred-nonblocking',
+      summary: 'Treats empty-input and partial-read session diffs as non-destructive deferrals: lore retrieval, agents, translation, current-output memory, and state commits keep running while only deletion/reindex cleanup is held until history deletion is recognizable.',
+    },
     {
       version: '1.1.65',
       kind: 'post-pipeline-session-guard-hotfix',
@@ -5212,6 +5217,7 @@
     }
     const nextSet = new Set(nextKeys);
     const prevSet = new Set(prevKeys);
+    const overlapCount = nextKeys.filter(key => prevSet.has(key)).length;
     const deletedNet = prevKeys.length
       ? prevKeys.filter(key => !nextSet.has(key)).length
       : Math.max(0, prevCount - nextCount);
@@ -5224,6 +5230,7 @@
       shrink: Math.max(0, prevCount - nextCount),
       commonPrefix,
       commonSuffix,
+      overlapCount,
       deletedNet,
       insertedNet,
       headChanged: String(prev?.headHash || '') && String(next?.headHash || '') && prev.headHash !== next.headHash,
@@ -5255,6 +5262,14 @@
       && diff.commonPrefix < 1
       && diff.commonSuffix < 1;
     if (partialSingleMessageRead && conf?.sessionDiffGuardEnabled !== false) return true;
+    const wholesaleReshapedShrink = nextCount >= 1
+      && prevCount >= 2
+      && parseNumber(diff.overlapCount, 0, 0, 999999) <= 0
+      && diff.headChanged
+      && diff.tailChanged
+      && diff.commonPrefix < 1
+      && diff.commonSuffix < 1;
+    if (wholesaleReshapedShrink && conf?.sessionDiffGuardEnabled !== false) return true;
     const unstableShape = shrink >= massThreshold
       && nextCount < Math.max(4, Math.floor(prevCount * 0.35))
       && diff.commonPrefix < 2
@@ -6641,7 +6656,9 @@
     const registeredFirstMessage = resolveRegisteredFirstMessage(character, currentChat);
     const baseContextMessages = chatMessages.length ? chatMessages : normalizedRequestMessages;
     const firstMessageContext = withVirtualFirstMessage(baseContextMessages, registeredFirstMessage);
-    const contextMessages = firstMessageContext.messages.length ? trimToLastUser(firstMessageContext.messages) : normalizedRequestMessages;
+    const contextMessages = firstMessageContext.messages.length
+      ? trimContextForActiveTurn(firstMessageContext.messages, normalizedRequestMessages, chatMessages)
+      : normalizedRequestMessages;
     const modeSignals = normalizedRequestMessages.length
       ? normalizedRequestMessages.concat(contextMessages.slice(-8))
       : contextMessages;
@@ -6675,6 +6692,23 @@
       promptModeId,
       promptModeName: promptModePreset?.name || '',
     };
+  }
+
+  function canPersistStateForContext(context) {
+    if (!context || typeof context !== 'object') return false;
+    if (!context.noSession) return Boolean(context.scope);
+    const scope = String(context.scope || '');
+    if (!scope || /^unknown-character:chat-unknown$/i.test(scope)) return false;
+    if (context.currentChat || context.chatIdentity?.key) return true;
+    if (Number.isFinite(Number(context.charIndex)) && Number.isFinite(Number(context.chatIndex))) return true;
+    const characterId = String(context.characterId || '');
+    const chatId = String(context.chatId || '');
+    return Boolean(characterId && chatId && characterId !== 'unknown-character' && chatId !== 'chat-unknown');
+  }
+
+  function sessionPersistenceMode(context) {
+    if (!context?.noSession) return 'current-chat';
+    return canPersistStateForContext(context) ? 'fallback-scope' : 'volatile';
   }
 
   async function safeCall(fn, fallback) {
@@ -6921,6 +6955,19 @@
       }
     }
     return idx >= 0 ? messages.slice(0, idx + 1) : messages;
+  }
+
+  function trimContextForActiveTurn(messages, requestMessages = [], chatMessages = []) {
+    const list = Array.isArray(messages) ? messages : [];
+    if (!list.length) return [];
+    const request = Array.isArray(requestMessages) ? requestMessages : [];
+    const chat = Array.isArray(chatMessages) ? chatMessages : [];
+    const lastRequest = request[request.length - 1] || null;
+    const lastChat = chat[chat.length - 1] || null;
+    const requestEndsWithUser = lastRequest?.role === 'user' && String(lastRequest.content || '').trim();
+    const chatEndsWithUser = lastChat?.role === 'user' && String(lastChat.content || '').trim();
+    if (requestEndsWithUser || chatEndsWithUser) return trimToLastUser(list);
+    return list;
   }
 
   function resolveMode(configMode, character, messages, db = null, chat = null, conf = null) {
@@ -16825,6 +16872,11 @@
     if (run.status === 'guarded-session-read' || run.status === 'guarded-no-state-commit') {
       pushAlertSummary(alerts, 'warn', '세션 보호 확인 필요', 1);
     }
+    if (run.sessionPersistence === 'volatile' || /no-session-transient/i.test(String(run.status || ''))) {
+      pushAlertSummary(alerts, 'warn', '세션 저장 보류', 1);
+    } else if (run.sessionTransient || /no-session-fallback-scope/i.test(String(run.status || ''))) {
+      pushAlertSummary(alerts, 'warn', '세션 읽기 임시', 1);
+    }
     if (run.commitReason && !isIntentionalSkipReason(run.commitReason) && /error|fail|timeout|json|parse|api|401|403|404|429|500|502|503|504/i.test(String(run.commitReason))) {
       pushAlertSummary(alerts, 'warn', '관리상태 확인 필요', 1);
     }
@@ -17343,56 +17395,54 @@
     await showRunToast('에로스 타워 작동 중', ['전처리 에이전트와 관리자료 검색을 준비합니다.'], 'info');
     await yieldRunProgressPaint();
     const context = await loadScopeAndContext(messages, conf);
-    if (context.noSession) {
-      await showRunToast('에로스 타워 대기', ['현재 채팅 세션을 확인하지 못해 전처리를 건너뜁니다.'], 'warn', 2600);
-      return messages;
+    const transientSession = Boolean(context.noSession);
+    const canPersistState = canPersistStateForContext(context);
+    const persistenceMode = sessionPersistenceMode(context);
+    if (transientSession) {
+      await showRunToast('에로스 타워 임시 세션', [
+        canPersistState
+          ? '현재 채팅 본문 읽기가 불안정해 삭제/백로그 정리만 보류하고 fallback scope에 관리상태는 유지합니다.'
+          : '현재 채팅 세션 저장 위치가 불안정해 저장/파괴적 기억 정리만 보류하고 주입은 계속합니다.',
+      ], 'warn', 2600);
     }
-    let state = await loadState(context.scope, context.mode, conf);
-    let sessionSync = syncSessionDiagnostics(state, context, conf);
-    const sessionRewindSync = await maybeRewindStateAfterConfirmedDelete(context.scope, state, context.mode, sessionSync, conf);
-    if (sessionRewindSync.changed && sessionRewindSync.state) {
+    let state = canPersistState ? await loadState(context.scope, context.mode, conf) : createDefaultState(context.mode);
+    let sessionSync = transientSession
+      ? {
+        changed: false,
+        verdict: 'no-session-transient',
+        destructiveBlocked: true,
+        noSession: true,
+        reason: 'session-unavailable',
+      }
+      : syncSessionDiagnostics(state, context, conf);
+    const sessionRewindSync = transientSession
+      ? { changed: false, skipped: true, reason: 'no-session-transient' }
+      : await maybeRewindStateAfterConfirmedDelete(context.scope, state, context.mode, sessionSync, conf);
+    if (!transientSession && sessionRewindSync.changed && sessionRewindSync.state) {
       state = sessionRewindSync.state;
       sessionSync = { ...sessionSync, rewindApplied: true, rewind: { ...sessionRewindSync, state: undefined } };
     }
-    if (shouldBlockMemoryMutation(sessionSync)) {
-      const memoryRecoverySync = runMemoryGardenRecovery(state, context.messages, conf, sessionSync);
-      await showRunToast('에로스 타워 므네메 정원 보류', summarizePreToast([], { skipped: true, reason: 'session-guard' }, memoryRecoverySync, { skipped: true, reason: 'session-guard' }, null, sessionRewindSync), 'warn', 3600);
-      await saveState(context.scope, state, conf);
-      const run = {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        type,
-        scope: context.scope,
-        mode: context.mode,
-        modeResolution: Runtime.lastModeResolution,
-        startedAt: nowIso(),
-        status: 'guarded-session-read',
-        provider: conf.provider,
-        model: conf.model,
-        notes: [],
-        sessionSync,
-        sessionRewindSync,
-        memoryRecoverySync,
-        longMemorySync: { skipped: true, reason: 'session-guard' },
-        coldStartResult: { skipped: true, reason: 'session-guard' },
-        firstMessageInfo: context.firstMessageInfo,
-        requestMessages: normalizeRequestMessages(messages),
-        userInputPreview: getUserInput(context.messages).slice(0, 500),
-        errors: [],
-      };
-      registerPendingRun(run);
-      Runtime.lastScope = context.scope;
-      appendRunLogInBackground(context.scope, run, conf);
-      return messages;
-    }
+    const sessionReadDeferred = transientSession || shouldBlockMemoryMutation(sessionSync);
+    const deferredMemoryRecoverySync = sessionReadDeferred
+      ? (transientSession
+        ? { changed: false, skipped: true, blocked: true, reason: 'no-session-transient' }
+        : runMemoryGardenRecovery(state, context.messages, conf, sessionSync))
+      : null;
     const bootstrapSync = syncCurrentCharacterBootstrap(state, context);
     const canonicalSync = syncCanonicalLoreLedger(state, context.canonicalSources);
     syncNeuroCore(state, context, conf);
     const cbsSync = syncCbsDiagnostics(state, context, conf);
-    const longMemorySync = syncChatLongMemoryLedger(state, context.messages, conf.contextWindow, conf.coldStartChunkSize);
-    const memoryRecoverySync = runMemoryGardenRecovery(state, context.messages, conf, sessionSync);
+    const longMemorySync = sessionReadDeferred
+      ? { added: 0, revised: 0, unchanged: 0, total: 0, olderCount: 0, recentKeep: conf.contextWindow, skipped: true, reason: 'session-read-deferred' }
+      : syncChatLongMemoryLedger(state, context.messages, conf.contextWindow, conf.coldStartChunkSize);
+    const memoryRecoverySync = deferredMemoryRecoverySync || runMemoryGardenRecovery(state, context.messages, conf, sessionSync);
     const psycheSourceSync = syncPsycheSourceRegistry(state, context, conf);
-    const psycheIngestResult = await runPsycheSourceIngest(conf, context, state);
-    const coldStartResult = await runAutoColdStart(conf, context, state);
+    const psycheIngestResult = canPersistState
+      ? await runPsycheSourceIngest(conf, context, state)
+      : { skipped: true, reason: 'no-persistable-session' };
+    const coldStartResult = transientSession
+      ? { skipped: true, reason: 'session-read-deferred' }
+      : await runAutoColdStart(conf, context, state);
     const memoryTierSync = refreshMemoryTiers(state, 'pre-request');
     const graphBefore = refreshAssociationGraph(state, context, [], conf);
     const notes = await runPrePipeline(conf, context, state);
@@ -17406,7 +17456,7 @@
     const injectedRequestMessagesInfo = summarizeRequestMessagesForRunLog(injectedMessages);
     const injectionTraceHead = Array.isArray(state.injectionTrace) ? state.injectionTrace[0] : null;
     const neuroCoreSync = summarizeNeuroCoreSync(state.neuroCore);
-    await saveState(context.scope, state, conf);
+    if (canPersistState) await saveState(context.scope, state, conf);
     const run = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       type,
@@ -17414,9 +17464,13 @@
       mode: context.mode,
       modeResolution: Runtime.lastModeResolution,
       startedAt: nowIso(),
-      status: 'pre-complete',
+      status: transientSession
+        ? (canPersistState ? 'pre-complete-no-session-fallback-scope' : 'pre-complete-no-session-transient')
+        : 'pre-complete',
       provider: conf.provider,
       model: conf.model,
+      sessionTransient: transientSession,
+      sessionPersistence: persistenceMode,
       notes,
       sessionSync,
       sessionRewindSync,
@@ -17449,8 +17503,12 @@
       errors: notes.filter(n => n.error).map(n => `${n.name}: ${n.error}`),
     };
     registerPendingRun(run);
-    Runtime.lastScope = context.scope;
-    appendRunLogInBackground(context.scope, run, conf);
+    if (canPersistState) {
+      Runtime.lastScope = context.scope;
+      appendRunLogInBackground(context.scope, run, conf);
+    } else {
+      Runtime.lastRunHealth = buildRunHealth(run, conf);
+    }
     return injectedMessages;
   }
 
@@ -17464,14 +17522,30 @@
     const pendingRun = takePendingRun(type);
     const baseMessages = pendingRun?.requestMessages || Runtime.lastRun?.requestMessages || [];
     const context = await loadScopeAndContext(baseMessages, conf);
-    if (context.noSession) {
-      await showRunToast('에로스 타워 관리상태 보류', ['현재 채팅 세션을 확인하지 못해 커밋을 건너뜁니다.'], 'warn', 2600);
-      return sanitizeFinalOutput(String(content ?? ''));
+    const transientSession = Boolean(context.noSession);
+    const canPersistState = canPersistStateForContext(context);
+    const persistenceMode = sessionPersistenceMode(context);
+    if (transientSession) {
+      await showRunToast('에로스 타워 임시 세션', [
+        canPersistState
+          ? '현재 채팅 본문 읽기가 불안정해 삭제/백로그 정리만 보류하고 fallback scope에 관리상태 커밋은 유지합니다.'
+          : '현재 채팅 세션 저장 위치가 불안정해 저장 커밋만 보류하고 후처리는 계속합니다.',
+      ], 'warn', 2600);
     }
-    let state = await loadState(context.scope, context.mode, conf);
-    let sessionSync = syncSessionDiagnostics(state, context, conf);
-    const sessionRewindSync = await maybeRewindStateAfterConfirmedDelete(context.scope, state, context.mode, sessionSync, conf);
-    if (sessionRewindSync.changed && sessionRewindSync.state) {
+    let state = canPersistState ? await loadState(context.scope, context.mode, conf) : createDefaultState(context.mode);
+    let sessionSync = transientSession
+      ? {
+        changed: false,
+        verdict: 'no-session-transient',
+        destructiveBlocked: true,
+        noSession: true,
+        reason: 'session-unavailable',
+      }
+      : syncSessionDiagnostics(state, context, conf);
+    const sessionRewindSync = transientSession
+      ? { changed: false, skipped: true, reason: 'no-session-transient' }
+      : await maybeRewindStateAfterConfirmedDelete(context.scope, state, context.mode, sessionSync, conf);
+    if (!transientSession && sessionRewindSync.changed && sessionRewindSync.state) {
       state = sessionRewindSync.state;
       sessionSync = { ...sessionSync, rewindApplied: true, rewind: { ...sessionRewindSync, state: undefined } };
     }
@@ -17485,66 +17559,46 @@
     const regexResult = await applyAdaptiveQualityOutput(finalContent, conf, state, postContext);
     finalContent = sanitizeFinalOutput(regexResult.text);
     postContext = contextWithAssistantOutput(context, finalContent);
-    if (shouldBlockMemoryMutation(sessionSync)) {
-      const memoryRecoverySync = runMemoryGardenRecovery(state, context.messages, conf, sessionSync);
-      await showRunToast('에로스 타워 관리상태 보류', [`세션 읽기 의심 상태라 관리상태 커밋만 건너뜁니다.`, `후처리 번역/출력 정리는 적용됨`, `메시지 ${Number(memoryRecoverySync.deletedCount || sessionSync.deletedCount || 0)}개 감소 확인 대기`], 'warn', 3200);
-      await saveState(context.scope, state, conf);
-      const run = {
-        ...(pendingRun || Runtime.lastRun || {}),
-        type,
-        scope: context.scope,
-        mode: context.mode,
-        modeResolution: Runtime.lastModeResolution,
-        completedAt: nowIso(),
-        status: 'guarded-no-state-commit',
-        commitReason: 'session-guard',
-        sessionSync,
-        sessionRewindSync,
-        memoryRecoverySync,
-        postPipelineResult,
-        qualityRegex: {
-          applied: regexResult.applied,
-          errors: regexResult.errors,
-          appliedRules: regexResult.appliedRules || [],
-          issuesBefore: regexResult.issuesBefore || regexResult.issues || [],
-          issuesAfter: regexResult.issuesAfter || [],
-          adaptive: regexResult.adaptive || null,
-        },
-        outputSanitized: finalContent !== rawFinalContent,
-        firstMessageInfo: context.firstMessageInfo,
-        rawFinalPreview: rawFinalContent.slice(0, 900),
-        finalPreview: finalContent.slice(0, 900),
-      };
-      appendRunLogInBackground(context.scope, run, conf);
-      Runtime.lastRun = null;
-      return finalContent;
-    }
+    const sessionReadDeferred = transientSession || shouldBlockMemoryMutation(sessionSync);
+    const deferredMemoryRecoverySync = sessionReadDeferred
+      ? (transientSession
+        ? { changed: false, skipped: true, blocked: true, reason: 'no-session-transient' }
+        : runMemoryGardenRecovery(state, context.messages, conf, sessionSync))
+      : null;
     const bootstrapSync = syncCurrentCharacterBootstrap(state, context);
     const canonicalSync = syncCanonicalLoreLedger(state, context.canonicalSources);
     syncNeuroCore(state, context, conf);
     const cbsSync = syncCbsDiagnostics(state, context, conf);
-    const longMemorySync = syncChatLongMemoryLedger(state, postContext.messages, conf.contextWindow, conf.coldStartChunkSize);
-    const memoryRecoverySync = runMemoryGardenRecovery(state, postContext.messages, conf, sessionSync);
+    const longMemorySync = sessionReadDeferred
+      ? { added: 0, revised: 0, unchanged: 0, total: 0, olderCount: 0, recentKeep: conf.contextWindow, skipped: true, reason: 'session-read-deferred' }
+      : syncChatLongMemoryLedger(state, postContext.messages, conf.contextWindow, conf.coldStartChunkSize);
+    const memoryRecoverySync = deferredMemoryRecoverySync || runMemoryGardenRecovery(state, postContext.messages, conf, sessionSync);
     const psycheSourceSync = syncPsycheSourceRegistry(state, postContext, conf);
     let commitResult = { changed: false, reason: 'not-run' };
-    try {
-      commitResult = await runStateCommit(conf, postContext, state, finalContent, notes);
-      if (!commitResult.changed && conf.stateApiEnabled) {
-        const failedCommit = commitResult;
-        commitResult = applyFallbackStateCommit(state, postContext, finalContent, commitResult.reason || 'state-commit-empty', failedCommit);
+    if (!canPersistState) {
+      commitResult = { changed: false, reason: transientSession ? 'no-session-transient' : 'no-persistable-session' };
+    } else {
+      try {
+        commitResult = await runStateCommit(conf, postContext, state, finalContent, notes);
+        if (!commitResult.changed && conf.stateApiEnabled) {
+          const failedCommit = commitResult;
+          commitResult = applyFallbackStateCommit(state, postContext, finalContent, commitResult.reason || 'state-commit-empty', failedCommit);
+        }
+      } catch (err) {
+        Runtime.lastError = err.message;
+        commitResult = conf.stateApiEnabled
+          ? applyFallbackStateCommit(state, postContext, finalContent, err.message)
+          : { changed: false, reason: err.message };
       }
-    } catch (err) {
-      Runtime.lastError = err.message;
-      commitResult = conf.stateApiEnabled
-        ? applyFallbackStateCommit(state, postContext, finalContent, err.message)
-        : { changed: false, reason: err.message };
     }
     const memoryTierSync = refreshMemoryTiers(state, 'post-commit');
     const graphSync = refreshAssociationGraph(state, postContext, notes, conf);
     const neuroCoreSync = syncNeuroCore(state, postContext, conf);
-    const postSessionSync = syncSessionDiagnostics(state, postContext, conf);
+    const postSessionSync = transientSession
+      ? { changed: false, verdict: 'no-session-transient', destructiveBlocked: true, noSession: true, persistence: persistenceMode }
+      : syncSessionDiagnostics(state, postContext, conf);
     await showRunToast('에로스 타워 관리상태 완료', summarizeCommitToast(commitResult, regexResult, graphSync, sessionRewindSync), commitResult.changed || sessionRewindSync?.changed ? 'success' : 'info', 2600);
-    await saveState(context.scope, state, conf);
+    if (canPersistState) await saveState(context.scope, state, conf);
     const run = {
       ...(pendingRun || Runtime.lastRun || {}),
       type,
@@ -17552,8 +17606,12 @@
       mode: context.mode,
       modeResolution: Runtime.lastModeResolution,
       completedAt: nowIso(),
-      status: commitResult.changed ? 'complete' : 'complete-no-state-commit',
+      status: transientSession
+        ? (canPersistState ? 'complete-no-session-fallback-scope' : 'complete-no-session-transient')
+        : (commitResult.changed ? 'complete' : 'complete-no-state-commit'),
       commitReason: commitResult.reason || '',
+      sessionTransient: transientSession,
+      sessionPersistence: persistenceMode,
       failedCommitReason: commitResult.failedCommitReason || '',
       commitAgent: commitResult.agent || null,
       commitCounts: commitResult.counts || null,
@@ -17585,7 +17643,8 @@
       rawFinalPreview: rawFinalContent.slice(0, 900),
       finalPreview: finalContent.slice(0, 900),
     };
-    appendRunLogInBackground(context.scope, run, conf);
+    if (canPersistState) appendRunLogInBackground(context.scope, run, conf);
+    else Runtime.lastRunHealth = buildRunHealth(run, conf);
     Runtime.lastRun = null;
     return finalContent;
   }
