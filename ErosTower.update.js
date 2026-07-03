@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.60
+//@display-name ☸Eros Tower 1.1.61
 //@api 3.0
-//@version 4.0.12
+//@version 4.0.13
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -35,18 +35,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.60
+ * Eros Tower 1.1.61
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.60 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.61 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.60';
+  const VERSION = '1.1.61';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.60`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.61`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -64,7 +64,7 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.60 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.61 analysis context';
   const MAIN_INJECTION_PLACEHOLDER_RE = /\{\{et\.(canonical|memory|state|characters|executive)\}\}/gi;
   const AUTO_INJECTION_FALLBACK_CHARS = 22000;
   const AUTO_INJECTION_MIN_CHARS = 3200;
@@ -80,6 +80,11 @@
     { index: 7, label: '초장편', englishLabel: 'very long-form', instruction: 'Write at least 9000 words.', scale: 'Very long-form: prepare dense continuity, layered character movement, multiple world threads, and long-range setup while preserving knowledge boundaries.' },
   ]);
   const SYSTEM_PATCH_NOTES = Object.freeze([
+    {
+      version: '1.1.61',
+      kind: 'settings-argument-zero-override-fix',
+      summary: 'Treats unset zero-valued host numeric arguments as absent for recent-chat history, output allowance, and timeout settings so dashboard-saved values are not clamped to the minimum; automatic injection budget zero semantics are preserved.',
+    },
     {
       version: '1.1.60',
       kind: 'retrieval-session-person-filter',
@@ -912,6 +917,13 @@
     return raw || fallback;
   }
 
+  function cleanOverrideArg(value, fallback = '', options = {}) {
+    const raw = String(value ?? '').trim();
+    if (!raw) return fallback;
+    if (options.zeroIsUnset === true && Number(raw) === 0) return fallback;
+    return raw;
+  }
+
   function normalizeUrl(url) {
     return String(url || '').trim().replace(/\/+$/, '');
   }
@@ -946,8 +958,8 @@
 
   async function getConfig() {
     const stored = await Storage.get(STORAGE.config, {});
-    const timeoutSecondsArg = cleanString(await getArg('et_timeout_s', ''), '');
-    const legacyTimeoutMsArg = cleanString(await getArg('et_timeout_ms', ''), '');
+    const timeoutSecondsArg = cleanOverrideArg(await getArg('et_timeout_s', ''), '', { zeroIsUnset: true });
+    const legacyTimeoutMsArg = cleanOverrideArg(await getArg('et_timeout_ms', ''), '', { zeroIsUnset: true });
     const injectionBudgetArg = cleanString(await getArg('et_injection_budget', ''), '');
     const args = {
       enabled: parseBool(await getArg('et_enabled', ''), undefined),
@@ -957,8 +969,8 @@
       apiKey: cleanString(await getArg('et_api_key', ''), ''),
       model: cleanString(await getArg('et_model', ''), ''),
       temperature: cleanString(await getArg('et_temperature', ''), ''),
-      maxTokens: cleanString(await getArg('et_max_tokens', ''), ''),
-      contextWindow: cleanString(await getArg('et_context_window', ''), ''),
+      maxTokens: cleanOverrideArg(await getArg('et_max_tokens', ''), '', { zeroIsUnset: true }),
+      contextWindow: cleanOverrideArg(await getArg('et_context_window', ''), '', { zeroIsUnset: true }),
       timeoutMs: timeoutSecondsArg ? timeoutSecondsToMs(timeoutSecondsArg) : legacyTimeoutMsArg,
       debugLog: parseBool(await getArg('et_debug_log', ''), undefined),
       runLogEnabled: parseBool(await getArg('et_run_log_enabled', ''), undefined),
