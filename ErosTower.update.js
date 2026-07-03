@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.64
+//@display-name ☸Eros Tower 1.1.65
 //@api 3.0
-//@version 4.0.15
+//@version 4.0.16
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -35,18 +35,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.64
+ * Eros Tower 1.1.65
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.64 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.65 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.64';
+  const VERSION = '1.1.65';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.64`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.65`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -67,7 +67,7 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.64 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.65 analysis context';
   const MAIN_INJECTION_PLACEHOLDER_RE = /\{\{et\.(canonical|memory|state|characters|executive)\}\}/gi;
   const AUTO_INJECTION_FALLBACK_CHARS = 22000;
   const AUTO_INJECTION_MIN_CHARS = 3200;
@@ -83,6 +83,11 @@
     { index: 7, label: '초장편', englishLabel: 'very long-form', instruction: 'Write at least 9000 words.', scale: 'Very long-form: prepare dense continuity, layered character movement, multiple world threads, and long-range setup while preserving knowledge boundaries.' },
   ]);
   const SYSTEM_PATCH_NOTES = Object.freeze([
+    {
+      version: '1.1.65',
+      kind: 'post-pipeline-session-guard-hotfix',
+      summary: 'Runs post-processing agents, translation, and output cleanup before session-read guards block only memory/state commits, preventing transient chat-read protection from returning untranslated main output.',
+    },
     {
       version: '1.1.64',
       kind: 'session-guard-partial-read',
@@ -17472,9 +17477,17 @@
     }
     const rawFinalContent = String(content ?? '');
     let finalContent = sanitizeFinalOutput(rawFinalContent);
+    const notes = pendingRun?.notes || Runtime.lastRun?.notes || [];
+    let postContext = contextWithAssistantOutput(context, finalContent);
+    const postPipelineResult = await runPostPipeline(finalContent, conf, postContext, state, notes);
+    finalContent = sanitizeFinalOutput(postPipelineResult.text);
+    postContext = contextWithAssistantOutput(context, finalContent);
+    const regexResult = await applyAdaptiveQualityOutput(finalContent, conf, state, postContext);
+    finalContent = sanitizeFinalOutput(regexResult.text);
+    postContext = contextWithAssistantOutput(context, finalContent);
     if (shouldBlockMemoryMutation(sessionSync)) {
       const memoryRecoverySync = runMemoryGardenRecovery(state, context.messages, conf, sessionSync);
-      await showRunToast('에로스 타워 관리상태 보류', [`세션 읽기 의심 상태라 커밋을 건너뜁니다.`, `메시지 ${Number(memoryRecoverySync.deletedCount || sessionSync.deletedCount || 0)}개 감소 확인 대기`], 'warn', 3200);
+      await showRunToast('에로스 타워 관리상태 보류', [`세션 읽기 의심 상태라 관리상태 커밋만 건너뜁니다.`, `후처리 번역/출력 정리는 적용됨`, `메시지 ${Number(memoryRecoverySync.deletedCount || sessionSync.deletedCount || 0)}개 감소 확인 대기`], 'warn', 3200);
       await saveState(context.scope, state, conf);
       const run = {
         ...(pendingRun || Runtime.lastRun || {}),
@@ -17488,6 +17501,15 @@
         sessionSync,
         sessionRewindSync,
         memoryRecoverySync,
+        postPipelineResult,
+        qualityRegex: {
+          applied: regexResult.applied,
+          errors: regexResult.errors,
+          appliedRules: regexResult.appliedRules || [],
+          issuesBefore: regexResult.issuesBefore || regexResult.issues || [],
+          issuesAfter: regexResult.issuesAfter || [],
+          adaptive: regexResult.adaptive || null,
+        },
         outputSanitized: finalContent !== rawFinalContent,
         firstMessageInfo: context.firstMessageInfo,
         rawFinalPreview: rawFinalContent.slice(0, 900),
@@ -17501,14 +17523,6 @@
     const canonicalSync = syncCanonicalLoreLedger(state, context.canonicalSources);
     syncNeuroCore(state, context, conf);
     const cbsSync = syncCbsDiagnostics(state, context, conf);
-    const notes = pendingRun?.notes || Runtime.lastRun?.notes || [];
-    let postContext = contextWithAssistantOutput(context, finalContent);
-    const postPipelineResult = await runPostPipeline(finalContent, conf, postContext, state, notes);
-    finalContent = sanitizeFinalOutput(postPipelineResult.text);
-    postContext = contextWithAssistantOutput(context, finalContent);
-    const regexResult = await applyAdaptiveQualityOutput(finalContent, conf, state, postContext);
-    finalContent = sanitizeFinalOutput(regexResult.text);
-    postContext = contextWithAssistantOutput(context, finalContent);
     const longMemorySync = syncChatLongMemoryLedger(state, postContext.messages, conf.contextWindow, conf.coldStartChunkSize);
     const memoryRecoverySync = runMemoryGardenRecovery(state, postContext.messages, conf, sessionSync);
     const psycheSourceSync = syncPsycheSourceRegistry(state, postContext, conf);
