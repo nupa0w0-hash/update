@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.62
+//@display-name ☸Eros Tower 1.1.64
 //@api 3.0
-//@version 4.0.14
+//@version 4.0.15
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -35,18 +35,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.62
+ * Eros Tower 1.1.64
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.62 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.64 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.62';
+  const VERSION = '1.1.64';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.62`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.64`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -67,7 +67,7 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.62 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.64 analysis context';
   const MAIN_INJECTION_PLACEHOLDER_RE = /\{\{et\.(canonical|memory|state|characters|executive)\}\}/gi;
   const AUTO_INJECTION_FALLBACK_CHARS = 22000;
   const AUTO_INJECTION_MIN_CHARS = 3200;
@@ -83,6 +83,16 @@
     { index: 7, label: '초장편', englishLabel: 'very long-form', instruction: 'Write at least 9000 words.', scale: 'Very long-form: prepare dense continuity, layered character movement, multiple world threads, and long-range setup while preserving knowledge boundaries.' },
   ]);
   const SYSTEM_PATCH_NOTES = Object.freeze([
+    {
+      version: '1.1.64',
+      kind: 'session-guard-partial-read',
+      summary: 'Keeps Risu partial chat reads from being promoted into confirmed deletions, removes first-message-id-only resets, fixes malformed length-toggle inference, and keeps transient session-read deferrals out of actionable dashboard alerts.',
+    },
+    {
+      version: '1.1.63',
+      kind: 'narrative-motion-advisory',
+      summary: 'Restored narrative motion and ensemble/focal-flow usefulness from Eros agent notes by treating them as optional craft proposals instead of suppressing scene-shape guidance, while preserving canonical source priority, host length controls, and perspective boundaries.',
+    },
     {
       version: '1.1.62',
       kind: 'light-runtime-logs',
@@ -770,7 +780,8 @@
       const encoded = JSON.stringify(encodeStorageValue(name, value));
       const write = async () => {
         await api.pluginStorage.setItem(storageKey, encoded);
-        if (encoded.length > STORAGE_VERIFY_HASH_LIMIT) return { bytes: encoded.length, verified: 'skipped-large-payload' };
+        const verificationSkip = storageVerificationSkipReason(name, encoded.length);
+        if (verificationSkip) return { bytes: encoded.length, verified: verificationSkip };
         const stored = await api.pluginStorage.getItem(storageKey);
         if (!stored) throw new Error('storage verification returned empty value');
         if (hashString(stored) !== hashString(encoded)) throw new Error('storage verification hash mismatch');
@@ -795,6 +806,13 @@
       } catch (_) {}
     },
   };
+
+  function storageVerificationSkipReason(name, encodedLength) {
+    if (encodedLength > STORAGE_VERIFY_HASH_LIMIT) return 'skipped-large-payload';
+    const key = String(name || '');
+    if (/^(?:runlog:|snapshots:|backup:)/.test(key)) return 'skipped-diagnostic-payload';
+    return '';
+  }
 
   const STORAGE_DICTIONARY = Object.freeze([
     '"summary":',
@@ -901,8 +919,20 @@
     return out;
   }
 
+  function parseUserNumberSetting(value, fallback) {
+    const raw = String(value ?? '').trim();
+    if (!raw) return fallback;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : fallback;
+  }
+
+  function normalizeHistoryWindowSetting(value, fallback = DEFAULT_CONFIG.contextWindow) {
+    const n = parseUserNumberSetting(value, fallback);
+    return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : Math.max(0, Math.floor(fallback || 0));
+  }
+
   function normalizeTranslationRetryCount(value, fallback = 1) {
-    return Math.round(parseNumber(value, fallback, 0, 10));
+    return Math.max(0, Math.round(parseUserNumberSetting(value, fallback)));
   }
 
   function normalizeTimeoutMsSetting(value, fallback = DEFAULT_CONFIG.timeoutMs) {
@@ -918,6 +948,16 @@
 
   function timeoutMsToSeconds(value, fallback = DEFAULT_CONFIG.timeoutMs) {
     return Math.round(normalizeTimeoutMsSetting(value, fallback) / 1000);
+  }
+
+  function timeoutSecondsToUserMs(value, fallback = DEFAULT_CONFIG.timeoutMs) {
+    const seconds = parseUserNumberSetting(value, fallback / 1000);
+    return Number.isFinite(seconds) ? seconds * 1000 : fallback;
+  }
+
+  function timeoutMsToUserSeconds(value, fallback = DEFAULT_CONFIG.timeoutMs) {
+    const ms = parseUserNumberSetting(value, fallback);
+    return Number.isFinite(ms) ? ms / 1000 : fallback / 1000;
   }
 
   function cleanString(value, fallback = '') {
@@ -1025,7 +1065,7 @@
     merged.model = cleanString(merged.model, providerDefaults(merged.provider).model);
     merged.temperature = parseNumber(merged.temperature, DEFAULT_CONFIG.temperature, 0, 2);
     merged.maxTokens = parseNumber(merged.maxTokens, DEFAULT_CONFIG.maxTokens, 128);
-    merged.contextWindow = parseNumber(merged.contextWindow, DEFAULT_CONFIG.contextWindow, 4, 80);
+    merged.contextWindow = parseUserNumberSetting(merged.contextWindow, DEFAULT_CONFIG.contextWindow);
     merged.timeoutMs = normalizeTimeoutMsSetting(merged.timeoutMs, DEFAULT_CONFIG.timeoutMs);
     if (!injectionBudgetArg && Number(stored?.injectionBudget) === 22000 && parseBool(stored?.autoCapEnabled, true) === true) {
       merged.injectionBudget = 0;
@@ -1367,7 +1407,7 @@
       model: cleanString(preset.model, defaults.model || conf.model),
       temperature: parseNumber(preset.temperature, conf.temperature, 0, 2),
       maxTokens: parseNumber(preset.maxTokens, conf.maxTokens, 128),
-      contextWindow: parseNumber(preset.contextWindow, conf.contextWindow, 4, 80),
+      contextWindow: parseUserNumberSetting(preset.contextWindow, conf.contextWindow),
       extraBodyJson: String(preset.extraBodyJson || ''),
     };
   }
@@ -1909,7 +1949,7 @@
         temperature: Number.isFinite(Number(agent.temperature)) ? Number(agent.temperature) : undefined,
         maxTokens: Number.isFinite(Number(agent.maxTokens)) ? Number(agent.maxTokens) : undefined,
         contextWindow: Number.isFinite(Number(agent.contextWindow)) ? Number(agent.contextWindow) : undefined,
-        timeoutMs: Number.isFinite(Number(agent.timeoutMs)) ? normalizeTimeoutMsSetting(agent.timeoutMs) : undefined,
+        timeoutMs: Number.isFinite(Number(agent.timeoutMs)) ? Number(agent.timeoutMs) : undefined,
         postMode,
         includeSettingBlocks: agent.includeSettingBlocks !== false,
         includeHistory: agent.includeHistory !== false,
@@ -1969,7 +2009,7 @@
       ? agent.modePrompts
       : fallback?.modePrompts || null;
     const phase = fallback?.phase || agent.phase;
-    const maxTokens = normalizeAgentMaxTokens(agent.maxTokens ?? fallback?.maxTokens, conf.maxTokens, agent.id, phase);
+    const maxTokens = parseUserNumberSetting(agent.maxTokens ?? fallback?.maxTokens, conf.maxTokens);
     return {
       ...agent,
       name: normalizedName || fallback?.name || agent.id,
@@ -1978,10 +2018,10 @@
       providerId,
       model: cleanString(agent.model || preset?.model || providerEntry?.defaultModel || fallback?.model || conf.model, conf.model),
       modelPresetId: agent.modelPresetId || fallback?.modelPresetId || '',
-      temperature: parseNumber(agent.temperature ?? fallback?.temperature, conf.temperature, 0, 2),
+      temperature: parseUserNumberSetting(agent.temperature ?? fallback?.temperature, conf.temperature),
       maxTokens,
-      contextWindow: parseNumber(agent.contextWindow ?? fallback?.contextWindow, conf.contextWindow, 4, 80),
-      timeoutMs: normalizeTimeoutMsSetting(agent.timeoutMs ?? fallback?.timeoutMs, conf.timeoutMs),
+      contextWindow: parseUserNumberSetting(agent.contextWindow ?? fallback?.contextWindow, conf.contextWindow),
+      timeoutMs: parseUserNumberSetting(agent.timeoutMs ?? fallback?.timeoutMs, conf.timeoutMs),
       systemPrompt: agent.systemPrompt || fallback?.systemPrompt || '',
       outputInstruction,
       userTemplate: agent.userTemplate || fallback?.userTemplate || defaultUserTemplate(fallback?.phase || agent.phase, agent.id, outputInstruction),
@@ -1997,23 +2037,10 @@
       memoryFormat: cleanString(agent.memoryFormat || fallback?.memoryFormat, ''),
       sourceAgentId: cleanString(agent.sourceAgentId || fallback?.sourceAgentId, ''),
       sourceRow: Number.isFinite(Number(agent.sourceRow ?? fallback?.sourceRow)) ? Number(agent.sourceRow ?? fallback?.sourceRow) : undefined,
-      translationRetryCount: normalizeTranslationRetryCount(agent.translationRetryCount ?? fallback?.translationRetryCount, 1),
+      translationRetryCount: parseUserNumberSetting(agent.translationRetryCount ?? fallback?.translationRetryCount, 1),
       translationSourceParallelEnabled: parseBool(agent.translationSourceParallelEnabled, fallback?.translationSourceParallelEnabled === true) === true,
       translationPromptModeId: normalizeActiveTranslationPromptModeId(agent.translationPromptModeId || fallback?.translationPromptModeId || conf.activeTranslationPromptModeId, conf.translationPromptModes),
     };
-  }
-
-  function agentMaxTokenFloor(agentId, phase) {
-    const id = String(agentId || '');
-    const phaseKey = String(phase || '');
-    if (id === 'state-commit' || phaseKey === 'psyche-main') return 4096;
-    if (id === 'state-aux' || phaseKey === 'psyche-aux') return 4096;
-    return 128;
-  }
-
-  function normalizeAgentMaxTokens(value, fallback, agentId = '', phase = '') {
-    const floor = agentMaxTokenFloor(agentId, phase);
-    return parseNumber(value, fallback, floor);
   }
 
   function defaultPipeline() {
@@ -2091,10 +2118,10 @@
       agentPhase: agent?.phase || '',
       baseUrl,
       model: cleanString(agent?.model || providerEntry?.defaultModel || preset?.model || conf.model, providerDefaults(provider).model),
-      temperature: parseNumber(agent?.temperature ?? preset?.temperature, conf.temperature, 0, 2),
-      maxTokens: normalizeAgentMaxTokens(agent?.maxTokens ?? preset?.maxTokens, conf.maxTokens, agent?.id || '', agent?.phase || ''),
-      contextWindow: parseNumber(agent?.contextWindow ?? preset?.contextWindow, conf.contextWindow, 4, 80),
-      timeoutMs: normalizeTimeoutMsSetting(agent?.timeoutMs ?? preset?.timeoutMs, conf.timeoutMs),
+      temperature: parseUserNumberSetting(agent?.temperature ?? preset?.temperature, conf.temperature),
+      maxTokens: parseUserNumberSetting(agent?.maxTokens ?? preset?.maxTokens, conf.maxTokens),
+      contextWindow: parseUserNumberSetting(agent?.contextWindow ?? preset?.contextWindow, conf.contextWindow),
+      timeoutMs: parseUserNumberSetting(agent?.timeoutMs ?? preset?.timeoutMs, conf.timeoutMs),
       apiKey: providerEntry?.apiKey || conf.providerKeys?.[provider] || conf.apiKey || '',
       modelsPath: providerEntry && providerEntry.modelsPath !== undefined ? providerEntry.modelsPath : conf.modelsPath,
       chatPath: providerEntry?.chatPath || conf.chatPath,
@@ -5216,6 +5243,13 @@
     if (nextCount <= 0 && prevCount > 0) return true;
     const massThreshold = Math.max(6, Math.ceil(prevCount * 0.22));
     const deferStreak = parseNumber(state?.sessionDiagnostics?.deferStreak, 0, 0, 999999);
+    const partialSingleMessageRead = nextCount <= 1
+      && prevCount >= 3
+      && diff.headChanged
+      && diff.tailChanged
+      && diff.commonPrefix < 1
+      && diff.commonSuffix < 1;
+    if (partialSingleMessageRead && conf?.sessionDiffGuardEnabled !== false) return true;
     const unstableShape = shrink >= massThreshold
       && nextCount < Math.max(4, Math.floor(prevCount * 0.35))
       && diff.commonPrefix < 2
@@ -5234,7 +5268,7 @@
       && diff.commonPrefix >= prevCount
       && !diff.headChanged;
     if (pureTailAppend) return false;
-    const contextWindow = parseNumber(conf?.contextWindow, DEFAULT_CONFIG.contextWindow, 4, 80);
+    const contextWindow = normalizeHistoryWindowSetting(conf?.contextWindow, DEFAULT_CONFIG.contextWindow);
     const protectedRecentStart = Math.max(0, prevCount - contextWindow);
     const mutationTouchesOlderChunk = diff.commonPrefix < protectedRecentStart
       || diff.deletedNet > 0
@@ -5315,7 +5349,9 @@
       });
       return { changed: true, verdict: 'session-init', fingerprint: next };
     }
-    const hardChanged = ['scope', 'characterId', 'chatId', 'firstChatId']
+    const hardChanged = ['scope', 'characterId', 'chatId']
+      .filter(key => prev[key] && next[key] && prev[key] !== next[key]);
+    const softIdentityChanged = ['firstChatId']
       .filter(key => prev[key] && next[key] && prev[key] !== next[key]);
     if (hardChanged.length) {
       const previousMeta = pickFingerprintMeta(prev);
@@ -5328,21 +5364,6 @@
         meta: { changed: hardChanged, previous: previousMeta, current: currentMeta },
       });
       return { changed: true, verdict: 'session-boundary-reset', hardChanged, stateReset: true, fingerprint: next };
-    }
-    if (hardChanged.length) {
-      state.sessionFingerprint = next;
-      state.sessionDiagnostics.status = 'session-changed';
-      state.sessionDiagnostics.lastStableFingerprint = next;
-      state.sessionDiagnostics.lastAuthoritativeMessageCount = next.rawMessageCount || next.messageCount || 0;
-      state.sessionDiagnostics.deferStreak = 0;
-      state.sessionDiagnostics.pendingMassDelete = null;
-      recordSessionDiagnostic(state, {
-        type: 'session-change',
-        severity: 'warn',
-        summary: `세션 식별자가 변경되었습니다: ${hardChanged.join(', ')}`,
-        meta: { changed: hardChanged, previous: pickFingerprintMeta(prev), current: pickFingerprintMeta(next) },
-      });
-      return { changed: true, verdict: 'session-change', fingerprint: next };
     }
     const diff = diffChatHistory(prev, next);
     const shrink = diff.shrink;
@@ -5466,6 +5487,21 @@
         meta: { changed: advisory },
       });
       return { changed: true, verdict: 'source-edit', fingerprint: next };
+    }
+    if (softIdentityChanged.length) {
+      state.sessionFingerprint = next;
+      state.sessionDiagnostics.lastStableFingerprint = next;
+      state.sessionDiagnostics.lastAuthoritativeMessageCount = next.rawMessageCount || next.messageCount || 0;
+      state.sessionDiagnostics.deferStreak = 0;
+      state.sessionDiagnostics.resumeGraceActive = false;
+      state.sessionDiagnostics.pendingMassDelete = null;
+      recordSessionDiagnostic(state, {
+        type: 'session-id-normalized',
+        severity: 'info',
+        summary: `세션 첫 메시지 식별자가 정규화되었습니다: ${softIdentityChanged.join(', ')}`,
+        meta: { changed: softIdentityChanged, previous: pickFingerprintMeta(prev), current: pickFingerprintMeta(next) },
+      });
+      return { changed: true, verdict: 'session-id-normalized', fingerprint: next };
     }
     state.sessionFingerprint = next;
     state.sessionDiagnostics.lastStableFingerprint = next;
@@ -9440,7 +9476,7 @@
         _sourceIndex: Number.isFinite(Number(msg?._sourceIndex)) ? Number(msg._sourceIndex) : index,
       }))
       .filter(msg => msg && (msg.role === 'user' || msg.role === 'assistant') && String(msg.content || '').trim());
-    const recentKeep = Math.max(8, Number(contextWindow || DEFAULT_CONFIG.contextWindow));
+    const recentKeep = normalizeHistoryWindowSetting(contextWindow, DEFAULT_CONFIG.contextWindow);
     const older = history.slice(0, Math.max(0, history.length - recentKeep));
     const size = Math.max(4, Number(chunkSize || DEFAULT_CONFIG.coldStartChunkSize));
     const chunks = [];
@@ -10032,9 +10068,11 @@
   }
 
   function formatHistory(messages, windowSize, options = {}) {
+    const historyWindow = normalizeHistoryWindowSetting(windowSize, DEFAULT_CONFIG.contextWindow);
+    if (historyWindow <= 0) return '(no previous chat history)';
     const chat = (Array.isArray(messages) ? messages : [])
       .filter(m => m.role === 'user' || m.role === 'assistant')
-      .slice(-Math.max(2, windowSize + 1), -1);
+      .slice(-(historyWindow + 1), -1);
     if (!chat.length) return '(no previous chat history)';
     const maxTotal = parseNumber(options.maxTotal, PSYCHE_HISTORY_TOTAL_CHARS, 800, 120000);
     const perMessage = parseNumber(options.perMessage, PSYCHE_HISTORY_MESSAGE_CHARS, 200, 20000);
@@ -10475,15 +10513,25 @@
     syncNeuroCore(state, context, conf, allUnits);
     resetNeuroExecutiveTrace(state);
     const budgetInfo = resolveMainInjectionBudget(context, budget, conf);
-    const totalBudget = Math.max(AUTO_INJECTION_MIN_CHARS, Number(budgetInfo.budget || AUTO_INJECTION_FALLBACK_CHARS));
+    const resolvedBudget = Number(budgetInfo.budget);
+    const totalBudget = Math.max(0, Number.isFinite(resolvedBudget) ? resolvedBudget : AUTO_INJECTION_FALLBACK_CHARS);
+    if (totalBudget <= 0) {
+      recordInjectionTrace(state, query, [], '', 0, {
+        budgetInfo,
+        canonicalTrace: Array.isArray(context?._canonicalInjectionTrace) ? context._canonicalInjectionTrace : [],
+        neuroCore: summarizeNeuroCoreSync(state.neuroCore),
+      });
+      return '';
+    }
     const floorBudget = Math.min(Math.max(1200, Math.floor(totalBudget * 0.42)), Math.max(900, totalBudget - 1200), totalBudget);
     const bridgeBudget = Math.min(Math.max(900, Math.floor(totalBudget * 0.24)), Math.max(700, totalBudget - floorBudget - 900));
     const neuroBudget = Math.min(1400, Math.max(420, Math.floor(totalBudget * 0.07)));
     const controlFloor = buildMainControlFloorContext(context, floorBudget, state, conf);
     const activeLoreBridge = buildActiveLoreBridgeContext(context, notes, bridgeBudget, state, conf);
     const neuroCoreBlock = buildNeuroCoreBriefingBlock(state, context, neuroBudget, conf);
-    const preAgentNotes = buildPreAgentNotesSource(notes);
-    const remainingBudget = Math.max(700, totalBudget - controlFloor.length - activeLoreBridge.length - neuroCoreBlock.length - preAgentNotes.length - 220);
+    const preAgentNotes = buildPreAgentNotesSource(notes, context);
+    const narrativeMotionAdvisory = buildNarrativeMotionAdvisory(context, notes);
+    const remainingBudget = Math.max(700, totalBudget - controlFloor.length - activeLoreBridge.length - neuroCoreBlock.length - preAgentNotes.length - narrativeMotionAdvisory.length - 220);
     const staged = await stagedRetrieveCandidates('main', state, query, AGENT_RETRIEVAL_PROFILE.main, conf, context);
     const candidates = staged.candidates.filter(candidate => candidate.kind !== 'lore');
     const selected = selectCandidates(candidates, AGENT_RETRIEVAL_PROFILE.main.limit, remainingBudget);
@@ -10500,6 +10548,7 @@
       activeLoreBridge,
       staged.note || '',
       retrievalPack,
+      narrativeMotionAdvisory,
       preAgentNotes,
     ];
     const briefing = joinBriefingBlocks(blocks, totalBudget);
@@ -10512,14 +10561,37 @@
     return briefing;
   }
 
-  function buildPreAgentNotesSource(notes) {
-    const text = formatMainAdvisoryNotes(notes);
+  function buildPreAgentNotesSource(notes, context = null) {
+    const text = formatMainAdvisoryNotes(notes, context);
     if (!text || text === '(none)') return '';
     return [
       '[Advisory Agent Notes]',
-      'Low-authority evidence/proposal only. These notes are not scene-design commands, response-shape commands, route mandates, or final-output instructions.',
-      'Use only concrete evidence, continuity risks, established anchors, and optional possibilities. Canonical source parts, current user/recent chat, and host prompt controls override these notes.',
+      'Advisory craft/evidence layer. These notes may propose scene motion, focal flow, ensemble beats, offscreen consequences, and continuity risks; they are not canon until shown in visible chat or final output.',
+      'Use concrete evidence, established anchors, continuity risks, and optional possibilities. Canonical source parts, current user/recent chat, and host prompt controls override these notes.',
+      'Do not copy note labels into prose, force every proposed beat, or reveal private/future facts through a focal character who cannot know them.',
       text,
+    ].join('\n');
+  }
+
+  function buildNarrativeMotionAdvisory(context = null, notes = []) {
+    const hasAnyNote = Array.isArray(notes) && notes.some(note => agentNoteBodyForRunLog(note));
+    if (!hasAnyNote) return '';
+    const mode = currentWritingModeLabel(context);
+    const lengthControl = resolveResponseLengthControl(context, null);
+    const lengthLabel = lengthControl?.option?.englishLabel || 'natural';
+    const hasSynthesis = Array.isArray(notes)
+      && notes.some(note => String(note?.id || '').toLowerCase() === 'synthesis' && agentNoteBodyForRunLog(note));
+    return [
+      '[Narrative Motion Advisory]',
+      'Private craft guidance, not a hard command. Use only when it materially improves the next reply and does not conflict with current user/recent chat, canonical source parts, or host prompt controls.',
+      `Writing mode: ${mode}. Length scale: ${lengthLabel}. Match breadth to visible length controls; do not expand solely because this advisory exists.`,
+      "Preserve one private interior at a time. A focal shift is allowed only at a clear paragraph/action-beat boundary and must immediately re-anchor in the new focal character's perception, access, and location.",
+      "When the scene feels static, prefer one earned state change: decision, departure, discovery, preparation, refusal, failed attempt, social realignment, resource shift, delayed consequence, or another actor's action.",
+      'Ensemble/world movement may appear as an interlude, cutaway, NPC-to-NPC exchange, public trace, delayed message, logistical consequence, rumor arriving, or parallel front progressing offscreen.',
+      'Do not force a shift, rotate cast for equal screen time, reveal private/future facts through a character who cannot know them, or manufacture a crisis solely to create motion.',
+      hasSynthesis
+        ? 'The synthesis note is the primary place to find response-shape and ensemble-motion candidates; use it as craft guidance, not canon.'
+        : 'If no synthesis motion candidate is useful, keep a single focal line and make the current beat consequential.',
     ].join('\n');
   }
 
@@ -10574,14 +10646,17 @@
   function inferResponseLengthIndexFromText(text) {
     const raw = String(text || '');
     if (!raw.trim()) return null;
-    const usableLines = raw.split(/\r?\n/)
+    const lines = raw.split(/\r?\n/)
       .map(line => line.trim())
-      .filter(line => line && !isMalformedLengthToggleResidueLine(line));
+      .filter(Boolean);
+    const usableLines = lines
+      .map(line => isMalformedLengthToggleResidueLine(line) ? stripMalformedLengthToggleResidueForInference(line).trim() : line)
+      .filter(Boolean);
     for (const line of usableLines) {
       const direct = line.match(/(?:^|[{"'\s,])(?:toggle_길이|길이|toggle_length|response[_\s-]*length|length)["'\s:=]+([0-7])\b/i);
       if (direct) return Number(direct[1]);
     }
-    const normalized = usableLines.join(' ').replace(/\s+/g, ' ');
+    const normalized = stripMalformedLengthToggleResidueForInference(usableLines.join('\n')).replace(/\s+/g, ' ');
     const instructionMap = [
       [7, /write\s+at\s+least\s+9000\s+words/i],
       [6, /write\s+at\s+least\s+5000\s+words/i],
@@ -10593,6 +10668,15 @@
     ];
     const found = instructionMap.find(([, pattern]) => pattern.test(normalized));
     return found ? found[0] : null;
+  }
+
+  function stripMalformedLengthToggleResidueForInference(text) {
+    let out = String(text || '');
+    out = out.replace(/\b[0-7]\s*=\s*[1-7]\s*\}\}\}\}\s*Write\s+(?:at\s+least|maximum)\s+\d+\s+words\.?/gi, ' ');
+    out = out.replace(/\{\{#if_pure[\s\S]{0,180}?\}\}/gi, ' ');
+    out = out.replace(/\{\{\/if_pure\}\}/gi, ' ');
+    out = out.replace(/\{\{\??\s*\{\{getglobalvar::[^}]+?\}\}\s*[=<>!]+\s*\d+\s*\}\}\}\}/gi, ' ');
+    return out;
   }
 
   function isMalformedLengthToggleResidueLine(line) {
@@ -10705,10 +10789,23 @@
     const existingTokens = estimateMessagesTokens(messages);
     const safetyTokens = Math.max(600, Math.ceil(maxResponse * 0.24));
     const remainingTokens = maxContext > 0 ? maxContext - maxResponse - existingTokens - safetyTokens : 0;
+    if (maxContext > 0 && remainingTokens <= 0) {
+      return {
+        budget: 0,
+        auto: true,
+        reason: 'no-context-room',
+        maxContext,
+        maxResponse,
+        existingTokens,
+        remainingTokens,
+      };
+    }
     const fromContext = remainingTokens > 0 ? Math.floor(remainingTokens * 1.85) : 0;
     const resolved = fromContext > 0 ? fromContext : AUTO_INJECTION_FALLBACK_CHARS;
     return {
-      budget: Math.round(Math.max(AUTO_INJECTION_MIN_CHARS, Math.min(AUTO_INJECTION_MAX_CHARS, resolved))),
+      budget: Math.round(maxContext > 0
+        ? Math.max(0, Math.min(AUTO_INJECTION_MAX_CHARS, resolved))
+        : Math.max(AUTO_INJECTION_MIN_CHARS, Math.min(AUTO_INJECTION_MAX_CHARS, resolved))),
       auto: true,
       reason: fromContext > 0 ? 'context-window' : 'fallback',
       maxContext,
@@ -10719,7 +10816,8 @@
   }
 
   function joinBriefingBlocks(blocks, budget) {
-    const max = Math.max(400, Number(budget || 0));
+    const max = Math.max(0, Number(budget || 0));
+    if (max <= 0) return '';
     const out = [];
     let used = 0;
     for (const raw of blocks || []) {
@@ -11160,6 +11258,7 @@
     const signature = buildRecallQuerySignature(queryTerms, context);
     return collectStateCandidates(state)
       .filter(candidate => !(candidate.kind === 'character' && isUnknownCharacterRetrievalCandidate(candidate.item, candidate.path)))
+      .filter(candidate => !isRecentChatEchoCandidate(candidate, state, context))
       .filter(candidate => !profile?.kinds || profile.kinds.includes(candidate.kind))
       .map(candidate => ({ ...candidate, perspectiveGate: perspectiveGateCandidate(candidate, state, context) }))
       .filter(candidate => candidate.perspectiveGate.allow)
@@ -11175,6 +11274,44 @@
         };
       })
       .sort((a, b) => b.score - a.score);
+  }
+
+  function isRecentChatEchoCandidate(candidate, state = null, context = null) {
+    const kind = String(candidate?.kind || '');
+    if (!['memory', 'event'].includes(kind)) return false;
+    const item = candidate?.item || {};
+    const source = String(item.source || item.sourceType || item.origin || '').toLowerCase();
+    if (!/(?:final|assistant|recent[_\s-]*chat|chat)/i.test(source)) return false;
+    if (item.anchor === true && inferImportance(item, kind) >= 8) return false;
+    const turn = inferItemTurn(item, state?.turn ?? 0);
+    const age = Math.max(0, Number(state?.turn || 0) - Number(turn || 0));
+    if (age > 5) return false;
+    const summary = summarizeLedgerText(item, kind);
+    if (!summary || summary.length < 32) return age <= 1;
+    if (textEchoesRecentChat(summary, context)) return true;
+    return age <= 1 && summary.length >= 90;
+  }
+
+  function textEchoesRecentChat(text, context = null) {
+    const messages = Array.isArray(context?.messages) ? context.messages : [];
+    if (!messages.length) return false;
+    const recentText = messages.slice(-8).map(messageText).join('\n');
+    if (!recentText.trim()) return false;
+    const normalizedRecent = normalizeEchoText(recentText);
+    const normalizedText = normalizeEchoText(text);
+    if (normalizedText.length >= 48 && normalizedRecent.includes(normalizedText.slice(0, Math.min(180, normalizedText.length)))) return true;
+    const terms = uniqueStrings(extractQueryTerms(text).map(term => String(term || '').toLowerCase()).filter(term => term.length >= 2)).slice(0, 24);
+    if (terms.length < 6) return false;
+    const recentTerms = new Set(extractQueryTerms(recentText).map(term => String(term || '').toLowerCase()).filter(term => term.length >= 2));
+    const hits = terms.filter(term => recentTerms.has(term)).length;
+    return hits / Math.min(terms.length, 18) >= 0.72;
+  }
+
+  function normalizeEchoText(text) {
+    return String(text || '')
+      .toLowerCase()
+      .replace(/[\s"'`*_~.,:;!?()[\]{}<>，。！？、；：“”‘’《》「」『』—–-]+/g, '')
+      .slice(0, 2000);
   }
 
   function canUseFutureOriginalCandidate(candidate, context = null, state = null) {
@@ -13277,23 +13414,45 @@
     ].filter(Boolean).join('\n')).join('\n\n');
   }
 
-  function formatMainAdvisoryNotes(notes) {
+  function formatMainAdvisoryNotes(notes, context = null) {
     if (!Array.isArray(notes) || !notes.length) return '(none)';
-    const included = includedAgentNotes(notes).slice(0, 4);
+    void context;
+    const perNoteLimit = 1900;
+    const totalLimit = 7600;
+    const included = prioritizeMainAdvisoryNotes(includedAgentNotes(notes)).slice(0, 4);
     if (!included.length) return '(none)';
     const blocks = included.map((note, idx) => {
-      const text = sanitizeMainAdvisoryNoteText(note.text || note.outputPreview || '');
+      const text = sanitizeMainAdvisoryNoteText(note.text || note.outputPreview || '', perNoteLimit);
       if (!text) return '';
       return [
         `## ${idx + 1}. ${note.name || note.id || 'agent'}`,
         text,
       ].join('\n');
     }).filter(Boolean);
-    return blocks.length ? blocks.join('\n\n').slice(0, 5200) : '(none)';
+    return blocks.length ? blocks.join('\n\n').slice(0, totalLimit) : '(none)';
   }
 
-  function sanitizeMainAdvisoryNoteText(text) {
-    const source = stripAgentNoteLengthMetaText(text).replace(/\r\n/g, '\n');
+  function prioritizeMainAdvisoryNotes(notes) {
+    const order = new Map([
+      ['synthesis', 0],
+      ['character', 1],
+      ['momentum', 2],
+      ['world', 3],
+    ]);
+    return (Array.isArray(notes) ? notes : [])
+      .map((note, idx) => ({ note, idx }))
+      .sort((a, b) => {
+        const aid = String(a.note?.id || '').toLowerCase();
+        const bid = String(b.note?.id || '').toLowerCase();
+        const av = order.has(aid) ? order.get(aid) : 10;
+        const bv = order.has(bid) ? order.get(bid) : 10;
+        return av - bv || a.idx - b.idx;
+      })
+      .map(item => item.note);
+  }
+
+  function sanitizeMainAdvisoryNoteText(text, maxChars = 1400) {
+    const source = stripAgentAnalysisPreamble(stripAgentNoteLengthMetaText(text)).replace(/\r\n/g, '\n');
     if (!source.trim()) return '';
     const lines = source.split('\n');
     const out = [];
@@ -13315,15 +13474,12 @@
         }
       }
       if (skipSection) continue;
-      if (isMainDirectiveAdvisoryLine(trimmed)) continue;
-      if (/response\s+mandate|response\s+shape|scene\s+design|scene\s+blueprint|recommended\s+entrances|end\s+state|carry-forward|separator|breadth|must\s+preserve|reject\s+or\s+ignore|pacing\s+and\s+stagnation/i.test(trimmed)) continue;
-      if (/response\s+mandate|response\s+shape|recommended\s+entrances|end\s+state|carry-forward|separator|breadth/i.test(trimmed)) continue;
+      if (isMainDirectiveAdvisoryLine(trimmed) && !isUsefulMotionAdvisoryLine(trimmed)) continue;
       if (/(?:write\s+(?:at\s+least|maximum)|\b\d+\s*[-~]\s*\d+\s*(?:words?|字|자)\b|약\s*\d+\s*[-~]\s*\d+\s*자)/i.test(trimmed)) continue;
-      if (/^(?:core\s+change|emotional\s+purpose|focal\s+sequence|boundary)\b/i.test(trimmed.replace(/^#+\s*/, ''))) continue;
       out.push(line);
-      if (out.join('\n').length >= 1200) break;
+      if (out.join('\n').length >= Math.max(900, maxChars - 120)) break;
     }
-    return out.join('\n').replace(/\n{3,}/g, '\n\n').trim().slice(0, 1400);
+    return out.join('\n').replace(/\n{3,}/g, '\n\n').trim().slice(0, maxChars);
   }
 
   function isAdvisorySectionHeading(line) {
@@ -13349,7 +13505,7 @@
 
   function isHardOmitMainAdvisorySection(line) {
     const heading = normalizeAdvisoryHeading(line);
-    return /(?:response\s+mandate|rp\s+reply\s+mandate|novel\s+reply\s+mandate|final\s+check|output\s+plan|advisory\s+contract|response\s+contract)/i.test(heading);
+    return /(?:final\s+check|output\s+plan)/i.test(heading);
   }
 
   function advisoryProposalHeadingLabel(line) {
@@ -13370,6 +13526,26 @@
     if (/^(?:single\s+focal|no\s+boundary\s+break|no\s+shift\s+warranted|any\s+pov\s+transition|no\s+additional\s+adjacent\s+scene)\b/i.test(text)) return true;
     if (/\b(?:response|output|reply)\b.{0,60}\b(?:must|should|warranted|justify|requires?)\b/i.test(text)) return true;
     return false;
+  }
+
+  function isUsefulMotionAdvisoryLine(line) {
+    const text = String(line || '').trim().replace(/^[-*]\s*/, '').replace(/\*\*/g, '');
+    if (/^(?:length)\s*[:竊?]/i.test(text)) return false;
+    return /(?:core\s+change|emotional\s+purpose|focal\s+(?:sequence|flow|order|shift|lens)|pov|boundary|ensemble|supporting|independent|npc|world\s+(?:front|movement|trace|in\s+motion)|offscreen|secondary|parallel|cross-cutting|consequence|end\s+state|carry-forward|changed\s+state|earned\s+decision|primary\s+causal|movement|actor|decision|departure|discovery|preparation|refusal|failed\s+attempt|social\s+realignment|resource\s+shift|delayed\s+consequence|interlude|cutaway|rumor|message|news|scene\s+break|beat|re-entry|avoid|must\s+preserve|knowledge\s+firewall|continuity\s+risk)/i.test(text);
+  }
+
+  function stripAgentAnalysisPreamble(text) {
+    let raw = String(text || '').replace(/\r\n/g, '\n').trim();
+    if (!raw) return '';
+    const sectionPattern = /(?:^|\n)\s*(?:#{1,6}\s*)?(?:\*{0,2}\[(?:Current Theater|Scene Anchor|Active World Fronts|Parallel World Fronts|Chronology and Geography|Intersections and Divergences|Focal Transition Candidates|Focal Flow|Focal Lens|Focal Arc Movement|Initiating Cast|Supporting or Independent Cast|NPC-to-NPC|Knowledge Firewall|Relationship Gradients|Response Shape|Primary Causal Movement|Secondary or Parallel Movements|Cross-Cutting Logic|Consequences at Different Speeds|End State and Carry-Forward|Pacing and Stagnation Risks|Response Mandate|RP Reply Mandate|Novel Reply Mandate|Focal and Continuity Plan|Ensemble Arc Weaving|World in Motion|Must Preserve|Avoid|Reject or Ignore)\]\*{0,2}|(?:World Stage|Living World|Operational Map|Ensemble|Narrative Motion|Worldweaver|Focal Flow|Response Shape|Primary Causal Movement|Secondary Movements|Cross-Cutting Logic|Consequences|End State)\b)/i;
+    const match = sectionPattern.exec(raw);
+    if (match && match.index > 0) {
+      const prefix = raw.slice(0, match.index);
+      if (prefix.length > 240 || /\b(?:The user wants|Let me|I need to|I should|My role is|Actually|One more consideration|Now let me|I will|I can)\b/i.test(prefix)) {
+        raw = raw.slice(match.index).trim();
+      }
+    }
+    return raw.replace(/^\s*(?:The user wants me to|Let me analyze|Let me think|Actually,\s*let me|I need to|I should|Now let me|I will)\b[\s\S]{0,1200}?(?=\n\s*(?:#{1,6}\s*)?(?:\[[^\]\n]{2,80}\]|#{1,6}\s+))/i, '').trim();
   }
 
   function extractJsonObject(text) {
@@ -14606,7 +14782,7 @@
     }, conf.timeoutMs, 'chat/completions');
     if (!res.ok) {
       const text = await readResponseTextWithTimeout(res, conf.timeoutMs, 'chat/completions').catch(() => '');
-      throw new Error(`Agent API ${res.status}: ${text.slice(0, 300)}`);
+      throw new Error(formatProviderHttpError('Agent API', res, text));
     }
     const data = await readResponseJsonWithTimeout(res, conf.timeoutMs, 'chat/completions');
     const text = extractOpenAIText(data);
@@ -14630,7 +14806,7 @@
     }, conf.timeoutMs, 'anthropic messages');
     if (!res.ok) {
       const text = await readResponseTextWithTimeout(res, conf.timeoutMs, 'anthropic messages').catch(() => '');
-      throw new Error(`Anthropic API ${res.status}: ${text.slice(0, 300)}`);
+      throw new Error(formatProviderHttpError('Anthropic API', res, text));
     }
     const data = await readResponseJsonWithTimeout(res, conf.timeoutMs, 'anthropic messages');
     const text = extractAnthropicText(data);
@@ -14730,7 +14906,7 @@
     }, conf.timeoutMs, 'vertex generateContent');
     if (!res.ok) {
       const text = await readResponseTextWithTimeout(res, conf.timeoutMs, 'vertex generateContent').catch(() => '');
-      throw new Error(`Vertex Gemini ${res.status}: ${text.slice(0, 300)}`);
+      throw new Error(formatProviderHttpError('Vertex Gemini', res, text));
     }
     const data = await readResponseJsonWithTimeout(res, conf.timeoutMs, 'vertex generateContent');
     const text = extractGeminiNativeText(data);
@@ -14754,7 +14930,7 @@
     }, conf.timeoutMs, 'vertex rawPredict');
     if (!res.ok) {
       const text = await readResponseTextWithTimeout(res, conf.timeoutMs, 'vertex rawPredict').catch(() => '');
-      throw new Error(`Vertex Claude ${res.status}: ${text.slice(0, 300)}`);
+      throw new Error(formatProviderHttpError('Vertex Claude', res, text));
     }
     const data = await readResponseJsonWithTimeout(res, conf.timeoutMs, 'vertex rawPredict');
     const text = extractAnthropicText(data);
@@ -14964,7 +15140,7 @@
     }, conf.timeoutMs || DEFAULT_CONFIG.timeoutMs, 'google oauth token');
     if (!res.ok) {
       const text = await readResponseTextWithTimeout(res, conf.timeoutMs || DEFAULT_CONFIG.timeoutMs, 'google oauth token').catch(() => '');
-      throw new Error(`Google OAuth token ${res.status}: ${text.slice(0, 260)}`);
+      throw new Error(formatProviderHttpError('Google OAuth', res, text));
     }
     const data = await readResponseJsonWithTimeout(res, conf.timeoutMs || DEFAULT_CONFIG.timeoutMs, 'google oauth token');
     if (!data?.access_token) throw new Error('Google OAuth token 응답에 access_token이 없습니다.');
@@ -15056,6 +15232,58 @@
 
   function readResponseJsonWithTimeout(res, timeoutMs, label) {
     return promiseWithTimeout(() => res.json(), timeoutMs, `${label} response json`);
+  }
+
+  function formatProviderHttpError(label, res, body = '') {
+    const status = Number(res?.status || 0) || '';
+    const statusText = String(res?.statusText || '').trim();
+    const detail = cleanProviderHttpErrorBody(body);
+    return `${label} ${status}${statusText ? ` ${statusText}` : ''}: ${detail || 'empty error body'}`.trim();
+  }
+
+  function cleanProviderHttpErrorBody(body = '') {
+    const raw = String(body || '').trim();
+    if (!raw) return '';
+    const htmlLike = /<!doctype\s+html|<html\b|<body\b|<title\b/i.test(raw);
+    const cloudflareCode = firstNonEmpty(
+      raw.match(/\bError code\s*(\d{3})\b/i)?.[1],
+      raw.match(/\b(\d{3})\s*:\s*A timeout occurred\b/i)?.[1],
+      raw.match(/\bOllama Error\s*(\d{3})\b/i)?.[1]
+    );
+    const title = htmlLike ? decodeHtmlEntities(raw.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] || '') : '';
+    const host = htmlLike ? decodeHtmlEntities(raw.match(/<span[^>]*>\s*([^<]*trycloudflare\.com[^<]*)\s*<\/span>/i)?.[1] || '') : '';
+    const plain = decodeHtmlEntities(raw)
+      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (cloudflareCode || /cloudflare|trycloudflare|origin web server timed out/i.test(plain)) {
+      const parts = [
+        cloudflareCode ? `Cloudflare ${cloudflareCode}` : 'Cloudflare error',
+        /timeout|timed out/i.test(plain) ? 'origin server timed out' : '',
+        host ? `host=${host}` : '',
+        title && !/cloudflare/i.test(title) ? title : '',
+      ].filter(Boolean);
+      return parts.join(' / ').slice(0, 500);
+    }
+    if (htmlLike) return (title || plain || raw).slice(0, 500);
+    try {
+      const parsed = JSON.parse(raw);
+      const message = parsed?.error?.message || parsed?.message || parsed?.error || '';
+      if (message) return String(message).replace(/\s+/g, ' ').trim().slice(0, 500);
+    } catch (_) {}
+    return plain.slice(0, 500);
+  }
+
+  function decodeHtmlEntities(value = '') {
+    return String(value || '')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'");
   }
 
   function nativeFetch(url, options) {
@@ -15210,6 +15438,7 @@
   function sanitizePreAgentNoteOutput(text, agentId = '') {
     let out = stripThoughtBlocks(String(text || '')).trim();
     if (!out) return '';
+    out = stripAgentAnalysisPreamble(out);
     const sectionPattern = /(?:^|\n)\s*(?:#{1,6}\s*)?(?:\*{0,2}\[(?:Current Theater|Scene Anchor|Active World Fronts|Parallel World Fronts|Chronology and Geography|Intersections and Divergences|Focal Transition Candidates|Focal Flow|Focal Lens|Focal Arc Movement|Initiating Cast|Supporting or Independent Cast|NPC-to-NPC|Knowledge Firewall|Relationship Gradients|Response Shape|Primary Causal Movement|Secondary or Parallel Movements|Cross-Cutting Logic|Consequences at Different Speeds|End State and Carry-Forward|Pacing and Stagnation Risks|Response Mandate|RP Reply Mandate|Novel Reply Mandate|Focal and Continuity Plan|Ensemble Arc Weaving|World in Motion|Must Preserve|Avoid|Reject or Ignore)\]\*{0,2}|(?:World Stage|Living World|Ensemble|Narrative Motion|Worldweaver)\b)/i;
     const match = sectionPattern.exec(out);
     if (match && match.index > 0) {
@@ -16013,7 +16242,6 @@
       }
     }
     if (userIdx >= 0) {
-      if (userIdx > 0) clone[userIdx - 1] = { ...clone[userIdx - 1], cachePoint: true };
       clone[userIdx] = setMessageText(clone[userIdx], `${block}\n\n${messageText(clone[userIdx]) || ''}`.trim());
       return clone;
     }
@@ -16471,7 +16699,9 @@
     if (!conf.runLogEnabled) return;
     const logKey = STORAGE.runLog(scope);
     const logs = await Storage.get(logKey, []);
-    const list = Array.isArray(logs) ? logs : [];
+    const list = (Array.isArray(logs) ? logs : [])
+      .slice(0, Math.max(MAX_RUN_LOGS * 2, MAX_RUN_LOGS + 4))
+      .map(item => compactRunLogForStorage(item, conf));
     const compactRun = compactRunLogForStorage(run, conf);
     const idx = list.findIndex(item => item?.id && item.id === compactRun.id);
     const next = idx >= 0
@@ -16498,6 +16728,24 @@
     }
   }
 
+  function appendRunLogInBackground(scope, run, conf) {
+    Runtime.lastRunHealth = buildRunHealth(run, conf);
+    if (!Runtime.lastRunHealth.errorCount && !Runtime.lastRunHealth.warnCount) Runtime.lastError = '';
+    if (!conf?.runLogEnabled) return;
+    const save = () => {
+      appendRunLog(scope, run, conf).catch(err => {
+        Runtime.lastError = `run log save failed: ${err.message}`;
+        Runtime.lastRunHealth = buildRunHealth({
+          ...(run || {}),
+          errors: uniqueStrings([].concat(run?.errors || [], Runtime.lastError)),
+        }, conf);
+        log('run log save failed', err.message);
+      });
+    };
+    if (typeof setTimeout === 'function') setTimeout(save, 0);
+    else Promise.resolve().then(save);
+  }
+
   function shortAlertText(value, limit = 150) {
     const text = String(value || '').replace(/\s+/g, ' ').trim();
     if (!text) return '';
@@ -16513,6 +16761,13 @@
     const text = String(note.error || note.text || '').trim();
     if (!text) return false;
     return !/(?:disabled|skipped|provider-not-ready|api key\/base url missing|api key missing|base url missing|no provider|no model)/i.test(text);
+  }
+
+  function isActionableSessionWarning(item) {
+    if (!item || typeof item !== 'object') return false;
+    const type = String(item.type || '').trim();
+    if (type === 'message-shrink-deferred') return false;
+    return true;
   }
 
   function pushAlertSummary(alerts, kind, label, count = 1) {
@@ -17121,7 +17376,7 @@
       };
       registerPendingRun(run);
       Runtime.lastScope = context.scope;
-      await safeAppendRunLog(context.scope, run, conf);
+      appendRunLogInBackground(context.scope, run, conf);
       return messages;
     }
     const bootstrapSync = syncCurrentCharacterBootstrap(state, context);
@@ -17141,6 +17396,10 @@
     await showRunToast('에로스 타워 모델 응답 대기 중', ['전처리 완료. 메인 모델의 응답을 기다립니다.'].concat(preToastLines), notes.some(note => note.error) || memoryRecoverySync?.changed || sessionRewindSync?.changed ? 'warn' : 'info');
     const injectionBudget = parseNumber(conf.injectionBudget, DEFAULT_CONFIG.injectionBudget, 0, 40000);
     const injection = await buildMainInjection(state, context, notes, injectionBudget, conf);
+    const injectedMessages = injectContext(messages, injection, injectionBudget);
+    const originalRequestMessagesInfo = summarizeRequestMessagesForRunLog(messages);
+    const injectedRequestMessagesInfo = summarizeRequestMessagesForRunLog(injectedMessages);
+    const injectionTraceHead = Array.isArray(state.injectionTrace) ? state.injectionTrace[0] : null;
     const neuroCoreSync = summarizeNeuroCoreSync(state.neuroCore);
     await saveState(context.scope, state, conf);
     const run = {
@@ -17168,6 +17427,17 @@
       coldStartResult,
       graphBefore,
       graphSync,
+      mainInjectionInfo: {
+        inserted: Boolean(String(injection || '').trim()),
+        requestedBudget: injectionBudget,
+        actualChars: String(injection || '').length,
+        originalRequestChars: originalRequestMessagesInfo.chars,
+        injectedRequestChars: injectedRequestMessagesInfo.chars,
+        addedChars: Math.max(0, injectedRequestMessagesInfo.chars - originalRequestMessagesInfo.chars),
+        budgetReason: injectionTraceHead?.budgetInfo?.reason || '',
+        resolvedBudget: injectionTraceHead?.budget || 0,
+      },
+      injectedRequestMessagesInfo,
       firstMessageInfo: context.firstMessageInfo,
       requestMessages: normalizeRequestMessages(messages),
       userInputPreview: getUserInput(context.messages).slice(0, 500),
@@ -17175,8 +17445,8 @@
     };
     registerPendingRun(run);
     Runtime.lastScope = context.scope;
-    await safeAppendRunLog(context.scope, run, conf);
-    return injectContext(messages, injection, injectionBudget);
+    appendRunLogInBackground(context.scope, run, conf);
+    return injectedMessages;
   }
 
   async function afterRequest(content, type) {
@@ -17223,7 +17493,7 @@
         rawFinalPreview: rawFinalContent.slice(0, 900),
         finalPreview: finalContent.slice(0, 900),
       };
-      await safeAppendRunLog(context.scope, run, conf);
+      appendRunLogInBackground(context.scope, run, conf);
       Runtime.lastRun = null;
       return finalContent;
     }
@@ -17301,7 +17571,7 @@
       rawFinalPreview: rawFinalContent.slice(0, 900),
       finalPreview: finalContent.slice(0, 900),
     };
-    await safeAppendRunLog(context.scope, run, conf);
+    appendRunLogInBackground(context.scope, run, conf);
     Runtime.lastRun = null;
     return finalContent;
   }
@@ -17520,7 +17790,9 @@
     const runtimeHealth = Runtime.lastRunHealth || buildRunHealth(latestRun || {});
     const alerts = collectRunAlerts(latestRun, conf);
     const session = normalizeSessionDiagnostics(state?.sessionDiagnostics);
-    const sessionWarnings = Array.isArray(session.warnings) ? session.warnings.length : 0;
+    const sessionWarnings = Array.isArray(session.warnings)
+      ? session.warnings.filter(isActionableSessionWarning).length
+      : 0;
     if (conf?.sessionRecoveryEnabled !== false && sessionWarnings) pushAlertSummary(alerts, 'warn', '세션 보호 확인 필요', Math.min(sessionWarnings, 3));
     const autoMemoryActive = conf?.autoMemoryEnabled !== false && conf?.autoColdStartEnabled !== false && conf?.stateApiEnabled !== false;
     const coldFailed = autoMemoryActive && Array.isArray(state?.coldStart?.failed) ? state.coldStart.failed : [];
@@ -17915,7 +18187,7 @@
       const modelOptions = providerModelOptions(provider, selectedModel);
       const translationModes = conf.translationPromptModes || normalizeTranslationPromptModes(conf);
       const selectedTranslationPrompt = normalizeActiveTranslationPromptModeId(agent.translationPromptModeId || conf.activeTranslationPromptModeId, translationModes);
-      const translationRetryCount = normalizeTranslationRetryCount(agent.translationRetryCount ?? 1, 1);
+      const translationRetryCount = parseUserNumberSetting(agent.translationRetryCount ?? 1, 1);
       const translationSourceParallelEnabled = agent.translationSourceParallelEnabled === true;
       return `
         <details class="et-agent-card">
@@ -17941,10 +18213,10 @@
                 ${inputField('모델 직접 입력', `et-agent-model-${agent.id}`, 'text', selectedModel, '모델 목록에서 선택하거나 직접 입력', `class="et-agent-model" data-agent-id="${escHtml(agent.id)}"`)}
               </div>
               <div class="et-row et-row-4">
-                ${inputField('Temperature', `et-agent-temperature-${agent.id}`, 'number', String(agent.temperature ?? conf.temperature), '0.25', `min="0" max="2" step="0.05" class="et-agent-temperature" data-agent-id="${escHtml(agent.id)}"`)}
-                ${inputField('Max Tokens', `et-agent-max-tokens-${agent.id}`, 'number', String(agent.maxTokens ?? conf.maxTokens), '4096', `min="128" class="et-agent-max-tokens" data-agent-id="${escHtml(agent.id)}"`)}
-                ${inputField('최근 대화', `et-agent-context-window-${agent.id}`, 'number', String(agent.contextWindow ?? conf.contextWindow), '48', `min="4" max="80" class="et-agent-context-window" data-agent-id="${escHtml(agent.id)}"`)}
-                ${inputField('Timeout s', `et-agent-timeout-s-${agent.id}`, 'number', String(timeoutMsToSeconds(agent.timeoutMs ?? conf.timeoutMs)), '300', `min="15" max="600" class="et-agent-timeout-s" data-agent-id="${escHtml(agent.id)}"`)}
+                ${inputField('Temperature', `et-agent-temperature-${agent.id}`, 'number', String(agent.temperature ?? conf.temperature), '0.25', `class="et-agent-temperature" data-agent-id="${escHtml(agent.id)}"`)}
+                ${inputField('Max Tokens', `et-agent-max-tokens-${agent.id}`, 'number', String(agent.maxTokens ?? conf.maxTokens), '4096', `class="et-agent-max-tokens" data-agent-id="${escHtml(agent.id)}"`)}
+                ${inputField('최근 대화', `et-agent-context-window-${agent.id}`, 'number', String(agent.contextWindow ?? conf.contextWindow), '48', `class="et-agent-context-window" data-agent-id="${escHtml(agent.id)}"`)}
+                ${inputField('Timeout s', `et-agent-timeout-s-${agent.id}`, 'number', String(timeoutMsToUserSeconds(agent.timeoutMs ?? conf.timeoutMs)), '300', `class="et-agent-timeout-s" data-agent-id="${escHtml(agent.id)}"`)}
               </div>
               ${agent.phase === 'post' ? `<div class="et-row">
                 ${selectField('후처리 적용', `et-agent-post-mode-${agent.id}`, normalizePostMode(agent.postMode), [
@@ -17955,7 +18227,7 @@
               </div>` : ''}
               ${agent.id === TRANSLATION_AGENT_ID ? `<div class="et-row et-translation-row">
                 ${selectField('번역 프롬프트', `et-agent-translation-prompt-${agent.id}`, selectedTranslationPrompt, translationPromptModeOptions(translationModes), 'et-agent-translation-prompt', `data-agent-id="${escHtml(agent.id)}"`)}
-                ${inputField('빈 응답 재시도', `et-agent-translation-retry-count-${agent.id}`, 'number', String(translationRetryCount), '1', `min="0" max="10" step="1" class="et-agent-translation-retry-count" data-agent-id="${escHtml(agent.id)}"`)}
+                ${inputField('빈 응답 재시도', `et-agent-translation-retry-count-${agent.id}`, 'number', String(translationRetryCount), '1', `class="et-agent-translation-retry-count" data-agent-id="${escHtml(agent.id)}"`)}
                 ${checkboxField('원문 병행', `et-agent-translation-source-parallel-${agent.id}`, translationSourceParallelEnabled, `class="et-agent-translation-source-parallel" data-agent-id="${escHtml(agent.id)}"`)}
               </div>` : ''}              <div class="et-actions et-agent-actions">
                 <button class="et-agent-save" data-agent-id="${escHtml(agent.id)}">이 에이전트 저장</button>
@@ -20532,12 +20804,12 @@
       enabled: value('et-agent-enabled', boolString(base.enabled !== false)) === 'true',
       providerId: value('et-agent-provider', base.providerId || conf.activeProviderId),
       model: value('et-agent-model', base.model || ''),
-      temperature: parseNumber(value('et-agent-temperature', base.temperature ?? conf.temperature), base.temperature ?? conf.temperature, 0, 2),
-      maxTokens: parseNumber(value('et-agent-max-tokens', base.maxTokens ?? conf.maxTokens), base.maxTokens ?? conf.maxTokens, 128),
-      contextWindow: parseNumber(value('et-agent-context-window', base.contextWindow ?? conf.contextWindow), base.contextWindow ?? conf.contextWindow, 4, 80),
-      timeoutMs: timeoutSecondsToMs(value('et-agent-timeout-s', timeoutMsToSeconds(base.timeoutMs ?? conf.timeoutMs)), base.timeoutMs ?? conf.timeoutMs),
+      temperature: parseUserNumberSetting(value('et-agent-temperature', base.temperature ?? conf.temperature), base.temperature ?? conf.temperature),
+      maxTokens: parseUserNumberSetting(value('et-agent-max-tokens', base.maxTokens ?? conf.maxTokens), base.maxTokens ?? conf.maxTokens),
+      contextWindow: parseUserNumberSetting(value('et-agent-context-window', base.contextWindow ?? conf.contextWindow), base.contextWindow ?? conf.contextWindow),
+      timeoutMs: timeoutSecondsToUserMs(value('et-agent-timeout-s', timeoutMsToUserSeconds(base.timeoutMs ?? conf.timeoutMs)), base.timeoutMs ?? conf.timeoutMs),
       postMode: normalizePostMode(value('et-agent-post-mode', base.postMode || 'suffix')),
-      translationRetryCount: normalizeTranslationRetryCount(value('et-agent-translation-retry-count', base.translationRetryCount ?? 1), base.translationRetryCount ?? 1),
+      translationRetryCount: parseUserNumberSetting(value('et-agent-translation-retry-count', base.translationRetryCount ?? 1), base.translationRetryCount ?? 1),
       translationSourceParallelEnabled: checked('et-agent-translation-source-parallel', base.translationSourceParallelEnabled === true),
       translationPromptModeId: normalizeActiveTranslationPromptModeId(value('et-agent-translation-prompt', base.translationPromptModeId || conf.activeTranslationPromptModeId), conf.translationPromptModes || normalizeTranslationPromptModes(conf)),
     };
