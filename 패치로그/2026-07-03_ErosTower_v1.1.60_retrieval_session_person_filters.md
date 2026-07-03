@@ -40,6 +40,10 @@
 - `D:\리수작업\에로스 타워\백업\ErosTower_before_version_1_1_60_20260703-090000`
 
 ## Raw URL confirmation
-- To be checked immediately after push:
-  - `https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js`
-  - `https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.update.js`
+- Checked after push at `2026-07-03 09:13:56 +09:00`.
+- `https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js`
+  - `//@display-name ☸Eros Tower 1.1.60`
+  - `//@version 1.1.60`
+- `https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.update.js`
+  - `//@display-name ☸Eros Tower 1.1.60`
+  - `//@version 4.0.12`
