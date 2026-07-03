@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.61
+//@display-name ☸Eros Tower 1.1.62
 //@api 3.0
-//@version 1.1.61
+//@version 1.1.62
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -35,18 +35,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.61
+ * Eros Tower 1.1.62
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.61 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.62 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.61';
+  const VERSION = '1.1.62';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.61`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.62`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -55,16 +55,19 @@
   const UI_REGISTRATION_STORAGE = 'uiRegistrations';
   const CHAT_SCOPE_ID_FIELD = 'erosTowerChatId';
   const MAX_EVENT_LOG = 100;
-  const MAX_RUN_LOGS = 12;
-  const MAX_RUN_LOG_TEXT_CHARS = 16000;
+  const MAX_RUN_LOGS = 6;
+  const MAX_RUN_LOG_TEXT_CHARS = 8000;
   const MAX_RUN_LOG_AGENT_NOTE_CHARS = 32000;
+  const LIGHT_RUN_LOG_AGENT_NOTE_CHARS = 2400;
+  const LIGHT_RUN_LOG_ERROR_NOTE_CHARS = 6000;
+  const LIGHT_RUN_LOG_PREVIEW_CHARS = 2200;
   const MAX_USAGE_EVENTS = 500;
   const LONG_MEMORY_EXCERPT_CHARS = 1800;
   const STORAGE_VERIFY_HASH_LIMIT = 384000;
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.61 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.62 analysis context';
   const MAIN_INJECTION_PLACEHOLDER_RE = /\{\{et\.(canonical|memory|state|characters|executive)\}\}/gi;
   const AUTO_INJECTION_FALLBACK_CHARS = 22000;
   const AUTO_INJECTION_MIN_CHARS = 3200;
@@ -80,6 +83,11 @@
     { index: 7, label: '초장편', englishLabel: 'very long-form', instruction: 'Write at least 9000 words.', scale: 'Very long-form: prepare dense continuity, layered character movement, multiple world threads, and long-range setup while preserving knowledge boundaries.' },
   ]);
   const SYSTEM_PATCH_NOTES = Object.freeze([
+    {
+      version: '1.1.62',
+      kind: 'light-runtime-logs',
+      summary: 'Reduced default persisted diagnostics weight: Run Log keeps fewer entries and compact note previews unless debug logging is enabled, while session deletion detection, memory-garden reindexing, NeuroCore, lore retrieval, and graph ranking are unchanged.',
+    },
     {
       version: '1.1.61',
       kind: 'settings-argument-zero-override-fix',
@@ -309,7 +317,7 @@
     recallTraceEnabled: true,
     stateBackupEnabled: true,
     snapshotRingEnabled: true,
-    snapshotRingMax: 64,
+    snapshotRingMax: 16,
     compressedStorageEnabled: true,
     memoryGardenRecoveryEnabled: true,
     sessionRecoveryEnabled: true,
@@ -1077,6 +1085,7 @@
     merged.stateBackupEnabled = parseBool(merged.stateBackupEnabled, DEFAULT_CONFIG.stateBackupEnabled) === true;
     merged.snapshotRingEnabled = parseBool(merged.snapshotRingEnabled, DEFAULT_CONFIG.snapshotRingEnabled) === true;
     merged.snapshotRingMax = parseNumber(merged.snapshotRingMax, DEFAULT_CONFIG.snapshotRingMax, 2, 200);
+    if (Number(stored?.snapshotRingMax) === 64 && merged.snapshotRingMax === 64) merged.snapshotRingMax = DEFAULT_CONFIG.snapshotRingMax;
     merged.compressedStorageEnabled = parseBool(merged.compressedStorageEnabled, DEFAULT_CONFIG.compressedStorageEnabled) === true;
     merged.memoryGardenRecoveryEnabled = parseBool(merged.memoryGardenRecoveryEnabled, DEFAULT_CONFIG.memoryGardenRecoveryEnabled) === true;
     merged.sessionRecoveryEnabled = parseBool(merged.sessionRecoveryEnabled, DEFAULT_CONFIG.sessionRecoveryEnabled) === true;
@@ -16589,6 +16598,11 @@
     const source = note || {};
     const status = source.error ? 'error' : source.skipped ? 'skipped' : 'ok';
     const noteText = agentNoteBodyForRunLog(source);
+    const textLimit = verbose
+      ? MAX_RUN_LOG_AGENT_NOTE_CHARS
+      : status === 'ok'
+        ? LIGHT_RUN_LOG_AGENT_NOTE_CHARS
+        : LIGHT_RUN_LOG_ERROR_NOTE_CHARS;
     const out = {
       id: source.id || '',
       name: source.name || '',
@@ -16603,7 +16617,7 @@
       error: source.error || '',
       includeInNotes: source.includeInNotes !== false,
       memoryEnabled: source.memoryEnabled === true,
-      text: clipRunLogText(noteText, MAX_RUN_LOG_AGENT_NOTE_CHARS),
+      text: clipRunLogText(noteText, textLimit),
       textChars: String(noteText || '').length,
     };
     if (source.postMode) out.postMode = source.postMode;
@@ -16687,8 +16701,8 @@
     const keepCommitFailureTrace = Boolean(out.failedCommitReason) || /json|parse|fail|error|timeout/i.test(String(out.commitReason || ''));
     if (out.commitPromptPreview) out.commitPromptPreview = verbose ? clipRunLogText(out.commitPromptPreview, 24000) : keepCommitFailureTrace ? clipRunLogText(out.commitPromptPreview, 5000) : '';
     if (out.commitRawPreview) out.commitRawPreview = verbose ? clipRunLogText(out.commitRawPreview, 24000) : keepCommitFailureTrace ? clipRunLogText(out.commitRawPreview, 3000) : '';
-    if (out.rawFinalPreview) out.rawFinalPreview = clipRunLogText(out.rawFinalPreview, verbose ? 16000 : 4000);
-    if (out.finalPreview) out.finalPreview = clipRunLogText(out.finalPreview, verbose ? 16000 : 4000);
+    if (out.rawFinalPreview) out.rawFinalPreview = clipRunLogText(out.rawFinalPreview, verbose ? 16000 : LIGHT_RUN_LOG_PREVIEW_CHARS);
+    if (out.finalPreview) out.finalPreview = clipRunLogText(out.finalPreview, verbose ? 16000 : LIGHT_RUN_LOG_PREVIEW_CHARS);
     if (Array.isArray(out.coldStartResult?.results)) {
       out.coldStartResult = {
         ...out.coldStartResult,
