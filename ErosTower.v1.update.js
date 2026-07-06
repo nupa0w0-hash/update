@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.74
+//@display-name ☸Eros Tower 1.1.75
 //@api 3.0
-//@version 1.1.74
+//@version 1.1.75
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -24,7 +24,6 @@
 //@arg et_embedding_base_url string Dedicated embedding API base URL. Blank uses provider URL.
 //@arg et_embedding_api_key string Dedicated embedding API key. Blank uses provider key.
 //@arg et_embedding_model string Embedding model name.
-//@arg et_synthesis_pre_agent_enabled string Run optional Synthesis pre-agent. true/false
 //@arg et_parallel_pre_agents_same_provider string Allow same-provider Eros pre-agent parallel calls. true/false
 //@arg et_auto_memory_enabled string Enable automatic Eros memory engine. true/false
 //@arg et_auto_cold_start_enabled string Enable automatic long-memory cold start. true/false
@@ -37,18 +36,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.74
+ * Eros Tower 1.1.75
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.74 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.75 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.74';
+  const VERSION = '1.1.75';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.74`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.75`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -69,7 +68,7 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.74 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.75 analysis context';
   const MAIN_INJECTION_PLACEHOLDER_RE = /\{\{et\.(canonical|memory|state|characters|executive)\}\}/gi;
   const AUTO_INJECTION_FALLBACK_CHARS = 22000;
   const AUTO_INJECTION_MIN_CHARS = 3200;
@@ -85,6 +84,11 @@
     { index: 7, label: '초장편', englishLabel: 'very long-form', instruction: 'Write at least 9000 words.', scale: 'Very long-form: prepare dense continuity, layered character movement, multiple world threads, and long-range setup while preserving knowledge boundaries.' },
   ]);
   const SYSTEM_PATCH_NOTES = Object.freeze([
+    {
+      version: '1.1.75',
+      kind: 'synthesis-agent-toggle-cleanup',
+      summary: 'Removed the duplicate Synthesis auxiliary execution gate. Synthesis now follows its normal pre-agent enabled toggle, and the parallel option is documented as applying only to World, Character, and Risk before Synthesis runs with their notes.',
+    },
     {
       version: '1.1.74',
       kind: 'long-memory-recall',
@@ -230,7 +234,6 @@
     embeddingTopK: 64,
     embeddingCacheEnabled: true,
     embeddingCacheMaxEntries: 320,
-    synthesisPreAgentEnabled: false,
     parallelPreAgentsSameProvider: false,
     autoMemoryEnabled: true,
     autoColdStartEnabled: true,
@@ -946,7 +949,6 @@
       embeddingBaseUrl: cleanString(await getArg('et_embedding_base_url', ''), ''),
       embeddingApiKey: cleanString(await getArg('et_embedding_api_key', ''), ''),
       embeddingModel: cleanString(await getArg('et_embedding_model', ''), ''),
-      synthesisPreAgentEnabled: parseBool(await getArg('et_synthesis_pre_agent_enabled', ''), undefined),
       parallelPreAgentsSameProvider: parseBool(await getArg('et_parallel_pre_agents_same_provider', ''), undefined),
       autoMemoryEnabled: parseBool(await getArg('et_auto_memory_enabled', ''), undefined),
       autoColdStartEnabled: parseBool(await getArg('et_auto_cold_start_enabled', ''), undefined),
@@ -1017,7 +1019,6 @@
     merged.embeddingTopK = parseNumber(merged.embeddingTopK, DEFAULT_CONFIG.embeddingTopK, 8, 128);
     merged.embeddingCacheEnabled = parseBool(merged.embeddingCacheEnabled, DEFAULT_CONFIG.embeddingCacheEnabled) === true;
     merged.embeddingCacheMaxEntries = parseNumber(merged.embeddingCacheMaxEntries, DEFAULT_CONFIG.embeddingCacheMaxEntries, 40, 1200);
-    merged.synthesisPreAgentEnabled = parseBool(merged.synthesisPreAgentEnabled, DEFAULT_CONFIG.synthesisPreAgentEnabled) === true;
     merged.parallelPreAgentsSameProvider = parseBool(merged.parallelPreAgentsSameProvider, DEFAULT_CONFIG.parallelPreAgentsSameProvider) === true;
     merged.autoMemoryEnabled = true;
     merged.autoColdStartEnabled = true;
@@ -11409,8 +11410,7 @@ function normalizeAdaptiveQualityState(value) {
 
   async function runPrePipeline(conf, context, state, progress = null) {
     const agents = pipelineAgents(conf).filter(a => a.enabled !== false
-      && a.phase === 'pre'
-      && (a.id !== 'synthesis' || conf?.synthesisPreAgentEnabled === true));
+      && a.phase === 'pre');
     if (typeof progress === 'function') {
       await progress({
         phase: 'retrieval-cache',
@@ -16930,9 +16930,8 @@ function evidenceConflictTouches(conflicts, item, kind, path) {
       <section class="et-panel">
         <details class="et-section-toggle">
           <summary>Eros pre-agent 실행 옵션</summary>
-          <div class="et-note" style="margin-top:10px">Synthesis는 전개/군상/오프스크린 후보를 합치는 보조 에이전트입니다. 꺼져 있으면 World / Character / Risk 노트만 메인에 전달합니다. 같은 provider 병렬 호출은 빠를 수 있지만 로컬/프록시 provider가 동시 요청에 약하면 다시 멈출 수 있습니다.</div>
+          <div class="et-note" style="margin-top:10px">Synthesis 실행 여부는 아래 Eros pre-agent 카드의 개별 켜짐/꺼짐 설정을 따릅니다. 같은 provider 병렬 허용은 Synthesis 앞의 World / Character / Risk 에이전트 동시 호출에만 적용됩니다. Synthesis는 앞선 노트를 모두 받은 뒤 별도로 실행됩니다.</div>
           <div class="et-row" style="margin-top:12px">
-            ${selectField('Synthesis 보조 실행', 'et-synthesis-pre-agent-enabled', boolString(conf.synthesisPreAgentEnabled === true), [{ value: 'false', label: '꺼짐(추천)' }, { value: 'true', label: '켜짐' }])}
             ${selectField('같은 provider 병렬 허용', 'et-parallel-pre-agents-same-provider', boolString(conf.parallelPreAgentsSameProvider === true), boolOptions(false))}
           </div>
           <div class="et-actions" style="margin-top:10px">
@@ -19607,7 +19606,6 @@ function evidenceConflictTouches(conflicts, item, kind, path) {
       embeddingTopK: conf.embeddingTopK,
       embeddingCacheEnabled: conf.embeddingCacheEnabled !== false,
       embeddingCacheMaxEntries: conf.embeddingCacheMaxEntries,
-      synthesisPreAgentEnabled: value('synthesis-pre-agent-enabled', boolString(conf.synthesisPreAgentEnabled === true)) === 'true',
       parallelPreAgentsSameProvider: value('parallel-pre-agents-same-provider', boolString(conf.parallelPreAgentsSameProvider === true)) === 'true',
       sessionRecoveryEnabled: conf.sessionRecoveryEnabled !== false,
       sessionDiffGuardEnabled: conf.sessionDiffGuardEnabled !== false,
