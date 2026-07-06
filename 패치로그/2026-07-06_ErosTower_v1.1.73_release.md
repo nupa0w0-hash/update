@@ -1,7 +1,7 @@
 # Eros Tower v1.1.73 release
 
 Date: 2026-07-06
-Status: release prepared; raw verification pending
+Status: released
 
 ## Trigger
 - User approved publishing the current local Eros Tower build.
@@ -44,4 +44,11 @@ Status: release prepared; raw verification pending
 - Direct install sync check passed: `ErosTower.v1.update.js` and `☸에로스 타워.js` SHA256 match.
 
 ## Raw URL Verification
-- Pending until push completes.
+- Raw branch URL check initially returned stale v1 cache:
+  - attempt 1: `ErosTower.v1.update.js` returned `//@version 1.1.66`
+  - attempt 2: `ErosTower.v1.update.js` returned `//@version 1.1.66`
+- Commit SHA raw URL confirmed the pushed v1 file immediately:
+  - `https://raw.githubusercontent.com/nupa0w0-hash/update/8d0df1f808d144d539773a26a4fe9285c6cf46a6/ErosTower.v1.update.js`: `//@version 1.1.73`
+- Branch raw URL verification passed after CDN cache refreshed:
+  - `https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js`: `//@display-name ☸Eros Tower 1.1.73`, `//@version 1.1.73`
+  - `https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.update.js`: `//@display-name ☸Eros Tower 1.1.73`, `//@version 4.0.18`
