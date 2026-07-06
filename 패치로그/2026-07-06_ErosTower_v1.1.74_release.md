@@ -47,4 +47,9 @@ Date: 2026-07-06
 
 ## Raw verification
 
-- Pending until push.
+- Commit-SHA raw verified:
+  - `ErosTower.v1.update.js`: `//@version 1.1.74`
+  - `ErosTower.update.js`: `//@version 4.0.19`
+- Branch install raw verified after CDN refresh:
+  - `https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js`: `//@version 1.1.74`
+  - `https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.update.js`: `//@version 4.0.19`
