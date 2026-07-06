@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.73
+//@display-name ☸Eros Tower 1.1.74
 //@api 3.0
-//@version 1.1.73
+//@version 1.1.74
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -37,18 +37,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.73
+ * Eros Tower 1.1.74
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.73 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.74 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.73';
+  const VERSION = '1.1.74';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.73`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.74`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -69,7 +69,7 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.73 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.74 analysis context';
   const MAIN_INJECTION_PLACEHOLDER_RE = /\{\{et\.(canonical|memory|state|characters|executive)\}\}/gi;
   const AUTO_INJECTION_FALLBACK_CHARS = 22000;
   const AUTO_INJECTION_MIN_CHARS = 3200;
@@ -85,6 +85,11 @@
     { index: 7, label: '초장편', englishLabel: 'very long-form', instruction: 'Write at least 9000 words.', scale: 'Very long-form: prepare dense continuity, layered character movement, multiple world threads, and long-range setup while preserving knowledge boundaries.' },
   ]);
   const SYSTEM_PATCH_NOTES = Object.freeze([
+    {
+      version: '1.1.74',
+      kind: 'long-memory-recall',
+      summary: 'Fixed chat long-memory chunks being misclassified as recent-chat echoes, and preserved their original source turn metadata so early chat memories can be recalled without promoting old chunks to current memories.',
+    },
     {
       version: '1.1.73',
       kind: 'runtime-dead-code-purge',
@@ -7988,6 +7993,10 @@ function normalizeAdaptiveQualityState(value) {
       const text = chunk.text;
       const hash = chunk.hash;
       const id = `chatmem:${hash}`;
+      const currentTurn = Math.max(0, Number(state.turn || 0));
+      const sourceStartTurn = Math.min(currentTurn, Math.max(0, Math.ceil((Number(chunk.sourceStartIndex || 0) + 1) / 2)));
+      const sourceEndTurn = Math.min(currentTurn, Math.max(sourceStartTurn, Math.ceil((Number(chunk.sourceEndIndex || chunk.sourceStartIndex || 0) + 1) / 2)));
+      const sourceAge = Math.max(0, currentTurn - sourceEndTurn);
       const entry = {
         id,
         summary: `Long memory chunk ${idx + 1}: ${summarizeCanonicalContent(text, 900)}`,
@@ -7995,18 +8004,18 @@ function normalizeAdaptiveQualityState(value) {
         source: 'chat_long_memory',
         sourceRank: SOURCE_RANK.memory,
         importance: 4,
-        recency: calculateRecency(Math.max(1, state.turn)),
+        recency: calculateRecency(sourceAge),
         confidence: 0.74,
         emotionalWeight: 0,
         canonLevel: 'established',
-        decay: calculateMemoryDecay({ importance: 4, confidence: 0.74, canonLevel: 'established' }, Math.max(1, state.turn)),
-        createdTurn: 0,
-        lastSeenTurn: state.turn,
-        lastConfirmedTurn: state.turn,
+        decay: calculateMemoryDecay({ importance: 4, confidence: 0.74, canonLevel: 'established' }, sourceAge),
+        createdTurn: sourceStartTurn,
+        lastSeenTurn: sourceEndTurn,
+        lastConfirmedTurn: sourceEndTurn,
         tags: ['long-memory', 'chat-backlog'],
         anchor: false,
         status: 'faded',
-        evidence: [{ source: 'chat', turn: state.turn, quoteOrSummary: `historical chat chunk ${idx + 1}`, certainty: 'established', at: nowIso() }],
+        evidence: [{ source: 'chat', turn: sourceEndTurn, quoteOrSummary: `historical chat chunk ${idx + 1}`, certainty: 'established', at: nowIso() }],
         chunk: {
           index: idx,
           messageCount: chunk.messageCount,
@@ -8014,6 +8023,9 @@ function normalizeAdaptiveQualityState(value) {
           rangeHash: chunk.rangeHash,
           sourceStartIndex: chunk.sourceStartIndex,
           sourceEndIndex: chunk.sourceEndIndex,
+          sourceStartTurn,
+          sourceEndTurn,
+          syncedAtTurn: currentTurn,
           sourceMessageIds: chunk.sourceMessageIds,
           sourceMessageHashes: chunk.sourceMessageHashes,
           historyEpoch: parseNumber(state.memoryRecovery?.historyEpoch, 0, 0, 999999),
@@ -10339,6 +10351,12 @@ function normalizeAdaptiveQualityState(value) {
     if (!['memory', 'event'].includes(kind)) return false;
     const item = candidate?.item || {};
     const source = String(item.source || item.sourceType || item.origin || '').toLowerCase();
+    const tags = normalizeStringArray(item.tags).map(tag => String(tag || '').toLowerCase());
+    const longMemoryChunk = /chat[_\s-]*long[_\s-]*memory|long[_\s-]*memory|chat[_\s-]*backlog/.test(source)
+      || tags.includes('long-memory')
+      || tags.includes('chat-backlog')
+      || (item.chunk && typeof item.chunk === 'object' && (item.chunk.hash || item.chunk.rangeHash));
+    if (longMemoryChunk) return false;
     if (!/(?:final|assistant|recent[_\s-]*chat|chat)/i.test(source)) return false;
     if (item.anchor === true && inferImportance(item, kind) >= 8) return false;
     const turn = inferItemTurn(item, state?.turn ?? 0);
