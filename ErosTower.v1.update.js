@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.75
+//@display-name ☸Eros Tower 1.1.76
 //@api 3.0
-//@version 1.1.75
+//@version 1.1.76
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -36,18 +36,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.75
+ * Eros Tower 1.1.76
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.75 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.76 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.75';
+  const VERSION = '1.1.76';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.75`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.76`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -68,7 +68,7 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.75 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.76 analysis context';
   const MAIN_INJECTION_PLACEHOLDER_RE = /\{\{et\.(canonical|memory|state|characters|executive)\}\}/gi;
   const AUTO_INJECTION_FALLBACK_CHARS = 22000;
   const AUTO_INJECTION_MIN_CHARS = 3200;
@@ -84,6 +84,16 @@
     { index: 7, label: '초장편', englishLabel: 'very long-form', instruction: 'Write at least 9000 words.', scale: 'Very long-form: prepare dense continuity, layered character movement, multiple world threads, and long-range setup while preserving knowledge boundaries.' },
   ]);
   const SYSTEM_PATCH_NOTES = Object.freeze([
+    {
+      version: '1.1.76',
+      kind: 'length-prompt-toggle-detection',
+      summary: 'Response length now resolves from the prompt-toggle definition and selected toggle_길이 value before any prompt-text fallback. Natural/0 is recorded as detected but inactive, while active length options keep the same agent-only advisory behavior.',
+    },
+    {
+      version: '1.1.76',
+      kind: 'state-commit-delta-only',
+      summary: 'Psyche state commit now receives one consolidated state commit context and a compact prior-state snapshot, then commits only durable current-turn deltas instead of rewriting broad unchanged state.',
+    },
     {
       version: '1.1.75',
       kind: 'synthesis-agent-toggle-cleanup',
@@ -2110,11 +2120,8 @@
     const withOutputInstruction = template => [prefix, template].filter(Boolean).join('\n\n');
     if (phase === 'post-state' || phase === 'psyche-main' || phase === 'psyche-aux') {
       return withOutputInstruction([
-        '<source label="Retrieved Eros Tower Context">',
-        '{{agent_context}}',
-        '</source>',
-        '<source label="Eros Tower State JSON">',
-        '{{state_json}}',
+        '<source label="State Commit Context">',
+        '{{state_commit_context}}',
         '</source>',
         '<source label="Recent Conversation">',
         '{{chat_history}}',
@@ -2235,35 +2242,40 @@
 
   const STATE_COMMIT_PROMPT = [
     'You are the Eros Tower State Committer.',
-    'Your task is to update persistent story state after the main model response.',
+    'Your task is to commit only the durable delta after the main model response.',
     'Use only facts that actually happened in the current user input or final assistant output, checked against previous state, relevant source context, and relevant memory.',
     'Planning notes, agent proposals, possible future motions, and analysis-only material are not commit evidence.',
+    'Do not rewrite a complete character sheet, world bible, lore summary, or prior-state snapshot.',
+    'Include only fields that are newly established, changed, revealed, contradicted, retired, or materially reactivated this turn.',
+    'Omit unchanged fields, default values, and empty filler.',
     'Return JSON only. No markdown.',
-    'Allowed shape:',
+    'Allowed compact delta shape:',
     '{',
     '  "summary": "one sentence",',
     '  "scene": {"time":"","location":"","presentCast":[],"unfinishedAction":"","materialConditions":[]},',
-    '  "characters": [{"id":"","name":"","aliases":[],"origin":"source-canon|session-born|body-memory|rumor|offscreen|unknown","affiliation":"","role":"","location":"","status":"","goal":"","rank":"","access":[],"desires":[],"fears":[],"incentives":[],"resources":[],"values":{"age":{"value":0,"unit":"years","evidence":""},"money":{"value":0,"unit":"","evidence":""},"currentYear":{"value":"","unit":"year","evidence":""}},"vitals":{"hp":{"value":100,"max":100,"min":0,"unit":"","evidence":""},"stamina":{"value":100,"max":100,"min":0,"unit":"","evidence":""},"fatigue":{"value":0,"unit":"","evidence":""},"stress":{"value":0,"unit":"","evidence":""}},"stats":{"mana":{"label":"Mana","value":30,"current":30,"max":100,"min":0,"kind":"resource","unit":"","evidence":""},"qi":{"label":"Qi","value":50,"current":50,"max":100,"min":0,"kind":"resource","unit":"","evidence":""}},"conditions":[],"canonLevel":"visible_chat","confidence":0.9,"firstSeenTurn":0,"lastSeenTurn":0,"evidence":[]}],',
-    '  "relationships": [{"id":"","a":"","b":"","tie":"","state":"","stance":"","dynamics":[],"metrics":{"trust":{"value":0,"scale":"-100..100","evidence":""},"tension":{"value":0,"scale":"0..100","evidence":""}},"affinity":0,"affection":0,"favorability":0,"trust":0,"intimacy":0,"loyalty":0,"respect":0,"fear":0,"jealousy":0,"dependence":0,"dominance":0,"tension":0,"socialDistance":50,"secrets":[],"lastChange":"","unsupportedLeapToAvoid":""}],',
+    '  "characters": [{"id":"","name":"","origin":"","affiliation":"","role":"","location":"","status":"","goal":"","conditions":[],"values":{},"stats":{},"evidence":[]}],',
+    '  "relationships": [{"id":"","a":"","b":"","tie":"","state":"","stance":"","dynamics":[],"metrics":{},"lastChange":"","evidence":""}],',
     '  "worldFronts": [{"id":"","actors":[],"objective":"","mechanism":"","domain":"","resourceChannels":[],"clock":0,"deadlineOrRhythm":"","visibility":"trace","status":"active","intersections":[]}],',
-    '  "memoryLedger": [{"id":"","summary":"","source":"final_output","sourceRank":88,"importance":5,"recency":1,"confidence":0.9,"emotionalWeight":0,"canonLevel":"established","decay":1,"createdTurn":0,"lastSeenTurn":0,"lastConfirmedTurn":0,"tags":[],"anchor":false}],',
-    '  "secretLedger": [{"id":"","truth":"","surface":"","tier":1,"owners":[],"knowers":[],"suspecters":[],"cannotKnow":[],"leakPressure":0,"revealGate":"","riskIfRevealed":"","status":"kept","canonLevel":"established","confidence":0.9,"sourceRank":88,"createdTurn":0,"lastSeenTurn":0}],',
-    '  "loreLedger": [{"id":"","name":"","summary":"","source":"lorebook","sourceId":"","scope":"","activationKeys":[],"priority":5,"importance":5,"canonLevel":"established","knownBy":[],"cannotKnow":[],"lastActivatedTurn":0,"evidence":""}],',
+    '  "memoryLedger": [{"id":"","summary":"","source":"final_output","sourceRank":88,"importance":5,"confidence":0.9,"emotionalWeight":0,"canonLevel":"established","tags":[],"anchor":false}],',
+    '  "secretLedger": [{"id":"","truth":"","surface":"","tier":1,"owners":[],"knowers":[],"suspecters":[],"cannotKnow":[],"leakPressure":0,"revealGate":"","riskIfRevealed":"","status":"kept","canonLevel":"established","confidence":0.9,"sourceRank":88}],',
+    '  "loreLedger": [{"id":"","name":"","summary":"","source":"lorebook","sourceId":"","scope":"","activationKeys":[],"importance":5,"canonLevel":"established","knownBy":[],"cannotKnow":[],"evidence":""}],',
     '  "plotThreads": {"foreshadowing":[],"clues":[],"secrets":[],"promisesDebtsConsequences":[],"resourceChannels":[]},',
     '  "knowledge": {"units":[]},',
     '  "continuityRisks": [],',
-    '  "eventLog": [{"source":"final_output","turn":0,"quoteOrSummary":"","certainty":"established"}]',
+    '  "eventLog": [{"source":"final_output","quoteOrSummary":"","certainty":"established"}]',
     '}',
     'Use stable ids when possible. Mark paid off or retired threads instead of deleting them.',
-    'For flexible values/stats, include only values supported by genre, character card, lore, visible state, or final output. Preserve the established representation: money, age, years, dates, counters, resources, ranks, levels, hp, or inventory amounts may be numeric/dated when the source uses them; qualitative attitudes, injuries, motives, fears, obligations, secrets, and social states may be prose or structured labels. Do not force everything into prose, and do not force everything into numbers.',
-    'For relationship changes, use state/stance/dynamics for qualitative changes and metrics or legacy numeric fields only when a numeric scale is actually supported. Include lastChange/evidence. Do not jump affection, trust, intimacy, loyalty, or fear without visible evidence.',
+    'Hard limits: summary <= 180 chars; characters <= 3; relationships <= 4; memoryLedger <= 4; secretLedger <= 4; worldFronts <= 3; eventLog <= 4; each evidence item <= 160 chars.',
+    'For characters, write only changed fields. Do not include hp, stamina, money, age, year, resources, desires, fears, or stats unless the final output explicitly changed or newly established them.',
+    'For flexible values/stats, preserve the established representation only when the value changed or was newly established this turn. Do not create numeric defaults.',
+    'For relationship changes, use state/stance/dynamics for qualitative changes and metrics only when a numeric scale is actually supported. Include lastChange/evidence.',
     'For secrets, separate who owns the truth, who knows it, who only suspects, and who cannot know it. leakPressure is 0-100. Do not reveal a secret unless revealGate is satisfied in the final output.',
-    'For memories, assign sourceRank, importance, confidence, emotionalWeight (-10 to 10), canonLevel, and anchor when the memory must resist decay.',
-    'For loreLedger, store durable lorebook/world-rule/long-memory units only when they were activated, used, corrected, or established. Include sourceId, activationKeys, scope, priority, canonLevel, knownBy, and cannotKnow when available.',
-    'For activated source context, maintain knowledge-boundary metadata even when the fact was not revealed in the final output. This is access-control bookkeeping, not an event claim. Store private/source-only facts in secretLedger or knowledge.units with owners/knowers/cannotKnow/revealGate, and keep status as kept/pressured unless the final output visibly reveals it.',
-    'If the final output creates or names a person who is not in source lore, commit them as a session-born/body-memory/rumor/offscreen character. Do not discard them as an extra. Preserve firstSeenTurn, affiliation, role/title, aliases, relationship to present characters, and a short evidence quote.',
+    'For memories, write only durable memories that should still matter later; do not duplicate scene description as memory unless it changes continuity.',
+    'For loreLedger, store durable lore/world-rule units only when activated, corrected, or newly established this turn.',
+    'For activated source context, maintain knowledge-boundary metadata only when it is relevant to this turn. This is access-control bookkeeping, not an event claim.',
+    'If the final output creates or names a person who is not in source lore, commit only the visible facts established now. Do not invent a full profile.',
     'A session-born person is canon for this chat once visible in the final output. Keep them distinct from source-canon lore, but let them persist, reappear, form relationships, spread rumors, and live offscreen in later turns.',
-    'Commit only facts, relationship shifts, stat changes, reveals, clues, resource changes, or front movements that actually happened or became established in the final output/user input.',
+    'If nothing durable changed, return a compact object with summary only and empty arrays/objects.',
   ].join('\n');
 
   const COLD_START_PROMPT = [
@@ -5196,6 +5208,10 @@ function normalizeAdaptiveQualityState(value) {
     const counts = diag.ledgerCounts || {};
     const latest = Array.isArray(packageData.runs) && packageData.runs.length ? packageData.runs[0] : null;
     const lengthControl = ctx.responseLengthControl || diag.responseLengthControl || {};
+    const lengthDetected = !!(lengthControl.detected || lengthControl.source || lengthControl.raw);
+    const lengthSummary = lengthDetected
+      ? `toggle_길이=${lengthControl.index ?? 0} (${lengthControl.option?.label || lengthControl.selected || '-'}) / ${lengthControl.active ? 'active' : 'inactive'} from ${lengthControl.source || 'unknown'}`
+      : '(inactive; not detected)';
     const lines = [
       '# Eros Tower Diagnostic Report',
       '',
@@ -5207,7 +5223,7 @@ function normalizeAdaptiveQualityState(value) {
       `- Mode: ${ctx.mode || '-'}`,
       `- Messages: ${ctx.messageCount ?? '-'}`,
       `- Canonical Sources / Units: ${ctx.canonicalSources ?? '-'} / ${ctx.canonicalUnits ?? '-'}`,
-      `- Response Length: ${lengthControl.active ? `toggle_길이=${lengthControl.index} (${lengthControl.option?.label || lengthControl.selected || '-'})` : '(inactive)'}`,
+      `- Response Length: ${lengthSummary}`,
       '',
       '## System Patch Notes',
       '',
@@ -8607,6 +8623,49 @@ function normalizeAdaptiveQualityState(value) {
     }, null, 2);
   }
 
+  function buildStateCommitSnapshotJson(state, context, maxChars = 5200) {
+    const max = Math.max(1600, Number(maxChars || 5200));
+    const snapshot = {
+      schemaVersion: state?.schemaVersion || VERSION,
+      pluginVersion: VERSION,
+      mode: state?.mode || context?.mode || 'rp',
+      responseLengthControl: resolveResponseLengthControl(context),
+      turn: state?.turn || 0,
+      scene: state?.scene || {},
+      activePerspective: state?.activePerspective || {},
+      canonicalIdentity: state?.canonicalIdentity || {},
+      counts: {
+        characters: Object.keys(state?.characters || {}).length,
+        relationships: (state?.relationships || []).length,
+        worldFronts: (state?.worldFronts || []).length,
+        memoryLedger: (state?.memoryLedger || []).length,
+        secretLedger: (state?.secretLedger || []).length,
+        loreLedger: (state?.loreLedger || []).length,
+        canonicalStoreUnits: normalizeCanonicalStore(state?.canonicalStore, state).units.length,
+      },
+      continuityRisks: (state?.continuityRisks || []).slice(-8),
+      evidenceConflicts: (state?.evidenceConflicts || []).slice(-4).map(item => ({
+        type: item.type,
+        detail: String(item.detail || '').slice(0, 240),
+        turn: item.turn,
+      })),
+    };
+    const text = JSON.stringify(snapshot, null, 2);
+    return text.length <= max ? text : trimBriefingBlockToBudget(text, max);
+  }
+
+  function buildStateCommitContext(commitContext, stateSnapshotJson, maxChars = 16000) {
+    const header = [
+      '[State Commit Context]',
+      'Previous state/reference selected for this commit. Commit evidence must come from Current User Input and Final Assistant Output; existing state/source is reference for continuity and conflict checks.',
+    ].join('\n');
+    return joinBriefingBlocks([
+      header,
+      commitContext ? `[Selected Source/State/Memory]\n${commitContext}` : '',
+      stateSnapshotJson ? `[Structured Prior State Snapshot]\n${stateSnapshotJson}` : '',
+    ], Math.max(3200, Number(maxChars || 16000)));
+  }
+
   function buildPreAgentFastSettingBlocks(state, context, budget = 5200) {
     const max = Math.max(1600, Number(budget || 5200));
     const lines = [
@@ -9555,19 +9614,21 @@ function normalizeAdaptiveQualityState(value) {
     if (info.promptName) entries.push({ source: `${source}:name`, key: 'promptName', value: info.promptName });
   }
 
-  function addToggleDefinitionLengthEntries(entries, globalVars, definitionText) {
-    if (!Array.isArray(entries) || !globalVars || typeof globalVars !== 'object' || !definitionText) return;
+  function addToggleDefinitionLengthEntries(entries, vars, definitionText, sourceDetail = '') {
+    if (!Array.isArray(entries) || !vars || typeof vars !== 'object' || !definitionText) return;
     parsePromptToggleDefinitions(definitionText)
       .filter(isResponseLengthToggleDefinition)
       .forEach(toggle => {
-        const raw = firstNonEmpty(globalVars[`toggle_${toggle.key}`], globalVars[toggle.key]);
+        const raw = firstNonEmpty(vars[`toggle_${toggle.key}`], vars[toggle.key]);
         if (raw === undefined || raw === null || raw === '') return;
         const index = parseNumber(raw, -1, -1, 9999);
         const selected = index >= 0 ? toggle.options[index] : '';
         entries.push({
-          source: 'promptToggleDefinition',
+          source: 'prompt-toggle',
+          sourceDetail,
           key: `${toggle.key} ${toggle.label}`,
           value: selected || raw,
+          rawValue: raw,
           selectedIndex: index >= 0 ? index : '',
           promptInfoToggle: true,
           definition: toggle,
@@ -9601,13 +9662,24 @@ function normalizeAdaptiveQualityState(value) {
       });
     };
     const definitionText = collectPromptToggleDefinitionText(character, db);
-    addMap('cbs', getEffectiveCbsToggles(conf, character, chat));
-    addMap('globalChatVariables', db?.globalChatVariables);
-    addToggleDefinitionLengthEntries(entries, db?.globalChatVariables, definitionText);
-    addMap('chat.scriptState', chat?.scriptstate || chat?.scriptState || chat?.data?.scriptstate || chat?.data?.scriptState);
-    addMap('chat.variables', chat?.variables || chat?.data?.variables);
-    addMap('character.variables', character?.variables || character?.data?.variables);
-    addMap('character.defaultVariables', parseCanonicalVariablePairs(firstNonEmpty(character?.defaultVariables, character?.data?.defaultVariables)));
+    const cbsToggles = getEffectiveCbsToggles(conf, character, chat);
+    const globalVars = db?.globalChatVariables;
+    const chatScriptState = chat?.scriptstate || chat?.scriptState || chat?.data?.scriptstate || chat?.data?.scriptState;
+    const chatVars = chat?.variables || chat?.data?.variables;
+    const characterVars = character?.variables || character?.data?.variables;
+    const characterDefaultVars = parseCanonicalVariablePairs(firstNonEmpty(character?.defaultVariables, character?.data?.defaultVariables));
+    addMap('cbs', cbsToggles);
+    addToggleDefinitionLengthEntries(entries, cbsToggles, definitionText, 'cbs');
+    addMap('globalChatVariables', globalVars);
+    addToggleDefinitionLengthEntries(entries, globalVars, definitionText, 'globalChatVariables');
+    addMap('chat.scriptState', chatScriptState);
+    addToggleDefinitionLengthEntries(entries, chatScriptState, definitionText, 'chat.scriptState');
+    addMap('chat.variables', chatVars);
+    addToggleDefinitionLengthEntries(entries, chatVars, definitionText, 'chat.variables');
+    addMap('character.variables', characterVars);
+    addToggleDefinitionLengthEntries(entries, characterVars, definitionText, 'character.variables');
+    addMap('character.defaultVariables', characterDefaultVars);
+    addToggleDefinitionLengthEntries(entries, characterDefaultVars, definitionText, 'character.defaultVariables');
     (Array.isArray(context?.requestMessages) ? context.requestMessages : []).slice(-32).forEach((item, index) => {
       addPromptInfoLengthEntries(entries, `request:${index}:promptInfo`, item?.promptInfo || item?.data?.promptInfo);
     });
@@ -9659,7 +9731,9 @@ function normalizeAdaptiveQualityState(value) {
     const k = normalizeLengthTokenText(entry?.key);
     let score = 0;
     if (entry?.promptInfoToggle) score += 105;
+    if (entry?.source === 'prompt-toggle') score += 96;
     if (entry?.source === 'globalChatVariables') score += 92;
+    if (entry?.sourceDetail === 'globalChatVariables') score += 6;
     if (entry?.source === 'promptToggleDefinition') score += 88;
     if (/scriptstate|script state/i.test(String(entry?.source || ''))) score += 78;
     if (/cbs/i.test(String(entry?.source || ''))) score += 72;
@@ -9776,7 +9850,7 @@ function normalizeAdaptiveQualityState(value) {
     const inferredIndex = inferResponseLengthIndexFromText(detectionText);
     const malformedResidue = hasMalformedLengthToggleResidue(detectionText);
     const rawText = String(entryMatch?.entry?.value ?? '').trim();
-    if (!entryMatch && inferredIndex === null) return { active: false, index: 0, raw: '', option: responseLengthOption(0), source: '', malformedResidue };
+    if (!entryMatch && inferredIndex === null) return { active: false, detected: false, index: 0, raw: '', option: responseLengthOption(0), source: '', malformedResidue };
     const index = entryMatch
       ? Math.round(parseNumber(entryMatch.lengthIndex, 0, 0, RESPONSE_LENGTH_TOGGLE_OPTIONS.length - 1))
       : Math.round(parseNumber(inferredIndex, 0, 0, RESPONSE_LENGTH_TOGGLE_OPTIONS.length - 1));
@@ -9785,9 +9859,11 @@ function normalizeAdaptiveQualityState(value) {
     const selected = definition?.options?.[index] || option.label;
     return {
       active: index > 0,
+      detected: true,
       index,
-      raw: rawText || String(inferredIndex ?? ''),
+      raw: rawText || String(entryMatch?.entry?.rawValue ?? inferredIndex ?? ''),
       source: entryMatch?.entry?.source || (entryMatch ? 'resolved-variable' : 'prompt-text'),
+      sourceDetail: entryMatch?.entry?.sourceDetail || '',
       malformedResidue,
       key: definition?.key || '길이',
       label: definition?.label || '이야기의 깊이',
@@ -9796,6 +9872,7 @@ function normalizeAdaptiveQualityState(value) {
         key: String(entryMatch.entry?.key || '').slice(0, 120),
         value: String(entryMatch.entry?.value ?? '').slice(0, 120),
         source: String(entryMatch.entry?.source || '').slice(0, 120),
+        sourceDetail: String(entryMatch.entry?.sourceDetail || '').slice(0, 120),
         score: entryMatch.score,
       } : null,
       option: {
@@ -11815,31 +11892,53 @@ function normalizeAdaptiveQualityState(value) {
       .trim();
   }
 
+  function normalizeStateCommitUserTemplate(template) {
+    return String(template || '').replace(
+      /<source label="Retrieved Eros Tower Context">\s*\{\{agent_context\}\}\s*<\/source>\s*<source label="Eros Tower State JSON">\s*\{\{state_json\}\}\s*<\/source>/g,
+      '<source label="State Commit Context">\n{{state_commit_context}}\n</source>',
+    );
+  }
+
+  function normalizeStateCommitSystemPrompt(prompt) {
+    const text = cleanString(prompt, '');
+    if (!text) return STATE_COMMIT_PROMPT;
+    if (text.includes('You are the Eros Tower State Committer.')
+      && text.includes('"vitals"')
+      && text.includes('"stats"')
+      && text.includes('"characters": [{"id":"","name":"","aliases"')) {
+      return STATE_COMMIT_PROMPT;
+    }
+    return text;
+  }
+
   async function runStateCommit(conf, context, state, finalOutput, notes) {
     if (!conf.stateApiEnabled) return { changed: false, reason: 'disabled' };
     const agent = getPsycheMainAgent(conf);
     if (!agent) return { changed: false, reason: 'no-psyche-main' };
     const agentConf = resolveAgentConf(agent, conf);
     if (!canCallProvider(agentConf)) return { changed: false, reason: 'provider-not-ready' };
-    const commitContext = await buildAgentContextPackMaybeEmbedded('state-commit', state, context, [], 9000, conf);
-    const settingView = buildCompiledSettingBlocks(state, context, [], PSYCHE_COMPILED_SETTING_CHARS);
+    const commitContext = await buildAgentContextPackMaybeEmbedded('state-commit', state, context, [], 10000, conf);
+    const stateSnapshotJson = buildStateCommitSnapshotJson(state, context);
+    const stateCommitContext = buildStateCommitContext(commitContext, stateSnapshotJson, 15000);
+    const userTemplate = normalizeStateCommitUserTemplate(agent.userTemplate || defaultUserTemplate(agent.phase || 'psyche-main', agent.id || 'psyche-main', agent.outputInstruction || ''));
     const values = {
-      setting_blocks: settingView,
-      state_summary: commitContext,
-      agent_context: commitContext,
-      state_json: buildAgentStateJson(state, context, [], PSYCHE_STATE_JSON_CHARS),
+      state_commit_context: stateCommitContext,
+      setting_blocks: '',
+      state_summary: stateCommitContext,
+      agent_context: stateCommitContext,
+      state_json: stateSnapshotJson,
       chat_history: formatHistory(context.messages, agentConf.contextWindow),
       user_input: getUserInput(context.messages),
       final_output: finalOutput,
       agent_notes: '',
     };
     const messages = [
-      { role: 'system', content: agent.systemPrompt || STATE_COMMIT_PROMPT },
-      { role: 'user', content: stripStateCommitAgentNoteSources(renderTemplate(agent.userTemplate, values)) },
+      { role: 'system', content: normalizeStateCommitSystemPrompt(agent.systemPrompt) },
+      { role: 'user', content: stripStateCommitAgentNoteSources(renderTemplate(userTemplate, values)) },
     ];
     const promptTrace = formatPromptTraceForRunLog(messages, conf, 5000, true);
     const raw = await callAgent(agentConf, messages);
-    const commit = extractJsonObject(raw);
+    const commit = extractStateCommitJsonObject(raw);
     if (!commit) return { changed: false, reason: 'json-parse-failed', raw: clipRunLogText(raw), prompt: promptTrace, agent: stateCommitAgentInfo(agent, agentConf) };
     const nextTurn = Math.max(Number(state.turn || 0) + 1, 1);
     const resolvedCommit = resolveEvidenceCommit(commit, state, context, finalOutput, nextTurn);
@@ -12097,6 +12196,45 @@ function normalizeAdaptiveQualityState(value) {
                 if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
               } catch (_) {}
               break;
+            }
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  function extractStateCommitJsonObject(text) {
+    const raw = stripThoughtBlocks(String(text || '')).trim();
+    const fenced = [...raw.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)];
+    for (const block of fenced) {
+      try {
+        const parsed = JSON.parse(String(block[1] || '').trim());
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+      } catch (_) {}
+    }
+    const start = raw.indexOf('{');
+    if (start < 0) return null;
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+    for (let i = start; i < raw.length; i += 1) {
+      const ch = raw[i];
+      if (inString) {
+        if (escaped) escaped = false;
+        else if (ch === '\\') escaped = true;
+        else if (ch === '"') inString = false;
+      } else {
+        if (ch === '"') inString = true;
+        else if (ch === '{') depth += 1;
+        else if (ch === '}') {
+          depth -= 1;
+          if (depth === 0) {
+            try {
+              const parsed = JSON.parse(raw.slice(start, i + 1));
+              return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+            } catch (_) {
+              return null;
             }
           }
         }
@@ -16138,6 +16276,10 @@ function evidenceConflictTouches(conflicts, item, kind, path) {
     const previous = Runtime.backgroundStateCommit[key]?.promise || Promise.resolve();
     const startedAt = nowIso();
     const runBackground = async () => {
+      await updateRunProgress(90, '에로스 타워 관리상태 저장 중', [
+        '출력은 이미 반환되었습니다. 백그라운드를 누르면 결과를 보면서 저장은 계속됩니다.',
+        '큰 봇이나 느린 모델에서는 잠시 렉이나 멈춤처럼 보일 수 있습니다.',
+      ], 'info', '관리상태 저장 준비', 'background state commit starting');
       if (typeof setTimeout === 'function') {
         await new Promise(resolve => setTimeout(resolve, 120));
       } else {
@@ -16171,6 +16313,10 @@ function evidenceConflictTouches(conflicts, item, kind, path) {
         ? { added: 0, revised: 0, unchanged: 0, total: 0, olderCount: 0, recentKeep: conf?.contextWindow, skipped: true, reason: 'session-read-deferred' }
         : syncChatLongMemoryLedger(latestState, effectivePostContext.messages, conf.contextWindow, conf.coldStartChunkSize);
       const memoryRecoverySync = deferredMemoryRecoverySync || runMemoryGardenRecovery(latestState, effectivePostContext.messages, conf, backgroundSessionSync);
+      await updateRunProgress(96, '에로스 타워 관리상태 저장 중', [
+        'Psyche가 최종 출력 기준으로 관리상태/기억 변화를 커밋합니다.',
+        '백그라운드를 눌러도 저장 작업은 계속됩니다.',
+      ], 'info', 'Psyche state commit', 'state commit agent running');
       await yieldRunProgressPaint();
       let commitResult = { changed: false, reason: 'not-run' };
       try {
@@ -16223,6 +16369,7 @@ function evidenceConflictTouches(conflicts, item, kind, path) {
         completedAt: run.backgroundStateCommitCompletedAt,
       };
       appendRunLogInBackground(scope, run, conf);
+      await updateRunProgress(100, '에로스 타워 관리상태 저장 완료', summarizeCommitToast(commitResult, regexResult, sessionRewindSync), commitResult.failedCommitReason || /error|fail|timeout|json|parse|api|401|403|404|429|500|502|503|504/i.test(String(commitResult.reason || '')) ? 'warn' : 'success', '관리상태 저장 완료', 'background state commit complete', { hideAfterMs: 2200 });
     };
     const promise = previous
       .catch(() => {})
@@ -16246,6 +16393,10 @@ function evidenceConflictTouches(conflicts, item, kind, path) {
           backgroundStateCommitCompleted: false,
           errors: uniqueStrings([].concat(baseRun.errors || [], Runtime.lastError)),
         }, conf);
+        updateRunProgress(100, '에로스 타워 관리상태 저장 오류', [
+          err?.message || String(err || 'unknown error'),
+          '출력은 이미 반환되었지만 관리상태 저장은 실패했습니다. Run Log를 확인하세요.',
+        ], 'warn', '관리상태 저장 오류', 'background state commit failed', { hideAfterMs: 5200 }).catch(() => {});
       })
       .finally(() => {
         if (Runtime.backgroundStateCommit?.[key]?.promise === promise) delete Runtime.backgroundStateCommit[key];
@@ -16343,9 +16494,16 @@ function evidenceConflictTouches(conflicts, item, kind, path) {
       sessionSync,
       sessionRewindSync,
     });
-    await updateRunProgress(100, 'Eros Tower output ready', [
-      canPersistState ? 'Output returned. Psyche state commit continues in background.' : 'Output returned. State commit skipped for this session.',
-    ], canPersistState ? 'success' : 'info', 'Output ready', canPersistState ? 'background state commit queued' : 'no state commit', { hideAfterMs: 1600 });
+    if (canPersistState) {
+      await updateRunProgress(88, '에로스 타워 관리상태 저장 중', [
+        '출력은 이미 반환되었습니다. 백그라운드를 누르면 결과를 보면서 저장은 계속됩니다.',
+        '큰 봇이나 느린 모델에서는 잠시 렉이나 멈춤처럼 보일 수 있습니다.',
+      ], 'info', '관리상태 저장 대기', 'background state commit queued');
+    } else {
+      await updateRunProgress(100, 'Eros Tower output ready', [
+        'Output returned. State commit skipped for this session.',
+      ], 'info', 'Output ready', 'no state commit', { hideAfterMs: 1600 });
+    }
     Runtime.lastRun = null;
     return finalContent;
   }
@@ -20229,7 +20387,7 @@ function evidenceConflictTouches(conflicts, item, kind, path) {
         testAgentNoteLengthMetaFilter: () => {
           const raw = [
             '[Response Length Control]',
-            'Detected: toggle_길이=5 (대서사 / epic movement) from globalChatVariables.toggle_길이.',
+            'Detected: toggle_길이=5 (대서사 / epic movement) from prompt-toggle.',
             'Host prompt length signal detected: Write at least 3200 words.',
             'Agent scale guidance: Epic movement: track multiple fronts and consequences.',
             '',
