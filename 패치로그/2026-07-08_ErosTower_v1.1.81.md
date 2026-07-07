@@ -1,7 +1,7 @@
 # Eros Tower v1.1.81
 
 Date: 2026-07-08
-Status: deployment candidate
+Status: deployed
 
 ## Summary
 - Restored the runtime base to the stable 1.1.78 line, then kept only the minimal data-material gate work required for the current release.
@@ -36,4 +36,12 @@ Status: deployment candidate
   - quality output path runs with data injection disabled.
 
 ## Raw Verification
-- Pending until GitHub raw URLs refresh after push.
+- v1 raw URL returns:
+  - `//@display-name ☸Eros Tower 1.1.81`
+  - `//@version 1.1.81`
+  - `//@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js`
+- compat raw URL returns:
+  - `//@display-name ☸Eros Tower 1.1.81`
+  - `//@version 4.0.23`
+  - `//@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.update.js`
+- Verified after GitHub raw cache refreshed.
