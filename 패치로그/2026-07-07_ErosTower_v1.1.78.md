@@ -1,7 +1,7 @@
 # Eros Tower v1.1.78
 
 Date: 2026-07-07
-Status: pending deployment verification
+Status: deployed and raw URL verified
 
 ## Request
 - Deploy the Goe resident post-processing agent update.
@@ -35,5 +35,11 @@ Status: pending deployment verification
 - Mock RisuAI simulation verified prompt UI registration and post-pipeline order: translation -> Goe -> quality cleanup.
 
 ## Raw URL Check
-- v1 raw URL: pending
-- compat raw URL: pending
+- v1 raw URL verified:
+  - `//@display-name ☸Eros Tower 1.1.78`
+  - `//@version 1.1.78`
+  - `//@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js`
+- compat raw URL verified:
+  - `//@display-name ☸Eros Tower 1.1.78`
+  - `//@version 4.0.22`
+  - `//@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.update.js`
