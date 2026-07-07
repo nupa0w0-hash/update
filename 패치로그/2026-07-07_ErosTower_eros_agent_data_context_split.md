@@ -1,14 +1,21 @@
 # Eros Tower Eros Agent Data Context Split
 
 Date: 2026-07-07
-Status: included in v1.1.80 deployment candidate
+Status: superseded by `2026-07-07_ErosTower_data_injection_material_gate.md`
+
+## Superseded
+- This patch interpreted `Data Context Injection OFF` as only disabling direct main raw Source Context injection.
+- That interpretation was rejected because `Data Context Injection` must gate Eros Tower lorebook and long-memory material, including every agent context pack.
+- The corrected local patch restores `Data Context Injection OFF` as a material gate for Eros Tower lore/long-memory, blocks agent context packs from Source/Memory Context, and excludes memory candidates from the Psyche bridge.
+
+The request/cause/change sections below document the rejected intermediate patch, not the current intended behavior.
 
 ## Request
 - Clarify and fix the interaction between `Data Context Injection` and `Eros Agents`.
 - Desired behavior: disabling main data injection should not prevent Eros pre-agents from using selected lore, managed state, and memory as internal evidence.
 
 ## Cause
-- `shouldInjectDataContextForAgent()` treated `Data Context Injection OFF` as a broad block for output-facing agents.
+- The previous `shouldInjectDataContextForAgent()` behavior treated `Data Context Injection OFF` as a broad block for agent context packs.
 - That block also applied to Eros pre-agents, so pre-agents still ran but received a disabled-context notice instead of Source/State/Memory Context.
 
 ## Change

@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.80
+//@display-name ☸Eros Tower 1.1.81
 //@api 3.0
-//@version 1.1.80
+//@version 1.1.81
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -42,18 +42,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.80
+ * Eros Tower 1.1.81
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.80 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.81 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.80';
+  const VERSION = '1.1.81';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.80`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.81`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -74,7 +74,7 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.80 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.81 analysis context';
   const MAIN_INJECTION_PLACEHOLDER_RE = /\{\{et\.(canonical|memory|state|characters|executive)\}\}/gi;
   const AUTO_INJECTION_FALLBACK_CHARS = 22000;
   const AUTO_INJECTION_MIN_CHARS = 3200;
@@ -91,14 +91,9 @@
   ]);
   const SYSTEM_PATCH_NOTES = Object.freeze([
     {
-      version: '1.1.80',
-      kind: 'eros-pre-agent-context-split',
-      summary: 'Data Context Injection OFF now only disables main raw Source Context injection; enabled Eros pre-agents can still use internal Source/State/Memory Context as evidence before writing notes.',
-    },
-    {
-      version: '1.1.79',
-      kind: 'psyche-state-bridge',
-      summary: 'When Data Context Injection is disabled but Psyche Agents are enabled, Eros Tower now keeps raw Source Context disabled while still passing managed State/Memory/Secret context to the main model for RisuAI native lore and long-memory coexistence.',
+      version: '1.1.81',
+      kind: 'restored-baseline-data-gate',
+      summary: 'Restored the runtime to the 1.1.78 baseline and kept only the minimal data-material gate patch: Data Injection OFF blocks Eros Tower Source/State/Memory material while allowing read-only RisuAI host context for Eros/Psyche and translation/Goe resident agents.',
     },
     {
       version: '1.1.78',
@@ -2231,25 +2226,22 @@
     return true;
   }
 
-  function shouldInjectPsycheStateBridge(conf = null, context = null) {
-    return !isDataContextInjectionEnabled(conf, context) && isPsycheAgentsEnabled(conf);
-  }
-
-  function isErosPreAgentId(agentId, conf = null) {
-    const id = String(agentId || '').trim();
-    if (!id) return false;
-    if (['world', 'character', 'momentum', 'plot', 'synthesis'].includes(id)) return true;
-    try {
-      return pipelineAgents(conf).some(agent => String(agent?.id || '') === id && agent?.phase === 'pre');
-    } catch (_) {
-      return false;
-    }
-  }
-
   function shouldInjectDataContextForAgent(agentId, conf = null, context = null) {
-    if (isDataContextInjectionEnabled(conf, context)) return true;
-    if (isPsycheAgent({ id: agentId })) return true;
-    return isErosAgentsEnabled(conf) && isErosPreAgentId(agentId, conf);
+    void agentId;
+    return isDataContextInjectionEnabled(conf, context);
+  }
+
+  function isErosPreAgentId(agentId) {
+    return ['world', 'character', 'momentum', 'synthesis'].includes(String(agentId || ''));
+  }
+
+  function isHostContextResidentAgentId(agentId) {
+    return [TRANSLATION_AGENT_ID, GOE_RESIDENT_AGENT_ID].includes(String(agentId || ''));
+  }
+
+  function shouldUseHostInjectedContextForAgent(agentId, conf = null, context = null) {
+    if (isDataContextInjectionEnabled(conf, context)) return false;
+    return isErosPreAgentId(agentId) || isPsycheAgent({ id: agentId }) || isHostContextResidentAgentId(agentId);
   }
 
   function isPsycheAgent(agent) {
@@ -8788,6 +8780,20 @@ function normalizeAdaptiveQualityState(value) {
     return trimBriefingBlockToBudget(text, max);
   }
 
+  function buildResidentSettingBlocks(agent, settingView, agentContext, conf, context, budget = PSYCHE_COMPILED_SETTING_CHARS) {
+    const base = String(settingView || '').trim();
+    const hostContext = !isDataContextInjectionEnabled(conf, context) && isHostContextResidentAgentId(agent?.id)
+      ? String(agentContext || '').trim()
+      : '';
+    if (!hostContext) return base;
+    const advisory = [
+      '[Resident Host Context Policy]',
+      'Use Host Injected Context only for terminology, names, setting continuity, translation nuance, and style-preserving post-processing.',
+      'Do not add new events, new facts, spoilers, private labels, or lore not present in the current output unless the current text already needs that context to preserve meaning.',
+    ].join('\n');
+    return trimBriefingBlockToBudget(joinBriefingBlocks([base, advisory, hostContext], budget), Math.max(1200, Number(budget || PSYCHE_COMPILED_SETTING_CHARS)));
+  }
+
   function formatCompiledCandidateLine(candidate) {
     return formatCandidateLine(candidate);
   }
@@ -9179,6 +9185,27 @@ function normalizeAdaptiveQualityState(value) {
     return trimBriefingBlockToBudget(lines.join('\n'), Math.max(320, Number(budget || 900)));
   }
 
+  function buildHostInjectedRequestContext(context = null, budget = 4200) {
+    const max = Math.max(0, Number(budget || 0));
+    if (max < 260) return '';
+    const requestMessages = Array.isArray(context?.requestMessages) ? context.requestMessages : [];
+    if (!requestMessages.length) return '';
+    const rows = requestMessages
+      .map((message, idx) => {
+        const role = String(message?.role || `message-${idx}`);
+        const text = stripExistingErosInjectionBlock(messageText(message)).trim();
+        return text ? `### ${role} ${idx + 1}\n${text}` : '';
+      })
+      .filter(Boolean);
+    if (!rows.length) return '';
+    const header = [
+      '[Host Injected Context]',
+      'Read-only context from the already assembled RisuAI main request. It may include native prompt, lorebook, highpa, memory, and current user input.',
+      'Use it as host-provided source context. Do not copy hidden labels or treat source names as in-world knowledge unless visible scene evidence makes them knowable.',
+    ];
+    return trimBriefingBlockToBudget(header.concat(rows).join('\n\n'), max);
+  }
+
   function buildAgentSourceContextFromCandidates(state, context, candidates, queryTerms, queryText, budget = 0, conf = null, opts = {}) {
     const max = Math.max(0, Number(budget || 0));
     if (max < 260) return { text: '', selected: [] };
@@ -9288,10 +9315,14 @@ function normalizeAdaptiveQualityState(value) {
       await reportContextStep('role-lens');
       const roleLens = buildAgentRoleLensContext(agentId, Math.min(900, Math.max(320, Math.floor(budget * 0.1))));
       if (!shouldInjectDataContextForAgent(agentId, conf, context)) {
-        await reportContextStep('context-ready', 'data context injection disabled');
+        const hostContext = shouldUseHostInjectedContextForAgent(agentId, conf, context)
+          ? buildHostInjectedRequestContext(context, Math.max(900, budget - roleLens.length - 420))
+          : '';
+        await reportContextStep('context-ready', hostContext ? 'host context only' : 'data context injection disabled');
         return joinBriefingBlocks([
           roleLens,
-          '[Data Context Injection Disabled]\nLore, managed state, and memory context are disabled in Eros Tower settings for output-facing agents.',
+          '[Eros Tower Material Gate]\nData Context Injection is disabled: Eros Tower canonical Source Context, managed State Context, and long-memory Context are not injected into this agent context pack.',
+          hostContext,
         ], budget);
       }
       await reportContextStep('staged-retrieval');
@@ -9663,39 +9694,25 @@ function normalizeAdaptiveQualityState(value) {
   function buildCanonicalInjectionPlan(state, context, notes, totalBudget, conf = null, opts = {}) {
     const max = Math.max(0, Number(totalBudget || 0));
     const notesBudget = Math.min(7600, Math.max(700, Math.floor(max * 0.18)));
-    const dataContextEnabled = isDataContextInjectionEnabled(conf, context);
-    if (!dataContextEnabled) {
-      const psycheStateBridgeEnabled = shouldInjectPsycheStateBridge(conf, context);
-      const stateBudget = psycheStateBridgeEnabled
-        ? Math.min(Math.max(900, Math.floor(max * 0.34)), Math.max(500, max - notesBudget - 240))
-        : 0;
-      const stateResult = psycheStateBridgeEnabled
-        ? buildMainStateContext(state, context, notes, stateBudget, conf, opts)
-        : { text: '', selected: [] };
+    if (!isDataContextInjectionEnabled(conf, context)) {
       const preAgentNotes = buildPreAgentNotesSource(notes, context, notesBudget);
-      const visibleBlocks = [
-        stateResult.text ? 'State Context (Psyche bridge)' : '',
-        preAgentNotes ? 'Eros Agent Notes' : '',
-      ].filter(Boolean);
       return {
         sourceContext: '',
-        stateContext: stateResult.text,
+        stateContext: '',
         preAgentNotes,
-        stateSelected: stateResult.selected,
+        stateSelected: [],
         summary: {
           sourceBudget: 0,
-          stateBudget,
+          stateBudget: 0,
           notesBudget,
-          visibleBlocks,
-          internalOnly: ['Source Context'].concat(stateResult.text ? [] : ['State Context']),
+          visibleBlocks: preAgentNotes ? ['Eros Agent Notes'] : [],
+          internalOnly: ['Source Context', 'State Context'],
           selectedCanonicalIds: [],
           selectedCanonicalCount: 0,
-          selectedStateCount: stateResult.selected.length,
+          selectedStateCount: 0,
           storeUnits: normalizeCanonicalStore(state?.canonicalStore, state).units.length,
           psycheLabelsAuthoritative: false,
           dataContextInjectionEnabled: false,
-          psycheStateBridgeEnabled,
-          sourceContextDisabled: true,
         },
       };
     }
@@ -9776,12 +9793,14 @@ function normalizeAdaptiveQualityState(value) {
   ]);
 
   function buildMainStateContext(state, context, notes, budget = 0, conf = null, opts = {}) {
-    void conf;
     const max = Math.max(0, Number(budget || 0));
     if (!state || max < 260) return { text: '', selected: [] };
+    const excludeMemory = opts?.excludeMemory === true || !isDataContextInjectionEnabled(conf, context);
     const header = [
       '[State Context]',
-      'Managed state, long memory, continuity, and active consequences related to this request. Use as current working state; raw Source Context wins on source facts.',
+      excludeMemory
+        ? 'Managed state, continuity, and active consequences related to this request. Long-memory candidates are excluded by the data material gate.'
+        : 'Managed state, long memory, continuity, and active consequences related to this request. Use as current working state; raw Source Context wins on source facts.',
     ];
     const queryText = [
       buildRetrievalQuery(context, [], []),
@@ -9798,7 +9817,8 @@ function normalizeAdaptiveQualityState(value) {
       : rankStateCandidates(state, queryTerms, profile, context);
     const filtered = ranked
       .filter(candidate => MAIN_STATE_CONTEXT_KINDS.includes(candidate.kind))
-      .filter(candidate => candidate.kind !== 'lore' && candidate.kind !== 'canonical');
+      .filter(candidate => candidate.kind !== 'lore' && candidate.kind !== 'canonical')
+      .filter(candidate => !(excludeMemory && candidate.kind === 'memory'));
     const selected = selectCandidates(filtered, profile.limit, Math.max(220, max - header.join('\n').length - 2));
     if (!selected.length) return { text: '', selected: [] };
     return {
@@ -11624,7 +11644,14 @@ function normalizeAdaptiveQualityState(value) {
   function buildTranslationAgentMessages(agent, current, conf, context, state, notes, agentContext = '') {
     const mode = getTranslationPromptMode(conf, agent?.translationPromptModeId);
     const agentConf = resolveAgentConf(agent, conf);
-    const settingView = buildCompiledSettingBlocks(state, context, notes, Math.floor(PSYCHE_COMPILED_SETTING_CHARS * 0.7));
+    const settingView = buildResidentSettingBlocks(
+      agent,
+      buildCompiledSettingBlocks(state, context, notes, Math.floor(PSYCHE_COMPILED_SETTING_CHARS * 0.7)),
+      agentContext,
+      conf,
+      context,
+      Math.floor(PSYCHE_COMPILED_SETTING_CHARS * 0.9)
+    );
     const values = {
       glossary: '',
       lore: settingView,
@@ -12089,7 +12116,14 @@ function normalizeAdaptiveQualityState(value) {
         continue;
       }
       const agentContext = await buildAgentContextPackMaybeEmbedded(agent.id, state, context, notes, Math.floor(agentConf.contextWindow * 220), conf);
-      const settingView = buildCompiledSettingBlocks(state, context, notes, Math.floor(PSYCHE_COMPILED_SETTING_CHARS * 0.85));
+      const settingView = buildResidentSettingBlocks(
+        agent,
+        buildCompiledSettingBlocks(state, context, notes, Math.floor(PSYCHE_COMPILED_SETTING_CHARS * 0.85)),
+        agentContext,
+        conf,
+        context,
+        PSYCHE_COMPILED_SETTING_CHARS
+      );
       const values = {
         setting_blocks: agent.includeSettingBlocks === false ? '' : settingView,
         state_summary: agentContext,
@@ -20830,114 +20864,6 @@ function evidenceConflictTouches(conflicts, item, kind, path) {
             briefingLength: briefing.length,
             traceCount: targetState.injectionTrace.length,
             firstTrace: targetState.injectionTrace[0] || null,
-          };
-        },
-        testPsycheStateBridgeWithoutSourceInjection: async () => {
-          const targetState = createDefaultState(context?.mode || 'rp');
-          targetState.turn = 7;
-          targetState.scene = {
-            ...targetState.scene,
-            place: 'RisuAI coexistence room',
-            presentCast: ['Bridge Subject'],
-            currentAction: 'testing Psyche state bridge without source lore injection',
-          };
-          targetState.memoryLedger = normalizeMemoryEntries([{
-            id: 'psyche-bridge-memory',
-            summary: 'Bridge Subject promised to keep the silver key hidden from the court.',
-            sourceRank: 88,
-            confidence: 0.92,
-            importance: 8,
-            lastSeenTurn: 6,
-            memoryTier: 'hot',
-            tags: ['bridge', 'secret'],
-          }], targetState, 7);
-          targetState.secretLedger = [{
-            id: 'psyche-bridge-secret',
-            summary: 'The silver key is hidden in Bridge Subject clothing.',
-            tier: 2,
-            status: 'active',
-            turn: 6,
-            evidence: 'debug fixture',
-          }];
-          const targetContext = context || {
-            messages: [{ role: 'user', content: 'Bridge Subject checks the silver key.' }],
-            character: { name: 'Bridge Subject' },
-            currentChat: { name: 'Debug Chat' },
-            mode: 'novel',
-          };
-          const bridgeOn = await buildMainBriefing(targetState, targetContext, [], 3600, {
-            ...DEFAULT_CONFIG,
-            dataContextInjectionEnabled: false,
-            psycheAgentsEnabled: true,
-            embeddingEnabled: false,
-            stagedSearchEnabled: false,
-          });
-          const bridgeOff = await buildMainBriefing(createDefaultState(context?.mode || 'rp'), targetContext, [], 3600, {
-            ...DEFAULT_CONFIG,
-            dataContextInjectionEnabled: false,
-            psycheAgentsEnabled: false,
-            embeddingEnabled: false,
-            stagedSearchEnabled: false,
-          });
-          return {
-            bridgeOnHasSourceContext: bridgeOn.includes('[Source Context]'),
-            bridgeOnHasStateContext: bridgeOn.includes('[State Context]'),
-            bridgeOnHasMemory: bridgeOn.includes('silver key'),
-            bridgeOffHasStateContext: bridgeOff.includes('[State Context]'),
-            bridgeOnTraceSummary: targetState.injectionTrace?.[0]?.canonicalPlan || null,
-          };
-        },
-        testErosAgentContextWithDataInjectionOff: async () => {
-          const targetCharacter = {
-            id: 'agent-context-subject',
-            name: 'Agent Context Subject',
-            description: 'Agent Context Subject is bound by the blue oath and must protect the old observatory.',
-            firstMessage: 'Agent Context Subject waits beside the old observatory door.',
-            lorebook: { type: 'risu', ver: 1, data: [
-              { comment: 'Blue Oath', alwaysActive: true, key: ['blue oath', 'observatory'], content: 'Blue Oath: Agent Context Subject must protect the old observatory and never hand the brass lens to the court.' },
-            ] },
-          };
-          const targetChat = { id: 'agent-context-chat', message: [{ role: 'assistant', data: targetCharacter.firstMessage }] };
-          const targetContext = {
-            character: targetCharacter,
-            currentChat: targetChat,
-            db: { modules: [], enabledModules: [] },
-            messages: [
-              { role: 'assistant', content: targetCharacter.firstMessage },
-              { role: 'user', content: 'Agent Context Subject checks the blue oath at the observatory.' },
-            ],
-            canonicalSources: collectCanonicalSources(targetCharacter, { modules: [], enabledModules: [] }, targetChat, conf || DEFAULT_CONFIG),
-            settingBlocks: buildSettingBlocks(targetCharacter, { modules: [], enabledModules: [] }, targetChat),
-            mode: 'novel',
-          };
-          const targetState = createDefaultState('novel');
-          targetState.turn = 5;
-          syncCanonicalLoreLedger(targetState, targetContext.canonicalSources);
-          targetState.memoryLedger = normalizeMemoryEntries([{
-            id: 'agent-context-memory',
-            summary: 'Agent Context Subject previously hid the brass lens under the observatory floor.',
-            sourceRank: 88,
-            confidence: 0.91,
-            importance: 8,
-            lastSeenTurn: 4,
-            memoryTier: 'hot',
-            tags: ['blue oath', 'observatory'],
-          }], targetState, 5);
-          const agentContext = await buildAgentContextPackMaybeEmbedded('world', targetState, targetContext, [], 5200, {
-            ...DEFAULT_CONFIG,
-            dataContextInjectionEnabled: false,
-            erosAgentsEnabled: true,
-            psycheAgentsEnabled: false,
-            embeddingEnabled: false,
-            stagedSearchEnabled: false,
-          });
-          return {
-            hasSourceContext: agentContext.includes('[Source Context]'),
-            hasStateContext: agentContext.includes('[State Context]'),
-            hasMemoryContext: agentContext.includes('[Memory Context]'),
-            hasLoreFact: agentContext.includes('Blue Oath') || agentContext.includes('old observatory'),
-            hasMemoryFact: agentContext.includes('brass lens'),
-            hasDisabledNotice: agentContext.includes('[Data Context Injection Disabled]'),
           };
         },
         testPreAgentNotesInjection: async () => {
