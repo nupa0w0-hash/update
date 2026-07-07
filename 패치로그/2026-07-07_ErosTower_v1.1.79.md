@@ -1,7 +1,7 @@
 # Eros Tower v1.1.79
 
 Date: 2026-07-07
-Status: pending deployment verification
+Status: deployed and raw URL verified
 
 ## Request
 - Deploy the Psyche state bridge update for RisuAI native highpa/lorebook/long-memory coexistence.
@@ -50,5 +50,7 @@ Status: pending deployment verification
   - `testReferenceModuleLoreSelection`
 
 ## Raw URL Check
-- v1 raw URL: pending
-- compat raw URL: pending
+- Commit: `53667f450473ca46e85268d7916803e1895f6b53`
+- v1 raw URL: verified `//@display-name ☸Eros Tower 1.1.79` / `//@version 1.1.79`
+- compat raw URL: verified `//@display-name ☸Eros Tower 1.1.79` / `//@version 4.0.23`
+- Note: `raw.githubusercontent.com/.../main/ErosTower.v1.update.js` served the previous cached `1.1.78` file until its 300-second CDN cache expired; after expiry the same update URL returned `1.1.79`.
