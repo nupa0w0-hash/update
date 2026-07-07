@@ -1,7 +1,7 @@
 # Eros Tower v1.1.80
 
 Date: 2026-07-07
-Status: pending deployment verification
+Status: deployed and raw URL verified
 
 ## Request
 - Deploy the Eros pre-agent data-context split patch.
@@ -45,5 +45,7 @@ Status: pending deployment verification
   - `testErosAgentContextWithDataInjectionOff`
 
 ## Raw URL Check
-- v1 raw URL: pending
-- compat raw URL: pending
+- Commit: `886dfb4ca8e42ff133b26f36ab78b151420e22b0`
+- v1 raw URL: verified `//@display-name ☸Eros Tower 1.1.80` / `//@version 1.1.80`
+- compat raw URL: verified `//@display-name ☸Eros Tower 1.1.80` / `//@version 4.0.24`
+- Note: `raw.githubusercontent.com/.../main/ErosTower.v1.update.js` served cached `1.1.79` until CDN cache expiry; after polling, the same update URL returned `1.1.80`.
