@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.78
+//@display-name ☸Eros Tower 1.1.79
 //@api 3.0
-//@version 1.1.78
+//@version 1.1.79
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -42,18 +42,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.78
+ * Eros Tower 1.1.79
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.78 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.79 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.78';
+  const VERSION = '1.1.79';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.78`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.79`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -74,7 +74,7 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.78 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.79 analysis context';
   const MAIN_INJECTION_PLACEHOLDER_RE = /\{\{et\.(canonical|memory|state|characters|executive)\}\}/gi;
   const AUTO_INJECTION_FALLBACK_CHARS = 22000;
   const AUTO_INJECTION_MIN_CHARS = 3200;
@@ -90,6 +90,11 @@
     { index: 7, label: '초장편', englishLabel: 'very long-form', instruction: 'Write at least 9000 words.', scale: 'Very long-form: prepare dense continuity, layered character movement, multiple world threads, and long-range setup while preserving knowledge boundaries.' },
   ]);
   const SYSTEM_PATCH_NOTES = Object.freeze([
+    {
+      version: '1.1.79',
+      kind: 'psyche-state-bridge',
+      summary: 'When Data Context Injection is disabled but Psyche Agents are enabled, Eros Tower now keeps raw Source Context disabled while still passing managed State/Memory/Secret context to the main model for RisuAI native lore and long-memory coexistence.',
+    },
     {
       version: '1.1.78',
       kind: 'goe-resident-prompt-mode',
@@ -2219,6 +2224,10 @@
     if (conf && typeof conf === 'object' && Object.prototype.hasOwnProperty.call(conf, 'dataContextInjectionEnabled')) return conf.dataContextInjectionEnabled !== false;
     if (context && typeof context === 'object' && Object.prototype.hasOwnProperty.call(context, 'dataContextInjectionEnabled')) return context.dataContextInjectionEnabled !== false;
     return true;
+  }
+
+  function shouldInjectPsycheStateBridge(conf = null, context = null) {
+    return !isDataContextInjectionEnabled(conf, context) && isPsycheAgentsEnabled(conf);
   }
 
   function shouldInjectDataContextForAgent(agentId, conf = null, context = null) {
@@ -9637,25 +9646,39 @@ function normalizeAdaptiveQualityState(value) {
   function buildCanonicalInjectionPlan(state, context, notes, totalBudget, conf = null, opts = {}) {
     const max = Math.max(0, Number(totalBudget || 0));
     const notesBudget = Math.min(7600, Math.max(700, Math.floor(max * 0.18)));
-    if (!isDataContextInjectionEnabled(conf, context)) {
+    const dataContextEnabled = isDataContextInjectionEnabled(conf, context);
+    if (!dataContextEnabled) {
+      const psycheStateBridgeEnabled = shouldInjectPsycheStateBridge(conf, context);
+      const stateBudget = psycheStateBridgeEnabled
+        ? Math.min(Math.max(900, Math.floor(max * 0.34)), Math.max(500, max - notesBudget - 240))
+        : 0;
+      const stateResult = psycheStateBridgeEnabled
+        ? buildMainStateContext(state, context, notes, stateBudget, conf, opts)
+        : { text: '', selected: [] };
       const preAgentNotes = buildPreAgentNotesSource(notes, context, notesBudget);
+      const visibleBlocks = [
+        stateResult.text ? 'State Context (Psyche bridge)' : '',
+        preAgentNotes ? 'Eros Agent Notes' : '',
+      ].filter(Boolean);
       return {
         sourceContext: '',
-        stateContext: '',
+        stateContext: stateResult.text,
         preAgentNotes,
-        stateSelected: [],
+        stateSelected: stateResult.selected,
         summary: {
           sourceBudget: 0,
-          stateBudget: 0,
+          stateBudget,
           notesBudget,
-          visibleBlocks: preAgentNotes ? ['Eros Agent Notes'] : [],
-          internalOnly: ['Source Context', 'State Context'],
+          visibleBlocks,
+          internalOnly: ['Source Context'].concat(stateResult.text ? [] : ['State Context']),
           selectedCanonicalIds: [],
           selectedCanonicalCount: 0,
-          selectedStateCount: 0,
+          selectedStateCount: stateResult.selected.length,
           storeUnits: normalizeCanonicalStore(state?.canonicalStore, state).units.length,
           psycheLabelsAuthoritative: false,
           dataContextInjectionEnabled: false,
+          psycheStateBridgeEnabled,
+          sourceContextDisabled: true,
         },
       };
     }
@@ -20790,6 +20813,61 @@ function evidenceConflictTouches(conflicts, item, kind, path) {
             briefingLength: briefing.length,
             traceCount: targetState.injectionTrace.length,
             firstTrace: targetState.injectionTrace[0] || null,
+          };
+        },
+        testPsycheStateBridgeWithoutSourceInjection: async () => {
+          const targetState = createDefaultState(context?.mode || 'rp');
+          targetState.turn = 7;
+          targetState.scene = {
+            ...targetState.scene,
+            place: 'RisuAI coexistence room',
+            presentCast: ['Bridge Subject'],
+            currentAction: 'testing Psyche state bridge without source lore injection',
+          };
+          targetState.memoryLedger = normalizeMemoryEntries([{
+            id: 'psyche-bridge-memory',
+            summary: 'Bridge Subject promised to keep the silver key hidden from the court.',
+            sourceRank: 88,
+            confidence: 0.92,
+            importance: 8,
+            lastSeenTurn: 6,
+            memoryTier: 'hot',
+            tags: ['bridge', 'secret'],
+          }], targetState, 7);
+          targetState.secretLedger = [{
+            id: 'psyche-bridge-secret',
+            summary: 'The silver key is hidden in Bridge Subject clothing.',
+            tier: 2,
+            status: 'active',
+            turn: 6,
+            evidence: 'debug fixture',
+          }];
+          const targetContext = context || {
+            messages: [{ role: 'user', content: 'Bridge Subject checks the silver key.' }],
+            character: { name: 'Bridge Subject' },
+            currentChat: { name: 'Debug Chat' },
+            mode: 'novel',
+          };
+          const bridgeOn = await buildMainBriefing(targetState, targetContext, [], 3600, {
+            ...DEFAULT_CONFIG,
+            dataContextInjectionEnabled: false,
+            psycheAgentsEnabled: true,
+            embeddingEnabled: false,
+            stagedSearchEnabled: false,
+          });
+          const bridgeOff = await buildMainBriefing(createDefaultState(context?.mode || 'rp'), targetContext, [], 3600, {
+            ...DEFAULT_CONFIG,
+            dataContextInjectionEnabled: false,
+            psycheAgentsEnabled: false,
+            embeddingEnabled: false,
+            stagedSearchEnabled: false,
+          });
+          return {
+            bridgeOnHasSourceContext: bridgeOn.includes('[Source Context]'),
+            bridgeOnHasStateContext: bridgeOn.includes('[State Context]'),
+            bridgeOnHasMemory: bridgeOn.includes('silver key'),
+            bridgeOffHasStateContext: bridgeOff.includes('[State Context]'),
+            bridgeOnTraceSummary: targetState.injectionTrace?.[0]?.canonicalPlan || null,
           };
         },
         testPreAgentNotesInjection: async () => {
