@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.76
+//@display-name ☸Eros Tower 1.1.77
 //@api 3.0
-//@version 1.1.76
+//@version 1.1.77
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -36,18 +36,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.76
+ * Eros Tower 1.1.77
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.76 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.77 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.76';
+  const VERSION = '1.1.77';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.76`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.77`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -68,7 +68,7 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.76 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.77 analysis context';
   const MAIN_INJECTION_PLACEHOLDER_RE = /\{\{et\.(canonical|memory|state|characters|executive)\}\}/gi;
   const AUTO_INJECTION_FALLBACK_CHARS = 22000;
   const AUTO_INJECTION_MIN_CHARS = 3200;
@@ -84,6 +84,11 @@
     { index: 7, label: '초장편', englishLabel: 'very long-form', instruction: 'Write at least 9000 words.', scale: 'Very long-form: prepare dense continuity, layered character movement, multiple world threads, and long-range setup while preserving knowledge boundaries.' },
   ]);
   const SYSTEM_PATCH_NOTES = Object.freeze([
+    {
+      version: '1.1.77',
+      kind: 'translation-source-parallel-sanitize-preserve',
+      summary: 'Source-parallel translation output now bypasses bilingual draft-leak stripping after the translation agent formats original/translated pairs, preserving English, Japanese, Chinese, and other source paragraphs while keeping normal draft-leak cleanup for non-parallel output.',
+    },
     {
       version: '1.1.76',
       kind: 'length-prompt-toggle-detection',
@@ -11743,6 +11748,7 @@ function normalizeAdaptiveQualityState(value) {
     let current = String(content ?? '');
     const agents = (conf.pipeline?.agents || []).filter(a => a.enabled !== false && (a.phase === 'post' || a.phase === 'resident'));
     const results = [];
+    let preserveBilingualDraft = false;
     if (!agents.length) return { text: current, changed: false, results };
     for (let agentIndex = 0; agentIndex < agents.length; agentIndex += 1) {
       const agent = agents[agentIndex];
@@ -11803,10 +11809,12 @@ function normalizeAdaptiveQualityState(value) {
       try {
         const callResult = await callPostAgentWithTranslationRetry(agent, agentConf, messages);
         const rawOutput = callResult.rawOutput;
-        const outputForApply = agent.id === TRANSLATION_AGENT_ID && agent.translationSourceParallelEnabled === true
+        const sourceParallelTranslation = agent.id === TRANSLATION_AGENT_ID && agent.translationSourceParallelEnabled === true;
+        const outputForApply = sourceParallelTranslation
           ? formatSourceParallelTranslationOutput(current, rawOutput)
           : rawOutput;
         const next = applyPostAgentOutput(agent, current, outputForApply);
+        if (sourceParallelTranslation && String(next || '').trim()) preserveBilingualDraft = true;
         if (String(next || '').trim()) current = next;
         results.push({
           id: agent.id,
@@ -11866,7 +11874,7 @@ function normalizeAdaptiveQualityState(value) {
         }
       }
     }
-    return { text: current, changed: current !== String(content ?? ''), results };
+    return { text: current, changed: current !== String(content ?? ''), results, preserveBilingualDraft };
   }
 
   function applyPostAgentOutput(agent, currentResponse, rawOutput) {
@@ -14020,14 +14028,17 @@ function evidenceConflictTouches(conflicts, item, kind, path) {
       .trim();
   }
 
-  function sanitizeFinalOutput(text) {
+  function sanitizeFinalOutput(text, options = {}) {
     const raw = String(text || '');
     const tagless = stripThoughtBlocks(raw)
       .replace(/^\s*<\s*Thoughts?\s*>\s*/i, '')
       .replace(/<\/\s*Thoughts?\s*>\s*/gi, '')
       .replace(/^\s*(?:#{1,6}\s*)?(?:Thoughts?|Reasoning|Analysis)\s*:?\s*$/gim, '')
       .replace(/<\s*\/?\s*(?:analysis|final|answer)\s*>\s*/gi, '');
-    const stripped = removeBilingualDraftLeak(stripLeadingMarkdownTitle(stripNonNarrativeBlocks(tagless))).trim();
+    const nonNarrativeStripped = stripLeadingMarkdownTitle(stripNonNarrativeBlocks(tagless));
+    const stripped = (options?.preserveBilingualDraft === true
+      ? nonNarrativeStripped
+      : removeBilingualDraftLeak(nonNarrativeStripped)).trim();
     const fallback = raw
       .replace(/<\s*\/?\s*Thoughts?\s*>/gi, '')
       .replace(/<\s*\/?\s*(?:think|reasoning|analysis|final|answer)\s*>/gi, '')
@@ -16466,13 +16477,13 @@ function evidenceConflictTouches(conflicts, item, kind, path) {
         info?.error ? `오류: ${info.error}` : '',
       ], info?.error ? 'warn' : 'info', '후처리 에이전트', `${agentName} ${agentIndex + 1}/${total} ${info?.phase || ''}`, { step: Math.min(total, agentIndex + 1), total });
     });
-    finalContent = sanitizeFinalOutput(postPipelineResult.text);
+    finalContent = sanitizeFinalOutput(postPipelineResult.text, { preserveBilingualDraft: postPipelineResult.preserveBilingualDraft === true });
     postContext = contextWithAssistantOutput(context, finalContent);
     await updateRunProgress(45, '에로스 타워 후처리', [
       `post changed ${postPipelineResult.changed ? 'yes' : 'no'} / agents ${Array.isArray(postPipelineResult.results) ? postPipelineResult.results.length : 0}`,
     ], postPipelineResult.results?.some?.(item => item.error) ? 'warn' : 'info', '출력 정리', '후처리 에이전트 결과 반영');
     const regexResult = await applyAdaptiveQualityOutput(finalContent, conf, state, postContext);
-    finalContent = sanitizeFinalOutput(regexResult.text);
+    finalContent = sanitizeFinalOutput(regexResult.text, { preserveBilingualDraft: postPipelineResult.preserveBilingualDraft === true });
     postContext = contextWithAssistantOutput(context, finalContent);
     await updateRunProgress(52, '에로스 타워 후처리', [
       `regex applied ${Number(regexResult?.applied || 0)} / errors ${Array.isArray(regexResult?.errors) ? regexResult.errors.length : 0}`,
