@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.79
+//@display-name ☸Eros Tower 1.1.80
 //@api 3.0
-//@version 1.1.79
+//@version 1.1.80
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -42,18 +42,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.79
+ * Eros Tower 1.1.80
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.79 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.80 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.79';
+  const VERSION = '1.1.80';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.79`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.80`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -74,7 +74,7 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.79 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.80 analysis context';
   const MAIN_INJECTION_PLACEHOLDER_RE = /\{\{et\.(canonical|memory|state|characters|executive)\}\}/gi;
   const AUTO_INJECTION_FALLBACK_CHARS = 22000;
   const AUTO_INJECTION_MIN_CHARS = 3200;
@@ -90,6 +90,11 @@
     { index: 7, label: '초장편', englishLabel: 'very long-form', instruction: 'Write at least 9000 words.', scale: 'Very long-form: prepare dense continuity, layered character movement, multiple world threads, and long-range setup while preserving knowledge boundaries.' },
   ]);
   const SYSTEM_PATCH_NOTES = Object.freeze([
+    {
+      version: '1.1.80',
+      kind: 'eros-pre-agent-context-split',
+      summary: 'Data Context Injection OFF now only disables main raw Source Context injection; enabled Eros pre-agents can still use internal Source/State/Memory Context as evidence before writing notes.',
+    },
     {
       version: '1.1.79',
       kind: 'psyche-state-bridge',
@@ -2230,9 +2235,21 @@
     return !isDataContextInjectionEnabled(conf, context) && isPsycheAgentsEnabled(conf);
   }
 
+  function isErosPreAgentId(agentId, conf = null) {
+    const id = String(agentId || '').trim();
+    if (!id) return false;
+    if (['world', 'character', 'momentum', 'plot', 'synthesis'].includes(id)) return true;
+    try {
+      return pipelineAgents(conf).some(agent => String(agent?.id || '') === id && agent?.phase === 'pre');
+    } catch (_) {
+      return false;
+    }
+  }
+
   function shouldInjectDataContextForAgent(agentId, conf = null, context = null) {
     if (isDataContextInjectionEnabled(conf, context)) return true;
-    return isPsycheAgent({ id: agentId });
+    if (isPsycheAgent({ id: agentId })) return true;
+    return isErosAgentsEnabled(conf) && isErosPreAgentId(agentId, conf);
   }
 
   function isPsycheAgent(agent) {
@@ -20868,6 +20885,59 @@ function evidenceConflictTouches(conflicts, item, kind, path) {
             bridgeOnHasMemory: bridgeOn.includes('silver key'),
             bridgeOffHasStateContext: bridgeOff.includes('[State Context]'),
             bridgeOnTraceSummary: targetState.injectionTrace?.[0]?.canonicalPlan || null,
+          };
+        },
+        testErosAgentContextWithDataInjectionOff: async () => {
+          const targetCharacter = {
+            id: 'agent-context-subject',
+            name: 'Agent Context Subject',
+            description: 'Agent Context Subject is bound by the blue oath and must protect the old observatory.',
+            firstMessage: 'Agent Context Subject waits beside the old observatory door.',
+            lorebook: { type: 'risu', ver: 1, data: [
+              { comment: 'Blue Oath', alwaysActive: true, key: ['blue oath', 'observatory'], content: 'Blue Oath: Agent Context Subject must protect the old observatory and never hand the brass lens to the court.' },
+            ] },
+          };
+          const targetChat = { id: 'agent-context-chat', message: [{ role: 'assistant', data: targetCharacter.firstMessage }] };
+          const targetContext = {
+            character: targetCharacter,
+            currentChat: targetChat,
+            db: { modules: [], enabledModules: [] },
+            messages: [
+              { role: 'assistant', content: targetCharacter.firstMessage },
+              { role: 'user', content: 'Agent Context Subject checks the blue oath at the observatory.' },
+            ],
+            canonicalSources: collectCanonicalSources(targetCharacter, { modules: [], enabledModules: [] }, targetChat, conf || DEFAULT_CONFIG),
+            settingBlocks: buildSettingBlocks(targetCharacter, { modules: [], enabledModules: [] }, targetChat),
+            mode: 'novel',
+          };
+          const targetState = createDefaultState('novel');
+          targetState.turn = 5;
+          syncCanonicalLoreLedger(targetState, targetContext.canonicalSources);
+          targetState.memoryLedger = normalizeMemoryEntries([{
+            id: 'agent-context-memory',
+            summary: 'Agent Context Subject previously hid the brass lens under the observatory floor.',
+            sourceRank: 88,
+            confidence: 0.91,
+            importance: 8,
+            lastSeenTurn: 4,
+            memoryTier: 'hot',
+            tags: ['blue oath', 'observatory'],
+          }], targetState, 5);
+          const agentContext = await buildAgentContextPackMaybeEmbedded('world', targetState, targetContext, [], 5200, {
+            ...DEFAULT_CONFIG,
+            dataContextInjectionEnabled: false,
+            erosAgentsEnabled: true,
+            psycheAgentsEnabled: false,
+            embeddingEnabled: false,
+            stagedSearchEnabled: false,
+          });
+          return {
+            hasSourceContext: agentContext.includes('[Source Context]'),
+            hasStateContext: agentContext.includes('[State Context]'),
+            hasMemoryContext: agentContext.includes('[Memory Context]'),
+            hasLoreFact: agentContext.includes('Blue Oath') || agentContext.includes('old observatory'),
+            hasMemoryFact: agentContext.includes('brass lens'),
+            hasDisabledNotice: agentContext.includes('[Data Context Injection Disabled]'),
           };
         },
         testPreAgentNotesInjection: async () => {
