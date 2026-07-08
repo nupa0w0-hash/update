@@ -27,4 +27,7 @@
 
 ## 배포
 
-- GitHub 배포는 하지 않음.
+- GitHub `main` 배포 완료.
+- 커밋: `ddf977c Release Eros Tower 1.1.83`
+- v1 raw URL 확인: `//@display-name ☸Eros Tower 1.1.83` / `//@version 1.1.83`
+- compat raw URL 확인: `//@display-name ☸Eros Tower 1.1.83` / `//@version 4.0.25`
