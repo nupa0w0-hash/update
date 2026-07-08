@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.83
+//@display-name ☸Eros Tower 1.1.84
 //@api 3.0
-//@version 4.0.25
+//@version 4.0.26
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -42,18 +42,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.83
+ * Eros Tower 1.1.84
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.83 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.84 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.83';
+  const VERSION = '1.1.84';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.83`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.84`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -74,7 +74,7 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.83 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.84 analysis context';
   const MAIN_INJECTION_PLACEHOLDER_RE = /\{\{et\.(canonical|memory|state|characters|executive)\}\}/gi;
   const AUTO_INJECTION_FALLBACK_CHARS = 22000;
   const AUTO_INJECTION_MIN_CHARS = 3200;
@@ -90,6 +90,11 @@
     { index: 7, label: '초장편', englishLabel: 'very long-form', instruction: 'Write at least 9000 words.', scale: 'Very long-form: prepare dense continuity, layered character movement, multiple world threads, and long-range setup while preserving knowledge boundaries.' },
   ]);
   const SYSTEM_PATCH_NOTES = Object.freeze([
+    {
+      version: '1.1.84',
+      kind: 'settings-backup-file-import',
+      summary: 'Settings restore now accepts a local JSON file as well as pasted JSON, using the same validated Storage.config import path and keeping chat state, run logs, snapshots, and caches untouched.',
+    },
     {
       version: '1.1.83',
       kind: 'full-settings-backup',
@@ -17380,9 +17385,16 @@ function evidenceConflictTouches(conflicts, item, kind, path) {
             <button id="et-export-settings">설정 JSON 다운로드</button>
             <button id="et-copy-settings">설정 JSON 복사</button>
           </div>
+          <div class="et-field" style="margin-top:12px">
+            <label for="et-import-settings-file">설정 JSON 파일</label>
+            <input id="et-import-settings-file" type="file" accept=".json,application/json,text/json">
+          </div>
+          <div class="et-actions">
+            <button id="et-import-settings-file-button">파일에서 설정 불러오기</button>
+          </div>
           ${textarea('설정 JSON 붙여넣기', 'et-import-settings-json', '', '다른 환경에서 내보낸 eros-tower-settings JSON을 붙여넣은 뒤 불러오세요.')}
           <div class="et-actions">
-            <button id="et-import-settings">설정 불러오기</button>
+            <button id="et-import-settings">붙여넣은 설정 불러오기</button>
           </div>
           <div id="et-settings-backup-status" class="et-status" data-kind="info"></div>
         </details>
@@ -19470,6 +19482,18 @@ function evidenceConflictTouches(conflicts, item, kind, path) {
       const next = readDashboardConfigFromUI({ ...latest, providerRegistry: latest.providerRegistry || conf.providerRegistry });
       return buildSettingsBackupPackage(next);
     };
+    const applySettingsBackupText = async (text) => {
+      if (!String(text || '').trim()) throw new Error('가져올 설정 JSON이 비어 있습니다.');
+      const nextConfig = importSettingsBackupPackage(JSON.parse(text));
+      await Storage.set(STORAGE.config, nextConfig);
+      return nextConfig;
+    };
+    const readSelectedSettingsFile = async () => {
+      const input = $('et-import-settings-file');
+      const file = input?.files?.[0];
+      if (!file) throw new Error('가져올 설정 JSON 파일을 선택하세요.');
+      return await readBrowserFileText(file);
+    };
 
     $('et-export-settings')?.addEventListener('click', async event => {
       await withBusy(event.currentTarget, async () => {
@@ -19493,10 +19517,19 @@ function evidenceConflictTouches(conflicts, item, kind, path) {
       if (!confirm('붙여넣은 JSON으로 에로스 타워 전체 설정을 교체할까요? 채팅별 관리상태와 Run Log는 변경하지 않습니다.')) return;
       await withBusy(event.currentTarget, async () => {
         const text = $('et-import-settings-json')?.value || '';
-        if (!text.trim()) throw new Error('가져올 설정 JSON이 비어 있습니다.');
-        const nextConfig = importSettingsBackupPackage(JSON.parse(text));
-        await Storage.set(STORAGE.config, nextConfig);
+        await applySettingsBackupText(text);
         setSettingsBackupStatus('설정 불러오기 완료. 창을 다시 열면 Provider와 에이전트 설정이 반영됩니다.', 'success');
+      }, 'et-settings-backup-status');
+    });
+
+    $('et-import-settings-file-button')?.addEventListener('click', async event => {
+      if (!confirm('선택한 JSON 파일로 에로스 타워 전체 설정을 교체할까요? 채팅별 관리상태와 Run Log는 변경하지 않습니다.')) return;
+      await withBusy(event.currentTarget, async () => {
+        const text = await readSelectedSettingsFile();
+        const textNode = $('et-import-settings-json');
+        if (textNode) textNode.value = text;
+        await applySettingsBackupText(text);
+        setSettingsBackupStatus('설정 파일 불러오기 완료. 창을 다시 열면 Provider와 에이전트 설정이 반영됩니다.', 'success');
       }, 'et-settings-backup-status');
     });
 
@@ -20900,6 +20933,17 @@ function evidenceConflictTouches(conflicts, item, kind, path) {
       document.execCommand('copy');
       area.remove();
     }
+  }
+
+  async function readBrowserFileText(file) {
+    if (!file) throw new Error('파일이 선택되지 않았습니다.');
+    if (typeof file.text === 'function') return await file.text();
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(new Error('파일을 읽지 못했습니다.'));
+      reader.readAsText(file, 'utf-8');
+    });
   }
 
   async function downloadTextFile(filename, text, mime = 'text/plain;charset=utf-8') {
