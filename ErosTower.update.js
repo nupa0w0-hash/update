@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.82
+//@display-name ☸Eros Tower 1.1.83
 //@api 3.0
-//@version 4.0.24
+//@version 4.0.25
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -42,18 +42,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.82
+ * Eros Tower 1.1.83
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.82 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.83 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.82';
+  const VERSION = '1.1.83';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.82`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.83`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -74,7 +74,7 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.82 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.83 analysis context';
   const MAIN_INJECTION_PLACEHOLDER_RE = /\{\{et\.(canonical|memory|state|characters|executive)\}\}/gi;
   const AUTO_INJECTION_FALLBACK_CHARS = 22000;
   const AUTO_INJECTION_MIN_CHARS = 3200;
@@ -90,6 +90,11 @@
     { index: 7, label: '초장편', englishLabel: 'very long-form', instruction: 'Write at least 9000 words.', scale: 'Very long-form: prepare dense continuity, layered character movement, multiple world threads, and long-range setup while preserving knowledge boundaries.' },
   ]);
   const SYSTEM_PATCH_NOTES = Object.freeze([
+    {
+      version: '1.1.83',
+      kind: 'full-settings-backup',
+      summary: 'Added full Eros Tower settings export/import for plugin configuration, Provider registry/API keys, agent routing, prompt modes, translation/Goe modes, embedding, reference, and quality settings without mixing in chat state, run logs, snapshots, or embedding cache.',
+    },
     {
       version: '1.1.82',
       kind: 'risu-persona-resolver-alignment',
@@ -707,6 +712,28 @@
     quota: 'quota-snapshots',
     embeddingCache: (providerId, model) => `embedding-cache:${slug(providerId || 'provider')}:${hashString(model || 'model')}`,
   };
+  const SETTINGS_BACKUP_TYPE = 'eros-tower-settings';
+  const SETTINGS_BACKUP_RUNTIME_KEYS = Object.freeze([
+    'state',
+    'backup',
+    'snapshots',
+    'runLog',
+    'runLogs',
+    'events',
+    'diagnostics',
+    'messages',
+    'message',
+    'memoryLedger',
+    'loreLedger',
+    'secretLedger',
+    'relationships',
+    'characters',
+    'plotThreads',
+    'worldFronts',
+    'embeddingCache',
+    'quotaSnapshots',
+    'usageLedger',
+  ]);
 
   const Runtime = {
     lastRun: null,
@@ -17347,6 +17374,22 @@ function evidenceConflictTouches(conflicts, item, kind, path) {
 
       <section class="et-panel" style="margin-top:14px">
         <details class="et-section-toggle">
+          <summary>전체 설정 백업 / 불러오기</summary>
+          <div class="et-note" style="margin-top:10px">Provider API Key, Provider 목록, 에이전트 모델/프롬프트, 번역/고에양 프롬프트, 임베딩, 참고 자료, 품질관리 설정을 저장합니다. 채팅별 관리상태, 장기기억 원장, Run Log, 스냅샷, 임베딩 캐시는 포함하지 않습니다.</div>
+          <div class="et-actions" style="margin-top:12px">
+            <button id="et-export-settings">설정 JSON 다운로드</button>
+            <button id="et-copy-settings">설정 JSON 복사</button>
+          </div>
+          ${textarea('설정 JSON 붙여넣기', 'et-import-settings-json', '', '다른 환경에서 내보낸 eros-tower-settings JSON을 붙여넣은 뒤 불러오세요.')}
+          <div class="et-actions">
+            <button id="et-import-settings">설정 불러오기</button>
+          </div>
+          <div id="et-settings-backup-status" class="et-status" data-kind="info"></div>
+        </details>
+      </section>
+
+      <section class="et-panel" style="margin-top:14px">
+        <details class="et-section-toggle">
           <summary>임베딩 검색 설정</summary>
           <div class="et-grid" style="margin-top:12px">
             <div>
@@ -19013,6 +19056,99 @@ function evidenceConflictTouches(conflicts, item, kind, path) {
     return clone;
   }
 
+  function isSettingsConfigLike(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    return [
+      'providerRegistryJson',
+      'pipelineJson',
+      'promptPresetsJson',
+      'translationPromptModesJson',
+      'goePromptModesJson',
+      'activeProviderId',
+      'provider',
+      'baseUrl',
+      'model',
+      'erosAgentsEnabled',
+      'psycheAgentsEnabled',
+      'dataContextInjectionEnabled',
+    ].some(key => Object.prototype.hasOwnProperty.call(value, key));
+  }
+
+  function buildSettingsBackupPackage(conf) {
+    return {
+      type: SETTINGS_BACKUP_TYPE,
+      version: VERSION,
+      exportedAt: nowIso(),
+      includesProviderSecrets: true,
+      scope: 'plugin-settings',
+      excludes: ['state:*', 'backup:*', 'snapshots:*', 'runlog:*', 'embedding-cache:*', 'usage-ledger', 'quota-snapshots'],
+      config: configForStorage(conf || {}),
+    };
+  }
+
+  function assertSettingsJsonField(name, value) {
+    const text = String(value || '').trim();
+    if (!text) return;
+    try {
+      JSON.parse(text);
+    } catch (err) {
+      throw new Error(`${name} JSON을 읽을 수 없습니다: ${err.message}`);
+    }
+  }
+
+  function normalizeImportedSettingsConfig(raw) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('설정 config 객체가 아닙니다.');
+    const imported = { ...raw };
+    SETTINGS_BACKUP_RUNTIME_KEYS.forEach(key => delete imported[key]);
+
+    if (Array.isArray(raw.providerRegistry) && !String(imported.providerRegistryJson || '').trim()) {
+      imported.providerRegistryJson = JSON.stringify({ version: VERSION, providers: raw.providerRegistry }, null, 2);
+    }
+    if (Array.isArray(raw.modelPresets) && !String(imported.modelPresetsJson || '').trim()) {
+      imported.modelPresetsJson = JSON.stringify({ version: VERSION, presets: raw.modelPresets }, null, 2);
+    }
+    if (raw.pipeline && typeof raw.pipeline === 'object' && !Array.isArray(raw.pipeline) && !String(imported.pipelineJson || '').trim()) {
+      imported.pipelineJson = JSON.stringify(raw.pipeline, null, 2);
+    }
+    if (Array.isArray(raw.promptPresets) && !String(imported.promptPresetsJson || '').trim()) {
+      imported.promptPresetsJson = serializePromptPresets(normalizePromptPresets({ promptPresets: raw.promptPresets, promptPresetsJson: '' }));
+    }
+    if (Array.isArray(raw.translationPromptModes) && !String(imported.translationPromptModesJson || '').trim()) {
+      imported.translationPromptModesJson = serializeTranslationPromptModes(normalizeTranslationPromptModes({ translationPromptModes: raw.translationPromptModes, translationPromptModesJson: '' }));
+    }
+    if (Array.isArray(raw.goePromptModes) && !String(imported.goePromptModesJson || '').trim()) {
+      imported.goePromptModesJson = serializeGoePromptModes(normalizeGoePromptModes({ goePromptModes: raw.goePromptModes, goePromptModesJson: '' }));
+    }
+
+    [
+      'providerRegistryJson',
+      'modelPresetsJson',
+      'pipelineJson',
+      'promptPresetsJson',
+      'translationPromptModesJson',
+      'goePromptModesJson',
+    ].forEach(key => assertSettingsJsonField(key, imported[key]));
+
+    if (imported.apiKey === MASKED_SECRET || imported.embeddingApiKey === MASKED_SECRET || String(imported.providerRegistryJson || '').includes(MASKED_SECRET)) {
+      throw new Error('마스킹된 API Key(*****)는 설정으로 가져올 수 없습니다. 실제 키가 포함된 설정 백업 JSON을 사용하세요.');
+    }
+
+    return configForStorage(imported);
+  }
+
+  function importSettingsBackupPackage(parsed) {
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('설정 백업 JSON 객체가 아닙니다.');
+    const rawConfig = parsed.type === SETTINGS_BACKUP_TYPE
+      ? parsed.config
+      : parsed.config && isSettingsConfigLike(parsed.config)
+        ? parsed.config
+        : isSettingsConfigLike(parsed)
+          ? parsed
+          : null;
+    if (!rawConfig) throw new Error('에로스 타워 설정 백업 형식이 아닙니다.');
+    return normalizeImportedSettingsConfig(rawConfig);
+  }
+
   async function fetchConfiguredModelList(conf) {
     if (conf.provider === 'vertex-ai') {
       const presetModels = Object.keys(API_PROVIDER_PRESETS['vertex-ai']?.models || {});
@@ -19208,6 +19344,7 @@ function evidenceConflictTouches(conflicts, item, kind, path) {
     const setLocalStatus = (id, text, kind = 'info') => setStatusNode(id, text, kind);
     const setMainStatus = (text, kind = 'info') => setLocalStatus('et-main-status', text, kind);
     const setProviderStatus = (text, kind = 'info') => setLocalStatus('et-provider-status', text, kind);
+    const setSettingsBackupStatus = (text, kind = 'info') => setLocalStatus('et-settings-backup-status', text, kind);
     const setEmbeddingStatus = (text, kind = 'info') => setLocalStatus('et-embedding-status', text, kind);
     const setReferenceStatus = (text, kind = 'info') => setLocalStatus('et-reference-status', text, kind);
     const setRecoveryStatus = (text, kind = 'info') => setLocalStatus('et-recovery-status', text, kind);
@@ -19326,6 +19463,41 @@ function evidenceConflictTouches(conflicts, item, kind, path) {
         await copyText(buildRunLogDiagnosticMarkdown(packageData));
         setRunDiagnosticStatus('진단 리포트 MD를 클립보드에 복사했습니다.', 'success');
       }, 'et-run-diagnostic-status');
+    });
+
+    const buildCurrentSettingsBackupPackage = async () => {
+      const latest = await getConfig();
+      const next = readDashboardConfigFromUI({ ...latest, providerRegistry: latest.providerRegistry || conf.providerRegistry });
+      return buildSettingsBackupPackage(next);
+    };
+
+    $('et-export-settings')?.addEventListener('click', async event => {
+      await withBusy(event.currentTarget, async () => {
+        setSettingsBackupStatus('현재 화면의 설정을 백업 JSON으로 만드는 중입니다.', 'info');
+        const packageData = await buildCurrentSettingsBackupPackage();
+        await downloadTextFile(`eros-tower-settings-${diagnosticTimestamp()}.json`, JSON.stringify(packageData, null, 2), 'application/json;charset=utf-8');
+        setSettingsBackupStatus('설정 JSON을 다운로드했습니다. Provider API Key가 포함될 수 있으니 공유에 주의하세요.', 'success');
+      }, 'et-settings-backup-status');
+    });
+
+    $('et-copy-settings')?.addEventListener('click', async event => {
+      await withBusy(event.currentTarget, async () => {
+        setSettingsBackupStatus('현재 화면의 설정을 백업 JSON으로 만드는 중입니다.', 'info');
+        const packageData = await buildCurrentSettingsBackupPackage();
+        await copyText(JSON.stringify(packageData, null, 2));
+        setSettingsBackupStatus('설정 JSON을 클립보드에 복사했습니다. Provider API Key가 포함될 수 있으니 공유에 주의하세요.', 'success');
+      }, 'et-settings-backup-status');
+    });
+
+    $('et-import-settings')?.addEventListener('click', async event => {
+      if (!confirm('붙여넣은 JSON으로 에로스 타워 전체 설정을 교체할까요? 채팅별 관리상태와 Run Log는 변경하지 않습니다.')) return;
+      await withBusy(event.currentTarget, async () => {
+        const text = $('et-import-settings-json')?.value || '';
+        if (!text.trim()) throw new Error('가져올 설정 JSON이 비어 있습니다.');
+        const nextConfig = importSettingsBackupPackage(JSON.parse(text));
+        await Storage.set(STORAGE.config, nextConfig);
+        setSettingsBackupStatus('설정 불러오기 완료. 창을 다시 열면 Provider와 에이전트 설정이 반영됩니다.', 'success');
+      }, 'et-settings-backup-status');
     });
 
     $('et-save')?.addEventListener('click', async event => {
