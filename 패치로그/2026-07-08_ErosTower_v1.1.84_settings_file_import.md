@@ -27,4 +27,7 @@
 
 ## 배포
 
-- GitHub 푸시 후 raw URL 확인 결과를 기록할 예정.
+- GitHub `main` 배포 완료.
+- 커밋: `a67b263 Release Eros Tower 1.1.84`
+- v1 raw URL 확인: `//@display-name ☸Eros Tower 1.1.84` / `//@version 1.1.84`
+- compat raw URL 확인: `//@display-name ☸Eros Tower 1.1.84` / `//@version 4.0.26`
