@@ -1,7 +1,7 @@
 # Eros Tower Persona Resolver Fix
 
 Date: 2026-07-08
-Status: deployment candidate for v1.1.82
+Status: deployed as v1.1.82
 
 ## Reason
 - RisuAI stores the active persona body in `personaPrompt`, but Eros Tower only read `description`, `desc`, `prompt`, `note`, `content`, and `name`.
@@ -49,4 +49,12 @@ Status: deployment candidate for v1.1.82
   - `☸에로스 타워.js` matches `ErosTower.v1.update.js`.
 
 ## Deployment
-- Pending GitHub raw verification after push.
+- v1 raw URL returns:
+  - `//@display-name ☸Eros Tower 1.1.82`
+  - `//@version 1.1.82`
+  - `//@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js`
+- compat raw URL returns:
+  - `//@display-name ☸Eros Tower 1.1.82`
+  - `//@version 4.0.24`
+  - `//@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.update.js`
+- Verified after GitHub raw cache refreshed.
