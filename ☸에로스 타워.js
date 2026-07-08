@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.81
+//@display-name ☸Eros Tower 1.1.82
 //@api 3.0
-//@version 1.1.81
+//@version 1.1.82
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -42,18 +42,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.81
+ * Eros Tower 1.1.82
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.81 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.82 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.81';
+  const VERSION = '1.1.82';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.81`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.82`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -74,7 +74,7 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.81 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.82 analysis context';
   const MAIN_INJECTION_PLACEHOLDER_RE = /\{\{et\.(canonical|memory|state|characters|executive)\}\}/gi;
   const AUTO_INJECTION_FALLBACK_CHARS = 22000;
   const AUTO_INJECTION_MIN_CHARS = 3200;
@@ -90,6 +90,11 @@
     { index: 7, label: '초장편', englishLabel: 'very long-form', instruction: 'Write at least 9000 words.', scale: 'Very long-form: prepare dense continuity, layered character movement, multiple world threads, and long-range setup while preserving knowledge boundaries.' },
   ]);
   const SYSTEM_PATCH_NOTES = Object.freeze([
+    {
+      version: '1.1.82',
+      kind: 'risu-persona-resolver-alignment',
+      summary: 'Aligned Eros Tower persona resolution with RisuAI: chat-bound persona first, then selected persona, then username/personaPrompt/userNote fallback. personaPrompt now feeds Persona blocks, canonical {{user}} replacement, session fingerprinting, translation slots, and quality protected terms while blank personas stay blank.',
+    },
     {
       version: '1.1.81',
       kind: 'restored-baseline-data-gate',
@@ -3784,7 +3789,7 @@ function normalizeAdaptiveQualityState(value) {
     const identityPrimaryNames = uniqueStrings(identitySubjects.map(subject => subject.name).filter(Boolean));
     const identityProtectedNames = uniqueStrings(identitySubjects.flatMap(subject => [subject.name].concat(normalizeStringArray(subject.aliases))).filter(Boolean));
     const cardName = firstNonEmpty(context?.character?.name, context?.character?.data?.name);
-    const persona = getEffectiveSelectedPersona(context?.db);
+    const persona = getEffectiveSelectedPersona(context?.db, context?.currentChat);
     const useCardNameAsCast = !identityPrimaryNames.length && cardName;
     const names = uniqueStrings([
       ...identityPrimaryNames,
@@ -4108,7 +4113,7 @@ function normalizeAdaptiveQualityState(value) {
     const lastMessage = messages[messages.length - 1] || {};
     const character = context?.character || {};
     const db = context?.db || {};
-    const persona = getEffectiveSelectedPersona(db) || {};
+    const persona = getEffectiveSelectedPersona(db, context?.currentChat) || {};
     const registeredFirstMessage = context?.firstMessageInfo?.message !== undefined
       ? context.firstMessageInfo
       : resolveRegisteredFirstMessage(character, context?.currentChat);
@@ -4147,7 +4152,7 @@ function normalizeAdaptiveQualityState(value) {
         registeredFirstMessage?.message || '',
       ].join('|')),
       personaId: String(firstNonEmpty(persona?.id, persona?.name, '')),
-      personaHash: hashString([persona?.name, persona?.description, persona?.desc, persona?.prompt, persona?.note].filter(Boolean).join('|')),
+      personaHash: hashString([persona?.id, persona?.name, persona?.description, persona?.desc, persona?.prompt, persona?.personaPrompt, persona?.note, formatEffectivePersonaBlock(persona)].filter(Boolean).join('|')),
       globalLoreHash: hashString(safeJsonStringify(globalLore)),
       localLoreHash: hashString(safeJsonStringify(localLore)),
       moduleLoreHash: hashString(safeJsonStringify(selectedReferenceModuleLore)),
@@ -5504,6 +5509,9 @@ function normalizeAdaptiveQualityState(value) {
       'characters',
       'personas',
       'selectedPersona',
+      'username',
+      'personaPrompt',
+      'userNote',
       'modules',
       'enabledModules',
       'moduleIntergration',
@@ -5546,6 +5554,8 @@ function normalizeAdaptiveQualityState(value) {
     const promptModePreset = promptModeId ? (conf.promptPresets || []).find(preset => preset.id === promptModeId) : null;
     const noSession = !currentChat && !normalizedRequestMessages.length && !chatIdentity.key;
     const canonicalSources = collectCanonicalSources(character, db, currentChat, conf);
+    const effectivePersona = getEffectiveSelectedPersona(db, currentChat);
+    const effectiveUserName = firstNonEmpty(effectivePersona?.name, db?.username, db?.userName, '');
     const settingBlocks = buildSettingBlocks(character, db, currentChat, canonicalSources, registeredFirstMessage);
     return {
       scope,
@@ -5567,6 +5577,8 @@ function normalizeAdaptiveQualityState(value) {
       messages: contextMessages.length ? contextMessages : normalizedRequestMessages,
       requestMessages: normalizedRequestMessages,
       settingBlocks,
+      userName: effectiveUserName,
+      username: effectiveUserName,
       mode,
       promptModeId,
       promptModeName: promptModePreset?.name || '',
@@ -6137,7 +6149,7 @@ function normalizeAdaptiveQualityState(value) {
   }
 
   function buildSettingBlocks(character, db, chat, canonicalSources = null, registeredFirstMessage = null) {
-    const persona = getEffectiveSelectedPersona(db);
+    const persona = getEffectiveSelectedPersona(db, chat);
     const lore = canonicalSources || collectCanonicalSources(character, db, chat);
     const firstMessage = firstNonEmpty(registeredFirstMessage?.message, resolveRegisteredFirstMessage(character, chat).message, '(none)');
     const lorePreview = lore
@@ -6154,22 +6166,62 @@ function normalizeAdaptiveQualityState(value) {
     ].join('\n\n');
   }
 
-  function getSelectedPersona(db) {
+  function getSelectedPersona(db, chat = null) {
     const personas = Array.isArray(db?.personas) ? db.personas : [];
-    if (!personas.length) return null;
-    const selected = db?.selectedPersona;
-    if (Number.isInteger(selected) && personas[selected]) return personas[selected];
-    if (typeof selected === 'string') {
-      const trimmed = selected.trim();
-      if (!trimmed || /^(none|null|undefined|-1)$/i.test(trimmed)) return null;
-      return personas.find(p => p?.id === trimmed || p?.name === trimmed) || null;
-    }
-    return null;
+    const boundRef = firstNonEmpty(chat?.bindedPersona, chat?.data?.bindedPersona, chat?.meta?.bindedPersona);
+    const boundPersona = findPersonaByReference(personas, boundRef);
+    if (boundPersona) return boundPersona;
+    const selectedPersona = findPersonaByReference(personas, db?.selectedPersona);
+    if (selectedPersona) return selectedPersona;
+    return buildDatabasePersonaFallback(db);
   }
 
-  function getEffectiveSelectedPersona(db) {
-    const persona = getSelectedPersona(db);
+  function getEffectiveSelectedPersona(db, chat = null) {
+    const persona = getSelectedPersona(db, chat);
     return isNoPersonaPlaceholder(persona) ? null : persona;
+  }
+
+  function findPersonaByReference(personas, reference) {
+    if (reference === undefined || reference === null) return null;
+    const list = Array.isArray(personas) ? personas : [];
+    if (typeof reference === 'object' && !Array.isArray(reference)) {
+      const directKey = firstNonEmpty(reference.id, reference.name);
+      if (directKey) {
+        const matched = findPersonaByReference(list, directKey);
+        if (matched) return matched;
+      }
+      return reference;
+    }
+    if (Number.isInteger(reference) && list[reference]) return list[reference];
+    const raw = String(reference || '').trim();
+    if (!raw || /^(none|null|undefined|-1)$/i.test(raw)) return null;
+    if (/^\d+$/.test(raw)) {
+      const index = Number(raw);
+      if (Number.isInteger(index) && list[index]) return list[index];
+    }
+    return list.find(persona => {
+      const keys = [
+        persona?.id,
+        persona?.name,
+        persona?.note,
+        persona?.data?.id,
+        persona?.data?.name,
+      ].map(value => String(value || '').trim()).filter(Boolean);
+      return keys.includes(raw);
+    }) || null;
+  }
+
+  function buildDatabasePersonaFallback(db) {
+    const name = firstNonEmpty(db?.username, db?.userName, db?.name);
+    const personaPrompt = firstNonEmpty(db?.personaPrompt, db?.userPersona, db?.userPrompt);
+    const note = firstNonEmpty(db?.userNote, db?.note);
+    if (!name && !personaPrompt && !note) return null;
+    return {
+      id: 'risu-current-user-persona',
+      name,
+      personaPrompt,
+      note,
+    };
   }
 
   function formatEffectivePersonaBlock(persona) {
@@ -6178,11 +6230,13 @@ function normalizeAdaptiveQualityState(value) {
       persona?.description,
       persona?.desc,
       persona?.prompt,
+      persona?.personaPrompt,
       persona?.note,
       persona?.content,
       persona?.data?.description,
       persona?.data?.desc,
       persona?.data?.prompt,
+      persona?.data?.personaPrompt,
       persona?.data?.note,
       persona?.name
     );
@@ -6200,11 +6254,13 @@ function normalizeAdaptiveQualityState(value) {
       persona.description,
       persona.desc,
       persona.prompt,
+      persona.personaPrompt,
       persona.note,
       persona.content,
       persona.data?.description,
       persona.data?.desc,
       persona.data?.prompt,
+      persona.data?.personaPrompt,
       persona.data?.note
     );
     if (body && !isNoPersonaMarkerText(body)) return false;
@@ -6744,7 +6800,7 @@ function normalizeAdaptiveQualityState(value) {
       .replace(/\{\{(?:setvar|settempvar|setdefaultvar|setglobalvar|addvar|incvar|decvar|mulvar|divvar|modvar|flushvar)::[^{}]*\}\}/gi, '')
       .replace(/\{\{(?:getvar|gettempvar|tempvar|getglobalvar)::([^{}]+)\}\}/gi, (_, name) => resolver(name))
       .replace(/\{\{(?:char|character)\}\}/gi, firstNonEmpty(character?.name, character?.data?.name, ''))
-      .replace(/\{\{(?:user|persona)\}\}/gi, firstNonEmpty(getEffectiveSelectedPersona(db)?.name, ''))
+      .replace(/\{\{(?:user|persona)\}\}/gi, firstNonEmpty(getEffectiveSelectedPersona(db, chat)?.name, db?.username, db?.userName, ''))
       .replace(/\n{3,}/g, '\n\n')
       .trim();
     return text;
@@ -14951,7 +15007,7 @@ function evidenceConflictTouches(conflicts, item, kind, path) {
     };
     push(context?.character?.name);
     push(context?.character?.data?.name);
-    push(getEffectiveSelectedPersona(context?.db)?.name);
+    push(getEffectiveSelectedPersona(context?.db, context?.currentChat)?.name);
     (Array.isArray(state?.scene?.presentCast) ? state.scene.presentCast : []).forEach(push);
     Object.values(state?.characters || {}).forEach(character => {
       push(character?.name);
@@ -20746,7 +20802,7 @@ function evidenceConflictTouches(conflicts, item, kind, path) {
           secrets: (Array.isArray(state?.secretLedger) ? state.secretLedger : []).slice(0, 60).map(item => ({ id: item.id || '', tier: item.tier, status: item.status || '' })),
           relationships: (Array.isArray(state?.relationships) ? state.relationships : []).slice(0, 60).map(item => ({ id: item.id || relationshipKey(item), a: item.a || '', b: item.b || '', trust: item.trust, tension: item.tension })),
         }),
-        stripCBS: text => normalizeCanonicalLoreContent(String(text || ''), context?.character || null, null, context?.currentChat || null, conf),
+        stripCBS: text => normalizeCanonicalLoreContent(String(text || ''), context?.character || null, context?.db || null, context?.currentChat || null, conf),
         testExternalMemoryImport: value => {
           const parsed = typeof value === 'string' ? JSON.parse(value) : value;
           const imported = importStatePackage(parsed, context?.mode || 'rp');
