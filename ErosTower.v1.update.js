@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.1.84
+//@display-name ☸Eros Tower 1.1.85
 //@api 3.0
-//@version 1.1.84
+//@version 1.1.85
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -42,18 +42,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.1.84
+ * Eros Tower 1.1.85
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.1.84 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.1.85 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.1.84';
+  const VERSION = '1.1.85';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.84`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.1.85`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -74,7 +74,7 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.84 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.1.85 analysis context';
   const MAIN_INJECTION_PLACEHOLDER_RE = /\{\{et\.(canonical|memory|state|characters|executive)\}\}/gi;
   const AUTO_INJECTION_FALLBACK_CHARS = 22000;
   const AUTO_INJECTION_MIN_CHARS = 3200;
@@ -90,6 +90,11 @@
     { index: 7, label: '초장편', englishLabel: 'very long-form', instruction: 'Write at least 9000 words.', scale: 'Very long-form: prepare dense continuity, layered character movement, multiple world threads, and long-range setup while preserving knowledge boundaries.' },
   ]);
   const SYSTEM_PATCH_NOTES = Object.freeze([
+    {
+      version: '1.1.85',
+      kind: 'settings-import-merge-preserve',
+      summary: 'Settings import now merges imported config over the current saved config instead of replacing Storage.config wholesale, so partial or older settings JSON cannot silently reset agent enabled flags, model choices, temperature, max tokens, context window, or provider settings that are absent from the file.',
+    },
     {
       version: '1.1.84',
       kind: 'settings-backup-file-import',
@@ -19484,7 +19489,9 @@ function evidenceConflictTouches(conflicts, item, kind, path) {
     };
     const applySettingsBackupText = async (text) => {
       if (!String(text || '').trim()) throw new Error('가져올 설정 JSON이 비어 있습니다.');
-      const nextConfig = importSettingsBackupPackage(JSON.parse(text));
+      const latest = await getConfig();
+      const importedConfig = importSettingsBackupPackage(JSON.parse(text));
+      const nextConfig = configForStorage({ ...latest, ...importedConfig });
       await Storage.set(STORAGE.config, nextConfig);
       return nextConfig;
     };
