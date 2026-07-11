@@ -52,6 +52,10 @@
 
 ## 배포 후 확인
 
-- 배포 커밋: 확인 후 기록
-- v1 raw URL: 확인 후 기록
-- compat raw URL: 확인 후 기록
+- 배포 커밋: `19ad86379c3593629d3219a6e070b530fb2219e3`
+- 확인 시각: `2026-07-12 01:40:33 KST`
+- 커밋 고정 v1 raw: HTTP 200, `//@display-name ☸Eros Tower 1.2.1`, `//@version 1.2.1`, 로컬 SHA-256 일치.
+- 커밋 고정 compat raw: HTTP 200, `//@display-name ☸Eros Tower 1.2.1`, `//@version 4.0.29`, 로컬 SHA-256 일치.
+- `main` v1 업데이트 URL: HTTP 200, SHA-256 `5165FF9166B3C61D607E139F005D04104E65810B6F328384CC1F806058729581`로 로컬과 일치.
+- `main` compat 업데이트 URL: HTTP 200, SHA-256 `F9D91E58FED749B181708D193D062CD625DEFF30C6FFBA9B2115E035A4B3048B`로 로컬과 일치.
+- 원격 `main`: `19ad86379c3593629d3219a6e070b530fb2219e3` 확인.
