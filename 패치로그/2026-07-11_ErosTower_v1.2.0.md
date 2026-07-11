@@ -62,7 +62,10 @@
 
 ## 배포 후 확인
 
-- 배포 커밋: 대기
-- v1 raw URL: 대기
-- compat raw URL: 대기
-- commit-SHA raw 검증: 대기
+- 배포 커밋: `852b2936fd94937cd2db229e842b15b205045234`
+- 확인 시각: `2026-07-11 19:40 KST`
+- v1 raw URL: HTTP 200, `//@display-name ☸Eros Tower 1.2.0`, `//@version 1.2.0`
+- v1 raw SHA-256: `B4D3D8AF1E8724DAE9E7913ED0D25D58864353AAA6F17FF5E5B988222AB1853F`로 로컬과 일치
+- compat raw URL: HTTP 200, `//@display-name ☸Eros Tower 1.2.0`, `//@version 4.0.28`
+- compat raw SHA-256: `EE6F797100BA3C50A85E6DA01D9D093D4BBDD2D3633E5197D3A54B6701A2C24C`로 로컬과 일치
+- commit-SHA raw v1/compat: 두 파일 모두 HTTP 200 및 로컬 SHA-256 일치
