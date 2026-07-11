@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.2.0
+//@display-name ☸Eros Tower 1.2.1
 //@api 3.0
-//@version 4.0.28
+//@version 4.0.29
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -42,18 +42,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.2.0
+ * Eros Tower 1.2.1
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.2.0 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.2.1 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.2.0';
+  const VERSION = '1.2.1';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.2.0`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.2.1`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -74,7 +74,7 @@
   const OUTPUT_ARTIFACT_INDEX_VERSION = 1;
   const IMAGE_OWNERSHIP_INDEX_VERSION = 1;
   const STATE_SNAPSHOT_MANIFEST_VERSION = 2;
-  const CONFIG_SCHEMA_VERSION = 2;
+  const CONFIG_SCHEMA_VERSION = 4;
   const CANONICAL_ANNOTATION_VERSION = 2;
   const CANONICAL_ANNOTATION_REVISION = 'source-semantics-v2';
   const OUTPUT_ARTIFACT_TEXT_PREVIEW_CHARS = 180;
@@ -89,7 +89,7 @@
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
-  const MAIN_INJECTION_TITLE = 'Eros Tower 1.2.0 analysis context';
+  const MAIN_INJECTION_TITLE = 'Eros Tower 1.2.1 analysis context';
   const MAIN_INJECTION_PLACEHOLDER_RE = /\{\{et\.(canonical|memory|state|characters|executive)\}\}/gi;
   const AUTO_INJECTION_FALLBACK_CHARS = 22000;
   const AUTO_INJECTION_MIN_CHARS = 3200;
@@ -105,6 +105,11 @@
     { index: 7, label: '초장편', englishLabel: 'very long-form', instruction: 'Write at least 9000 words.', scale: 'Very long-form: prepare dense continuity, layered character movement, multiple world threads, and long-range setup while preserving knowledge boundaries.' },
   ]);
   const SYSTEM_PATCH_NOTES = Object.freeze([
+    {
+      version: '1.2.1',
+      kind: 'image-routing-placement-vertex-flex-release',
+      summary: 'Promotes the tested image pipeline corrections: fixed format-bound API connections, credential isolation, Vertex Gemini Flex headers, paragraph-aware placement, bilingual-safe display, configurable illustration sizing, actual image call tests, and nonintrusive Run Log error reporting.',
+    },
     {
       version: '1.2.0',
       kind: 'canonical-runtime-illustration-album-release',
@@ -242,14 +247,22 @@
   const GOE_PROMPT_DEFAULT_ID = 'builtin-goe-default';
   const GOE_PROMPT_TYPE = 'goe-resident-mode';
   const IMAGE_API_PROFILE_DEFAULT_ID = 'builtin-wellspring-nai';
+  const IMAGE_API_PROFILE_IDS = Object.freeze({
+    'wellspring-nai': IMAGE_API_PROFILE_DEFAULT_ID,
+    novelai: 'builtin-novelai-image',
+    'comfyui-local': 'builtin-comfyui-local',
+    'custom-json': 'builtin-custom-image-json',
+  });
   const IMAGE_API_PRESET_DEFAULT_ID = 'builtin-webnovel-illustration';
   const IMAGE_PRESET_MEDIA_VERSION = 1;
   const IMAGE_PRESET_MEDIA_STORAGE_PREFIX = 'image-preset-media:';
-  const IMAGE_RESIDENT_PROMPT_REVISION = 'v1.2.0-visual-reference-v1';
+  const IMAGE_RESIDENT_PROMPT_REVISION = 'v1.2.1-image-placement-ko-v1';
   const IMAGE_VISUAL_REFERENCE_CONTEXT_CHARS = 7600;
   const IMAGE_RESIDENT_LEGACY_BUILTIN_SIGNATURES = Object.freeze([
     { length: 2089, hash: '1cf76ws' },
     { length: 2533, hash: '16ho6ix' },
+    { length: 4036, hash: '1yo6gxr' },
+    { length: 4257, hash: '1wkhmxv' },
   ]);
   const IMAGE_RESIDENT_SYSTEM_PROMPT = [
     'You are a web novel illustration director and image-tagging resident.',
@@ -269,6 +282,7 @@
     '      "shots": [',
     '        {',
     '          "paragraph": 1,',
+    '          "placement": "앞 | 뒤",',
     '          "title": "short Korean scene title",',
     '          "memoryLine": "one emotionally resonant Korean line grounded in this exact moment",',
     '          "characterCount": "strict Danbooru count such as 1boy, 1girl, 2boys, or 1boy, 1girl",',
@@ -296,6 +310,7 @@
     '',
     'Rules:',
     '- Use existing paragraph order. If paragraph numbers are not explicitly shown, count paragraphs from 1.',
+    '- Set placement to "앞" by default. Use "뒤" only when the reader must encounter the paragraph first, such as a result, reveal, or aftermath image.',
     '- Select only moments that are visible in the current output.',
     '- Every selected shot must contain at least one visible character. Do not create scenery-only filler when a character moment is available.',
     '- characterCount must exactly match every fully or partially visible character. Use NAI/Danbooru count tags: 1boy, 2boys, 1girl, 2girls, or mixed counts.',
@@ -425,9 +440,9 @@
     goePromptModesJson: '',
     activeGoePromptModeId: GOE_PROMPT_DEFAULT_ID,
     imageApiProfilesJson: '',
-    activeImageApiProfileId: IMAGE_API_PROFILE_DEFAULT_ID,
     imageApiPresetsJson: '',
     activeImageApiPresetId: IMAGE_API_PRESET_DEFAULT_ID,
+    vertexTrafficMode: 'auto',
     providerPreset: 'ollama-local',
     activeProviderId: 'ollama-local',
     modelsPath: '/models',
@@ -1118,13 +1133,95 @@
     }
   }
 
+  function legacyImageApiFormatFromProfile(profile = {}) {
+    const explicit = firstNonEmpty(profile?.provider, profile?.imageApiFormat, profile?.imageFormat, '');
+    if (explicit) return normalizeImageProviderType(explicit);
+    const fixedFormat = Object.entries(IMAGE_API_PROFILE_IDS).find(([, id]) => id === profile?.id)?.[0];
+    if (fixedFormat) return fixedFormat;
+    const hint = [profile?.id, profile?.name, profile?.endpoint, profile?.url]
+      .map(value => String(value || '').toLowerCase())
+      .join(' ');
+    if (/novelai|image\.novelai\.net/.test(hint)) return 'novelai';
+    if (/comfy/.test(hint)) return 'comfyui-local';
+    if (/custom|json/.test(hint)) return 'custom-json';
+    return 'wellspring-nai';
+  }
+
+  function migrateImageApiConnectionFormat(source) {
+    const pipelineText = String(source?.pipelineJson || '').trim();
+    if (!pipelineText) return { config: source, changed: false };
+    try {
+      const parsed = JSON.parse(pipelineText);
+      const agents = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.agents) ? parsed.agents : null;
+      if (!agents) return { config: source, changed: false };
+      const imageAgent = agents.find(agent => agent?.id === IMAGE_RESIDENT_AGENT_ID);
+      if (!imageAgent) return { config: source, changed: false };
+
+      const rawProfiles = parseJsonConfigArray(source.imageApiProfilesJson, defaultImageApiProfiles);
+      const selectedProfileId = normalizeImageApiEditorProfileId(
+        imageAgent.imageApiProfileId || source.activeImageApiProfileId,
+        rawProfiles,
+      );
+      const selectedProfile = rawProfiles.find(profile => profile?.id === selectedProfileId) || rawProfiles[0] || {};
+      const imageApiFormat = normalizeImageProviderType(firstNonEmpty(
+        imageAgent.imageApiFormat,
+        imageAgent.imageFormat,
+        imageAgent.imageProviderType,
+        legacyImageApiFormatFromProfile(selectedProfile),
+      ));
+      const targetProfileId = imageApiProfileIdForFormat(imageApiFormat);
+      const targetDefault = defaultImageApiProfiles().find(profile => profile.id === targetProfileId) || defaultImageApiProfiles()[0];
+      const migratedSelectedProfile = {
+        ...targetDefault,
+        ...selectedProfile,
+        id: targetProfileId,
+        name: targetDefault.name,
+      };
+      let migratedRawProfiles = rawProfiles.map(profile => {
+        if (profile?.id === targetProfileId) return migratedSelectedProfile;
+        if (profile?.id === selectedProfileId && selectedProfileId !== targetProfileId && Object.values(IMAGE_API_PROFILE_IDS).includes(selectedProfileId)) {
+          return defaultImageApiProfiles().find(item => item.id === selectedProfileId) || profile;
+        }
+        return profile;
+      });
+      if (!migratedRawProfiles.some(profile => profile?.id === targetProfileId)) {
+        migratedRawProfiles = migratedRawProfiles.concat(migratedSelectedProfile);
+      }
+      const migratedAgents = agents.map(agent => {
+        if (agent?.id !== IMAGE_RESIDENT_AGENT_ID) return agent;
+        const migrated = { ...agent, imageApiFormat };
+        delete migrated.imageApiProfileId;
+        delete migrated.imageFormat;
+        delete migrated.imageProviderType;
+        return migrated;
+      });
+      const migratedPipeline = Array.isArray(parsed) ? migratedAgents : { ...parsed, agents: migratedAgents };
+      const migratedConfig = {
+        ...source,
+        imageApiProfilesJson: serializeImageApiProfiles(migratedRawProfiles),
+        pipelineJson: JSON.stringify(migratedPipeline, null, 2),
+      };
+      delete migratedConfig.activeImageApiProfileId;
+      return { config: migratedConfig, changed: true };
+    } catch (err) {
+      log('image API connection/format migration skipped', err.message);
+      return { config: source, changed: false };
+    }
+  }
+
   function migrateStoredConfig(value) {
     const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
-    const version = parseNumber(source.configSchemaVersion, 0, 0, CONFIG_SCHEMA_VERSION);
-    if (version >= CONFIG_SCHEMA_VERSION) return { config: source, changed: false };
+    const storedVersion = parseNumber(source.configSchemaVersion, 0, 0, CONFIG_SCHEMA_VERSION);
+    const imageMigration = storedVersion < CONFIG_SCHEMA_VERSION
+      ? migrateImageApiConnectionFormat(source)
+      : { config: source, changed: false };
+    const version = parseNumber(imageMigration.config.configSchemaVersion, 0, 0, CONFIG_SCHEMA_VERSION);
+    const changed = imageMigration.changed || version < CONFIG_SCHEMA_VERSION;
     return {
-      config: { ...source, configSchemaVersion: CONFIG_SCHEMA_VERSION },
-      changed: true,
+      config: changed
+        ? { ...imageMigration.config, configSchemaVersion: CONFIG_SCHEMA_VERSION }
+        : imageMigration.config,
+      changed,
     };
   }
 
@@ -1275,6 +1372,9 @@
       merged.chatPath = activeProvider.chatPath;
       merged.extraHeaders = activeProvider.extraHeaders || '';
       merged.modelOptions = activeProvider.modelOptions || [];
+      merged.vertexProjectId = activeProvider.vertexProjectId || '';
+      merged.vertexLocation = activeProvider.vertexLocation || 'global';
+      merged.vertexTrafficMode = normalizeVertexTrafficMode(activeProvider.vertexTrafficMode);
     }
     merged.modelPresets = parseModelPresets(merged.modelPresetsJson, merged);
     merged.promptPresets = normalizePromptPresets(merged);
@@ -1288,8 +1388,8 @@
     merged.activeGoePromptModeId = normalizeActiveGoePromptModeId(merged.activeGoePromptModeId, merged.goePromptModes);
     merged.goePromptModesJson = serializeGoePromptModes(merged.goePromptModes);
     merged.imageApiProfiles = normalizeImageApiProfiles(merged.imageApiProfilesJson);
-    merged.activeImageApiProfileId = normalizeActiveImageApiProfileId(merged.activeImageApiProfileId, merged.imageApiProfiles);
     merged.imageApiProfilesJson = serializeImageApiProfiles(merged.imageApiProfiles);
+    delete merged.activeImageApiProfileId;
     merged.imageApiPresets = normalizeImageApiPresets(merged.imageApiPresetsJson);
     merged.activeImageApiPresetId = normalizeActiveImageApiPresetId(merged.activeImageApiPresetId, merged.imageApiPresets);
     merged.imageApiPresetsJson = serializeImageApiPresets(merged.imageApiPresets);
@@ -1336,6 +1436,17 @@
     if (['vertex', 'vertexai', 'vertex-ai'].includes(raw)) return 'vertex-ai';
     if (['ollama', 'openai', 'deepseek', 'google', 'vertex-ai', 'openrouter', 'groq', 'together', 'mistral', 'fireworks', 'perplexity', 'nanogpt', 'vercel-ai-gateway', 'lmstudio', 'vllm', 'copilot', 'custom'].includes(raw)) return raw;
     return 'ollama';
+  }
+
+  function normalizeVertexTrafficMode(value) {
+    return String(value || '').trim().toLowerCase() === 'flex' ? 'flex' : 'auto';
+  }
+
+  function vertexTrafficModeOptions() {
+    return [
+      { value: 'auto', label: '자동 (기존 방식)' },
+      { value: 'flex', label: 'Flex PayGo' },
+    ];
   }
 
   function providerDefaults(provider) {
@@ -1409,6 +1520,7 @@
       modelOptions: Object.keys(preset.models || {}),
       vertexProjectId: '',
       vertexLocation: preset.provider === 'vertex-ai' ? 'global' : '',
+      vertexTrafficMode: 'auto',
       enabled: true,
     };
   }
@@ -1440,6 +1552,7 @@
       modelOptions: [],
       vertexProjectId: '',
       vertexLocation: '',
+      vertexTrafficMode: 'auto',
       enabled: true,
     }, { ...DEFAULT_CONFIG, providerRegistry: providers }, providers.length);
   }
@@ -1463,7 +1576,7 @@
       preset: presetId,
       provider,
       baseUrl: provider === 'vertex-ai' ? '' : normalizeUrl(explicitBaseUrl ? entry.baseUrl : preset.baseUrl || defaults.baseUrl || fallbackBaseUrl),
-      apiKey: apiKey === MASKED_SECRET ? findProviderEntry(conf.providerRegistry || [], id)?.apiKey || conf.apiKey || '' : apiKey,
+      apiKey: apiKey === MASKED_SECRET ? findProviderEntry(conf.providerRegistry || [], id)?.apiKey || '' : apiKey,
       defaultModel: cleanString(firstNonEmpty(entry.defaultModel, entry.model, ''), explicitModel ? '' : preset.defaultModel || defaults.model || conf.model),
       modelsPath: provider === 'vertex-ai' ? '' : normalizeOptionalApiPath(entry.modelsPath, preset.modelsPath ?? '/models'),
       chatPath: provider === 'vertex-ai' ? '' : normalizeApiPath(entry.chatPath, preset.chatPath || '/chat/completions'),
@@ -1472,12 +1585,21 @@
       modelOptions: normalizeModelOptions(entry.modelOptions, entry.defaultModel || entry.model || preset.defaultModel, presetId),
       vertexProjectId: cleanString(firstNonEmpty(entry.vertexProjectId, entry.projectId, serviceAccount?.project_id, ''), ''),
       vertexLocation: cleanString(firstNonEmpty(entry.vertexLocation, entry.location, ''), provider === 'vertex-ai' ? 'global' : ''),
+      vertexTrafficMode: normalizeVertexTrafficMode(entry.vertexTrafficMode || entry.vertexServiceTier),
       enabled: true,
     };
   }
 
   function findProviderEntry(registry, id) {
     return (Array.isArray(registry) ? registry : []).find(entry => entry.id === id) || null;
+  }
+
+  function resolveProviderApiKey(conf, providerEntry = null, providerType = '') {
+    if (providerEntry) return String(providerEntry.apiKey || '');
+    const provider = normalizeProvider(providerType || conf?.provider);
+    const legacyKey = String(conf?.providerKeys?.[provider] || '');
+    if (legacyKey) return legacyKey;
+    return normalizeProvider(conf?.provider) === provider ? String(conf?.apiKey || '') : '';
   }
 
   function normalizeActiveProviderId(value, registry) {
@@ -2207,9 +2329,6 @@
 
   function mergeAgentWithPromptRevision(stored, fallback) {
     const merged = { ...(fallback || {}), ...(stored || {}) };
-    if (fallback?.id === IMAGE_RESIDENT_AGENT_ID && stored && !['imageApiFormat', 'imageFormat', 'imageProviderType'].some(key => Object.prototype.hasOwnProperty.call(stored, key))) {
-      delete merged.imageApiFormat;
-    }
     if (fallback?.promptRevision && (!stored || stored.promptRevision !== fallback.promptRevision)) {
       const imageResident = fallback.id === IMAGE_RESIDENT_AGENT_ID;
       const preserveCustomImagePrompt = imageResident && stored && !isKnownBuiltinImageResidentPrompt(stored.systemPrompt);
@@ -2249,25 +2368,8 @@
     const rawContextWindow = agent.contextWindow ?? fallback?.contextWindow;
     const contextWindow = parseUserNumberSetting(rawContextWindow, conf.contextWindow);
     const imageResident = agent.id === IMAGE_RESIDENT_AGENT_ID || fallback?.id === IMAGE_RESIDENT_AGENT_ID;
-    const imageProfiles = imageResident
-      ? (Array.isArray(conf.imageApiProfiles) ? conf.imageApiProfiles : normalizeImageApiProfiles(conf.imageApiProfilesJson))
-      : [];
-    const imageApiProfileId = imageResident
-      ? normalizeActiveImageApiProfileId(agent.imageApiProfileId || fallback?.imageApiProfileId || conf.activeImageApiProfileId, imageProfiles)
-      : '';
-    const legacyImageProfile = imageResident
-      ? imageProfiles.find(profile => profile.id === imageApiProfileId) || imageProfiles[0] || null
-      : null;
-    const imageApiFormat = imageResident
-      ? normalizeImageProviderType(
-        agent.imageApiFormat
-        || agent.imageFormat
-        || agent.imageProviderType
-        || legacyImageProfile?.provider
-        || fallback?.imageApiFormat,
-      )
-      : '';
-    return {
+    const imageDisplay = imageResident ? normalizeImageDisplaySettings({ ...(fallback || {}), ...(agent || {}) }) : null;
+    const normalized = {
       ...agent,
       name: normalizedName || fallback?.name || agent.id,
       phase,
@@ -2300,12 +2402,27 @@
       translationPromptModeId: normalizeActiveTranslationPromptModeId(agent.translationPromptModeId || fallback?.translationPromptModeId || conf.activeTranslationPromptModeId, conf.translationPromptModes),
       goePromptModeId: normalizeActiveGoePromptModeId(agent.goePromptModeId || fallback?.goePromptModeId || conf.activeGoePromptModeId, conf.goePromptModes),
       ...(imageResident ? {
-        imageApiProfileId,
-        imageApiFormat,
+        imageApiFormat: normalizeImageProviderType(
+          agent.imageApiFormat
+          || agent.imageFormat
+          || agent.imageProviderType
+          || fallback?.imageApiFormat,
+        ),
         imageApiPresetId: normalizeActiveImageApiPresetId(agent.imageApiPresetId || fallback?.imageApiPresetId || conf.activeImageApiPresetId, conf.imageApiPresets),
         maxImages: Math.max(1, Math.floor(parseUserNumberSetting(agent.maxImages ?? fallback?.maxImages, 1))),
+        imageDisplaySize: imageDisplay.size,
+        imageDisplayWidth: imageDisplay.width,
+        imageDisplayAspect: imageDisplay.aspect,
+        imageDisplayCustomAspect: imageDisplay.customAspect,
+        imageDisplayFit: imageDisplay.fit,
       } : {}),
     };
+    if (imageResident) {
+      delete normalized.imageApiProfileId;
+      delete normalized.imageFormat;
+      delete normalized.imageProviderType;
+    }
+    return normalized;
   }
 
   function defaultPipeline() {
@@ -2339,10 +2456,14 @@
           postMode: 'suffix',
           includeHistory: false,
           includePreviousNotes: false,
-          imageApiProfileId: IMAGE_API_PROFILE_DEFAULT_ID,
           imageApiFormat: 'wellspring-nai',
           imageApiPresetId: IMAGE_API_PRESET_DEFAULT_ID,
           maxImages: 1,
+          imageDisplaySize: 'medium',
+          imageDisplayWidth: 480,
+          imageDisplayAspect: 'original',
+          imageDisplayCustomAspect: '2:3',
+          imageDisplayFit: 'contain',
         },
       ],
     };
@@ -2405,7 +2526,7 @@
       maxTokens: parseUserNumberSetting(agent?.maxTokens ?? preset?.maxTokens, conf.maxTokens),
       contextWindow: parseUserNumberSetting(agent?.contextWindow ?? preset?.contextWindow, conf.contextWindow),
       timeoutMs: parseUserNumberSetting(agent?.timeoutMs ?? preset?.timeoutMs, conf.timeoutMs),
-      apiKey: providerEntry?.apiKey || conf.providerKeys?.[provider] || conf.apiKey || '',
+      apiKey: resolveProviderApiKey(conf, providerEntry, provider),
       modelsPath: providerEntry && providerEntry.modelsPath !== undefined ? providerEntry.modelsPath : conf.modelsPath,
       chatPath: providerEntry?.chatPath || conf.chatPath,
       extraHeaders: providerEntry?.extraHeaders || conf.extraHeaders || '',
@@ -2413,6 +2534,7 @@
       modelOptions: providerEntry?.modelOptions || conf.modelOptions || [],
       vertexProjectId: providerEntry?.vertexProjectId || conf.vertexProjectId || '',
       vertexLocation: providerEntry?.vertexLocation || conf.vertexLocation || 'global',
+      vertexTrafficMode: normalizeVertexTrafficMode(providerEntry?.vertexTrafficMode || conf.vertexTrafficMode),
       presetExtraBodyJson: preset?.extraBodyJson || '',
     };
   }
@@ -10215,6 +10337,80 @@ function normalizeAdaptiveQualityState(value) {
     ];
   }
 
+  function imageApiProfileIdForFormat(value) {
+    const format = normalizeImageProviderType(value);
+    return IMAGE_API_PROFILE_IDS[format] || IMAGE_API_PROFILE_DEFAULT_ID;
+  }
+
+  function imageApiFormatForProfileId(value) {
+    const id = cleanString(value, '');
+    return Object.entries(IMAGE_API_PROFILE_IDS).find(([, profileId]) => profileId === id)?.[0] || 'wellspring-nai';
+  }
+
+  function normalizeImageDisplaySize(value) {
+    const raw = String(value || '').trim().toLowerCase();
+    if (['small', '작게'].includes(raw)) return 'small';
+    if (['large', '크게'].includes(raw)) return 'large';
+    if (['full', 'fit', '화면', '화면 맞춤'].includes(raw)) return 'full';
+    if (['original', '원본', '원본 크기'].includes(raw)) return 'original';
+    if (['custom', '직접', '직접 입력'].includes(raw)) return 'custom';
+    return 'medium';
+  }
+
+  function normalizeImageDisplayAspect(value) {
+    const raw = String(value || '').trim().toLowerCase().replace(/\s+/g, '');
+    if (['1:1', '2:3', '3:4', '4:3', '16:9'].includes(raw)) return raw;
+    if (['custom', '직접', '직접입력'].includes(raw)) return 'custom';
+    return 'original';
+  }
+
+  function normalizeImageDisplayFit(value) {
+    const raw = String(value || '').trim().toLowerCase();
+    return ['cover', '채우기', '잘라서 채우기'].includes(raw) ? 'cover' : 'contain';
+  }
+
+  function normalizeImageDisplaySettings(value = {}) {
+    const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    const width = Number(source.imageDisplayWidth ?? source.displayWidth ?? source.width ?? 480);
+    return {
+      size: normalizeImageDisplaySize(source.imageDisplaySize || source.displaySize || source.size),
+      width: Number.isFinite(width) && width > 0 ? Math.floor(width) : 480,
+      aspect: normalizeImageDisplayAspect(source.imageDisplayAspect || source.displayAspect || source.aspect),
+      customAspect: cleanString(source.imageDisplayCustomAspect || source.displayCustomAspect || source.customAspect, '2:3'),
+      fit: normalizeImageDisplayFit(source.imageDisplayFit || source.displayFit || source.fit),
+    };
+  }
+
+  function imageDisplaySizeOptions() {
+    return [
+      { value: 'small', label: '작게 · 320px' },
+      { value: 'medium', label: '보통 · 480px' },
+      { value: 'large', label: '크게 · 720px' },
+      { value: 'full', label: '화면 너비에 맞춤' },
+      { value: 'original', label: '원본 크기' },
+      { value: 'custom', label: '직접 입력' },
+    ];
+  }
+
+  function imageDisplayAspectOptions() {
+    return [
+      { value: 'original', label: '원본 비율' },
+      { value: '1:1', label: '정사각형 · 1:1' },
+      { value: '2:3', label: '세로 · 2:3' },
+      { value: '3:4', label: '세로 · 3:4' },
+      { value: '4:3', label: '가로 · 4:3' },
+      { value: '16:9', label: '가로 · 16:9' },
+      { value: 'custom', label: '직접 입력' },
+    ];
+  }
+
+  function imageDisplayFitOptions() {
+    return [
+      { value: 'contain', label: '전체 이미지 표시' },
+      { value: 'cover', label: '비율에 맞춰 채우기' },
+    ];
+  }
+
   function imageProviderUsesSiteGenerationSettings(provider) {
     return normalizeImageProviderType(provider) === 'wellspring-nai';
   }
@@ -10229,7 +10425,7 @@ function normalizeAdaptiveQualityState(value) {
 
   function defaultImageKeyHeaderForProvider(provider) {
     const type = normalizeImageProviderType(provider);
-    if (type === 'comfyui-local' || type === 'custom-json') return 'none';
+    if (type === 'comfyui-local') return 'none';
     return 'authorization-bearer';
   }
 
@@ -10237,6 +10433,93 @@ function normalizeAdaptiveQualityState(value) {
     const type = normalizeImageProviderType(provider);
     if (type === 'custom-json') return 'data.0.image';
     return '';
+  }
+
+  function imageApiCredentialInfo(profile = null) {
+    const provider = normalizeImageProviderType(profile?.provider);
+    const required = provider === 'novelai' || provider === 'wellspring-nai';
+    const headers = parseOptionalJsonObject(profile?.headersJson);
+    const headerCredential = Object.entries(headers).some(([key, value]) =>
+      ['authorization', 'x-api-key', 'api-key', 'x-novelai-token'].includes(String(key || '').trim().toLowerCase())
+        && Boolean(cleanString(value, ''))
+    );
+    const apiKeyCredential = Boolean(cleanString(profile?.apiKey, ''));
+    return {
+      provider,
+      required,
+      present: apiKeyCredential || headerCredential,
+      source: apiKeyCredential ? 'api-key' : headerCredential ? 'headers-json' : '',
+    };
+  }
+
+  function imageApiBearerHeader(apiKey = '') {
+    const value = cleanString(apiKey, '');
+    return /^Bearer\s+/i.test(value) ? value : value ? `Bearer ${value}` : '';
+  }
+
+  function imageApiEndpointHost(endpoint) {
+    try {
+      return new URL(String(endpoint || '')).host || '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function imageApiProfileDiagnostic(profile = null) {
+    const credential = imageApiCredentialInfo(profile);
+    return {
+      profileId: cleanString(profile?.id, ''),
+      profileName: cleanString(profile?.name, ''),
+      provider: credential.provider,
+      endpointHost: imageApiEndpointHost(profile?.endpoint),
+      enabled: profile?.enabled !== false,
+      credentialRequired: credential.required,
+      credentialPresent: credential.present,
+      credentialSource: credential.source,
+    };
+  }
+
+  function validateImageApiProfile(profile = null) {
+    if (!profile) return { ok: false, code: 'image-profile-missing', message: '선택한 삽화 API 프로필을 찾지 못했습니다.' };
+    if (profile.enabled === false) return { ok: false, code: 'image-profile-disabled', message: `삽화 API "${profile.name || profile.id}"가 꺼져 있습니다.` };
+    if (!cleanString(profile.endpoint, '')) return { ok: false, code: 'image-endpoint-missing', message: `삽화 API "${profile.name || profile.id}"의 요청 URL이 비어 있습니다.` };
+    const credential = imageApiCredentialInfo(profile);
+    if (credential.required && !credential.present) {
+      const keyName = credential.provider === 'novelai' ? 'NovelAI Persistent API Token' : 'Wellspring ws-key';
+      return {
+        ok: false,
+        code: 'image-api-key-missing',
+        message: `${keyName}이 삽화 API 프로필에 저장되지 않았습니다. 이미진씨의 텍스트 Provider API Key와 이미지 생성 API Key는 서로 별개입니다.`,
+      };
+    }
+    return { ok: true, code: '', message: '' };
+  }
+
+  function friendlyImageApiError(error, profile = null) {
+    const raw = cleanString(error?.message || error, '알 수 없는 이미지 API 오류');
+    const provider = normalizeImageProviderType(profile?.provider);
+    if (/recaptcha token is required for trial generation/i.test(raw)) {
+      return 'NovelAI가 비로그인 체험 요청으로 판정해 생성을 거절했습니다. 삽화 API 설정에 NovelAI Persistent API Token이 저장되어 실제 요청에 전달되는지 확인하세요. 텍스트 Provider의 API Key와는 별개입니다.';
+    }
+    if (/\b401\b|unauthori[sz]ed|invalid session|invalid api key|invalid token/i.test(raw)) {
+      return `${provider === 'novelai' ? 'NovelAI Persistent API Token' : '삽화 API Key'} 인증에 실패했습니다. 선택한 삽화 API 프로필의 Key/Token과 요청 URL을 확인하세요.`;
+    }
+    if (/\b403\b|forbidden/i.test(raw)) {
+      return '삽화 API가 요청 권한을 거부했습니다. 선택한 이미지 API의 Key/Token, 계정 권한, 요청 URL을 확인하세요.';
+    }
+    return shortAlertText(raw, 240);
+  }
+
+  function imageApiCredentialGuide(profile = null) {
+    const diagnostic = imageApiProfileDiagnostic(profile);
+    if (diagnostic.provider === 'novelai') {
+      return `${diagnostic.credentialPresent ? 'NovelAI Persistent API Token 저장됨' : 'NovelAI Persistent API Token 필요'} · 텍스트 Provider API Key와 별도로 이 삽화 API 프로필에 저장합니다.`;
+    }
+    if (diagnostic.provider === 'wellspring-nai') {
+      return `${diagnostic.credentialPresent ? 'Wellspring ws-key 저장됨' : 'Wellspring ws-key 필요'} · Wellspring 이미지 생성용 키를 이 삽화 API 프로필에 저장합니다.`;
+    }
+    if (diagnostic.provider === 'comfyui-local') return '로컬 ComfyUI는 기본적으로 API Key가 필요하지 않습니다.';
+    return diagnostic.credentialPresent ? '커스텀 이미지 API 인증 정보가 저장되어 있습니다.' : '인증이 필요한 커스텀 API라면 Key/Token 또는 Headers JSON을 입력하세요.';
   }
 
   function imagePresetProviderGuide(provider) {
@@ -10251,7 +10534,7 @@ function normalizeAdaptiveQualityState(value) {
     if (type === 'novelai') {
       return `${formatName} 형식: NAI 모델·비율·Steps·Prompt Guidance·Sampler·Seed와 NAI V4 캐릭터 프롬프트를 직접 전송합니다. Vibe Transfer와 V4.5 Precise Reference도 이 프리셋에서 관리합니다.`;
     }
-    return `${formatName} 형식: Wellspring은 사이트에 저장된 활성 생성 설정을 사용합니다. 에로스 타워 프리셋에서는 Positive prefix / Negative prompt 중심으로 삽화 프롬프트를 관리합니다.`;
+    return `${formatName} 형식: Wellspring은 사이트에 저장된 활성 생성 설정을 사용합니다. 에로스 타워 프리셋에서는 긍정/부정 프롬프트 중심으로 삽화 프롬프트를 관리합니다.`;
   }
 
   function imagePresetLoraPlaceholder(provider) {
@@ -10327,7 +10610,6 @@ function normalizeAdaptiveQualityState(value) {
       {
         id: IMAGE_API_PROFILE_DEFAULT_ID,
         name: 'Wellspring / 챈섭',
-        provider: 'wellspring-nai',
         enabled: true,
         endpoint: defaultImageEndpointForProvider('wellspring-nai'),
         apiKey: '',
@@ -10340,7 +10622,6 @@ function normalizeAdaptiveQualityState(value) {
       {
         id: 'builtin-novelai-image',
         name: 'NovelAI 공식/호환',
-        provider: 'novelai',
         enabled: true,
         endpoint: defaultImageEndpointForProvider('novelai'),
         apiKey: '',
@@ -10353,7 +10634,6 @@ function normalizeAdaptiveQualityState(value) {
       {
         id: 'builtin-comfyui-local',
         name: 'ComfyUI 로컬',
-        provider: 'comfyui-local',
         enabled: true,
         endpoint: defaultImageEndpointForProvider('comfyui-local'),
         apiKey: '',
@@ -10366,11 +10646,10 @@ function normalizeAdaptiveQualityState(value) {
       {
         id: 'builtin-custom-image-json',
         name: '커스텀 JSON',
-        provider: 'custom-json',
         enabled: true,
         endpoint: '',
         apiKey: '',
-        apiKeyHeader: 'none',
+        apiKeyHeader: defaultImageKeyHeaderForProvider('custom-json'),
         headersJson: '',
         requestTemplateJson: '',
         responsePath: defaultImageResponsePathForProvider('custom-json'),
@@ -10575,6 +10854,14 @@ function normalizeAdaptiveQualityState(value) {
         positivePrefix: `3::oekaki, jaggy lines, pixel art, aliasing, thick outlines ::, 2.14::artist:wanke ::, 3::artist:chuzenji ::, 0.74::artist:gogalking ::, 2::artist:healthyman ::, 0.9::ratatatat74 ::, 1.14::artist:myabit ::, year 2025, year 2024, -2::multiple views ::, -10::artist collaboration ::, -1.5::simple background ::, best quality, amazing quality, very aesthetic, absurdres, 2::commission ::, masterpiece, -2::blurry, otokonoko ::, morning school background, -1::scary::, bright coloring, 2::manga style, shiny effect::`,
         negativePrompt: `text, logo, watermark, too many watermarks, blank page, text-only page, reference, username, signature, artist:xinzoruo, artist:milkpanda, artist collaboration, variant set, large variant set, 4koma, 2koma, toon (style), oekaki, chibi, turnaround, film grain, monochrome, dithering, screentones, dated, old, 1990s (style), mutation, deformed, distorted, disfigured, artistic error, distorted anatomy, anatomical structure error, asymmetrical face, unnatural hair, bad eyes, cloudy eyes, blank eyes, pointy ears, bad proportions, bad limb, bad hands, extra hands, bad hand structure, extra digits, fewer digits, bad legs, extra legs, amputee, distorted composition, bad perspective, multiple views, negative space, animation error, chromatic aberration, disorganized colors, scan artifacts, jpeg artifacts, vertical lines, vertical banding, worst quality, bad quality, lowres, blurry, fewer details, unfinished, incomplete, amateur, cheesy, unsatisfactory, inadequate, deficient, subpar, poor, displeasing, very displeasing, bad illustration, bad portrait`,
       },
+      {
+        id: 'builtin-nai-style-eolheon-chestnutflower',
+        name: '얼헌',
+        creator: 'ChestnutFlower',
+        builtin: true,
+        positivePrefix: `{{{artist:iuui}}}, {{artist:ningen_mame}}, {artist:ciloranko}, {artist:sho_(sho_lwlw)}, {{artist:tianliang duohe fangdongye}}, [[[[[[[quasarcake]]]]]]], [[[[[baocaizi]]]]], [[artist:kawacy]], [[[artist:kadeart]]], [[[artist:maccha (mochancc)]]], [artist:ask (askzy)], year 2024, {animated}, best quality, amazing quality, very aesthetic, highres, incredibly absurdres`,
+        negativePrompt: `blurry, lowres, error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, multiple views, logo, too many watermarks, lowres, {bad}, error, fewer, extra, missing, worst quality, jpeg artifacts, bad quality, watermark, unfinished, displeasing, chromatic aberration, signature, extra digits, artistic error, username, scan, [abstract], normal quality, bad quality, low quality, worst quality, lowres, displeasing, very displeasing, {bad}, bad anatomy, bad hands, text, error, missing, missing finger, extra, extra digits, fewer, fewer digits, cropped, JPEG artifacts, signature, watermark, username, blurry, artist name, bad face, fat, duplicate, mutation, deformed, disfigured, extra arms, extra legs, long neck, bad feet, bad proportions, extra, fewer, unfinished, chromatic aberration, scan, scan artifacts, muscular female, monochrome, glasses, head out of frame nostrils, lips, {hands on own chest, hand on breast}, no pupils, white pupils, snake head, snake tail, open shirt, breasts grab, opening eyes, tight clothes, squeezing, wet clothes, see-through, popped button, ponytail, twintails, tied hair, braid, side ponytail, asymmetrical hair, chinese clothes, ear piercing, choker, grey background, shirt lift, mole, hand in own hair, braid, tied hair, ribbon, sleeves rolled up, opening eyes, tie clip, glowing eyes, hime cut, belt, long sideburns, tied hair, ponytail, side ponytail, hair flowing over, short sleeves, touching breast, touching necktie, breast press, cropped jacket, crop top, loli, sitting, forehead jewel, forehead mark, blue hair, close-up, leaning forward, nostril`,
+      },
     ].map(preset => ({
       ...preset,
       enabled: true,
@@ -10623,56 +10910,71 @@ function normalizeAdaptiveQualityState(value) {
       && ['Wellspring / 챈섭 NAI 호환', 'Wellspring/챈섭 NAI 호환'].includes(storedName)
       ? 'Wellspring / 챈섭'
       : storedName;
+    const legacyFormat = legacyImageApiFormatFromProfile(profile);
     return {
       id,
       name,
-      provider: normalizeImageProviderType(profile.provider),
       enabled: profile.enabled !== false,
-      endpoint: normalizeUrl(profile.endpoint || profile.url || defaultImageEndpointForProvider(profile.provider)),
+      endpoint: normalizeUrl(profile.endpoint || profile.url || defaultImageEndpointForProvider(legacyFormat)),
       apiKey: profile.apiKey === MASKED_SECRET ? '' : cleanString(profile.apiKey, ''),
-      apiKeyHeader: cleanString(profile.apiKeyHeader || profile.keyHeader, defaultImageKeyHeaderForProvider(profile.provider)),
+      apiKeyHeader: cleanString(profile.apiKeyHeader || profile.keyHeader, defaultImageKeyHeaderForProvider(legacyFormat)),
       headersJson: cleanString(profile.headersJson || profile.headers || '', ''),
       requestTemplateJson: cleanString(profile.requestTemplateJson || profile.requestTemplate || '', ''),
-      responsePath: cleanString(profile.responsePath, defaultImageResponsePathForProvider(profile.provider)),
+      responsePath: cleanString(profile.responsePath, defaultImageResponsePathForProvider(legacyFormat)),
       timeoutMs: normalizeTimeoutMsSetting(profile.timeoutMs, DEFAULT_TIMEOUT_MS),
     };
   }
 
   function normalizeImageApiProfiles(raw) {
-    const seen = new Set();
-    const list = parseJsonConfigArray(raw, defaultImageApiProfiles)
-      .map(normalizeImageApiProfile)
-      .filter(Boolean)
-      .filter(profile => {
-        if (seen.has(profile.id)) return false;
-        seen.add(profile.id);
-        return true;
+    const defaults = defaultImageApiProfiles();
+    const parsed = parseJsonConfigArray(raw, () => []).filter(profile => profile && typeof profile === 'object' && !Array.isArray(profile));
+    return defaults.map(defaultProfile => {
+      const format = imageApiFormatForProfileId(defaultProfile.id);
+      const exact = parsed.find(profile => cleanString(profile?.id, '') === defaultProfile.id);
+      const legacy = parsed.find(profile => legacyImageApiFormatFromProfile(profile) === format);
+      return normalizeImageApiProfile({
+        ...defaultProfile,
+        ...(exact || legacy || {}),
+        id: defaultProfile.id,
+        name: defaultProfile.name,
+        enabled: true,
       });
-    return list.length ? list : defaultImageApiProfiles();
+    }).filter(Boolean);
   }
 
   function serializeImageApiProfiles(profiles) {
     return JSON.stringify({ version: VERSION, profiles: normalizeImageApiProfiles(JSON.stringify(profiles || [])) }, null, 2);
   }
 
-  function normalizeActiveImageApiProfileId(value, profiles) {
+  function upsertConfigItemById(list, item) {
+    const safeItem = item && typeof item === 'object' ? item : null;
+    if (!safeItem?.id) return Array.isArray(list) ? list : [];
+    const next = Array.isArray(list) ? list.slice() : [];
+    const index = next.findIndex(existing => existing?.id === safeItem.id);
+    if (index >= 0) next[index] = safeItem;
+    else next.push(safeItem);
+    return next;
+  }
+
+  function normalizeImageApiEditorProfileId(value, profiles) {
     const list = Array.isArray(profiles) && profiles.length ? profiles : defaultImageApiProfiles();
     const raw = cleanString(value, '');
     return list.some(item => item.id === raw) ? raw : list[0].id;
   }
 
-  function getActiveImageApiProfile(conf) {
+  function getImageApiProfileForFormat(conf, value) {
     const profiles = Array.isArray(conf?.imageApiProfiles) ? conf.imageApiProfiles : normalizeImageApiProfiles(conf?.imageApiProfilesJson);
-    const id = normalizeActiveImageApiProfileId(conf?.activeImageApiProfileId, profiles);
+    const id = imageApiProfileIdForFormat(value);
     return profiles.find(item => item.id === id) || profiles[0] || null;
   }
 
   function getRuntimeImageApiProfile(conf) {
-    const profile = getActiveImageApiProfile(conf);
+    const format = normalizeImageProviderType(conf?.imageApiFormat);
+    const profile = getImageApiProfileForFormat(conf, format);
     if (!profile) return null;
     return {
       ...profile,
-      provider: normalizeImageProviderType(conf?.imageApiFormat || profile.provider),
+      provider: format,
     };
   }
 
@@ -10745,18 +11047,14 @@ function normalizeAdaptiveQualityState(value) {
   function imageRuntimeConfigForAgent(conf, agent = {}) {
     const profiles = Array.isArray(conf?.imageApiProfiles) ? conf.imageApiProfiles : normalizeImageApiProfiles(conf?.imageApiProfilesJson);
     const presets = Array.isArray(conf?.imageApiPresets) ? conf.imageApiPresets : normalizeImageApiPresets(conf?.imageApiPresetsJson);
-    const activeImageApiProfileId = normalizeActiveImageApiProfileId(agent?.imageApiProfileId || conf?.activeImageApiProfileId, profiles);
-    const activeProfile = profiles.find(profile => profile.id === activeImageApiProfileId) || profiles[0] || null;
     return {
       ...conf,
       imageApiProfiles: profiles,
       imageApiPresets: presets,
-      activeImageApiProfileId,
       imageApiFormat: normalizeImageProviderType(
         agent?.imageApiFormat
         || agent?.imageFormat
-        || agent?.imageProviderType
-        || activeProfile?.provider,
+        || agent?.imageProviderType,
       ),
       activeImageApiPresetId: normalizeActiveImageApiPresetId(agent?.imageApiPresetId || conf?.activeImageApiPresetId, presets),
     };
@@ -10813,6 +11111,54 @@ function normalizeAdaptiveQualityState(value) {
     return [header, '', `### ${title}`, '', safeBody, '', footer].join('\n');
   }
 
+  function normalizeImagePlacement(value, fallback = 'before') {
+    const parse = rawValue => {
+      const raw = String(rawValue || '').trim().toLowerCase();
+      if (['before', '앞', '위', '문단 앞'].includes(raw)) return 'before';
+      if (['after', '뒤', '아래', '문단 뒤'].includes(raw)) return 'after';
+      return '';
+    };
+    return parse(value) || parse(fallback) || 'before';
+  }
+
+  function imageDisplayAspectCss(settings = {}) {
+    const normalized = normalizeImageDisplaySettings(settings);
+    if (normalized.aspect === 'original') return '';
+    const raw = normalized.aspect === 'custom' ? normalized.customAspect : normalized.aspect;
+    const match = String(raw || '').trim().match(/^(\d+(?:\.\d+)?)\s*[:/]\s*(\d+(?:\.\d+)?)$/);
+    if (!match) return '';
+    const width = Number(match[1]);
+    const height = Number(match[2]);
+    return Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0 ? `${width} / ${height}` : '';
+  }
+
+  function buildImageChatDisplayBody(assetTag, agent = {}) {
+    const assetName = imageAssetNameFromTag(assetTag);
+    if (!assetName) return cleanString(assetTag, '');
+    const settings = normalizeImageDisplaySettings(agent);
+    const fixedWidths = { small: 320, medium: 480, large: 720 };
+    const imageSize = fixedWidths[settings.size] || settings.width;
+    const sizeStyle = settings.size === 'original'
+      ? 'width:auto;max-width:none'
+      : settings.size === 'full'
+        ? 'width:100%;max-width:none'
+        : `width:100%;max-width:${imageSize}px`;
+    const aspect = imageDisplayAspectCss(settings);
+    const aspectStyle = aspect
+      ? `aspect-ratio:${aspect};object-fit:${settings.fit}`
+      : 'height:auto';
+    return `<div data-eros-tower-illustration="true" style="display:block;width:100%;overflow-x:auto;margin:1em 0;text-align:center"><img src="{{raw::${assetName}}}" alt="삽화" loading="lazy" style="display:block;${sizeStyle};${aspectStyle};margin:0 auto;border-radius:6px"></div>`;
+  }
+
+  function resolveImageArtifactPlacement(shot = {}, sourceParallel = false) {
+    const paragraph = Math.max(0, Math.floor(Number(shot?.paragraph || 0)));
+    if (!sourceParallel) return { paragraph, placement: normalizeImagePlacement(shot?.placement) };
+    return {
+      paragraph: paragraph > 0 && paragraph % 2 === 1 ? paragraph + 1 : paragraph,
+      placement: 'after',
+    };
+  }
+
   function insertImageArtifactsIntoText(text, artifacts = []) {
     const source = String(text || '').trim();
     const images = (Array.isArray(artifacts) ? artifacts : [])
@@ -10821,7 +11167,7 @@ function normalizeAdaptiveQualityState(value) {
         item,
         block: buildOutputArtifactDisplayBlock(item, item?.body || ''),
         paragraph: Math.max(0, Math.floor(Number(item?.paragraph || item?.entry?.paragraph || 0))),
-        placement: String(item?.placement || item?.entry?.placement || 'after').toLowerCase() === 'before' ? 'before' : 'after',
+        placement: normalizeImagePlacement(item?.placement || item?.entry?.placement),
       }))
       .filter(item => item.block);
     if (!images.length) return source;
@@ -12095,16 +12441,27 @@ function normalizeAdaptiveQualityState(value) {
     return { generated: true, artifact: result, assetTag };
   }
 
-  async function generateComfyImageFromResidentRequest(conf, context, profile, preset, agentRequest = {}, options = {}) {
+  function buildImageApiRequestHeaders(profile, accept = 'application/json, image/*') {
+    const headers = {
+      'Content-Type': 'application/json',
+      Accept: accept,
+      ...parseOptionalJsonObject(profile?.headersJson),
+    };
+    if (profile?.apiKey) {
+      const keyHeader = cleanString(profile.apiKeyHeader, 'authorization-bearer');
+      if (keyHeader === 'x-api-key') headers['x-api-key'] = headers['x-api-key'] || profile.apiKey;
+      else if (keyHeader === 'authorization-raw') headers.Authorization = headers.Authorization || profile.apiKey;
+      else if (keyHeader !== 'none') headers.Authorization = headers.Authorization || imageApiBearerHeader(profile.apiKey);
+    }
+    return headers;
+  }
+
+  async function requestComfyImageBytes(profile, preset, agentRequest = {}, options = {}) {
     const deadlineAt = Number(options.deadlineAt) || createImageJobDeadline(profile?.timeoutMs || DEFAULT_TIMEOUT_MS);
     const progress = options.progress;
     const base = comfyBaseUrl(profile.endpoint);
     const payload = buildComfyPromptPayload(profile, preset, agentRequest);
-    const headers = {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-      ...parseOptionalJsonObject(profile.headersJson),
-    };
+    const headers = buildImageApiRequestHeaders(profile, 'application/json');
     await emitImageJobProgress(progress, 'image-api-request', { provider: profile.provider, endpoint: `${base}/prompt` });
     const res = await fetchWithTimeout(`${base}/prompt`, {
       method: 'POST',
@@ -12119,32 +12476,20 @@ function normalizeAdaptiveQualityState(value) {
     const promptId = cleanString(data?.prompt_id || data?.promptId || data?.id, '');
     if (!promptId) throw new Error(`ComfyUI prompt response did not include prompt_id: ${String(compactJson(data)).slice(0, 240)}`);
     await emitImageJobProgress(progress, 'image-api-response', { provider: profile.provider, promptId });
-    const bytes = await fetchComfyImageBytes(profile, promptId, { deadlineAt, progress });
-    return await persistGeneratedImageBytes(context, bytes, profile, preset, agentRequest, { deadlineAt, progress });
+    return await fetchComfyImageBytes(profile, promptId, { deadlineAt, progress });
   }
 
-  async function generateImageFromResidentRequest(conf, context, agentRequest = {}, progress = null) {
-    const profile = getRuntimeImageApiProfile(conf);
-    const preset = getActiveImageApiPreset(conf);
-    if (!profile || profile.enabled === false) return { generated: false, reason: 'image-profile-disabled' };
-    if (!preset || preset.enabled === false) return { generated: false, reason: 'image-preset-disabled' };
-    if (!profile.endpoint) return { generated: false, reason: 'image-endpoint-missing' };
-    const deadlineAt = createImageJobDeadline(profile.timeoutMs || DEFAULT_TIMEOUT_MS);
+  async function requestImageBytes(profile, preset, agentRequest = {}, options = {}) {
+    const preflight = validateImageApiProfile(profile);
+    if (!preflight.ok) throw new Error(preflight.message);
+    if (!preset || preset.enabled === false) throw new Error('선택한 이미지 프리셋이 없거나 꺼져 있습니다.');
+    const deadlineAt = Number(options.deadlineAt) || createImageJobDeadline(profile.timeoutMs || DEFAULT_TIMEOUT_MS);
+    const progress = options.progress;
     if (normalizeImageProviderType(profile.provider) === 'comfyui-local') {
-      return await generateComfyImageFromResidentRequest(conf, context, profile, preset, agentRequest, { deadlineAt, progress });
+      return await requestComfyImageBytes(profile, preset, agentRequest, { deadlineAt, progress });
     }
     const payload = await buildImageApiPayloadForRequest(profile, preset, agentRequest);
-    const headers = {
-      'Content-Type': 'application/json',
-      Accept: 'application/json, image/*',
-      ...parseOptionalJsonObject(profile.headersJson),
-    };
-    if (profile.apiKey) {
-      const keyHeader = cleanString(profile.apiKeyHeader, 'authorization-bearer');
-      if (keyHeader === 'x-api-key') headers['x-api-key'] = headers['x-api-key'] || profile.apiKey;
-      else if (keyHeader === 'authorization-raw') headers.Authorization = headers.Authorization || profile.apiKey;
-      else if (keyHeader !== 'none') headers.Authorization = headers.Authorization || `Bearer ${profile.apiKey}`;
-    }
+    const headers = buildImageApiRequestHeaders(profile);
     await emitImageJobProgress(progress, 'image-api-request', { provider: profile.provider, endpoint: profile.endpoint });
     const res = await fetchWithTimeout(profile.endpoint, {
       method: 'POST',
@@ -12156,7 +12501,32 @@ function normalizeAdaptiveQualityState(value) {
       throw new Error(`image API failed ${res.status}: ${String(text || '').slice(0, 400)}`);
     }
     await emitImageJobProgress(progress, 'image-api-response', { provider: profile.provider, status: res.status });
-    const bytes = await responseToImageBytes(res, profile, { deadlineAt, progress });
+    return await responseToImageBytes(res, profile, { deadlineAt, progress });
+  }
+
+  async function checkImageApiConnection(profile) {
+    const preflight = validateImageApiProfile(profile);
+    if (!preflight.ok) throw new Error(preflight.message);
+    const comfy = normalizeImageProviderType(profile.provider) === 'comfyui-local';
+    if (!comfy) {
+      return { endpoint: profile.endpoint, method: 'LOCAL', status: null, networkChecked: false };
+    }
+    const endpoint = `${comfyBaseUrl(profile.endpoint)}/system_stats`;
+    const method = 'GET';
+    const res = await fetchWithTimeout(endpoint, {
+      method,
+      headers: buildImageApiRequestHeaders(profile, 'application/json'),
+    }, Math.min(profile.timeoutMs || DEFAULT_TIMEOUT_MS, 30000), 'image API connection check');
+    if (res.status === 401 || res.status === 403) throw new Error(`image API authentication failed ${res.status}`);
+    if (res.status >= 500) throw new Error(`image API connection failed ${res.status}`);
+    return { endpoint, method, status: res.status, networkChecked: true };
+  }
+
+  async function generateImageFromResidentRequest(conf, context, agentRequest = {}, progress = null) {
+    const profile = getRuntimeImageApiProfile(conf);
+    const preset = getActiveImageApiPreset(conf);
+    const deadlineAt = createImageJobDeadline(profile?.timeoutMs || DEFAULT_TIMEOUT_MS);
+    const bytes = await requestImageBytes(profile, preset, agentRequest, { deadlineAt, progress });
     return await persistGeneratedImageBytes(context, bytes, profile, preset, agentRequest, { deadlineAt, progress });
   }
 
@@ -12193,7 +12563,7 @@ function normalizeAdaptiveQualityState(value) {
       basePrompt: suppliedPrompt,
       prompt: '',
       negative: cleanString(shot.negative || shot.negativePrompt, ''),
-      placement: cleanString(shot.placement, 'after'),
+      placement: normalizeImagePlacement(shot.placement),
     };
     normalized.prompt = buildImageShotPrompt(normalized);
     return normalized.prompt ? normalized : null;
@@ -12219,7 +12589,7 @@ function normalizeAdaptiveQualityState(value) {
         memoryLine: source.memoryLine || source.summary || source.albumSummary || source.caption || '',
         prompt: directPrompt,
         negative: source.negative || source.negativePrompt || '',
-        placement: source.placement || 'after',
+        placement: source.placement,
       }, {}, 0);
       if (normalized) shots.push(normalized);
     }
@@ -13468,7 +13838,7 @@ function normalizeAdaptiveQualityState(value) {
     const model = cleanString(conf.embeddingModel, '');
     if (!provider || !model) return null;
     const baseUrl = normalizeUrl(conf.embeddingBaseUrl || provider.baseUrl || conf.baseUrl || '');
-    const apiKey = conf.embeddingApiKey || provider.apiKey || conf.providerKeys?.[provider.provider] || conf.apiKey || '';
+    const apiKey = conf.embeddingApiKey || resolveProviderApiKey(conf, provider, provider.provider);
     return {
       ...conf,
       ...provider,
@@ -16159,6 +16529,10 @@ function normalizeAdaptiveQualityState(value) {
       const agent = agents[agentIndex];
       const agentConf = resolveAgentConf(agent, conf);
       const before = current;
+      const imageResident = agent.id === IMAGE_RESIDENT_AGENT_ID;
+      const imageRuntimeConf = imageResident ? imageRuntimeConfigForAgent(conf, agent) : null;
+      const imageApiProfile = imageResident ? getRuntimeImageApiProfile(imageRuntimeConf) : null;
+      const imageTransport = imageResident ? imageApiProfileDiagnostic(imageApiProfile) : null;
       if (typeof progress === 'function') {
         await progress({
           phase: 'post-agent-start',
@@ -16177,6 +16551,7 @@ function normalizeAdaptiveQualityState(value) {
           model: agentConf.model,
           skipped: true,
           error: `provider-not-ready:${agentConf.provider}`,
+          imageTransport,
           inputPreview: before.slice(0, 900),
           outputPreview: before.slice(0, 900),
         });
@@ -16190,7 +16565,38 @@ function normalizeAdaptiveQualityState(value) {
         }
         continue;
       }
-      const imageResident = agent.id === IMAGE_RESIDENT_AGENT_ID;
+      if (imageResident) {
+        const preflight = validateImageApiProfile(imageApiProfile);
+        if (!preflight.ok) {
+          Runtime.lastError = preflight.message;
+          results.push({
+            id: agent.id,
+            name: agent.name,
+            phase: agent.phase,
+            provider: agentConf.provider,
+            providerId: agentConf.providerId,
+            model: agentConf.model,
+            ms: 0,
+            postMode: normalizePostMode(agent.postMode),
+            skipped: true,
+            error: preflight.message,
+            technicalError: preflight.code,
+            imageTransport,
+            inputPreview: before.slice(0, 900),
+            outputPreview: before.slice(0, 900),
+          });
+          if (typeof progress === 'function') {
+            await progress({
+              phase: 'post-agent-error',
+              agent,
+              agentIndex,
+              totalAgents: agents.length,
+              error: preflight.message,
+            });
+          }
+          continue;
+        }
+      }
       const translationResident = agent.id === TRANSLATION_AGENT_ID;
       const standardTextResident = !imageResident && !translationResident;
       const imageVisualHistory = imageResident
@@ -16253,7 +16659,6 @@ function normalizeAdaptiveQualityState(value) {
           : rawOutput;
         let imageResult = null;
         if (imageResident) {
-          const imageRuntimeConf = imageRuntimeConfigForAgent(conf, agent);
           const imagePreset = getActiveImageApiPreset(imageRuntimeConf);
           const request = normalizeImageResidentRequest(extractJsonObject(rawOutput) || {}, imagePreset, agent.maxImages);
           if (typeof progress === 'function') {
@@ -16295,12 +16700,13 @@ function normalizeAdaptiveQualityState(value) {
               });
               generated.push({ shot, result: shotResult });
               if (shotResult?.generated && shotResult.assetTag) {
+                const artifactPlacement = resolveImageArtifactPlacement(shot, preserveBilingualDraft);
                 visibleArtifacts.push({
                   ...(shotResult.artifact || {}),
                   type: 'image',
-                  body: shotResult.assetTag,
-                  placement: shot.placement || 'after',
-                  paragraph: shot.paragraph || 0,
+                  body: buildImageChatDisplayBody(shotResult.assetTag, agent),
+                  placement: artifactPlacement.placement,
+                  paragraph: artifactPlacement.paragraph,
                   entry: shotResult.artifact?.entry || {
                     id: shotResult.artifact?.id || `image-${Date.now().toString(36)}`,
                     type: 'image',
@@ -16366,6 +16772,7 @@ function normalizeAdaptiveQualityState(value) {
           changed: current !== before,
           artifact: artifactResult,
           image: imageResult,
+          imageTransport,
           imageVisualContextChars: imageResident ? imageVisualContext.length : 0,
           prompt: promptTrace,
           rawOutput: clipRunLogText(rawOutput),
@@ -16381,7 +16788,9 @@ function normalizeAdaptiveQualityState(value) {
           });
         }
       } catch (err) {
-        Runtime.lastError = err.message;
+        const rawError = err?.message || String(err || 'unknown error');
+        const displayError = imageResident ? friendlyImageApiError(err, imageApiProfile) : rawError;
+        Runtime.lastError = displayError;
         results.push({
           id: agent.id,
           name: agent.name,
@@ -16397,7 +16806,9 @@ function normalizeAdaptiveQualityState(value) {
           goePromptModeId: goeMode?.id || '',
           goePromptModeName: goeMode?.name || '',
           attempts: err.translationAttempts,
-          error: err.message,
+          error: displayError,
+          technicalError: rawError,
+          imageTransport,
           prompt: promptTrace,
           rawOutput: '',
           inputPreview: before.slice(0, 900),
@@ -16409,7 +16820,7 @@ function normalizeAdaptiveQualityState(value) {
             agent,
             agentIndex,
             totalAgents: agents.length,
-            error: err.message,
+            error: displayError,
           });
         }
       }
@@ -18214,6 +18625,21 @@ function normalizeAdaptiveQualityState(value) {
     return callVertexGeminiNative(conf, messages, runtime, token);
   }
 
+  function buildVertexGeminiHeaders(conf, runtime, token) {
+    const headers = {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    };
+    if (normalizeVertexTrafficMode(conf?.vertexTrafficMode) !== 'flex') return headers;
+    if (String(runtime?.location || '').trim().toLowerCase() !== 'global') {
+      throw new Error('Vertex Flex PayGo는 현재 global 위치에서만 사용할 수 있습니다. Vertex Location을 global로 설정하세요.');
+    }
+    headers['X-Vertex-AI-LLM-Request-Type'] = 'shared';
+    headers['X-Vertex-AI-LLM-Shared-Request-Type'] = 'flex';
+    return headers;
+  }
+
   async function callVertexGeminiNative(conf, messages, runtime, token) {
     const converted = toGeminiNativeRequest(messages);
     const body = applyExtraBody({
@@ -18232,7 +18658,7 @@ function normalizeAdaptiveQualityState(value) {
     if (converted.system) body.systemInstruction = { parts: [{ text: converted.system }] };
     const res = await fetchWithTimeout(buildVertexGeminiUrl(runtime.projectId, runtime.location, runtime.model), {
       method: 'POST',
-      headers: { Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      headers: buildVertexGeminiHeaders(conf, runtime, token),
       body: JSON.stringify(body),
     }, conf.timeoutMs, 'vertex generateContent');
     if (!res.ok) {
@@ -20211,6 +20637,19 @@ function normalizeAdaptiveQualityState(value) {
     if (source.retries !== undefined) out.retries = parseNumber(source.retries, 0, 0, 99);
     if (source.imageVisualContextChars !== undefined) out.imageVisualContextChars = parseNumber(source.imageVisualContextChars, 0, 0, 99999999);
     if (source.image) out.image = compactImageResidentResultForRunLog(source.image);
+    if (source.imageTransport && typeof source.imageTransport === 'object') {
+      out.imageTransport = {
+        profileId: clipRunLogText(source.imageTransport.profileId || '', 160),
+        profileName: clipRunLogText(source.imageTransport.profileName || '', 160),
+        provider: clipRunLogText(source.imageTransport.provider || '', 80),
+        endpointHost: clipRunLogText(source.imageTransport.endpointHost || '', 180),
+        enabled: source.imageTransport.enabled !== false,
+        credentialRequired: source.imageTransport.credentialRequired === true,
+        credentialPresent: source.imageTransport.credentialPresent === true,
+        credentialSource: clipRunLogText(source.imageTransport.credentialSource || '', 80),
+      };
+    }
+    if (source.technicalError) out.technicalError = clipRunLogText(source.technicalError, 700);
     if (status !== 'ok') out.message = clipRunLogText(source.error || source.text || '', 700);
     if (verbose) {
       out.prompt = source.prompt ? clipRunLogText(source.prompt) : '';
@@ -22225,10 +22664,8 @@ function normalizeAdaptiveQualityState(value) {
     const presets = runtimeConf.imageApiPresets;
     const activeId = normalizeActiveImageApiPresetId(runtimeConf.activeImageApiPresetId, presets);
     const activePreset = presets.find(item => item.id === activeId) || presets[0] || defaultImageApiPresets()[0];
-    const profiles = runtimeConf.imageApiProfiles;
-    const activeProfileId = normalizeActiveImageApiProfileId(runtimeConf.activeImageApiProfileId, profiles);
-    const activeProfile = profiles.find(item => item.id === activeProfileId) || profiles[0] || defaultImageApiProfiles()[0];
     const activeProviderType = normalizeImageProviderType(runtimeConf.imageApiFormat);
+    const activeProviderLabel = imageProviderTypeOptions().find(item => item.value === activeProviderType)?.label || activeProviderType;
     const providerGuide = imagePresetProviderGuide(activeProviderType);
     const providerSettings = activePreset.providerSettings || defaultImagePresetProviderSettings();
     const nai = providerSettings.novelai || defaultImagePresetProviderSettings().novelai;
@@ -22242,13 +22679,13 @@ function normalizeAdaptiveQualityState(value) {
         <div class="et-agent-section-head">
           <div>
             <h2>웹소설 보다 딸려 온 이미진씨 프리셋</h2>
-            <div class="et-note">이미진씨에서 선택한 이미지 형식에 맞춰 프롬프트와 생성값을 편집합니다. URL과 Key는 Provider 화면의 삽화 API에서 관리합니다.</div>
+            <div class="et-note">이미진씨에서 선택한 이미지 형식에 맞춰 프롬프트와 생성값을 편집합니다. URL과 Key는 Provider 화면에 저장된 같은 형식의 연결을 자동 사용합니다.</div>
           </div>
           <button type="button" class="et-section-collapse" data-section-collapse>펼치기</button>
         </div>
         <div class="et-agent-section-body">
           <textarea id="et-image-api-presets-json" style="display:none">${escHtml(runtimeJson)}</textarea>
-          <div class="et-note" id="et-image-preset-provider-guide" style="margin-top:12px" data-provider-type="${escHtml(activeProviderType)}"><strong>${escHtml(activeProfile.name || activeProviderType)}</strong><br>${escHtml(providerGuide)}</div>
+          <div class="et-note" id="et-image-preset-provider-guide" style="margin-top:12px" data-provider-type="${escHtml(activeProviderType)}"><strong>${escHtml(activeProviderLabel)}</strong><br>${escHtml(providerGuide)}</div>
           <div class="et-row" style="margin-top:12px">
             ${selectField('편집할 이미진씨 프리셋', 'et-image-api-preset-id', activeId, imagePresetOptions({ imageApiPresets: presets }), 'et-image-api-preset-id')}
             ${inputField('프리셋 이름', 'et-image-preset-name', 'text', activePreset.name || '', '기본')}
@@ -22257,10 +22694,10 @@ function normalizeAdaptiveQualityState(value) {
             ${inputField('제작자 / 출처', 'et-image-preset-creator', 'text', activePreset.creator || '', '선택 입력')}
             ${checkboxField('활성', 'et-image-preset-enabled', activePreset.enabled !== false)}
           </div>
-          ${textarea('Positive prefix', 'et-image-preset-positive-prefix', activePreset.positivePrefix || '', 'web novel illustration, masterpiece, best quality, ...')}
-          ${textarea('Negative prompt', 'et-image-preset-negative-prompt', activePreset.negativePrompt || '', 'low quality, bad anatomy, bad hands, text, logo, watermark, ...')}
+          ${textarea('긍정 프롬프트', 'et-image-preset-positive-prefix', activePreset.positivePrefix || '', 'web novel illustration, masterpiece, best quality, ...')}
+          ${textarea('부정 프롬프트', 'et-image-preset-negative-prompt', activePreset.negativePrompt || '', 'low quality, bad anatomy, bad hands, text, logo, watermark, ...')}
           ${providerPanel('wellspring-nai', `
-            <div class="et-note" style="margin-top:10px">Wellspring/챈섭은 사이트에 저장된 활성 모델·크기·샘플러·LoRA 설정을 사용합니다. 이 프리셋에서는 공통 Positive / Negative와 이미진씨가 분리한 장면·캐릭터 프롬프트만 전송합니다.</div>
+            <div class="et-note" style="margin-top:10px">Wellspring/챈섭은 사이트에 저장된 활성 모델·크기·샘플러·LoRA 설정을 사용합니다. 이 프리셋에서는 공통 긍정/부정 프롬프트와 이미진씨가 분리한 장면·캐릭터 프롬프트만 전송합니다.</div>
           `)}
           ${providerPanel('novelai', `
             <div class="et-note" style="margin-top:10px">NovelAI는 장면·작화 태그를 Base prompt로, 등장인물을 캐릭터별 V4 prompt와 negative prompt로 분리해 전송합니다.</div>
@@ -22416,15 +22853,13 @@ function normalizeAdaptiveQualityState(value) {
       const selectedTranslationPrompt = normalizeActiveTranslationPromptModeId(agent.translationPromptModeId || conf.activeTranslationPromptModeId, translationModes);
       const goeModes = conf.goePromptModes || normalizeGoePromptModes(conf);
       const selectedGoePrompt = normalizeActiveGoePromptModeId(agent.goePromptModeId || conf.activeGoePromptModeId, goeModes);
-      const imageProfiles = Array.isArray(conf.imageApiProfiles) ? conf.imageApiProfiles : normalizeImageApiProfiles(conf.imageApiProfilesJson);
       const imagePresets = Array.isArray(conf.imageApiPresets) ? conf.imageApiPresets : normalizeImageApiPresets(conf.imageApiPresetsJson);
-      const selectedImageProfile = normalizeActiveImageApiProfileId(agent.imageApiProfileId || conf.activeImageApiProfileId, imageProfiles);
-      const legacyImageProfile = imageProfiles.find(profile => profile.id === selectedImageProfile) || imageProfiles[0] || null;
-      const selectedImageFormat = normalizeImageProviderType(agent.imageApiFormat || legacyImageProfile?.provider);
+      const selectedImageFormat = normalizeImageProviderType(agent.imageApiFormat || agent.imageFormat || agent.imageProviderType);
       const selectedImagePreset = normalizeActiveImageApiPresetId(agent.imageApiPresetId || conf.activeImageApiPresetId, imagePresets);
       const translationRetryCount = parseUserNumberSetting(agent.translationRetryCount ?? 1, 1);
       const translationSourceParallelEnabled = agent.translationSourceParallelEnabled === true;
       const translationOutputTarget = normalizeTranslationOutputTarget(agent.translationOutputTarget);
+      const imageDisplay = normalizeImageDisplaySettings(agent);
       return `
         <details class="et-agent-card">
           <summary class="et-agent-summary">
@@ -22451,7 +22886,7 @@ function normalizeAdaptiveQualityState(value) {
               ${agent.id === IMAGE_RESIDENT_AGENT_ID ? `<div class="et-row et-row-4">
                 ${inputField('Temperature', `et-agent-temperature-${agent.id}`, 'number', String(agent.temperature ?? conf.temperature), '0.25', `class="et-agent-temperature" data-agent-id="${escHtml(agent.id)}"`)}
                 ${inputField('Max Tokens', `et-agent-max-tokens-${agent.id}`, 'number', String(agent.maxTokens ?? conf.maxTokens), '4096', `class="et-agent-max-tokens" data-agent-id="${escHtml(agent.id)}"`)}
-                ${inputField('Max images', `et-agent-max-images-${agent.id}`, 'number', String(agent.maxImages ?? 1), '1', `class="et-agent-max-images" data-agent-id="${escHtml(agent.id)}"`)}
+                ${inputField('최대 삽화 수', `et-agent-max-images-${agent.id}`, 'number', String(agent.maxImages ?? 1), '1', `class="et-agent-max-images" data-agent-id="${escHtml(agent.id)}"`)}
                 ${inputField('Timeout s', `et-agent-timeout-s-${agent.id}`, 'number', String(timeoutMsToUserSeconds(agent.timeoutMs ?? conf.timeoutMs)), '300', `class="et-agent-timeout-s" data-agent-id="${escHtml(agent.id)}"`)}
               </div>` : `<div class="et-row et-row-4">
                 ${inputField('Temperature', `et-agent-temperature-${agent.id}`, 'number', String(agent.temperature ?? conf.temperature), '0.25', `class="et-agent-temperature" data-agent-id="${escHtml(agent.id)}"`)}
@@ -22476,12 +22911,20 @@ function normalizeAdaptiveQualityState(value) {
               ${agent.id === GOE_RESIDENT_AGENT_ID ? `<div class="et-row et-goe-row">
                 ${selectField('고에양 프롬프트', `et-agent-goe-prompt-${agent.id}`, selectedGoePrompt, goePromptModeOptions(goeModes), 'et-agent-goe-prompt', `data-agent-id="${escHtml(agent.id)}"`)}
               </div>` : ''}
-              ${agent.id === IMAGE_RESIDENT_AGENT_ID ? `<div class="et-grid-3">
-                ${selectField('삽화 API', `et-agent-image-api-profile-${agent.id}`, selectedImageProfile, imageProfileOptions({ imageApiProfiles: imageProfiles }), 'et-agent-image-api-profile', `data-agent-id="${escHtml(agent.id)}"`)}
+              ${agent.id === IMAGE_RESIDENT_AGENT_ID ? `<div class="et-row">
                 ${selectField('이미지 형식', `et-agent-image-api-format-${agent.id}`, selectedImageFormat, imageProviderTypeOptions(), 'et-agent-image-api-format', `data-agent-id="${escHtml(agent.id)}"`)}
                 ${selectField('이미지 프리셋', `et-agent-image-api-preset-${agent.id}`, selectedImagePreset, imagePresetOptions({ imageApiPresets: imagePresets }), 'et-agent-image-api-preset', `data-agent-id="${escHtml(agent.id)}"`)}
               </div>
-              <div class="et-note">위 Provider/모델은 이미진씨가 삽화 요청 JSON을 작성하는 LLM입니다. 삽화 API는 연결 정보, 이미지 형식은 요청 규격, 이미지 프리셋은 생성값을 결정합니다.</div>` : ''}
+              <div class="et-row">
+                ${selectField('삽화 표시 크기', `et-agent-image-display-size-${agent.id}`, imageDisplay.size, imageDisplaySizeOptions(), 'et-agent-image-display-size', `data-agent-id="${escHtml(agent.id)}"`)}
+                ${inputField('직접 너비(px)', `et-agent-image-display-width-${agent.id}`, 'number', String(imageDisplay.width), '480', `class="et-agent-image-display-width" data-agent-id="${escHtml(agent.id)}"`)}
+              </div>
+              <div class="et-row et-row-4">
+                ${selectField('삽화 표시 비율', `et-agent-image-display-aspect-${agent.id}`, imageDisplay.aspect, imageDisplayAspectOptions(), 'et-agent-image-display-aspect', `data-agent-id="${escHtml(agent.id)}"`)}
+                ${inputField('직접 비율', `et-agent-image-display-custom-aspect-${agent.id}`, 'text', imageDisplay.customAspect, '2:3', `class="et-agent-image-display-custom-aspect" data-agent-id="${escHtml(agent.id)}"`)}
+                ${selectField('비율 적용', `et-agent-image-display-fit-${agent.id}`, imageDisplay.fit, imageDisplayFitOptions(), 'et-agent-image-display-fit', `data-agent-id="${escHtml(agent.id)}"`)}
+              </div>
+              <div class="et-note">위 Provider/모델은 삽화 요청을 설계하는 LLM입니다. 이미지 형식은 실제 API 요청 규격, 이미지 프리셋은 생성값을 결정합니다. URL과 Key는 Provider 화면에 저장된 같은 형식의 연결을 자동 사용합니다.</div>` : ''}
               <div class="et-actions et-agent-actions">
                 <button class="et-agent-save" data-agent-id="${escHtml(agent.id)}">이 에이전트 저장</button>
                 <button class="et-agent-check" data-agent-id="${escHtml(agent.id)}">연결 확인</button>
@@ -22614,42 +23057,69 @@ function normalizeAdaptiveQualityState(value) {
     }));
   }
 
+  function readImageProfileEditorFromUI(base = null, forcedId = '') {
+    if (typeof document === 'undefined') return null;
+    const get = id => document.getElementById(id);
+    if (!get('et-image-profile-endpoint')) return null;
+    const keyInput = get('et-image-profile-api-key')?.value || '';
+    return normalizeImageApiProfile({
+      ...(base || {}),
+      id: forcedId || base?.id || `image-profile-${Date.now().toString(36)}`,
+      name: get('et-image-profile-name')?.value ?? base?.name ?? '',
+      endpoint: get('et-image-profile-endpoint')?.value ?? base?.endpoint ?? '',
+      apiKey: keyInput === MASKED_SECRET ? base?.apiKey || '' : keyInput,
+      apiKeyHeader: cleanString(base?.apiKeyHeader, 'authorization-bearer'),
+      timeoutMs: timeoutSecondsToUserMs(
+        get('et-image-profile-timeout-s')?.value || timeoutMsToUserSeconds(base?.timeoutMs || DEFAULT_TIMEOUT_MS),
+        base?.timeoutMs || DEFAULT_TIMEOUT_MS
+      ),
+      headersJson: get('et-image-profile-headers-json')?.value || '',
+      responsePath: get('et-image-profile-response-path')?.value || '',
+      requestTemplateJson: get('et-image-profile-request-template-json')?.value || '',
+    });
+  }
+
   function renderImageApiSettingsPanel(conf) {
     const profiles = Array.isArray(conf?.imageApiProfiles) ? conf.imageApiProfiles : normalizeImageApiProfiles(conf?.imageApiProfilesJson);
-    const activeProfileId = normalizeActiveImageApiProfileId(conf.activeImageApiProfileId, profiles);
-    const activeProfile = profiles.find(item => item.id === activeProfileId) || profiles[0] || defaultImageApiProfiles()[0];
+    const editorProfileId = profiles[0]?.id || IMAGE_API_PROFILE_DEFAULT_ID;
+    const editorProfile = profiles.find(item => item.id === editorProfileId) || profiles[0] || defaultImageApiProfiles()[0];
+    const editorFormat = imageApiFormatForProfileId(editorProfileId);
+    const editorFormatLabel = imageProviderTypeOptions().find(item => item.value === editorFormat)?.label || editorFormat;
+    const runtimeProfile = { ...editorProfile, provider: editorFormat };
     return `
       <section class="et-panel" style="margin-top:14px">
         <details class="et-section-toggle">
           <summary>삽화 API 연결 설정</summary>
           <div class="et-collapsible-body">
-          <div class="et-note">이미지 생성 서버의 연결 정보만 저장합니다. 실제 요청 형식과 생성 프리셋은 이미진씨 설정에서 선택합니다.</div>
+          <div class="et-note">챈섭·NovelAI·ComfyUI·커스텀 연결의 URL·Key·헤더를 각각 저장합니다. 이미진씨에서 고른 이미지 형식과 같은 연결을 자동 사용합니다.</div>
+          <div id="et-image-profile-auth-guide" class="et-note" style="margin-top:6px" data-image-api-format="${escHtml(editorFormat)}"><strong>${escHtml(editorFormatLabel)} 연결</strong><br>${escHtml(imageApiCredentialGuide(runtimeProfile))}</div>
           <textarea id="et-image-api-profiles-json" style="display:none">${escHtml(serializeImageApiProfiles(profiles))}</textarea>
           <div class="et-row" style="margin-top:12px">
-            ${selectField('편집할 삽화 API', 'et-image-api-profile-id', activeProfileId, imageProfileOptions({ ...conf, imageApiProfiles: profiles }))}
-            ${inputField('프로필 이름', 'et-image-profile-name', 'text', activeProfile.name || '', 'Wellspring / 챈섭')}
+            ${selectField('편집할 이미지 API', 'et-image-api-profile-id', editorProfileId, imageProfileOptions({ ...conf, imageApiProfiles: profiles }))}
+            ${inputField('연결 이름', 'et-image-profile-name', 'text', editorProfile.name || '', 'Wellspring / 챈섭', 'readonly')}
           </div>
           <div class="et-row">
-            ${inputField('요청 URL / Base URL', 'et-image-profile-endpoint', 'text', activeProfile.endpoint || '', 'https://... 또는 http://127.0.0.1:8188')}
-            ${inputField('API Key (선택)', 'et-image-profile-api-key', 'password', activeProfile.apiKey ? MASKED_SECRET : '', '필요한 경우 입력')}
+            ${inputField('요청 URL / Base URL', 'et-image-profile-endpoint', 'text', editorProfile.endpoint || '', 'https://... 또는 http://127.0.0.1:8188')}
+            ${inputField('이미지 API Key / Token', 'et-image-profile-api-key', 'password', editorProfile.apiKey ? MASKED_SECRET : '', 'NovelAI Persistent Token / Wellspring ws-key')}
           </div>
           <div class="et-row">
-            ${inputField('Timeout s', 'et-image-profile-timeout-s', 'number', String(timeoutMsToUserSeconds(activeProfile.timeoutMs || DEFAULT_TIMEOUT_MS)), '300')}
+            ${inputField('Timeout s', 'et-image-profile-timeout-s', 'number', String(timeoutMsToUserSeconds(editorProfile.timeoutMs || DEFAULT_TIMEOUT_MS)), '300')}
           </div>
           <details class="et-section-toggle" style="margin-top:10px">
             <summary>고급 연결 설정</summary>
             <div class="et-row" style="margin-top:8px">
-              ${textarea('Headers JSON', 'et-image-profile-headers-json', activeProfile.headersJson || '', '{"x-api-key":"..."}')}
-              ${textarea('요청 본문 / workflow JSON', 'et-image-profile-request-template-json', activeProfile.requestTemplateJson || '', '{"prompt":"{{prompt}}", ...}')}
+              ${textarea('Headers JSON', 'et-image-profile-headers-json', editorProfile.headersJson || '', '{"x-api-key":"..."}')}
+              ${textarea('요청 본문 / workflow JSON', 'et-image-profile-request-template-json', editorProfile.requestTemplateJson || '', '{"prompt":"{{prompt}}", ...}')}
             </div>
-            ${textarea('응답 이미지 경로 (선택)', 'et-image-profile-response-path', activeProfile.responsePath || '', 'data.0.image')}
+            ${textarea('응답 이미지 경로 (선택)', 'et-image-profile-response-path', editorProfile.responsePath || '', 'data.0.image')}
           </details>
           <div class="et-actions">
             <button id="et-image-profile-save" type="button">현재 API 저장</button>
-            <button id="et-image-profile-new" type="button">새 API</button>
-            <button id="et-image-profile-copy" type="button">복제</button>
-            <button id="et-image-profile-delete" type="button">삭제</button>
+            <button id="et-image-profile-check" type="button">연결 설정 확인</button>
+            <button id="et-image-profile-generate-test" type="button">이미지 모델 호출 테스트</button>
           </div>
+          <div class="et-note">연결 설정 확인은 URL·키·헤더를 검사합니다. 이미지 호출 테스트는 현재 연결과 프리셋으로 실제 1장을 생성해 서버 인증과 응답을 확인하므로 API 사용량이 발생할 수 있습니다.</div>
+          <div id="et-image-api-test-preview" hidden style="margin-top:10px"></div>
           <div id="et-image-api-status" class="et-status" data-kind="info"></div>
           <details class="et-section-toggle" style="margin-top:10px">
             <summary>삽화 API JSON 내보내기</summary>
@@ -23754,8 +24224,10 @@ function normalizeAdaptiveQualityState(value) {
           <div class="et-note">${escHtml(meta || '-')}</div>
           ${note.role ? `<div class="et-note">${escHtml(note.role)}</div>` : ''}
           ${note.postMode ? `<div class="et-note">post mode: ${escHtml(note.postMode)}${note.changed !== undefined ? ` / changed: ${note.changed ? 'yes' : 'no'}` : ''}</div>` : ''}
+          ${note.imageTransport ? `<div class="et-note">삽화 API: ${escHtml(note.imageTransport.profileName || note.imageTransport.profileId || '-')} / ${escHtml(note.imageTransport.provider || '-')} / ${escHtml(note.imageTransport.endpointHost || '-')} / 인증 ${note.imageTransport.credentialPresent ? '저장됨' : note.imageTransport.credentialRequired ? '없음' : '불필요'}</div>` : ''}
           ${note.attempts ? `<div class="et-note">attempts: ${escHtml(note.attempts)}${note.retries ? ` / retries: ${escHtml(note.retries)}` : ''}</div>` : ''}
           ${note.message ? `<div class="et-note">${escHtml(note.message)}</div>` : ''}
+          ${note.technicalError && note.technicalError !== note.message ? `<details><summary>기술 오류</summary><pre>${escHtml(note.technicalError)}</pre></details>` : ''}
           ${note.text ? `<pre>${escHtml(String(note.text).slice(0, 2200))}</pre>` : ''}
           ${note.inputPreview ? `<details><summary>Input Preview</summary><pre>${escHtml(note.inputPreview)}</pre></details>` : ''}
           ${note.outputPreview ? `<details><summary>Output Preview</summary><pre>${escHtml(note.outputPreview)}</pre></details>` : ''}
@@ -23789,16 +24261,17 @@ function normalizeAdaptiveQualityState(value) {
     const isVertex = provider.preset === 'vertex-ai' || provider.provider === 'vertex-ai';
     const connectionFields = isVertex
       ? `<input type="hidden" class="et-provider-base" value="${escHtml(provider.baseUrl || '')}">
-          <div class="et-row">
+          <div class="et-grid-3">
             ${inputField('Vertex Project ID', `et-provider-vertex-project-${id}`, 'text', provider.vertexProjectId || '', '비우면 JSON의 project_id 사용', 'class="et-provider-vertex-project"')}
             ${inputField('Vertex Location', `et-provider-vertex-location-${id}`, 'text', provider.vertexLocation || 'global', 'global / us-central1 / asia-northeast3', 'class="et-provider-vertex-location"')}
+            ${selectField('요청 처리', `et-provider-vertex-traffic-${id}`, normalizeVertexTrafficMode(provider.vertexTrafficMode), vertexTrafficModeOptions(), 'et-provider-vertex-traffic')}
           </div>`
       : `<div class="et-row">
             ${inputField('Base URL (API root/prefix)', `et-provider-base-${id}`, 'text', provider.baseUrl, '예: https://api.openai.com/v1', 'class="et-provider-base"')}
             ${textarea('API Key / Token', `et-provider-key-${id}`, provider.apiKey ? MASKED_SECRET : '', '', 'et-provider-key')}
           </div>`;
     const vertexHelp = isVertex
-      ? `<div class="et-note">Vertex URL은 직접 입력하지 않습니다. 에로스 타워가 네이티브 Vertex 경로를 사용합니다. <code>global</code>이면 <code>https://aiplatform.googleapis.com/v1/projects/{project}/locations/global/publishers/google/models/{model}:generateContent</code>, 리전이면 <code>https://{location}-aiplatform.googleapis.com/v1/projects/{project}/locations/{location}/publishers/google/models/{model}:generateContent</code>를 자동 생성합니다.</div><div class="et-note">서비스 계정 JSON 키 전체를 아래 칸에 붙여넣으면 OAuth access token을 자동 발급합니다. JSON에 project_id가 있으면 Project ID 칸은 비워도 됩니다.</div>`
+      ? `<div class="et-note">Vertex URL은 직접 입력하지 않습니다. 에로스 타워가 네이티브 Vertex 경로를 사용합니다. <code>global</code>이면 <code>https://aiplatform.googleapis.com/v1/projects/{project}/locations/global/publishers/google/models/{model}:generateContent</code>, 리전이면 <code>https://{location}-aiplatform.googleapis.com/v1/projects/{project}/locations/{location}/publishers/google/models/{model}:generateContent</code>를 자동 생성합니다.</div><div class="et-note">Flex PayGo는 Gemini 요청에 공식 Vertex 헤더를 사용하며 현재 지원 모델과 <code>global</code> 위치에서만 동작합니다. 지연 시간이 길 수 있으므로 사용하는 에이전트의 Timeout도 충분히 설정해야 합니다.</div><div class="et-note">서비스 계정 JSON 키 전체를 아래 칸에 붙여넣으면 OAuth access token을 자동 발급합니다. JSON에 project_id가 있으면 Project ID 칸은 비워도 됩니다.</div>`
       : '';
     const compatHelp = isVertex ? '' : '<div class="et-note">OpenAI 호환 API는 보통 Base URL에 <code>/v1</code>까지 넣고, 아래 Path는 <code>/models</code>, <code>/chat/completions</code>처럼 endpoint suffix만 둡니다. 이미 전체 endpoint를 Base URL에 넣었다면 중복 Path를 비우거나 조정하세요.</div>';
     const keyField = isVertex
@@ -24143,6 +24616,7 @@ function normalizeAdaptiveQualityState(value) {
     delete clone.imageApiPresets;
     delete clone.pipeline;
     delete clone.providerRegistry;
+    delete clone.activeImageApiProfileId;
     return clone;
   }
 
@@ -24503,11 +24977,28 @@ function normalizeAdaptiveQualityState(value) {
     const artifactScopeFromContext = activeContext => cleanString(activeContext?.scope || context?.scope || Runtime.lastScope, '');
     const imageProfilesFromUI = () => normalizeImageApiProfiles($('et-image-api-profiles-json')?.value || conf.imageApiProfilesJson || '');
     const imagePresetsFromUI = () => normalizeImageApiPresets($('et-image-api-presets-json')?.value || conf.imageApiPresetsJson || '');
+    const imageApiFormatFromUI = () => normalizeImageProviderType(
+      $(`et-agent-image-api-format-${IMAGE_RESIDENT_AGENT_ID}`)?.value
+      || (conf.pipeline?.agents || []).find(agent => agent?.id === IMAGE_RESIDENT_AGENT_ID)?.imageApiFormat,
+    );
+    const imageRuntimeProfileFromUI = profile => {
+      const profileId = cleanString(profile?.id || $('et-image-api-profile-id')?.value, IMAGE_API_PROFILE_DEFAULT_ID);
+      return { ...(profile || {}), provider: imageApiFormatForProfileId(profileId) };
+    };
+    const updateImageProfileAuthGuide = profile => {
+      const guide = $('et-image-profile-auth-guide');
+      if (!guide) return;
+      const runtimeProfile = imageRuntimeProfileFromUI(profile);
+      const format = normalizeImageProviderType(runtimeProfile.provider);
+      const formatLabel = imageProviderTypeOptions().find(item => item.value === format)?.label || format;
+      guide.dataset.imageApiFormat = format;
+      guide.innerHTML = `<strong>${escHtml(formatLabel)} 연결</strong><br>${escHtml(imageApiCredentialGuide(runtimeProfile))}`;
+    };
     const writeImageProfileSelect = (profiles, activeId) => {
       const select = $('et-image-api-profile-id');
       if (!select) return;
       const safeProfiles = normalizeImageApiProfiles(JSON.stringify(profiles || []));
-      const safeActive = normalizeActiveImageApiProfileId(activeId, safeProfiles);
+      const safeActive = normalizeImageApiEditorProfileId(activeId, safeProfiles);
       select.innerHTML = imageProfileOptions({ imageApiProfiles: safeProfiles })
         .map(option => `<option value="${escHtml(option.value)}" ${String(option.value) === safeActive ? 'selected' : ''}>${escHtml(option.label)}</option>`)
         .join('');
@@ -24516,14 +25007,6 @@ function normalizeAdaptiveQualityState(value) {
       if (raw) raw.value = serializeImageApiProfiles(safeProfiles);
       const exportRaw = $('et-image-api-profiles-export-json');
       if (exportRaw) exportRaw.value = serializeImageApiProfiles(safeProfiles);
-      const agentSelect = $(`et-agent-image-api-profile-${IMAGE_RESIDENT_AGENT_ID}`);
-      if (agentSelect) {
-        const selected = safeProfiles.some(item => item.id === agentSelect.value) ? agentSelect.value : safeActive;
-        agentSelect.innerHTML = imageProfileOptions({ imageApiProfiles: safeProfiles })
-          .map(option => `<option value="${escHtml(option.value)}">${escHtml(option.label)}</option>`)
-          .join('');
-        agentSelect.value = selected;
-      }
     };
     const writeImagePresetSelect = (presets, activeId) => {
       const select = $('et-image-api-preset-id');
@@ -24556,33 +25039,18 @@ function normalizeAdaptiveQualityState(value) {
       if ($('et-image-profile-headers-json')) $('et-image-profile-headers-json').value = data.headersJson || '';
       if ($('et-image-profile-response-path')) $('et-image-profile-response-path').value = data.responsePath || '';
       if ($('et-image-profile-request-template-json')) $('et-image-profile-request-template-json').value = data.requestTemplateJson || '';
+      updateImageProfileAuthGuide(data);
     };
-    const readImageProfileEditor = (base = null, forcedId = '') => {
-      const legacyProviderType = normalizeImageProviderType(base?.provider);
-      return normalizeImageApiProfile({
-        ...(base || {}),
-        id: forcedId || base?.id || `image-profile-${Date.now().toString(36)}`,
-        name: $('et-image-profile-name')?.value || base?.name || '',
-        provider: legacyProviderType,
-        endpoint: $('et-image-profile-endpoint')?.value || base?.endpoint || '',
-        apiKey: $('et-image-profile-api-key')?.value === MASKED_SECRET ? base?.apiKey || '' : $('et-image-profile-api-key')?.value || '',
-        apiKeyHeader: cleanString(base?.apiKeyHeader || base?.keyHeader, defaultImageKeyHeaderForProvider(legacyProviderType)),
-        timeoutMs: timeoutSecondsToUserMs($('et-image-profile-timeout-s')?.value || timeoutMsToUserSeconds(base?.timeoutMs || DEFAULT_TIMEOUT_MS), base?.timeoutMs || DEFAULT_TIMEOUT_MS),
-        headersJson: $('et-image-profile-headers-json')?.value || '',
-        responsePath: $('et-image-profile-response-path')?.value || '',
-        requestTemplateJson: $('et-image-profile-request-template-json')?.value || '',
-      });
-    };
-    const applyImagePresetProviderUi = (provider, profile = null) => {
+    const applyImagePresetProviderUi = provider => {
       const providerType = normalizeImageProviderType(provider);
       document.querySelectorAll('[data-image-preset-provider-panel]').forEach(panel => {
         panel.hidden = panel.getAttribute('data-image-preset-provider-panel') !== providerType;
       });
       const guide = $('et-image-preset-provider-guide');
       if (guide) {
-        const resolvedProfile = profile || { name: imageProviderTypeOptions().find(item => item.value === providerType)?.label || providerType, provider: providerType };
+        const formatLabel = imageProviderTypeOptions().find(item => item.value === providerType)?.label || providerType;
         guide.dataset.providerType = providerType;
-        guide.innerHTML = `<strong>${escHtml(resolvedProfile.name || providerType)}</strong><br>${escHtml(imagePresetProviderGuide(providerType))}`;
+        guide.innerHTML = `<strong>${escHtml(formatLabel)}</strong><br>${escHtml(imagePresetProviderGuide(providerType))}`;
       }
     };
     const applyNaiReferenceModeUi = value => {
@@ -24726,15 +25194,6 @@ function normalizeAdaptiveQualityState(value) {
         },
       },
     });
-    const upsertById = (list, item) => {
-      const safeItem = item && typeof item === 'object' ? item : null;
-      if (!safeItem?.id) return Array.isArray(list) ? list : [];
-      const next = Array.isArray(list) ? list.slice() : [];
-      const idx = next.findIndex(existing => existing?.id === safeItem.id);
-      if (idx >= 0) next[idx] = safeItem;
-      else next.push(safeItem);
-      return next;
-    };
     const albumExportFileName = (entry, ext = 'json') => {
       const title = cleanString(entry?.title, entry?.id || 'album').slice(0, 42) || 'album';
       return `eros-tower-album-${diagnosticTimestamp()}-${title}.${ext}`;
@@ -25040,22 +25499,26 @@ function normalizeAdaptiveQualityState(value) {
       $('et-image-api-profile-id')?.addEventListener('change', event => {
         const profiles = imageProfilesFromUI();
         fillImageProfileEditor(profiles.find(item => item.id === event.currentTarget.value) || profiles[0]);
+        const preview = $('et-image-api-test-preview');
+        if (preview) {
+          preview.hidden = true;
+          preview.replaceChildren();
+        }
+      });
+      $('et-image-profile-api-key')?.addEventListener('input', () => {
+        const profiles = imageProfilesFromUI();
+        const profileId = $('et-image-api-profile-id')?.value || '';
+        const current = profiles.find(item => item.id === profileId) || profiles[0] || defaultImageApiProfiles()[0];
+        const liveProfile = readImageProfileEditorFromUI(current, profileId);
+        updateImageProfileAuthGuide(liveProfile);
       });
       $('et-image-api-preset-id')?.addEventListener('change', event => {
         const presets = imagePresetsFromUI();
         fillImagePresetEditor(presets.find(item => item.id === event.currentTarget.value) || presets[0]);
       });
-      $(`et-agent-image-api-profile-${IMAGE_RESIDENT_AGENT_ID}`)?.addEventListener('change', event => {
-        const profiles = imageProfilesFromUI();
-        const profile = profiles.find(item => item.id === event.currentTarget.value) || profiles[0] || defaultImageApiProfiles()[0];
-        const format = $(`et-agent-image-api-format-${IMAGE_RESIDENT_AGENT_ID}`)?.value || profile.provider;
-        applyImagePresetProviderUi(format, profile);
-      });
       $(`et-agent-image-api-format-${IMAGE_RESIDENT_AGENT_ID}`)?.addEventListener('change', event => {
-        const profiles = imageProfilesFromUI();
-        const profileId = $(`et-agent-image-api-profile-${IMAGE_RESIDENT_AGENT_ID}`)?.value || '';
-        const profile = profiles.find(item => item.id === profileId) || profiles[0] || defaultImageApiProfiles()[0];
-        applyImagePresetProviderUi(event.currentTarget.value, profile);
+        const format = normalizeImageProviderType(event.currentTarget.value);
+        applyImagePresetProviderUi(format);
       });
       $(`et-agent-image-api-preset-${IMAGE_RESIDENT_AGENT_ID}`)?.addEventListener('change', event => {
         const presets = imagePresetsFromUI();
@@ -25137,42 +25600,68 @@ function normalizeAdaptiveQualityState(value) {
           const profiles = imageProfilesFromUI();
           const id = $('et-image-api-profile-id')?.value || profiles[0]?.id || '';
           const current = profiles.find(item => item.id === id) || profiles[0] || null;
-          writeImageProfileSelect(upsertById(profiles, readImageProfileEditor(current, id)), id);
-          await saveCurrent(setImageApiStatus, '삽화 API 프로필을 저장했습니다.');
+          const savedProfile = readImageProfileEditorFromUI(current, id);
+          writeImageProfileSelect(upsertConfigItemById(profiles, savedProfile), id);
+          await saveCurrent(null, '');
+          const validation = validateImageApiProfile(imageRuntimeProfileFromUI(savedProfile));
+          setImageApiStatus(
+            validation.ok ? '삽화 API 프로필을 저장했습니다. 생성에 필요한 입력값이 갖춰졌습니다.' : `저장했지만 생성 준비가 필요합니다: ${validation.message}`,
+            validation.ok ? 'success' : 'warn'
+          );
         }, 'et-image-api-status');
       });
-      $('et-image-profile-new')?.addEventListener('click', async event => {
+      $('et-image-profile-check')?.addEventListener('click', async event => {
         await withBusy(event.currentTarget, async () => {
           const profiles = imageProfilesFromUI();
-          const id = `image-profile-${Date.now().toString(36)}`;
-          const nextProfile = normalizeImageApiProfile({ ...defaultImageApiProfiles()[0], id, name: 'New image API', apiKey: '' });
-          writeImageProfileSelect(upsertById(profiles, nextProfile), id);
-          fillImageProfileEditor(nextProfile);
-          await saveCurrent(setImageApiStatus, '새 삽화 API 프로필을 만들었습니다.');
+          const id = $('et-image-api-profile-id')?.value || profiles[0]?.id || IMAGE_API_PROFILE_DEFAULT_ID;
+          const current = profiles.find(item => item.id === id) || profiles[0] || null;
+          const runtimeProfile = imageRuntimeProfileFromUI(readImageProfileEditorFromUI(current, id));
+          setImageApiStatus(`${runtimeProfile.name} 연결 설정 확인 중...`, 'info');
+          try {
+            const result = await checkImageApiConnection(runtimeProfile);
+            setImageApiStatus(
+              result.networkChecked
+                ? `${runtimeProfile.name} 연결 응답 확인: HTTP ${result.status} (${result.method})`
+                : `${runtimeProfile.name} 연결 설정 확인 완료. 실제 서버 인증은 이미지 모델 호출 테스트로 확인하세요.`,
+              'success'
+            );
+          } catch (err) {
+            throw new Error(friendlyImageApiError(err, runtimeProfile));
+          }
         }, 'et-image-api-status');
       });
-      $('et-image-profile-copy')?.addEventListener('click', async event => {
+      $('et-image-profile-generate-test')?.addEventListener('click', async event => {
         await withBusy(event.currentTarget, async () => {
           const profiles = imageProfilesFromUI();
-          const id = $('et-image-api-profile-id')?.value || profiles[0]?.id || '';
-          const current = profiles.find(item => item.id === id) || profiles[0] || defaultImageApiProfiles()[0];
-          const copyId = `image-profile-${Date.now().toString(36)}`;
-          const copy = normalizeImageApiProfile({ ...current, id: copyId, name: `${current.name || 'Image API'} copy` });
-          writeImageProfileSelect(upsertById(profiles, copy), copyId);
-          fillImageProfileEditor(copy);
-          await saveCurrent(setImageApiStatus, '삽화 API 프로필을 복제했습니다.');
-        }, 'et-image-api-status');
-      });
-      $('et-image-profile-delete')?.addEventListener('click', async event => {
-        await withBusy(event.currentTarget, async () => {
-          let profiles = imageProfilesFromUI();
-          if (profiles.length <= 1) throw new Error('최소 1개의 삽화 API 프로필은 필요합니다.');
-          const id = $('et-image-api-profile-id')?.value || profiles[0]?.id || '';
-          profiles = profiles.filter(item => item.id !== id);
-          const activeId = profiles[0]?.id || IMAGE_API_PROFILE_DEFAULT_ID;
-          writeImageProfileSelect(profiles, activeId);
-          fillImageProfileEditor(profiles[0]);
-          await saveCurrent(setImageApiStatus, '삽화 API 프로필을 삭제했습니다.');
+          const id = $('et-image-api-profile-id')?.value || profiles[0]?.id || IMAGE_API_PROFILE_DEFAULT_ID;
+          const current = profiles.find(item => item.id === id) || profiles[0] || null;
+          const runtimeProfile = imageRuntimeProfileFromUI(readImageProfileEditorFromUI(current, id));
+          const presets = imagePresetsFromUI();
+          const selectedPresetId = $(`et-agent-image-api-preset-${IMAGE_RESIDENT_AGENT_ID}`)?.value
+            || $('et-image-api-preset-id')?.value
+            || presets[0]?.id;
+          const preset = presets.find(item => item.id === selectedPresetId) || presets[0] || null;
+          setImageApiStatus(`${runtimeProfile.name} 실제 이미지 1장 생성 중...`, 'info');
+          try {
+            const bytes = await requestImageBytes(runtimeProfile, preset, {
+              title: '이미지 API 호출 테스트',
+              prompt: 'solo character, standing in a quiet library, warm window light, web novel illustration, detailed background',
+              basePrompt: 'solo character, standing in a quiet library, warm window light, web novel illustration, detailed background',
+              negative: 'low quality, blurry, text, logo, watermark',
+              characters: [],
+              paragraph: 1,
+            });
+            const ext = detectImageExtFromBytes(bytes);
+            const mime = `image/${ext === 'jpg' ? 'jpeg' : ext}`;
+            const preview = $('et-image-api-test-preview');
+            if (preview) {
+              preview.hidden = false;
+              preview.innerHTML = `<img src="data:${escHtml(mime)};base64,${bytesToBase64(bytes)}" alt="이미지 API 호출 테스트 결과" style="display:block;max-width:min(320px,100%);max-height:420px;object-fit:contain;border-radius:6px">`;
+            }
+            setImageApiStatus(`${runtimeProfile.name} 이미지 호출 성공 · ${Math.max(1, Math.round(bytes.length / 1024))} KB`, 'success');
+          } catch (err) {
+            throw new Error(friendlyImageApiError(err, runtimeProfile));
+          }
         }, 'et-image-api-status');
       });
       $('et-image-preset-save')?.addEventListener('click', async event => {
@@ -25181,7 +25670,7 @@ function normalizeAdaptiveQualityState(value) {
           const id = $('et-image-api-preset-id')?.value || presets[0]?.id || '';
           const current = presets.find(item => item.id === id) || presets[0] || null;
           const previousMediaKeys = imagePresetMediaKeys(current);
-          const nextPresets = upsertById(presets, readImagePresetEditor(current, id));
+          const nextPresets = upsertConfigItemById(presets, readImagePresetEditor(current, id));
           writeImagePresetSelect(nextPresets, id);
           await removeUnreferencedImagePresetMedia(previousMediaKeys, nextPresets);
           await saveCurrent(setImagePresetStatus, '이미진씨 프리셋을 저장했습니다.');
@@ -25192,7 +25681,7 @@ function normalizeAdaptiveQualityState(value) {
           const presets = imagePresetsFromUI();
           const id = `image-preset-${Date.now().toString(36)}`;
           const nextPreset = normalizeImageApiPreset({ ...defaultImageApiPresets()[0], id, name: 'New image preset', creator: '', builtin: false });
-          writeImagePresetSelect(upsertById(presets, nextPreset), id);
+          writeImagePresetSelect(upsertConfigItemById(presets, nextPreset), id);
           fillImagePresetEditor(nextPreset);
           await saveCurrent(setImagePresetStatus, '새 이미진씨 프리셋을 만들었습니다.');
         }, 'et-image-preset-status');
@@ -25204,7 +25693,7 @@ function normalizeAdaptiveQualityState(value) {
           const current = presets.find(item => item.id === id) || presets[0] || defaultImageApiPresets()[0];
           const copyId = `image-preset-${Date.now().toString(36)}`;
           const copy = normalizeImageApiPreset({ ...current, id: copyId, name: `${current.name || 'Image preset'} copy`, builtin: false });
-          writeImagePresetSelect(upsertById(presets, copy), copyId);
+          writeImagePresetSelect(upsertConfigItemById(presets, copy), copyId);
           fillImagePresetEditor(copy);
           await saveCurrent(setImagePresetStatus, '이미진씨 프리셋을 복제했습니다.');
         }, 'et-image-preset-status');
@@ -25224,10 +25713,7 @@ function normalizeAdaptiveQualityState(value) {
           await saveCurrent(setImagePresetStatus, '이미진씨 프리셋을 삭제했습니다.');
         }, 'et-image-preset-status');
       });
-      const imageAgentProfileId = $(`et-agent-image-api-profile-${IMAGE_RESIDENT_AGENT_ID}`)?.value || '';
-      const imageAgentProfile = imageProfilesFromUI().find(item => item.id === imageAgentProfileId) || imageProfilesFromUI()[0] || defaultImageApiProfiles()[0];
-      const imageAgentFormat = $(`et-agent-image-api-format-${IMAGE_RESIDENT_AGENT_ID}`)?.value || imageAgentProfile.provider;
-      applyImagePresetProviderUi(imageAgentFormat, imageAgentProfile);
+      applyImagePresetProviderUi(imageApiFormatFromUI());
       applyNaiReferenceModeUi($('et-image-preset-nai-reference-mode')?.value || 'none');
     };
     wireOutputArtifactButtons(context);
@@ -26392,6 +26878,14 @@ function normalizeAdaptiveQualityState(value) {
       || { id: agentId, name: agentId, phase: 'pre' };
     const value = (prefix, fallback = '') => document.getElementById(`${prefix}-${agentId}`)?.value ?? fallback;
     const checked = (prefix, fallback = false) => document.getElementById(`${prefix}-${agentId}`)?.checked ?? fallback;
+    const imageDisplay = agentId === IMAGE_RESIDENT_AGENT_ID ? normalizeImageDisplaySettings({
+      ...base,
+      imageDisplaySize: value('et-agent-image-display-size', base.imageDisplaySize || 'medium'),
+      imageDisplayWidth: value('et-agent-image-display-width', base.imageDisplayWidth ?? 480),
+      imageDisplayAspect: value('et-agent-image-display-aspect', base.imageDisplayAspect || 'original'),
+      imageDisplayCustomAspect: value('et-agent-image-display-custom-aspect', base.imageDisplayCustomAspect || '2:3'),
+      imageDisplayFit: value('et-agent-image-display-fit', base.imageDisplayFit || 'contain'),
+    }) : null;
     return {
       ...base,
       enabled: value('et-agent-enabled', boolString(base.enabled !== false)) === 'true',
@@ -26409,10 +26903,14 @@ function normalizeAdaptiveQualityState(value) {
       translationPromptModeId: normalizeActiveTranslationPromptModeId(value('et-agent-translation-prompt', base.translationPromptModeId || conf.activeTranslationPromptModeId), conf.translationPromptModes || normalizeTranslationPromptModes(conf)),
       goePromptModeId: normalizeActiveGoePromptModeId(value('et-agent-goe-prompt', base.goePromptModeId || conf.activeGoePromptModeId), conf.goePromptModes || normalizeGoePromptModes(conf)),
       ...(agentId === IMAGE_RESIDENT_AGENT_ID ? {
-        imageApiProfileId: normalizeActiveImageApiProfileId(value('et-agent-image-api-profile', base.imageApiProfileId || conf.activeImageApiProfileId), conf.imageApiProfiles || normalizeImageApiProfiles(conf.imageApiProfilesJson)),
         imageApiFormat: normalizeImageProviderType(value('et-agent-image-api-format', base.imageApiFormat || 'wellspring-nai')),
         imageApiPresetId: normalizeActiveImageApiPresetId(value('et-agent-image-api-preset', base.imageApiPresetId || conf.activeImageApiPresetId), conf.imageApiPresets || normalizeImageApiPresets(conf.imageApiPresetsJson)),
         maxImages: Math.max(1, Math.floor(parseUserNumberSetting(value('et-agent-max-images', base.maxImages ?? 1), base.maxImages ?? 1))),
+        imageDisplaySize: imageDisplay.size,
+        imageDisplayWidth: imageDisplay.width,
+        imageDisplayAspect: imageDisplay.aspect,
+        imageDisplayCustomAspect: imageDisplay.customAspect,
+        imageDisplayFit: imageDisplay.fit,
       } : {}),
     };
   }
@@ -26431,6 +26929,19 @@ function normalizeAdaptiveQualityState(value) {
     const activeId = value('provider-editor-select', conf.activeProviderId);
     const activeProvider = findProviderEntry(providerRegistry, activeId) || providerRegistry.find(item => item.enabled !== false) || providerRegistry[0] || providerEntryFromPreset('ollama-local', conf);
     const embeddingKeyInput = value('embedding-api-key', conf.embeddingApiKey ? MASKED_SECRET : '');
+    let imageApiProfiles = normalizeImageApiProfiles(value('image-api-profiles-json', conf.imageApiProfilesJson || ''));
+    const imageApiEditorProfileId = normalizeImageApiEditorProfileId(
+      value('image-api-profile-id', IMAGE_API_PROFILE_DEFAULT_ID),
+      imageApiProfiles
+    );
+    const imageApiEditorProfile = imageApiProfiles.find(item => item.id === imageApiEditorProfileId) || imageApiProfiles[0] || null;
+    const editedImageApiProfile = readImageProfileEditorFromUI(imageApiEditorProfile, imageApiEditorProfileId);
+    if (editedImageApiProfile) imageApiProfiles = upsertConfigItemById(imageApiProfiles, editedImageApiProfile);
+    const imageApiPresets = normalizeImageApiPresets(value('image-api-presets-json', conf.imageApiPresetsJson || ''));
+    const activeImageApiPresetId = normalizeActiveImageApiPresetId(
+      value('image-api-preset-id', conf.activeImageApiPresetId || IMAGE_API_PRESET_DEFAULT_ID),
+      imageApiPresets
+    );
     let next = {
       ...conf,
       enabled: value('enabled', boolString(conf.enabled)) === 'true',
@@ -26455,6 +26966,7 @@ function normalizeAdaptiveQualityState(value) {
       modelOptions: activeProvider.modelOptions,
       vertexProjectId: activeProvider.vertexProjectId || '',
       vertexLocation: activeProvider.vertexLocation || 'global',
+      vertexTrafficMode: normalizeVertexTrafficMode(activeProvider.vertexTrafficMode),
       temperature: conf.temperature,
       maxTokens: conf.maxTokens,
       contextWindow: conf.contextWindow,
@@ -26499,10 +27011,11 @@ function normalizeAdaptiveQualityState(value) {
       referenceCharacterIds: readReferenceSelectionFromUI('character', conf.referenceCharacterIds),
       referenceModuleIds: readReferenceSelectionFromUI('module', conf.referenceModuleIds),
       referencePluginKeys: readReferenceSelectionFromUI('plugin', conf.referencePluginKeys),
-      imageApiProfilesJson: value('image-api-profiles-json', conf.imageApiProfilesJson || ''),
-      activeImageApiProfileId: value('image-api-profile-id', conf.activeImageApiProfileId || IMAGE_API_PROFILE_DEFAULT_ID),
-      imageApiPresetsJson: value('image-api-presets-json', conf.imageApiPresetsJson || ''),
-      activeImageApiPresetId: value('image-api-preset-id', conf.activeImageApiPresetId || IMAGE_API_PRESET_DEFAULT_ID),
+      imageApiProfiles,
+      imageApiProfilesJson: serializeImageApiProfiles(imageApiProfiles),
+      imageApiPresets,
+      imageApiPresetsJson: serializeImageApiPresets(imageApiPresets),
+      activeImageApiPresetId,
     };
     const cbsTextNode = $('et-cbs-toggle-text');
     if (cbsTextNode) {
@@ -26534,8 +27047,8 @@ function normalizeAdaptiveQualityState(value) {
     next.activeGoePromptModeId = normalizeActiveGoePromptModeId(next.activeGoePromptModeId, next.goePromptModes);
     next.goePromptModesJson = serializeGoePromptModes(next.goePromptModes);
     next.imageApiProfiles = normalizeImageApiProfiles(next.imageApiProfilesJson);
-    next.activeImageApiProfileId = normalizeActiveImageApiProfileId(next.activeImageApiProfileId, next.imageApiProfiles);
     next.imageApiProfilesJson = serializeImageApiProfiles(next.imageApiProfiles);
+    delete next.activeImageApiProfileId;
     next.imageApiPresets = normalizeImageApiPresets(next.imageApiPresetsJson);
     next.activeImageApiPresetId = normalizeActiveImageApiPresetId(next.activeImageApiPresetId, next.imageApiPresets);
     next.imageApiPresetsJson = serializeImageApiPresets(next.imageApiPresets);
@@ -26599,6 +27112,7 @@ function normalizeAdaptiveQualityState(value) {
       modelOptions: normalizeModelOptions(optionValues, '', presetId),
       vertexProjectId: q('.et-provider-vertex-project')?.value || previous?.vertexProjectId || '',
       vertexLocation: q('.et-provider-vertex-location')?.value || previous?.vertexLocation || 'global',
+      vertexTrafficMode: normalizeVertexTrafficMode(q('.et-provider-vertex-traffic')?.value || previous?.vertexTrafficMode),
       enabled: true,
     }, conf, idx);
   }
@@ -26638,6 +27152,7 @@ function normalizeAdaptiveQualityState(value) {
     set('.et-provider-models-path', preset.modelsPath ?? '');
     set('.et-provider-chat-path', preset.chatPath ?? '/chat/completions');
     set('.et-provider-vertex-location', preset.provider === 'vertex-ai' ? 'global' : '');
+    set('.et-provider-vertex-traffic', 'auto');
     updateProviderCardModels(card, Object.keys(preset.models || {}), preset.defaultModel || '');
   }
   function escHtml(value) {
@@ -27391,15 +27906,187 @@ function normalizeAdaptiveQualityState(value) {
           const html = renderImageApiSettingsPanel({
             ...DEFAULT_CONFIG,
             imageApiProfiles: defaultImageApiProfiles(),
-            activeImageApiProfileId: 'builtin-comfyui-local',
           });
           return {
             hidesKeyHeader: !html.includes('Key header') && !html.includes('et-image-profile-api-key-header'),
-            connectionOnly: html.includes('요청 URL / Base URL') && html.includes('실제 요청 형식과 생성 프리셋은 이미진씨 설정에서 선택합니다.'),
-            noFormatSelector: !html.includes('et-image-profile-provider'),
+            fixedConnectionsOnly: Object.values(IMAGE_API_PROFILE_IDS).every(id => html.includes(`value="${id}"`))
+              && !html.includes('et-image-profile-new')
+              && !html.includes('et-image-profile-copy')
+              && !html.includes('et-image-profile-delete'),
+            connectionAndFormatSeparated: html.includes('요청 URL / Base URL')
+              && !html.includes('et-image-profile-provider')
+              && html.includes('이미진씨에서 고른 이미지 형식과 같은 연결을 자동 사용합니다.'),
+            hasConnectionAndGenerationTests: html.includes('et-image-profile-check')
+              && html.includes('et-image-profile-generate-test'),
             customHeaderDefault: defaultImageKeyHeaderForProvider('custom-json'),
             comfyHeaderDefault: defaultImageKeyHeaderForProvider('comfyui-local'),
           };
+        },
+        testImageApiCredentialContract: () => {
+          const profiles = defaultImageApiProfiles();
+          const runtime = format => ({
+            ...profiles.find(item => item.id === imageApiProfileIdForFormat(format)),
+            provider: format,
+          });
+          const novelai = runtime('novelai');
+          const wellspring = runtime('wellspring-nai');
+          const comfy = runtime('comfyui-local');
+          const keyedNovelai = { ...novelai, apiKey: 'persistent-token' };
+          const headerNovelai = { ...novelai, headersJson: '{"Authorization":"Bearer persistent-token"}' };
+          const keyedWellspring = { ...wellspring, apiKey: 'ws-key' };
+          const savedProfiles = normalizeImageApiProfiles(serializeImageApiProfiles(
+            upsertConfigItemById(profiles, keyedNovelai)
+          ));
+          const recaptchaMessage = friendlyImageApiError('image API failed 400: Recaptcha token is required for trial generation', novelai);
+          return {
+            blankNovelaiRejected: validateImageApiProfile(novelai).code === 'image-api-key-missing',
+            blankWellspringRejected: validateImageApiProfile(wellspring).code === 'image-api-key-missing',
+            keyedNovelaiAccepted: validateImageApiProfile(keyedNovelai).ok === true,
+            headerNovelaiAccepted: validateImageApiProfile(headerNovelai).ok === true,
+            keyedWellspringAccepted: validateImageApiProfile(keyedWellspring).ok === true,
+            localComfyAcceptedWithoutKey: validateImageApiProfile(comfy).ok === true,
+            serializedKeyPreserved: savedProfiles.find(item => item.id === keyedNovelai.id)?.apiKey === 'persistent-token',
+            bearerPrefixNotDuplicated: imageApiBearerHeader('Bearer persistent-token') === 'Bearer persistent-token'
+              && imageApiBearerHeader('persistent-token') === 'Bearer persistent-token',
+            recaptchaExplainedInKorean: /Persistent API Token/.test(recaptchaMessage),
+            imageFailureDoesNotAlterChat: composeVisibleFinalContent('본문', '본문', []) === '본문',
+          };
+        },
+        testVertexFlexTraffic: () => {
+          const runtime = { projectId: 'project-test', location: 'global', model: 'gemini-3.5-flash' };
+          const automatic = buildVertexGeminiHeaders({ vertexTrafficMode: 'auto' }, runtime, 'token');
+          const flex = buildVertexGeminiHeaders({ vertexTrafficMode: 'flex' }, runtime, 'token');
+          let regionalError = '';
+          try {
+            buildVertexGeminiHeaders({ vertexTrafficMode: 'flex' }, { ...runtime, location: 'us-central1' }, 'token');
+          } catch (err) {
+            regionalError = err?.message || String(err);
+          }
+          const provider = normalizeProviderEntry({
+            ...providerEntryFromPreset('vertex-ai', DEFAULT_CONFIG),
+            vertexTrafficMode: 'flex',
+          }, { ...DEFAULT_CONFIG, providerRegistry: [] }, 0);
+          const html = providerCardHtml(provider, { ...DEFAULT_CONFIG, providerRegistry: [provider] }, true);
+          return {
+            automaticHasNoTierHeaders: !automatic['X-Vertex-AI-LLM-Request-Type']
+              && !automatic['X-Vertex-AI-LLM-Shared-Request-Type'],
+            flexUsesOfficialHeaders: flex['X-Vertex-AI-LLM-Request-Type'] === 'shared'
+              && flex['X-Vertex-AI-LLM-Shared-Request-Type'] === 'flex',
+            flexRequiresGlobal: /global/.test(regionalError),
+            providerRoundTrip: provider.vertexTrafficMode === 'flex',
+            uiHasFlexChoice: html.includes('et-provider-vertex-traffic') && html.includes('Flex PayGo'),
+          };
+        },
+        testProviderCredentialIsolation: () => {
+          const active = normalizeProviderEntry({
+            id: 'custom-2',
+            name: 'Wellspring LLM',
+            preset: 'custom',
+            provider: 'custom',
+            baseUrl: 'https://wellspring.example/v1',
+            apiKey: 'wellspring-secret',
+            defaultModel: 'glm-test',
+          }, { ...DEFAULT_CONFIG, providerRegistry: [] }, 0);
+          const nanogpt = normalizeProviderEntry({
+            ...providerEntryFromPreset('nanogpt', DEFAULT_CONFIG),
+            apiKey: '',
+          }, { ...DEFAULT_CONFIG, providerRegistry: [] }, 1);
+          const conf = {
+            ...DEFAULT_CONFIG,
+            provider: active.provider,
+            activeProviderId: active.id,
+            apiKey: active.apiKey,
+            providerKeys: { custom: active.apiKey },
+            providerRegistry: [active, nanogpt],
+            modelPresets: [],
+          };
+          const imageAgent = {
+            id: IMAGE_RESIDENT_AGENT_ID,
+            name: 'Image resident',
+            phase: 'resident',
+            providerId: nanogpt.id,
+            model: 'deepseek/deepseek-v4-pro',
+          };
+          const missingKeyConf = resolveAgentConf(imageAgent, conf);
+          const keyedNanogpt = { ...nanogpt, apiKey: 'nanogpt-secret' };
+          const ownKeyConf = resolveAgentConf(imageAgent, { ...conf, providerRegistry: [active, keyedNanogpt] });
+          const embeddingConf = resolveEmbeddingConf({
+            ...conf,
+            embeddingEnabled: true,
+            embeddingProviderId: nanogpt.id,
+            embeddingModel: 'embedding-test',
+            embeddingApiKey: '',
+          });
+          return {
+            doesNotBorrowActiveCredential: missingKeyConf.apiKey === '',
+            missingCredentialIsNotCallable: canCallProvider(missingKeyConf) === false,
+            ownCredentialPreserved: ownKeyConf.apiKey === 'nanogpt-secret' && canCallProvider(ownKeyConf) === true,
+            embeddingDoesNotBorrowActiveCredential: embeddingConf?.apiKey === '',
+          };
+        },
+        testPostPipelineMissingCredentialSkip: async () => {
+          const active = normalizeProviderEntry({
+            id: 'custom-2',
+            name: 'Wellspring LLM',
+            preset: 'custom',
+            provider: 'custom',
+            baseUrl: 'https://wellspring.example/v1',
+            apiKey: 'wellspring-secret',
+            defaultModel: 'glm-test',
+          }, { ...DEFAULT_CONFIG, providerRegistry: [] }, 0);
+          const nanogpt = normalizeProviderEntry({
+            ...providerEntryFromPreset('nanogpt', DEFAULT_CONFIG),
+            apiKey: '',
+          }, { ...DEFAULT_CONFIG, providerRegistry: [] }, 1);
+          const imageAgent = {
+            ...defaultPipeline().agents.find(agent => agent.id === IMAGE_RESIDENT_AGENT_ID),
+            enabled: true,
+            providerId: nanogpt.id,
+            model: 'deepseek/deepseek-v4-pro',
+          };
+          const targetConf = {
+            ...DEFAULT_CONFIG,
+            provider: active.provider,
+            activeProviderId: active.id,
+            apiKey: active.apiKey,
+            providerKeys: { custom: active.apiKey },
+            providerRegistry: [active, nanogpt],
+            modelPresets: [],
+            imageApiProfiles: defaultImageApiProfiles(),
+            imageApiPresets: defaultImageApiPresets(),
+            pipeline: { version: VERSION, agents: [imageAgent] },
+          };
+          const originalFetch = globalThis.fetch;
+          let fetchCalls = 0;
+          const ownKeyConf = resolveAgentConf(imageAgent, {
+            ...targetConf,
+            providerRegistry: [active, { ...nanogpt, apiKey: 'nanogpt-secret' }],
+          });
+          const ownKeyHeaders = await buildApiHeaders(ownKeyConf, false);
+          globalThis.fetch = async () => {
+            fetchCalls += 1;
+            throw new Error('fetch must not run without the selected Provider credential');
+          };
+          try {
+            const result = await runPostPipeline(
+              '현재 장면 본문',
+              targetConf,
+              { scope: 'credential-test', mode: 'novel', messages: [] },
+              createDefaultState('novel'),
+              [],
+            );
+            const row = result.results[0] || {};
+            return {
+              fetchWasNotCalled: fetchCalls === 0,
+              agentWasSkipped: row.skipped === true,
+              reportsSelectedProviderNotReady: row.providerId === nanogpt.id && row.error === 'provider-not-ready:nanogpt',
+              outputPreserved: result.text === '현재 장면 본문',
+              ownCredentialHeaderOnly: ownKeyHeaders.Authorization === 'Bearer nanogpt-secret'
+                && !String(ownKeyHeaders.Authorization || '').includes(active.apiKey),
+            };
+          } finally {
+            globalThis.fetch = originalFetch;
+          }
         },
         testImageResidentMaxImagesUi: () => {
           const conf = {
@@ -27407,7 +28094,6 @@ function normalizeAdaptiveQualityState(value) {
             providerRegistry: defaultProviderRegistry(),
             activeProviderId: DEFAULT_CONFIG.activeProviderId,
             imageApiProfiles: defaultImageApiProfiles(),
-            activeImageApiProfileId: IMAGE_API_PROFILE_DEFAULT_ID,
             imageApiPresets: defaultImageApiPresets(),
             activeImageApiPresetId: IMAGE_API_PRESET_DEFAULT_ID,
             pipeline: defaultPipeline(),
@@ -27419,8 +28105,17 @@ function normalizeAdaptiveQualityState(value) {
           return {
             hasImageResident: imageCard.includes(IMAGE_RESIDENT_AGENT_ID),
             hasMaxImages: imageCard.includes(`et-agent-max-images-${IMAGE_RESIDENT_AGENT_ID}`),
-            hasImageFormat: imageCard.includes(`et-agent-image-api-format-${IMAGE_RESIDENT_AGENT_ID}`),
+            hasKoreanMaxImagesLabel: imageCard.includes('최대 삽화 수'),
+            hasFormatOnlySelector: imageCard.includes(`et-agent-image-api-format-${IMAGE_RESIDENT_AGENT_ID}`)
+              && !imageCard.includes(`et-agent-image-api-profile-${IMAGE_RESIDENT_AGENT_ID}`),
             hasNoImageRecentChat: !imageCard.includes(`et-agent-context-window-${IMAGE_RESIDENT_AGENT_ID}`),
+            hasDisplayControls: [
+              'et-agent-image-display-size',
+              'et-agent-image-display-width',
+              'et-agent-image-display-aspect',
+              'et-agent-image-display-custom-aspect',
+              'et-agent-image-display-fit',
+            ].every(id => imageCard.includes(`${id}-${IMAGE_RESIDENT_AGENT_ID}`)),
             presetPanelHasNoMaxImages: !renderImagePresetModePanel(conf).includes('et-image-preset-max-images'),
           };
         },
@@ -27445,6 +28140,103 @@ function normalizeAdaptiveQualityState(value) {
             memoryLine: shot.memoryLine,
             imagePrompt: shot.prompt,
             albumLineExcludedFromImagePrompt: !String(shot.prompt || '').includes('넌 날 달에 데려가지 못했지만'),
+          };
+        },
+        testImagePlacementContract: () => {
+          const request = normalizeImageResidentRequest({
+            create: true,
+            scenes: [{
+              shots: [{ paragraph: 2, prompt: 'single character, moonlit room' }],
+            }],
+          }, { maxImages: 1 }, 1);
+          const explicitAfter = normalizeImageShot({
+            paragraph: 2,
+            placement: '뒤',
+            prompt: 'single character, dawn room',
+          });
+          const explicitBefore = normalizeImageShot({
+            paragraph: 2,
+            placement: '앞',
+            prompt: 'single character, morning room',
+          });
+          const source = 'Paragraph one.\n\nParagraph two.\n\nParagraph three.';
+          const beforeMarker = '{{image::before_shot}}';
+          const afterMarker = '{{image::after_shot}}';
+          const defaultRendered = insertImageArtifactsIntoText(source, [{
+            id: 'image-before-shot',
+            type: 'image',
+            body: beforeMarker,
+            paragraph: 2,
+          }]);
+          const afterRendered = insertImageArtifactsIntoText(source, [{
+            id: 'image-after-shot',
+            type: 'image',
+            body: afterMarker,
+            paragraph: 2,
+            placement: 'after',
+          }]);
+          return {
+            schemaRequestsKoreanPlacement: IMAGE_RESIDENT_SYSTEM_PROMPT.includes('"placement": "앞 | 뒤"'),
+            defaultNormalizedBefore: request.shots[0]?.placement === 'before',
+            koreanBeforeAccepted: explicitBefore?.placement === 'before',
+            koreanAfterAccepted: explicitAfter?.placement === 'after',
+            explicitAfterPreserved: explicitAfter?.placement === 'after',
+            defaultInsertedBeforeParagraph: defaultRendered.indexOf(beforeMarker) < defaultRendered.indexOf('Paragraph two.'),
+            explicitInsertedAfterParagraph: afterRendered.indexOf(afterMarker) > afterRendered.indexOf('Paragraph two.')
+              && afterRendered.indexOf(afterMarker) < afterRendered.indexOf('Paragraph three.'),
+          };
+        },
+        testImageParallelPlacementAndDisplay: () => {
+          const paired = resolveImageArtifactPlacement({ paragraph: 3, placement: '앞' }, true);
+          const normal = resolveImageArtifactPlacement({ paragraph: 3, placement: '앞' }, false);
+          const pairedMarker = '{{image::paired_scene}}';
+          const pairedText = insertImageArtifactsIntoText('원문 1\n\n번역 1\n\n원문 2\n\n번역 2\n\n원문 3\n\n번역 3', [{
+            id: 'paired-scene',
+            type: 'image',
+            body: pairedMarker,
+            paragraph: paired.paragraph,
+            placement: paired.placement,
+          }]);
+          const medium = buildImageChatDisplayBody('{{image::memory_scene}}', {
+            imageDisplaySize: 'medium',
+            imageDisplayAspect: 'original',
+          });
+          const original = buildImageChatDisplayBody('{{image::memory_scene}}', {
+            imageDisplaySize: 'original',
+            imageDisplayAspect: 'original',
+          });
+          const custom = buildImageChatDisplayBody('{{image::memory_scene}}', {
+            imageDisplaySize: 'custom',
+            imageDisplayWidth: 640,
+            imageDisplayAspect: 'custom',
+            imageDisplayCustomAspect: '5:7',
+            imageDisplayFit: 'cover',
+          });
+          const fallbackAgent = defaultPipeline().agents.find(agent => agent.id === IMAGE_RESIDENT_AGENT_ID);
+          const normalizedAgent = normalizeAgentConfig({
+            ...fallbackAgent,
+            imageDisplaySize: 'custom',
+            imageDisplayWidth: 640,
+            imageDisplayAspect: 'custom',
+            imageDisplayCustomAspect: '5:7',
+            imageDisplayFit: 'cover',
+          }, { ...DEFAULT_CONFIG, imageApiProfiles: defaultImageApiProfiles(), imageApiPresets: defaultImageApiPresets() }, fallbackAgent);
+          return {
+            parallelMovesToTranslatedPairEnd: paired.paragraph === 4 && paired.placement === 'after',
+            parallelImageDoesNotSplitPair: pairedText.indexOf(pairedMarker) > pairedText.indexOf('번역 2')
+              && pairedText.indexOf(pairedMarker) < pairedText.indexOf('원문 3'),
+            normalKeepsSelectedParagraphAndSide: normal.paragraph === 3 && normal.placement === 'before',
+            usesRisuRawAssetPath: medium.includes('src="{{raw::memory_scene}}"'),
+            mediumWidthApplied: medium.includes('max-width:480px'),
+            originalSizeAvailable: original.includes('width:auto;max-width:none'),
+            customWidthApplied: custom.includes('max-width:640px'),
+            customAspectApplied: custom.includes('aspect-ratio:5 / 7'),
+            customFitApplied: custom.includes('object-fit:cover'),
+            agentSettingsNormalized: normalizedAgent.imageDisplaySize === 'custom'
+              && normalizedAgent.imageDisplayWidth === 640
+              && normalizedAgent.imageDisplayAspect === 'custom'
+              && normalizedAgent.imageDisplayCustomAspect === '5:7'
+              && normalizedAgent.imageDisplayFit === 'cover',
           };
         },
         testImageResidentVisualReferenceMessages: () => {
@@ -27666,15 +28458,17 @@ function normalizeAdaptiveQualityState(value) {
             steps: 28,
           });
           const profiles = defaultImageApiProfiles();
-          const novelaiProfile = profiles.find(item => item.provider === 'novelai');
-          const wellspringProfile = profiles.find(item => item.provider === 'wellspring-nai');
+          const novelaiConnection = profiles.find(item => item.id === imageApiProfileIdForFormat('novelai'));
+          const wellspringConnection = profiles.find(item => item.id === imageApiProfileIdForFormat('wellspring-nai'));
+          const novelaiProfile = { ...novelaiConnection, provider: 'novelai' };
+          const wellspringProfile = { ...wellspringConnection, provider: 'wellspring-nai' };
           const migratedWellspringProfile = normalizeImageApiProfile({
             ...wellspringProfile,
             name: 'Wellspring / 챈섭 NAI 호환',
           });
           const pipeline = defaultPipeline();
           pipeline.agents = pipeline.agents.map(agent => agent.id === IMAGE_RESIDENT_AGENT_ID
-            ? { ...agent, imageApiProfileId: wellspringProfile.id, imageApiFormat: 'novelai', imageApiPresetId: preset.id }
+            ? { ...agent, imageApiFormat: 'novelai', imageApiPresetId: preset.id }
             : agent);
           const novelaiPayload = buildImageApiPayload(novelaiProfile, preset, { prompt: 'girl in palace', negative: 'bad hands' });
           const wellspringPayload = buildImageApiPayload(wellspringProfile, preset, { prompt: 'girl in palace', negative: 'bad hands' });
@@ -27682,7 +28476,6 @@ function normalizeAdaptiveQualityState(value) {
             ...DEFAULT_CONFIG,
             pipeline,
             imageApiProfiles: profiles,
-            activeImageApiProfileId: wellspringProfile.id,
             imageApiPresets: [preset],
             activeImageApiPresetId: preset.id,
           });
@@ -27697,42 +28490,45 @@ function normalizeAdaptiveQualityState(value) {
           }, pipeline.agents.find(agent => agent.id === IMAGE_RESIDENT_AGENT_ID));
           const runtimeProfile = getRuntimeImageApiProfile(runtimeConf);
           const runtimePayload = buildImageApiPayload(runtimeProfile, preset, { prompt: 'girl in palace', negative: 'bad hands' });
-          const explicitRoundTrip = normalizePipeline(JSON.parse(JSON.stringify(pipeline)), {
-            ...DEFAULT_CONFIG,
-            imageApiProfiles: profiles,
-            activeImageApiProfileId: wellspringProfile.id,
-            imageApiPresets: [preset],
-            activeImageApiPresetId: preset.id,
-            providerRegistry: defaultProviderRegistry(),
-          }).agents.find(agent => agent.id === IMAGE_RESIDENT_AGENT_ID);
-          const legacyImageAgent = (() => {
-            const source = defaultPipeline().agents.find(agent => agent.id === IMAGE_RESIDENT_AGENT_ID);
-            const { imageApiFormat, ...legacy } = source;
-            return { ...legacy, imageApiProfileId: novelaiProfile.id };
-          })();
-          const legacyPipeline = normalizePipeline({
+          const legacyPipeline = {
             version: VERSION,
-            agents: defaultPipeline().agents.map(agent => agent.id === IMAGE_RESIDENT_AGENT_ID ? legacyImageAgent : agent),
-          }, {
-            ...DEFAULT_CONFIG,
-            imageApiProfiles: profiles,
-            activeImageApiProfileId: wellspringProfile.id,
-            imageApiPresets: [preset],
-            activeImageApiPresetId: preset.id,
-            providerRegistry: defaultProviderRegistry(),
+            agents: defaultPipeline().agents.map(agent => {
+              if (agent.id !== IMAGE_RESIDENT_AGENT_ID) return agent;
+              const { imageApiFormat, ...legacyAgent } = agent;
+              return { ...legacyAgent, imageApiProfileId: 'legacy-novelai-connection' };
+            }),
+          };
+          const legacyMigration = migrateImageApiConnectionFormat({
+            imageApiProfilesJson: JSON.stringify({ profiles: profiles.concat({
+              id: 'legacy-novelai-connection',
+              name: 'My NovelAI',
+              provider: 'novelai',
+              endpoint: 'https://novelai.example/generate',
+              apiKey: 'legacy-token',
+            }) }),
+            activeImageApiProfileId: wellspringConnection.id,
+            pipelineJson: JSON.stringify(legacyPipeline),
           });
-          const migratedImageAgent = legacyPipeline.agents.find(agent => agent.id === IMAGE_RESIDENT_AGENT_ID);
+          const migratedProfiles = normalizeImageApiProfiles(legacyMigration.config.imageApiProfilesJson);
+          const migratedProfile = migratedProfiles.find(item => item.id === imageApiProfileIdForFormat('novelai'));
+          const migratedPipeline = JSON.parse(legacyMigration.config.pipelineJson);
+          const migratedImageAgent = migratedPipeline.agents.find(agent => agent.id === IMAGE_RESIDENT_AGENT_ID);
           return {
             hasProviderGuide: html.includes('Vibe Transfer와 V4.5 Precise Reference'),
             hasAllProviderPanels: ['wellspring-nai', 'novelai', 'comfyui-local', 'custom-json'].every(type => html.includes(`data-image-preset-provider-panel="${type}"`)),
-            presetPanelUsesAgentFormat: /data-image-preset-provider-panel="novelai"\s*>/.test(html)
+            presetPanelUsesSelectedFormat: /data-image-preset-provider-panel="novelai"\s*>/.test(html)
               && /data-image-preset-provider-panel="wellspring-nai"\s+hidden>/.test(html),
-            runtimeUsesAgentFormat: runtimeProfile?.provider === 'novelai'
-              && runtimeProfile?.id === wellspringProfile.id
-              && runtimeProfile?.endpoint === wellspringProfile.endpoint
+            runtimeMapsFormatToFixedConnection: runtimeProfile?.provider === 'novelai'
+              && runtimeProfile?.id === novelaiConnection.id
+              && runtimeProfile?.endpoint === novelaiConnection.endpoint
               && runtimePayload.model === 'nai-diffusion-4-5-full',
-            explicitFormatRoundTrip: explicitRoundTrip?.imageApiFormat === 'novelai',
-            legacyFormatMigratedFromProfile: migratedImageAgent?.imageApiFormat === 'novelai',
+            legacyConnectionAndFormatMigrated: legacyMigration.changed === true
+              && migratedProfile?.endpoint === 'https://novelai.example/generate'
+              && migratedProfile?.apiKey === 'legacy-token'
+              && migratedImageAgent?.imageApiFormat === 'novelai'
+              && !Object.prototype.hasOwnProperty.call(migratedImageAgent || {}, 'imageApiProfileId'),
+            fixedConnectionCount: migratedProfiles.length === 4
+              && Object.values(IMAGE_API_PROFILE_IDS).every(id => migratedProfiles.some(profile => profile.id === id)),
             hasNaiReferenceUi: html.includes('et-image-preset-nai-reference-mode') && html.includes('et-image-preset-nai-vibe-file') && html.includes('et-image-preset-nai-precise-file'),
             uniqueInputIds: duplicates.length === 0,
             duplicateIds: [...new Set(duplicates)],
@@ -27763,6 +28559,7 @@ function normalizeAdaptiveQualityState(value) {
             ['만능그림체', 'Gsia'],
             ['팝애니', 'gim'],
             ['도트', 'hokhok'],
+            ['얼헌', 'ChestnutFlower'],
           ];
           const rows = expected.map(([name, creator]) => {
             const preset = presets.find(item => item.name === name && item.creator === creator);
@@ -27783,7 +28580,10 @@ function normalizeAdaptiveQualityState(value) {
           };
         },
         testNaiReferencePayloads: async () => {
-          const profile = normalizeImageApiProfile(defaultImageApiProfiles().find(item => item.provider === 'novelai'));
+          const profile = {
+            ...defaultImageApiProfiles().find(item => item.id === imageApiProfileIdForFormat('novelai')),
+            provider: 'novelai',
+          };
           const request = { prompt: '1girl, moonlit balcony', negative: 'bad hands' };
           const vibeData = {
             identifier: 'novelai-vibe-transfer',
