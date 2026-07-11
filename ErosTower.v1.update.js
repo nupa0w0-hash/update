@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.2.1
+//@display-name ☸Eros Tower 1.2.2
 //@api 3.0
-//@version 1.2.1
+//@version 1.2.2
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -42,18 +42,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.2.1
+ * Eros Tower 1.2.2
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.2.1 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.2.2 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.2.1';
+  const VERSION = '1.2.2';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.2.1`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.2.2`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -105,6 +105,11 @@
     { index: 7, label: '초장편', englishLabel: 'very long-form', instruction: 'Write at least 9000 words.', scale: 'Very long-form: prepare dense continuity, layered character movement, multiple world threads, and long-range setup while preserving knowledge boundaries.' },
   ]);
   const SYSTEM_PATCH_NOTES = Object.freeze([
+    {
+      version: '1.2.2',
+      kind: 'album-preview-centered-group',
+      summary: 'Album photo detail now fits without its own scrollbar and keeps the title, proportionally scaled photo, and memory line together as one vertically centered group on desktop and mobile.',
+    },
     {
       version: '1.2.1',
       kind: 'image-routing-placement-vertex-flex-release',
@@ -22313,12 +22318,12 @@ function normalizeAdaptiveQualityState(value) {
       .et-album-preview-overlay { position:absolute; inset:0; z-index:20; display:grid; grid-template-rows:auto minmax(0,1fr); background:#31272a; color:#f0dfd9; }
       .et-album-preview-toolbar { min-height:42px; display:flex; align-items:center; justify-content:flex-end; padding:6px 10px 0; }
       .et-album-preview-close { width:34px; min-width:34px; height:34px; min-height:34px; padding:0; border-radius:999px; color:#f2e4df; border-color:#765c62; background:rgba(39,28,31,.88); font-size:20px; line-height:1; }
-      .et-album-photo-scroll { min-height:0; overflow:auto; overscroll-behavior:contain; padding:0 18px 28px; }
-      .et-album-photo { width:min(920px, 100%); min-height:100%; margin:0 auto; display:flex; flex-direction:column; justify-content:center; box-sizing:border-box; }
-      .et-album-photo-title { margin:0 0 10px; color:#bea8a5; text-align:center; font-size:11px; font-weight:500; line-height:1.35; letter-spacing:0; }
-      .et-album-photo-frame { margin:0; padding:clamp(7px, 1.2vw, 12px); border:1px solid #6f555b; background:#46373b; box-shadow:0 18px 54px rgba(8,5,6,.42); display:grid; place-items:center; }
-      .et-album-photo-frame img { display:block; width:auto; max-width:100%; height:auto; max-height:68vh; object-fit:contain; background:#1f191b; }
-      .et-album-photo-line { width:min(720px, 92%); margin:20px auto 0; color:#ead7d1; text-align:center; font-family:ui-serif, Georgia, "Noto Serif KR", serif; font-size:14px; line-height:1.8; letter-spacing:0; white-space:pre-line; overflow-wrap:anywhere; }
+      .et-album-photo-stage { min-height:0; overflow:hidden; padding:0 18px 20px; display:grid; place-items:center; }
+      .et-album-photo { width:min(920px, 100%); height:100%; min-height:0; margin:0 auto; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; box-sizing:border-box; }
+      .et-album-photo-title { flex:0 0 auto; margin:0; color:#bea8a5; text-align:center; font-size:11px; font-weight:500; line-height:1.35; letter-spacing:0; }
+      .et-album-photo-frame { width:100%; flex:0 1 auto; min-width:0; min-height:0; margin:0; display:grid; place-items:center; overflow:hidden; }
+      .et-album-photo-frame img { display:block; width:auto; max-width:100%; height:auto; max-height:100%; object-fit:contain; box-sizing:border-box; padding:clamp(7px, 1.2vw, 12px); border:1px solid #6f555b; background:#1f191b; box-shadow:0 18px 54px rgba(8,5,6,.42); }
+      .et-album-photo-line { width:min(720px, 92%); flex:0 0 auto; margin:0 auto; color:#ead7d1; text-align:center; font-family:ui-serif, Georgia, "Noto Serif KR", serif; font-size:14px; line-height:1.8; letter-spacing:0; white-space:pre-line; overflow-wrap:anywhere; }
       #et-artifact-status:empty { display:none; }
       .et-badge { display:inline-flex; align-items:center; max-width:180px; overflow:hidden; text-overflow:ellipsis; border:1px solid #d6b4a8; border-radius:999px; padding:2px 7px; color:#704a50; font-size:11px; white-space:nowrap; }
       .et-badge.good { border-color:#93b27b; color:#4c6d3e; }
@@ -22371,12 +22376,11 @@ function normalizeAdaptiveQualityState(value) {
         .et-album-select { top:3px; right:3px; width:22px; height:22px; }
         .et-album-select input { width:14px; height:14px; }
         .et-album-preview-toolbar { min-height:40px; padding:5px 7px 0; }
-        .et-album-photo-scroll { padding:0 10px 22px; }
-        .et-album-photo { justify-content:flex-start; padding-top:4px; }
-        .et-album-photo-title { margin-bottom:7px; font-size:10px; }
-        .et-album-photo-frame { padding:5px; }
-        .et-album-photo-frame img { max-height:70vh; }
-        .et-album-photo-line { width:94%; margin-top:14px; font-size:13px; line-height:1.75; }
+        .et-album-photo-stage { padding:0 10px 12px; }
+        .et-album-photo { gap:8px; }
+        .et-album-photo-title { font-size:10px; }
+        .et-album-photo-frame img { padding:5px; }
+        .et-album-photo-line { width:94%; font-size:13px; line-height:1.75; }
       }
     `;
   }
@@ -23346,7 +23350,7 @@ function normalizeAdaptiveQualityState(value) {
       <div class="et-album-preview-toolbar">
         <button type="button" class="et-album-preview-close" aria-label="사진 닫기" title="사진 닫기">×</button>
       </div>
-      <div class="et-album-photo-scroll">
+      <div class="et-album-photo-stage">
         <article class="et-album-photo">
           <h3 class="et-album-photo-title">${escHtml(title)}</h3>
           <figure class="et-album-photo-frame">
@@ -27804,6 +27808,13 @@ function normalizeAdaptiveQualityState(value) {
             detailIsCentered: /\.et-album-photo-title\s*\{[^}]*text-align:center/.test(styles)
               && /\.et-album-photo-frame\s*\{[^}]*place-items:center/.test(styles)
               && /\.et-album-photo-line\s*\{[^}]*text-align:center/.test(styles),
+            detailFitsViewportWithoutScroll: /\.et-album-photo-stage\s*\{[^}]*overflow:hidden/.test(styles)
+              && /\.et-album-photo\s*\{[^}]*height:100%[^}]*display:flex[^}]*justify-content:center/.test(styles)
+              && /\.et-album-photo-frame\s*\{[^}]*flex:0 1 auto/.test(styles)
+              && /\.et-album-photo-frame img\s*\{[^}]*max-height:100%/.test(styles),
+            detailKeepsTextNearPhoto: /\.et-album-photo\s*\{[^}]*gap:12px/.test(styles)
+              && /@media \(max-width: 640px\)[\s\S]*\.et-album-photo\s*\{[^}]*gap:8px/.test(styles)
+              && !/\.et-album-photo\s*\{[^}]*grid-template-rows/.test(styles),
             detailUsesDarkAlbumPage: /\.et-album-preview-overlay\s*\{[^}]*background:#31272a/.test(styles),
             inventoryIsCompactPhotoGrid: /\.et-album-inventory\s*\{[^}]*minmax\(76px, 96px\)/.test(styles)
               && /@media \(max-width: 640px\)[\s\S]*\.et-album-inventory\s*\{[^}]*minmax\(64px, 1fr\)/.test(styles)
