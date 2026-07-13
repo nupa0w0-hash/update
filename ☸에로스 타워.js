@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.2.2
+//@display-name ☸Eros Tower 1.2.3
 //@api 3.0
-//@version 1.2.2
+//@version 1.2.3
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -42,18 +42,18 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.2.2
+ * Eros Tower 1.2.3
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.2.2 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.2.3 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.2.2';
+  const VERSION = '1.2.3';
   const PREFIX = 'eros_tower_v02:';
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.2.2`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.2.3`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -105,6 +105,11 @@
     { index: 7, label: '초장편', englishLabel: 'very long-form', instruction: 'Write at least 9000 words.', scale: 'Very long-form: prepare dense continuity, layered character movement, multiple world threads, and long-range setup while preserving knowledge boundaries.' },
   ]);
   const SYSTEM_PATCH_NOTES = Object.freeze([
+    {
+      version: '1.2.3',
+      kind: 'risu-flat-image-contract',
+      summary: 'Promotes the tested canonical activation/state authority and album viewport fixes, and aligns image planning with the RisuAI illustration/inlay flat prompt contract without inferred gender negatives, local position grids, duplicated V4 character captions, or generated-image feedback.',
+    },
     {
       version: '1.2.2',
       kind: 'album-preview-centered-group',
@@ -261,75 +266,62 @@
   const IMAGE_API_PRESET_DEFAULT_ID = 'builtin-webnovel-illustration';
   const IMAGE_PRESET_MEDIA_VERSION = 1;
   const IMAGE_PRESET_MEDIA_STORAGE_PREFIX = 'image-preset-media:';
-  const IMAGE_RESIDENT_PROMPT_REVISION = 'v1.2.1-image-placement-ko-v1';
-  const IMAGE_VISUAL_REFERENCE_CONTEXT_CHARS = 7600;
+  const IMAGE_RESIDENT_PROMPT_REVISION = 'v1.2.3-risu-flat-image-v1';
+  const IMAGE_VISUAL_REFERENCE_CONTEXT_CHARS = 6400;
   const IMAGE_RESIDENT_LEGACY_BUILTIN_SIGNATURES = Object.freeze([
     { length: 2089, hash: '1cf76ws' },
     { length: 2533, hash: '16ho6ix' },
     { length: 4036, hash: '1yo6gxr' },
     { length: 4257, hash: '1wkhmxv' },
+    { length: 4214, hash: '1iqosj1' },
+    { length: 8114, hash: 'ndfhr' },
+    { length: 7092, hash: '3zovkf' },
+    { length: 8125, hash: 'd2yjih' },
+    { length: 8130, hash: '1u2ocwg' },
   ]);
   const IMAGE_RESIDENT_SYSTEM_PROMPT = [
-    'You are a web novel illustration director and image-tagging resident.',
-    'Select concrete visual moments from the Current Final Story Output and turn them into stable image-generation requests.',
-    'The Current Final Story Output is the sole authority for what happens now, who is visibly present, and their current action, expression, pose, and attire.',
-    'Visual Reference Context contains canonical identity and managed visual continuity for characters appearing in the output. Use it to preserve identity; never use it to add an absent character, unseen event, secret, future fact, or offscreen scene.',
-    'The image API is separate from the text model. Do not rewrite the story.',
-    'Return one JSON object only. No markdown, XML, YAML, or commentary.',
+    'You create concise image descriptors for a serialized web novel.',
+    'Choose visible moments only from the numbered Current Final Story Output. That text alone decides the event, visible cast, action, current clothes, expression, and paragraph.',
+    'Visual Ground may supply stable source-backed identity and current managed appearance, clothing, or injury continuity. The Current Final Story Output overrides it whenever they differ.',
+    'Visual Ground never adds a character, event, action, secret, or offscreen scene.',
+    'Return one JSON object only, with no markdown fence or commentary.',
     '',
     'Schema:',
     '{',
     '  "create": true | false,',
-    '  "reason": "short internal reason",',
-    '  "scenes": [',
+    '  "reason": "brief reason only when create is false",',
+    '  "shots": [',
     '    {',
-    '      "place": "scene-level place, time, lighting, weather, mood, props",',
-    '      "shots": [',
+    '      "paragraph": 1,',
+    '      "placement": "앞 | 뒤",',
+    '      "title": "short Korean title",',
+    '      "memoryLine": "one grounded Korean line for the album",',
+    '      "camera": "concise English camera and framing tags",',
+    '      "scene": "concise English common tags: exact visible subject count, environment, location, time, weather, lighting, and important props",',
+    '      "supplement": "optional short English visual phrase only when camera/scene/character tags cannot express the composition or interaction; otherwise empty",',
+    '      "characters": [',
     '        {',
-    '          "paragraph": 1,',
-    '          "placement": "앞 | 뒤",',
-    '          "title": "short Korean scene title",',
-    '          "memoryLine": "one emotionally resonant Korean line grounded in this exact moment",',
-    '          "characterCount": "strict Danbooru count such as 1boy, 1girl, 2boys, or 1boy, 1girl",',
-    '          "camera": "camera angle and framing",',
-    '          "situation": "environment, lighting, composition, and visible situation tags",',
-    '          "characters": [',
-    '            {',
-    '              "name": "character name from the output",',
-    '              "label": "boy | girl | other",',
-    '              "visualAge": "child | adolescent | male | female | mature male | mature female, based on visible age",',
-    '              "appearance": "stable identity traits: hair, eyes, skin, species, body, distinguishing marks",',
-    '              "attire": "visible clothes and accessories",',
-    '              "expression": "visible expression",',
-    '              "action": "pose, gaze, and interaction",',
-    '              "position": "relative position when two or more characters are visible",',
-    '              "negative": "optional character-specific contradiction tags"',
-    '            }',
-    '          ],',
-    '          "negative": "optional shot-level negative tags"',
+    '          "name": "source-binding name; never place it in the image tags",',
+    '          "positive": "one complete English character tag string: boy/girl or species, visible age when useful, identity, body, attire, expression, pose, gaze, and action",',
+    '          "negative": "only an explicit client- or source-backed contradiction; otherwise empty"',
     '        }',
-    '      ]',
+    '      ],',
+    '      "negative": "only an explicit shot-wide contradiction; otherwise empty"',
     '    }',
     '  ]',
     '}',
     '',
     'Rules:',
-    '- Use existing paragraph order. If paragraph numbers are not explicitly shown, count paragraphs from 1.',
-    '- Set placement to "앞" by default. Use "뒤" only when the reader must encounter the paragraph first, such as a result, reveal, or aftermath image.',
-    '- Select only moments that are visible in the current output.',
-    '- Every selected shot must contain at least one visible character. Do not create scenery-only filler when a character moment is available.',
-    '- characterCount must exactly match every fully or partially visible character. Use NAI/Danbooru count tags: 1boy, 2boys, 1girl, 2girls, or mixed counts.',
-    '- label is a visual subject class for image generation, not a social role. Never infer girl from delicate, pale, slender, long-haired, submissive, or beautiful traits.',
-    '- Copy stable appearance from Visual Reference Context when available. Keep the same identity fingerprint for the same character across all shots.',
-    '- Current output overrides reference context for current attire, injury visibility, expression, pose, and action.',
-    '- For every character, provide specific appearance, attire, expression, and action. For multi-character scenes, provide position and directional interaction for each character.',
-    '- Use concise, objective English Danbooru-style tags/phrases suitable for NAI/ComfyUI. Do not put character names into appearance tags.',
-    '- Write title in Korean. It should name the remembered scene in two to eight Korean words, not describe the image prompt.',
-    '- Write memoryLine in Korean as one memorable line of dialogue, inner thought, or restrained poetic reflection rooted in the current story output.',
-    '- memoryLine is for the album, not the image model. Do not list appearance, pose, clothes, camera, or composition there.',
-    '- Prefer an exact or lightly condensed line already present in the scene. If none fits, write one faithful line without inventing new facts or future outcomes.',
-    '- Do not include story text, explanations, or private analysis.',
-    '- If no image is needed, return {"create":false,"reason":"...","scenes":[]}.',
+    '- Read every [P#] paragraph, then choose only moments that are genuinely worth illustrating. Image capacity is a maximum, not a target.',
+    '- Use only existing paragraph numbers. Use placement "앞" unless the paragraph must be read before its result or reveal image.',
+    '- scene owns shared count and setting. Each character positive owns that character’s identity, clothes, expression, pose, and action. Do not repeat those facts across fields.',
+    '- Put exact visible counts such as 1girl, 1boy, 2girls, or 1girl, 1boy in scene. For a non-human subject, use its species instead of invented tags such as 1other.',
+    '- For multiple characters, list characters in the intended left-to-right order. Do not output positions or coordinates.',
+    '- Copy stable identity traits from source evidence when available. Otherwise use only visible story evidence and neutral non-conflicting detail.',
+    '- Never infer negative tags from gender, age, pose, or appearance. Leave negative empty unless the client or source explicitly supplies a contradiction.',
+    '- The runtime adds the selected style preset once at the front. Do not reproduce, rewrite, or dilute its style or artist tags.',
+    '- title and memoryLine are album metadata and must not be included in image tags.',
+    '- Return valid JSON. If no image is warranted, return {"create":false,"reason":"...","shots":[]}.',
   ].join('\n');
   const TRANSLATION_PARALLEL_INSTRUCTION = `# 원문 병행
 - For this call only, return valid parsable JSON as an array of objects.
@@ -3646,8 +3638,16 @@ function normalizeCanonicalStore(value, state = null) {
   }
 
   function selectPinnedIdentityLoreSources(context) {
+    const query = canonicalActivationQueryText(context, []).toLowerCase();
     return (Array.isArray(context?.canonicalSources) ? context.canonicalSources : [])
       .filter(isPinnedIdentityLoreSource)
+      .filter(source => {
+        if (String(source?.kind || '').toLowerCase() === 'desc') return true;
+        return normalizeStringArray(source?.activationKeys)
+          .map(key => String(key || '').toLowerCase().trim())
+          .filter(key => key.length >= 2)
+          .some(key => query.includes(key));
+      })
       .sort((a, b) => identitySourcePriority(b) - identitySourcePriority(a))
       .slice(0, 6);
   }
@@ -4216,8 +4216,25 @@ function normalizeAdaptiveQualityState(value) {
     const pruned = pruneAutoLoreBootstrapCharacters(state);
     const extractedIdentitySubjects = extractIdentitySubjectsFromSources(context?.canonicalSources, null);
     const identitySubjects = options.useCanonicalAnnotations === true
-      ? enrichIdentitySubjectsFromCanonicalAnnotations(extractedIdentitySubjects, state, context)
+      ? consolidateCanonicalIdentitySubjects(enrichIdentitySubjectsFromCanonicalAnnotations(extractedIdentitySubjects, state, context))
       : extractedIdentitySubjects;
+    let coalescedAliases = { merged: 0, names: [] };
+    if (options.useCanonicalAnnotations === true && identitySubjects.length) {
+      state.canonicalIdentity = normalizeCanonicalIdentity({
+        subjects: identitySubjects,
+        updatedAt: nowIso(),
+        source: 'active-canon',
+      });
+      coalescedAliases = coalesceStateCharactersByCanonicalIdentity(state, state.canonicalIdentity);
+      if (coalescedAliases.merged > 0) {
+        state.migrationLog = (Array.isArray(state.migrationLog) ? state.migrationLog : []).concat({
+          at: nowIso(),
+          type: 'canonical-character-alias-coalesce',
+          summary: `Canonical identity alias state ${coalescedAliases.merged}개 병합`,
+          names: coalescedAliases.names.slice(0, 20),
+        }).slice(-80);
+      }
+    }
     const visibleSceneText = (Array.isArray(context?.messages) ? context.messages : [])
       .slice(-8)
       .map(messageText)
@@ -4234,11 +4251,13 @@ function normalizeAdaptiveQualityState(value) {
     const cardName = firstNonEmpty(context?.character?.name, context?.character?.data?.name);
     const persona = getEffectiveSelectedPersona(context?.db, context?.currentChat);
     const useCardNameAsCast = !identitySubjects.length && cardName && !isGenericCharacterStateToken(cardName);
+    const retainedSceneCast = normalizeStringArray(state.scene?.presentCast)
+      .filter(name => imageVisualTextContains(visibleSceneText, name) || findTrustedStateCharacterByName(state, name));
     const names = uniqueStrings([
       ...identityPrimaryNames,
       useCardNameAsCast ? cardName : '',
       firstNonEmpty(persona?.name),
-      ...(Array.isArray(state.scene?.presentCast) ? state.scene.presentCast : []),
+      ...retainedSceneCast,
     ]).filter(name => name && !isGenericCharacterStateToken(name));
     const protectedNames = uniqueStrings(identityProtectedNames.concat(names)).filter(name => name && !isGenericCharacterStateToken(name));
     state.activePerspective = {
@@ -4252,6 +4271,12 @@ function normalizeAdaptiveQualityState(value) {
         if (!id) return;
         if (state.characters[id]) {
           if (state.characters[id].status === 'background') state.characters[id].status = 'active';
+          state.characters[id].canonicalIdentityRef = subject.id;
+          state.characters[id].commitGrounding = {
+            kind: 'canonical-identity',
+            turn: state.turn || 0,
+            sourceRef: subject.sourceRefs?.[0] || '',
+          };
           return;
         }
         state.characters[id] = normalizeCharacterState({
@@ -4263,6 +4288,12 @@ function normalizeAdaptiveQualityState(value) {
           role: 'canonical identity',
           status: 'active',
           location: state.scene?.location || '',
+          canonicalIdentityRef: subject.id,
+          commitGrounding: {
+            kind: 'canonical-identity',
+            turn: state.turn || 0,
+            sourceRef: subject.sourceRefs?.[0] || '',
+          },
           evidence: [{ source: 'canonical_identity', turn: state.turn, quoteOrSummary: subject.sourceRefs?.[0] || 'canonical identity bootstrap', certainty: 'established' }],
         }, state.turn);
       });
@@ -4275,6 +4306,7 @@ function normalizeAdaptiveQualityState(value) {
           role: 'primary character',
           status: 'active',
           location: state.scene?.location || '',
+          commitGrounding: { kind: 'character-card', turn: state.turn || 0, sourceRef: 'character-card' },
           evidence: [{ source: 'character_card', turn: state.turn, quoteOrSummary: 'Character card bootstrap', certainty: 'established' }],
         }, state.turn);
       }
@@ -4284,6 +4316,7 @@ function normalizeAdaptiveQualityState(value) {
       bootstrapped: Boolean(presentIdentitySubjects.length || (!identitySubjects.length && cardName)),
       bootstrapSource: presentIdentitySubjects.length ? 'canonical-identity' : (!identitySubjects.length && cardName ? 'character-card' : 'none'),
       prunedLoreCharacters: pruned.removed,
+      coalescedCharacterAliases: coalescedAliases.merged,
     };
   }
 
@@ -6190,19 +6223,20 @@ function normalizeAdaptiveQualityState(value) {
     const scope = slug(`${characterId}:${chatId}`);
     const normalizedRequestMessages = normalizeRequestMessages(requestMessages);
     const chatMessages = normalizeStoredChatMessages(currentChat);
+    const requestChatMessages = normalizeRisuRequestChatMessages(normalizedRequestMessages);
+    const visibleChatMessages = mergeActivationChatMessages(chatMessages, requestChatMessages);
     const registeredFirstMessage = resolveRegisteredFirstMessage(character, currentChat);
-    const baseContextMessages = chatMessages.length ? chatMessages : normalizedRequestMessages;
-    const firstMessageContext = withVirtualFirstMessage(baseContextMessages, registeredFirstMessage);
+    const firstMessageContext = withVirtualFirstMessage(visibleChatMessages, registeredFirstMessage);
     const contextMessages = firstMessageContext.messages.length
-      ? trimContextForActiveTurn(firstMessageContext.messages, normalizedRequestMessages, chatMessages)
-      : normalizedRequestMessages;
+      ? trimContextForActiveTurn(firstMessageContext.messages, requestChatMessages, chatMessages)
+      : [];
     const modeSignals = normalizedRequestMessages.length
       ? normalizedRequestMessages.concat(contextMessages.slice(-8))
       : contextMessages;
     const mode = resolveMode(conf.mode, character, modeSignals, db, currentChat, conf);
     const promptModeId = promptPresetIdFromModeValue(conf.mode);
     const promptModePreset = promptModeId ? (conf.promptPresets || []).find(preset => preset.id === promptModeId) : null;
-    const noSession = !currentChat && !normalizedRequestMessages.length && !chatIdentity.key;
+    const noSession = !currentChat && !visibleChatMessages.length && !chatIdentity.key;
     const canonicalSources = collectCanonicalSources(character, db, currentChat, conf);
     const effectivePersona = getEffectiveSelectedPersona(db, currentChat);
     const effectiveUserName = firstNonEmpty(effectivePersona?.name, db?.username, db?.userName, '');
@@ -6224,7 +6258,8 @@ function normalizeAdaptiveQualityState(value) {
       },
       charIndex,
       chatIndex,
-      messages: contextMessages.length ? contextMessages : normalizedRequestMessages,
+      messages: contextMessages,
+      activationMessages: contextMessages,
       requestMessages: normalizedRequestMessages,
       settingBlocks,
       userName: effectiveUserName,
@@ -6316,8 +6351,59 @@ function normalizeAdaptiveQualityState(value) {
   function normalizeRequestMessages(messages) {
     return (Array.isArray(messages) ? messages : [])
       .filter(msg => msg && (msg.role === 'user' || msg.role === 'assistant' || msg.role === 'system'))
-      .map(msg => ({ role: msg.role, content: messageText(msg), promptInfo: msg.promptInfo || msg.data?.promptInfo || null }))
+      .map((msg, index) => ({
+        role: msg.role,
+        content: messageText(msg),
+        memo: firstNonEmpty(msg.memo, msg.data?.memo),
+        name: firstNonEmpty(msg.name, msg.data?.name),
+        attr: Array.isArray(msg.attr) ? msg.attr.slice() : [],
+        removable: msg.removable,
+        promptInfo: msg.promptInfo || msg.data?.promptInfo || null,
+        _sourceIndex: index,
+      }))
       .filter(msg => msg.content.trim());
+  }
+
+  function isRisuRequestChatMessage(message) {
+    if (!message || !['user', 'assistant'].includes(String(message.role || ''))) return false;
+    const memo = String(message.memo || '').trim();
+    if (!memo) return false;
+    if (/^(?:newchat|newchatexample|supamemory|hypamemory|supaprompt)$/i.test(memo)) return false;
+    if (/^example_/i.test(String(message.name || ''))) return false;
+    return true;
+  }
+
+  function normalizeRisuRequestChatMessages(messages) {
+    return (Array.isArray(messages) ? messages : [])
+      .filter(isRisuRequestChatMessage)
+      .map(message => ({
+        role: message.role,
+        content: String(message.content || '').trim(),
+        id: String(message.memo || '').trim(),
+        memo: String(message.memo || '').trim(),
+        _sourceIndex: message._sourceIndex,
+        _source: 'risu-request-chat',
+      }))
+      .filter(message => message.content);
+  }
+
+  function mergeActivationChatMessages(storedMessages, requestChatMessages) {
+    const stored = Array.isArray(storedMessages) ? storedMessages.filter(Boolean) : [];
+    const request = Array.isArray(requestChatMessages) ? requestChatMessages.filter(Boolean) : [];
+    if (!stored.length) return request;
+    if (!request.length) return stored;
+    const merged = stored.slice();
+    const ids = new Set(stored.map(message => String(message.id || '').trim()).filter(Boolean));
+    const hashes = new Set(stored.map(message => inventoryContentHash(message.role, message.content)));
+    request.forEach(message => {
+      const id = String(message.id || message.memo || '').trim();
+      const hash = inventoryContentHash(message.role, message.content);
+      if ((id && ids.has(id)) || hashes.has(hash)) return;
+      merged.push(message);
+      if (id) ids.add(id);
+      hashes.add(hash);
+    });
+    return merged;
   }
 
   function inventoryContentHash(role, value) {
@@ -6332,10 +6418,13 @@ function normalizeAdaptiveQualityState(value) {
     if (!context || !text) return context;
     const hostText = String(options.hostContent ?? text).trim() || text;
     const messages = Array.isArray(context.messages) ? context.messages : [];
+    const activationMessages = Array.isArray(context.activationMessages) ? context.activationMessages : messages;
     const finalHash = inventoryContentHash('assistant', text);
     const hostHash = inventoryContentHash('assistant', hostText);
     const hasFinalMessage = messages.some(msg => msg?.role === 'assistant' && inventoryContentHash('assistant', msg.content) === finalHash);
     const nextMessages = hasFinalMessage ? messages : messages.concat({ role: 'assistant', content: text });
+    const hasActivationFinal = activationMessages.some(msg => msg?.role === 'assistant' && inventoryContentHash('assistant', msg.content) === finalHash);
+    const nextActivationMessages = hasActivationFinal ? activationMessages : activationMessages.concat({ role: 'assistant', content: text });
     const rawMessages = Array.isArray(context.currentChat?.message) ? context.currentChat.message : null;
     const nextChat = rawMessages ? { ...context.currentChat } : context.currentChat;
     if (rawMessages) {
@@ -6356,6 +6445,7 @@ function normalizeAdaptiveQualityState(value) {
     return {
       ...context,
       messages: nextMessages,
+      activationMessages: nextActivationMessages,
       currentChat: nextChat,
     };
   }
@@ -6407,7 +6497,7 @@ function normalizeAdaptiveQualityState(value) {
       return role && content.trim() ? {
         role,
         content: content.trim(),
-        id: firstNonEmpty(item?.id, item?.messageId, item?.mesId, item?.send_date, `${index}`),
+        id: firstNonEmpty(item?.chatId, item?.id, item?.messageId, item?.mesId, item?.send_date, `${index}`),
         promptInfo: item?.promptInfo || item?.data?.promptInfo || null,
         _sourceIndex: index,
       } : null;
@@ -8001,7 +8091,9 @@ function normalizeAdaptiveQualityState(value) {
         revealState: firstNonEmpty(annotation.revealState, unit.revealState),
         revealGate: firstNonEmpty(annotation.revealGate, unit.revealGate),
         subjectHints: uniqueStrings(normalizeStringArray(unit.subjectHints).concat(annotation.subjectHints)).slice(0, 64),
-        activationKeys: uniqueStrings(normalizeStringArray(unit.activationKeys).concat(annotation.activationKeys)).slice(0, 96),
+        activationKeys: uniqueStrings(normalizeStringArray(unit.activationKeys)
+          .concat(annotation.activationKeys)).slice(0, 96),
+        annotationActivationKeys: normalizeStringArray(annotation.activationKeys).slice(0, 96),
         annotationConfidence: annotation.confidence,
       };
     });
@@ -8031,7 +8123,8 @@ function normalizeAdaptiveQualityState(value) {
 
   function canonicalSelectionClass(reason) {
     const normalized = String(reason || '').trim().toLowerCase();
-    if (normalized === 'trigger' || normalized === 'active-memory-bridge') return 'direct-current';
+    if (normalized === 'trigger') return 'direct-current';
+    if (normalized === 'active-memory-bridge') return 'state-bridge';
     if (normalized === 'recursive') return 'recursive';
     if (normalized === 'source-neighbor' || normalized === 'sibling') return 'sibling';
     if (normalized === 'embedding' || normalized.includes('semantic')) return 'embedding';
@@ -8067,11 +8160,13 @@ function normalizeAdaptiveQualityState(value) {
     const winner = Number(incoming.score || 0) > Number(previous.score || 0) ? incoming : previous;
     const reasons = uniqueStrings(canonicalSelectionReasonList(previous).concat(canonicalSelectionReasonList(incoming)));
     const linkedFrom = uniqueStrings(normalizeStringArray(previous.linkedFrom).concat(normalizeStringArray(incoming.linkedFrom)));
+    const matchedKeys = uniqueStrings(normalizeStringArray(previous.matchedKeys).concat(normalizeStringArray(incoming.matchedKeys)));
     return {
       ...winner,
       reasons,
       reason: winner.reason || reasons[0] || '',
       linkedFrom,
+      matchedKeys,
       semanticScore: Math.max(Number(previous.semanticScore || 0), Number(incoming.semanticScore || 0)),
     };
   }
@@ -8092,6 +8187,7 @@ function normalizeAdaptiveQualityState(value) {
       selectionClasses: provenance.classes,
       stateActivation: provenance.stateActivation,
       linkedFrom: uniqueStrings(normalizeStringArray(selection?.linkedFrom)).slice(0, 8),
+      matchedKeys: uniqueStrings(normalizeStringArray(selection?.matchedKeys)).slice(0, 12),
       charLength: String(unit.content || '').length,
       sourceLength: unit.sourceLength || 0,
       sourceRange: unit.sourceEndIndex !== undefined ? { start: unit.sourceStartIndex || 0, end: unit.sourceEndIndex || 0 } : null,
@@ -8208,6 +8304,25 @@ function normalizeAdaptiveQualityState(value) {
       - ((unit.part?.index || 1) - 1) * 0.01;
   }
 
+  function canonicalCandidatePackingTier(candidate) {
+    const unit = candidate?.unit || {};
+    const reasons = canonicalSelectionReasonList(candidate);
+    if (unit.kind === 'firstMessage') return 0;
+    if (reasons.includes('trigger')) return 1;
+    if (reasons.includes('active-memory-bridge')) return 2;
+    if (unit.kind === 'desc') return 3;
+    if (reasons.includes('foundation')) return 4;
+    if (reasons.includes('recursive')) return 5;
+    if (reasons.includes('always-background')) return 6;
+    return 7;
+  }
+
+  function compareCanonicalPackingCandidates(a, b) {
+    const tierDelta = canonicalCandidatePackingTier(a) - canonicalCandidatePackingTier(b);
+    if (tierDelta) return tierDelta;
+    return canonicalUnitSortValue(b?.unit, b?.score) - canonicalUnitSortValue(a?.unit, a?.score);
+  }
+
   function canonicalUnitAccessNote(unit) {
     const lines = [];
     const knownBy = uniqueStrings(normalizeStringArray(unit?.knownBy)).slice(0, 8);
@@ -8283,7 +8398,7 @@ function normalizeAdaptiveQualityState(value) {
     byBaseId.forEach(group => group.sort((a, b) => Number(a?.part?.index || 1) - Number(b?.part?.index || 1)));
     const sorted = (Array.isArray(candidates) ? candidates : [])
       .slice()
-      .sort((a, b) => canonicalUnitSortValue(b.unit, b.score) - canonicalUnitSortValue(a.unit, a.score));
+      .sort(compareCanonicalPackingCandidates);
     const selected = [];
     const selectedIds = new Set();
     let used = headerCost;
@@ -8303,29 +8418,46 @@ function normalizeAdaptiveQualityState(value) {
       used += nextLen;
       return true;
     };
-    sorted.forEach(item => tryAdd(item.unit, item.score, item.reason, item.reasons, item.linkedFrom));
-    if (allowSourceNeighbors && selected.length < limit) {
-      const neighborCandidates = [];
-      selected.slice().forEach(item => {
+    const candidatesByTier = new Map();
+    sorted.forEach(item => {
+      const tier = canonicalCandidatePackingTier(item);
+      if (!candidatesByTier.has(tier)) candidatesByTier.set(tier, []);
+      candidatesByTier.get(tier).push(item);
+    });
+    Array.from(candidatesByTier.keys()).sort((a, b) => a - b).forEach(tier => {
+      const tierSeeds = [];
+      (candidatesByTier.get(tier) || []).forEach(item => {
+        if (tryAdd(item.unit, item.score, item.reason, item.reasons, item.linkedFrom)) tierSeeds.push(item);
+      });
+      if (!allowSourceNeighbors || selected.length >= limit || !tierSeeds.length) return;
+      const neighborById = new Map();
+      tierSeeds.forEach(item => {
         const baseId = firstNonEmpty(item.unit?.baseId, item.unit?.part?.baseId);
         const sourceGroup = byBaseId.get(baseId) || [];
+        const reasons = canonicalSelectionReasonList(item);
+        const completeProfile = sourceGroup.some(looksLikeCharacterProfileUnit)
+          && reasons.some(reason => reason === 'trigger' || reason === 'active-memory-bridge' || reason === 'recursive');
         sourceGroup.forEach(neighbor => {
           if (!neighbor || selectedIds.has(neighbor.id) || neighbor.id === item.unit.id) return;
           const distance = Math.abs((neighbor.part?.index || 1) - (item.unit.part?.index || 1));
-          if (!distance || distance > maxSourceNeighborDistance) return;
-          neighborCandidates.push({
+          if (!distance || (!completeProfile && distance > maxSourceNeighborDistance)) return;
+          const candidate = {
             unit: neighbor,
             score: Math.max(0, item.score - 24 - distance * 3),
             reason: 'source-neighbor',
             reasons: ['source-neighbor'],
             linkedFrom: [item.unit.id],
-          });
+            distance,
+          };
+          const key = canonicalCandidateKey(neighbor);
+          neighborById.set(key, mergeCanonicalSelectionCandidate(neighborById.get(key), candidate));
         });
       });
-      neighborCandidates
-        .sort((a, b) => canonicalUnitSortValue(b.unit, b.score) - canonicalUnitSortValue(a.unit, a.score))
+      Array.from(neighborById.values())
+        .sort((a, b) => Number(a.distance || 0) - Number(b.distance || 0)
+          || Number(b.score || 0) - Number(a.score || 0))
         .forEach(item => tryAdd(item.unit, item.score, item.reason, item.reasons, item.linkedFrom));
-    }
+    });
     return selected;
   }
 
@@ -8413,7 +8545,6 @@ function normalizeAdaptiveQualityState(value) {
     return uniqueStrings([]
       .concat(normalizeStringArray(state?.activePerspective?.protectedNames))
       .concat(normalizeStringArray(state?.activePerspective?.presentCast))
-      .concat(normalizeStringArray(state?.scene?.presentCast))
       .concat(firstNonEmpty(context?.character?.name, context?.character?.data?.name)))
       .filter(name => name && !isGenericCharacterStateToken(name))
       .slice(0, 48);
@@ -8507,12 +8638,11 @@ function normalizeAdaptiveQualityState(value) {
   }
 
   function futureOriginalAccessText(context = null, fallback = '') {
-    const messages = Array.isArray(context?.messages) ? context.messages : [];
-    return [getUserInput(messages), fallback].filter(Boolean).join('\n');
+    return [getActivationUserInput(context), fallback].filter(Boolean).join('\n');
   }
 
   function knowledgeBoundaryIntentText(context = null, fallback = '') {
-    const currentUser = getUserInput(context?.messages || []);
+    const currentUser = getActivationUserInput(context);
     return String(currentUser || fallback || '');
   }
 
@@ -8544,29 +8674,41 @@ function normalizeAdaptiveQualityState(value) {
   }
 
   function canonicalActivationQueryText(context = null, notes = []) {
-    const messages = Array.isArray(context?.messages) ? context.messages : [];
+    const messages = activationMessagesForContext(context);
     void notes;
     return [
-      context?.mode || '',
       getUserInput(messages),
       messages.slice(-6).map(item => item?.content || '').join('\n').slice(0, 4200),
     ].filter(Boolean).join('\n');
   }
 
   function canonicalUnitExplicitTriggerKeys(unit, runtimeMeta = null) {
-    const keys = Array.isArray(runtimeMeta?.canonicalKeysLower)
-      ? runtimeMeta.canonicalKeysLower
-      : normalizeStringArray(unit?.activationKeys || unit?.keys)
-        .map(value => String(value || '').toLowerCase().trim())
-        .filter(value => value.length >= 2);
+    const keys = normalizeStringArray([]
+      .concat(Array.isArray(runtimeMeta?.canonicalKeysLower) ? runtimeMeta.canonicalKeysLower : [])
+      .concat(unit?.activationKeys || unit?.keys || [])
+      .concat(unit?.annotationActivationKeys || []));
+    if (looksLikeCharacterProfileUnit(unit)) {
+      const name = extractIdentityName(unit?.content, '');
+      keys.push(name, ...extractIdentityAliases(unit?.content, '', name));
+    }
     return uniqueStrings(keys)
+      .map(value => String(value || '').toLowerCase().trim())
+      .filter(value => value.length >= 2)
       .filter(key => key && !/^(?:none|null|undefined|false|off|no\s*key|no-key|\-)$/.test(key))
       .slice(0, 80);
   }
 
+  function canonicalExplicitKeyMatchesQuery(key, queryText, queryTerms = []) {
+    if (canonicalReferenceTermAppears(queryText, key)) return true;
+    const normalized = normalizeCanonicalReferenceTerm(key);
+    if (!/[a-z0-9]/i.test(normalized)) return false;
+    return (Array.isArray(queryTerms) ? queryTerms : [])
+      .some(term => normalizeCanonicalReferenceTerm(term) === normalized);
+  }
+
   function canonicalUnitExplicitActivationScore(unit, queryTerms = [], queryText = '', runtimeMeta = null) {
     if (!unit) return 0;
-    if (unit.foundation || unit.alwaysActive || unit.kind === 'firstMessage') return 0;
+    if (unit.foundation || unit.kind === 'firstMessage') return 0;
     const keys = canonicalUnitExplicitTriggerKeys(unit, runtimeMeta);
     if (!keys.length) return 0;
     const query = String(queryText || '').toLowerCase();
@@ -8576,15 +8718,9 @@ function normalizeAdaptiveQualityState(value) {
     if (!query && !terms.length) return 0;
     let score = 0;
     keys.forEach(key => {
-      if (query.includes(key)) {
+      if (canonicalExplicitKeyMatchesQuery(key, query, terms)) {
         score += 260;
-        return;
       }
-      if (terms.includes(key)) {
-        score += 220;
-        return;
-      }
-      if (terms.some(term => term.length >= 2 && (key.includes(term) || term.includes(key)))) score += 110;
     });
     if (score <= 0) return 0;
     const label = runtimeMeta?.canonicalLabelLower || [
@@ -8604,20 +8740,179 @@ function normalizeAdaptiveQualityState(value) {
   }
 
   function addExplicitCanonicalActivationCandidates(target, index, units, queryTerms, queryText, reason, bias = 0, boundaryQueryText = queryText, futureAccessText = boundaryQueryText, options = {}) {
+    const groups = canonicalReferenceSourceGroups(units);
+    groups.forEach(group => {
+      const matchedKeys = uniqueStrings(group.flatMap(unit => canonicalUnitExplicitTriggerKeys(
+        unit,
+        canonicalUnitRuntimeMeta(options.runtimeIndex, unit)
+      ))).filter(key => canonicalExplicitKeyMatchesQuery(key, queryText, queryTerms));
+      if (!matchedKeys.length) return;
+      const anchors = new Map();
+      matchedKeys.forEach(key => {
+        const anchor = group.find(unit => canonicalReferenceTermAppears(unit?.content, key)) || group[0];
+        if (!anchor) return;
+        const anchorKey = canonicalCandidateKey(anchor);
+        const record = anchors.get(anchorKey) || { unit: anchor, matchedKeys: [] };
+        record.matchedKeys.push(key);
+        anchors.set(anchorKey, record);
+      });
+      anchors.forEach(record => {
+        const unit = record.unit;
+        const allowFutureSource = typeof options.allowFutureSource === 'function'
+          ? options.allowFutureSource(unit)
+          : options.allowFutureSource;
+        if (!canInjectKnowledgeBoundaryCanonicalUnit(unit, boundaryQueryText, futureAccessText, { state: options.state, context: options.context, allowFutureSource })) return;
+        const runtimeMeta = canonicalUnitRuntimeMeta(options.runtimeIndex, unit);
+        const directScore = canonicalUnitExplicitActivationScore(unit, queryTerms, queryText, runtimeMeta);
+        if (directScore <= 0) return;
+        upsertCanonicalStageCandidate(target, index, {
+          unit,
+          score: directScore + bias,
+          reason,
+          directScore,
+          matchedKeys: uniqueStrings(record.matchedKeys),
+        });
+      });
+    });
+  }
+
+  function normalizeCanonicalReferenceTerm(value) {
+    return String(value || '')
+      .normalize('NFKC')
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function canonicalReferenceTermAppears(text, term) {
+    const haystack = normalizeCanonicalReferenceTerm(text);
+    const needle = normalizeCanonicalReferenceTerm(term);
+    if (!haystack || needle.length < 2) return false;
+    if (/^[a-z0-9][a-z0-9 _.'-]*$/i.test(needle)) {
+      return new RegExp(`(^|[^\\p{L}\\p{N}_])${escapeRegexLiteral(needle)}(?=$|[^\\p{L}\\p{N}_])`, 'iu').test(haystack);
+    }
+    return haystack.includes(needle);
+  }
+
+  function canonicalReferenceSourceGroups(units) {
+    const groups = new Map();
     (Array.isArray(units) ? units : []).forEach(unit => {
       if (!unit) return;
+      const baseId = firstNonEmpty(unit.baseId, unit?.part?.baseId, unit.sourceId, unit.id);
+      if (!groups.has(baseId)) groups.set(baseId, []);
+      groups.get(baseId).push(unit);
+    });
+    groups.forEach(group => group.sort((a, b) => Number(a?.part?.index || 1) - Number(b?.part?.index || 1)));
+    return groups;
+  }
+
+  function canonicalReferenceKeyOwners(groups) {
+    const owners = new Map();
+    groups.forEach((group, baseId) => {
+      const keys = uniqueStrings(group.flatMap(unit => canonicalUnitExplicitTriggerKeys(unit).concat(unit?.label || '')));
+      keys.forEach(key => {
+        const normalized = normalizeCanonicalReferenceTerm(key);
+        if (!normalized || normalized.length < 2) return;
+        if (!owners.has(normalized)) owners.set(normalized, new Set());
+        owners.get(normalized).add(baseId);
+      });
+    });
+    return owners;
+  }
+
+  function canonicalCharacterReferenceKeys(group, keyOwners) {
+    const sourceText = group.map(unit => unit?.content || '').filter(Boolean).join('\n');
+    const name = extractIdentityName(sourceText, '');
+    const aliases = extractIdentityAliases(sourceText, '', name);
+    const identityKeys = uniqueStrings([name].concat(aliases))
+      .map(normalizeCanonicalReferenceTerm)
+      .filter(key => key.length >= 2 && !isGenericCharacterStateToken(key));
+    const explicitUniqueKeys = uniqueStrings(group.flatMap(unit => canonicalUnitExplicitTriggerKeys(unit)))
+      .map(normalizeCanonicalReferenceTerm)
+      .filter(key => key.length >= 2
+        && !isGenericCharacterStateToken(key)
+        && keyOwners.get(key)?.size === 1
+        && (!identityKeys.length || identityKeys.some(identity => identity.includes(key) || key.includes(identity))));
+    return uniqueStrings(identityKeys.concat(explicitUniqueKeys));
+  }
+
+  function canonicalNonCharacterReferenceKeys(group, keyOwners) {
+    const labels = uniqueStrings(group.map(unit => normalizeCanonicalReferenceTerm(unit?.label)))
+      .filter(label => label.length >= 2 && !isGenericCharacterStateToken(label));
+    const labelKeys = labels.filter(label => keyOwners.get(label)?.size === 1);
+    const explicitLabelKeys = uniqueStrings(group.flatMap(unit => canonicalUnitExplicitTriggerKeys(unit)))
+      .map(normalizeCanonicalReferenceTerm)
+      .filter(key => key.length >= 2
+        && !isGenericCharacterStateToken(key)
+        && keyOwners.get(key)?.size === 1
+        && labels.some(label => label === key || label.startsWith(key) || label.endsWith(key)));
+    return uniqueStrings(labelKeys.concat(explicitLabelKeys));
+  }
+
+  function canonicalRecursiveSeedEligible(candidate) {
+    const unit = candidate?.unit;
+    if (!unit) return false;
+    if (looksLikeCharacterProfileUnit(unit)) return true;
+    const labels = uniqueStrings([normalizeCanonicalReferenceTerm(unit.label)]
+      .concat(normalizeStringArray(unit.subjectHints).map(normalizeCanonicalReferenceTerm)))
+      .filter(label => label.length >= 2 && !isGenericCharacterStateToken(label));
+    return normalizeStringArray(candidate.matchedKeys)
+      .map(normalizeCanonicalReferenceTerm)
+      .some(key => labels.some(label => label === key || label.startsWith(key) || label.endsWith(key)));
+  }
+
+  function addExplicitCanonicalReferenceCandidates(target, index, units, boundaryQueryText, futureAccessText, options = {}) {
+    const groups = canonicalReferenceSourceGroups(units);
+    const keyOwners = canonicalReferenceKeyOwners(groups);
+    const seedGroups = new Map();
+    (Array.isArray(target) ? target : []).forEach(candidate => {
+      const reasons = canonicalSelectionReasonList(candidate);
+      if (!reasons.some(reason => reason === 'trigger' || reason === 'active-memory-bridge')) return;
+      if (!canonicalRecursiveSeedEligible(candidate)) return;
+      const unit = candidate?.unit;
+      const baseId = firstNonEmpty(unit?.baseId, unit?.part?.baseId, unit?.sourceId, unit?.id);
+      if (!unit || !baseId) return;
+      if (!seedGroups.has(baseId)) seedGroups.set(baseId, { ids: [], text: '' });
+      const seed = seedGroups.get(baseId);
+      seed.ids.push(unit.id);
+      seed.text = [seed.text, unit.content].filter(Boolean).join('\n');
+    });
+    seedGroups.forEach(seed => {
+      seed.ids = uniqueStrings(seed.ids);
+    });
+    if (!seedGroups.size) return;
+
+    groups.forEach((group, baseId) => {
+      if (!group.length || seedGroups.has(baseId)) return;
+      const characterProfile = group.some(looksLikeCharacterProfileUnit);
+      const referenceKeys = characterProfile
+        ? canonicalCharacterReferenceKeys(group, keyOwners)
+        : canonicalNonCharacterReferenceKeys(group, keyOwners);
+      if (!referenceKeys.length) return;
+      const linkedFrom = [];
+      const matchedKeys = [];
+      seedGroups.forEach(seed => {
+        const matches = referenceKeys.filter(key => canonicalReferenceTermAppears(seed.text, key));
+        if (!matches.length) return;
+        matchedKeys.push(...matches);
+        linkedFrom.push(...seed.ids);
+      });
+      if (!matchedKeys.length) return;
+      const anchor = group.find(unit => matchedKeys.some(key => canonicalReferenceTermAppears(unit?.content, key))) || group[0];
       const allowFutureSource = typeof options.allowFutureSource === 'function'
-        ? options.allowFutureSource(unit)
+        ? options.allowFutureSource(anchor)
         : options.allowFutureSource;
-      if (!canInjectKnowledgeBoundaryCanonicalUnit(unit, boundaryQueryText, futureAccessText, { state: options.state, context: options.context, allowFutureSource })) return;
-      const runtimeMeta = canonicalUnitRuntimeMeta(options.runtimeIndex, unit);
-      const directScore = canonicalUnitExplicitActivationScore(unit, queryTerms, queryText, runtimeMeta);
-      if (directScore <= 0) return;
+      if (!canInjectKnowledgeBoundaryCanonicalUnit(anchor, boundaryQueryText, futureAccessText, {
+        state: options.state,
+        context: options.context,
+        allowFutureSource,
+      })) return;
       upsertCanonicalStageCandidate(target, index, {
-        unit,
-        score: directScore + bias,
-        reason,
-        directScore,
+        unit: anchor,
+        score: 320 + Math.min(180, uniqueStrings(matchedKeys).reduce((sum, key) => sum + Math.min(30, key.length * 3), 0)),
+        reason: 'recursive',
+        directScore: 0,
+        linkedFrom: uniqueStrings(linkedFrom),
       });
     });
   }
@@ -8657,13 +8952,27 @@ function normalizeAdaptiveQualityState(value) {
       sourceUnits,
       queryTerms,
       queryText,
-      'foundation-always',
+      'foundation',
       0,
-      1000,
-      unit => unit.foundation || unit.alwaysActive || unit.kind === 'firstMessage',
+      1200,
+      unit => unit.foundation || unit.kind === 'firstMessage',
       boundaryQueryText,
       futureAccessText,
       { directActivationBoost: true, state, context, allowFutureSource, runtimeIndex }
+    );
+    addCanonicalStageCandidates(
+      candidates,
+      index,
+      sourceUnits,
+      queryTerms,
+      queryText,
+      'always-background',
+      0,
+      120,
+      unit => unit.alwaysActive && !unit.foundation && unit.kind !== 'firstMessage',
+      boundaryQueryText,
+      futureAccessText,
+      { directActivationBoost: false, state, context, allowFutureSource, runtimeIndex }
     );
     addExplicitCanonicalActivationCandidates(candidates, index, sourceUnits, queryTerms, queryText, 'trigger', 1800, boundaryQueryText, futureAccessText, { state, context, allowFutureSource, runtimeIndex });
     const bridgeText = buildActiveStateBridgeText(state, context, queryTerms, opts);
@@ -8671,14 +8980,11 @@ function normalizeAdaptiveQualityState(value) {
       const bridgeTerms = extractQueryTerms(bridgeText).slice(0, 100);
       addExplicitCanonicalActivationCandidates(candidates, index, sourceUnits, bridgeTerms, bridgeText, 'active-memory-bridge', 720, boundaryQueryText, futureAccessText, { state, context, allowFutureSource, runtimeIndex });
     }
-    const recursiveText = candidates
-      .slice(0, 10)
-      .map(item => [item.unit.label, item.unit.path, item.unit.content].filter(Boolean).join('\n').slice(0, 900))
-      .join('\n');
-    if (recursiveText) {
-      const recursiveTerms = extractQueryTerms(recursiveText).slice(0, 120);
-      addExplicitCanonicalActivationCandidates(candidates, index, sourceUnits, recursiveTerms, recursiveText, 'recursive', 320, boundaryQueryText, futureAccessText, { state, context, allowFutureSource, runtimeIndex });
-    }
+    addExplicitCanonicalReferenceCandidates(candidates, index, sourceUnits, boundaryQueryText, futureAccessText, {
+      state,
+      context,
+      allowFutureSource,
+    });
     return candidates;
   }
 
@@ -10250,21 +10556,9 @@ function normalizeAdaptiveQualityState(value) {
   }
 
   function extractCanonicalActivationKeys(entry, label, content) {
-    const direct = []
-      .concat(normalizeStringArray(entry?.keys))
-      .concat(normalizeStringArray(entry?.key))
-      .concat(normalizeStringArray(entry?.secondkey))
-      .concat(normalizeStringArray(entry?.secondKey))
-      .concat(normalizeStringArray(entry?.secondaryKeys))
-      .concat(normalizeStringArray(entry?.additionalKeys))
-      .concat(normalizeStringArray(entry?.activationKeys))
-      .concat(normalizeStringArray(entry?.keywords))
-      .concat(normalizeStringArray(entry?.aliases));
-    const text = `${label || ''}\n${String(content || '').slice(0, 600)}`;
-    const inferred = (text.match(/[A-Za-z][A-Za-z0-9_-]{2,}|[\uAC00-\uD7A3]{2,}|[\u3040-\u30FF]{2,}|[\u3400-\u9FFF]{2,}/g) || [])
-      .filter(token => !/^(그리고|하지만|그러나|있는|없는|한다|했다|the|and|for|with)$/i.test(token))
-      .slice(0, 20);
-    return uniqueStrings(direct.concat(inferred)).slice(0, 16);
+    void label;
+    void content;
+    return explicitLoreActivationKeys(entry).slice(0, 96);
   }
 
   function inferCanonicalPriority(entry, kind) {
@@ -10883,7 +11177,7 @@ function normalizeAdaptiveQualityState(value) {
       builtin: true,
       enabled: true,
       maxImages: 1,
-      positivePrefix: 'web novel illustration, cinematic composition, expressive characters, detailed background',
+      positivePrefix: 'web novel illustration, expressive character focus, readable faces, dynamic interaction',
       negativePrompt: 'low quality, worst quality, blurry, extra fingers, malformed hands, bad anatomy, text, watermark',
       providerSettings: {
         ...defaultImagePresetProviderSettings(),
@@ -11234,10 +11528,7 @@ function normalizeAdaptiveQualityState(value) {
         if (!name) return null;
         return {
           name,
-          label: normalizeImageCharacterGenderTag(character.label || character.genderTag || character.gender),
-          visualAge: cleanString(character.visualAge || character.visual_age || character.age, '').slice(0, 80),
-          appearance: cleanString(character.appearance, '').slice(0, 700),
-          body: cleanString(character.body, '').slice(0, 320),
+          positive: cleanString(character.positive, '').slice(0, 1400),
         };
       })
       .filter(Boolean)
@@ -11822,63 +12113,17 @@ function normalizeAdaptiveQualityState(value) {
     return cleanString(value, '');
   }
 
-  function normalizeImageCharacterGenderTag(value) {
-    const text = cleanString(value, '').toLowerCase();
-    if (/^(?:boy|male|man|남성|남자|男|男性)$/.test(text)) return 'boy';
-    if (/^(?:girl|female|woman|여성|여자|女|女性)$/.test(text)) return 'girl';
-    return text === 'other' ? 'other' : '';
-  }
-
-  function deriveImageCharacterCountTag(shot = {}) {
-    const explicit = cleanString(shot.characterCount || shot.character_count || shot.count, '');
-    if (explicit && /\b\d+\s*(?:boys?|girls?)\b/i.test(explicit)) return explicit.replace(/\s+/g, ' ').trim();
-    const counts = { boy: 0, girl: 0, other: 0 };
-    (Array.isArray(shot.characters) ? shot.characters : []).forEach(character => {
-      const tag = normalizeImageCharacterGenderTag(character?.label || character?.genderTag || character?.gender);
-      if (tag === 'boy' || tag === 'girl') counts[tag] += 1;
-      else counts.other += 1;
-    });
-    const tags = [];
-    if (counts.girl) tags.push(`${counts.girl}${counts.girl === 1 ? 'girl' : 'girls'}`);
-    if (counts.boy) tags.push(`${counts.boy}${counts.boy === 1 ? 'boy' : 'boys'}`);
-    if (!tags.length && counts.other === 1) tags.push('solo');
-    else if (!tags.length && counts.other > 1) tags.push(`${counts.other} characters`);
-    return tags.join(', ');
-  }
-
   function imageCharacterPromptGroup(character = {}) {
-    const direct = imagePromptPart(character.positive);
-    if (direct) return direct;
-    return [
-      normalizeImageCharacterGenderTag(character.label || character.genderTag || character.gender),
-      imagePromptPart(character.visualAge || character.age),
-      imagePromptPart(character.appearance),
-      imagePromptPart(character.body),
-      imagePromptPart(character.attire),
-      imagePromptPart(character.expression),
-      imagePromptPart(character.action),
-      imagePromptPart(character.position),
-    ].filter(Boolean).join(', ');
+    return imagePromptPart(character.positive);
   }
 
   function buildImageShotBasePrompt(shot = {}) {
-    const suppliedBase = cleanString(shot.basePrompt || shot.sourcePrompt, '');
-    if (suppliedBase) return suppliedBase;
     const characters = Array.isArray(shot.characters) ? shot.characters : [];
     if (!characters.length && cleanString(shot.prompt, '')) return cleanString(shot.prompt, '');
-    const characterCount = deriveImageCharacterCountTag(shot);
-    const genderTags = characters
-      .map(character => normalizeImageCharacterGenderTag(character?.label || character?.genderTag || character?.gender))
-      .filter(Boolean);
-    const focus = genderTags.length && genderTags.every(tag => tag === 'boy')
-      ? 'male focus'
-      : genderTags.length && genderTags.every(tag => tag === 'girl') ? 'female focus' : '';
     return [
-      characterCount,
-      focus,
-      imagePromptPart(shot.place),
       imagePromptPart(shot.camera),
-      imagePromptPart(shot.situation),
+      imagePromptPart(shot.scene),
+      imagePromptPart(shot.supplement),
     ].filter(Boolean).join(', ');
   }
 
@@ -11892,17 +12137,8 @@ function normalizeAdaptiveQualityState(value) {
     return [buildImageShotBasePrompt(shot), ...buildImageCharacterPrompts(shot)].filter(Boolean).join(' | ');
   }
 
-  function imageShotGenderContradiction(shot = {}) {
-    const genderTags = (Array.isArray(shot.characters) ? shot.characters : [])
-      .map(character => normalizeImageCharacterGenderTag(character?.label || character?.genderTag || character?.gender))
-      .filter(Boolean);
-    return genderTags.length && genderTags.every(tag => tag === 'boy')
-      ? 'female, girl, 1girl'
-      : genderTags.length && genderTags.every(tag => tag === 'girl') ? 'male, boy, 1boy' : '';
-  }
-
   function buildImageShotBaseNegative(shot = {}) {
-    return [imagePromptPart(shot.negative), imageShotGenderContradiction(shot)].filter(Boolean).join(', ');
+    return imagePromptPart(shot.negative);
   }
 
   function buildImageCharacterNegativePrompts(shot = {}) {
@@ -11911,14 +12147,17 @@ function normalizeAdaptiveQualityState(value) {
   }
 
   function buildImageShotNegative(shot = {}) {
-    return [buildImageShotBaseNegative(shot), ...buildImageCharacterNegativePrompts(shot)].filter(Boolean).join(', ');
+    const baseNegative = buildImageShotBaseNegative(shot);
+    const characterNegatives = buildImageCharacterNegativePrompts(shot);
+    return characterNegatives.some(Boolean)
+      ? [baseNegative, ...characterNegatives].join(' | ')
+      : baseNegative;
   }
 
   function buildImagePromptStructure(agentRequest, preset) {
-    const basePrompt = [
-      preset?.positivePrefix,
-      buildImageShotBasePrompt(agentRequest),
-    ].map(value => String(value || '').trim()).filter(Boolean).join(', ');
+    const stylePrefix = String(preset?.positivePrefix || '').trim();
+    const shotPrompt = buildImageShotBasePrompt(agentRequest);
+    const basePrompt = [stylePrefix, shotPrompt].filter(Boolean).join(',\n\n');
     const characterPrompts = buildImageCharacterPrompts(agentRequest);
     const baseNegative = [
       preset?.negativePrompt,
@@ -11931,7 +12170,9 @@ function normalizeAdaptiveQualityState(value) {
       characterPrompts,
       characterNegatives,
       prompt: [basePrompt, ...characterPrompts].filter(Boolean).join(' | '),
-      negative: [baseNegative, ...characterNegatives].filter(Boolean).join(', '),
+      negative: characterNegatives.some(Boolean)
+        ? [baseNegative, ...characterNegatives].join(' | ')
+        : baseNegative,
     };
   }
 
@@ -11948,31 +12189,27 @@ function normalizeAdaptiveQualityState(value) {
     return structure.prompt;
   }
 
-  function buildNaiCharacterCaptions(prompts = []) {
-    const captions = (Array.isArray(prompts) ? prompts : [])
-      .map((caption, sourceIndex) => ({ caption: cleanString(caption, ''), sourceIndex }))
-      .filter(item => item.caption)
-      .slice(0, 6);
-    const count = captions.length;
-    return captions.map((item, index) => ({
-      sourceIndex: item.sourceIndex,
-      char_caption: item.caption,
-      centers: [{
-        x: count <= 1 ? 0.5 : Number(((index + 1) / (count + 1)).toFixed(4)),
-        y: 0.5,
-      }],
-    }));
+  function buildImageNegativeForProvider(structure, provider) {
+    const type = normalizeImageProviderType(provider);
+    if (type === 'comfyui-local' || type === 'custom-json') {
+      return [structure.baseNegative, ...structure.characterNegatives].filter(Boolean).join(', ');
+    }
+    return structure.negative;
   }
 
   function buildImageApiTemplateVars(preset, agentRequest, provider = '') {
     const providerType = normalizeImageProviderType(provider);
     const settings = imagePresetSettingsForProvider(preset, providerType);
     const structure = buildImagePromptStructure(agentRequest, preset);
+    const comfyPrompt = [structure.basePrompt, ...structure.characterPrompts].filter(Boolean).join(', ');
+    const comfyNegative = [structure.baseNegative, ...structure.characterNegatives].filter(Boolean).join(', ');
     return {
       prompt: buildImagePromptForProvider(structure, provider),
       naiPrompt: structure.prompt,
-      comfyPrompt: [structure.basePrompt, ...structure.characterPrompts].filter(Boolean).join(', '),
-      negative: structure.negative,
+      comfyPrompt,
+      negative: buildImageNegativeForProvider(structure, provider),
+      naiNegative: structure.negative,
+      comfyNegative,
       basePrompt: structure.basePrompt,
       baseNegative: structure.baseNegative,
       characterPrompts: structure.characterPrompts,
@@ -12001,14 +12238,8 @@ function normalizeAdaptiveQualityState(value) {
     const advanced = parseOptionalJsonObject(providerSettings.advancedJson);
     const siteManaged = imageProviderUsesSiteGenerationSettings(providerType);
     const naiCompatible = providerType === 'wellspring-nai' || providerType === 'novelai';
-    const naiCharacterCaptions = buildNaiCharacterCaptions(vars.characterPrompts);
-    const useStructuredNaiPrompt = naiCompatible && naiCharacterCaptions.length > 0;
-    const naiNegativeCaptions = naiCharacterCaptions.map(item => ({
-      char_caption: cleanString(vars.characterNegatives[item.sourceIndex], ''),
-      centers: item.centers,
-    }));
     const payload = {
-      input: useStructuredNaiPrompt ? vars.basePrompt : vars.prompt,
+      input: vars.prompt,
       action: 'generate',
       parameters: {
         ...(!siteManaged ? {
@@ -12016,13 +12247,12 @@ function normalizeAdaptiveQualityState(value) {
           height: vars.height,
           steps: vars.steps,
           scale: vars.cfg,
-          cfg_scale: vars.cfg,
           sampler: vars.sampler || undefined,
           seed: vars.seed >= 0 ? vars.seed : undefined,
           loras: vars.loras,
         } : {}),
-        negative_prompt: useStructuredNaiPrompt ? vars.baseNegative : vars.negative,
-        uc: useStructuredNaiPrompt ? vars.baseNegative : vars.negative,
+        ...advanced,
+        negative_prompt: vars.negative,
         ...(naiCompatible ? {
           params_version: 3,
           n_samples: 1,
@@ -12030,25 +12260,71 @@ function normalizeAdaptiveQualityState(value) {
           legacy_uc: false,
           v4_prompt: {
             caption: {
-              base_caption: vars.basePrompt,
-              char_captions: naiCharacterCaptions.map(({ sourceIndex, ...caption }) => caption),
+              base_caption: vars.prompt,
+              char_captions: [],
             },
             use_coords: false,
             use_order: true,
           },
           v4_negative_prompt: {
             caption: {
-              base_caption: vars.baseNegative,
-              char_captions: naiNegativeCaptions,
+              base_caption: vars.negative,
+              char_captions: [],
             },
             legacy_uc: false,
           },
         } : {}),
-        ...advanced,
       },
     };
     if (!siteManaged && vars.model) payload.model = vars.model;
     return payload;
+  }
+
+  function imagePromptFingerprint(value) {
+    const text = String(value || '');
+    return {
+      chars: text.length,
+      hash: text ? hashString(text) : '',
+    };
+  }
+
+  function buildImagePromptTrace(profile, preset, agentRequest) {
+    const providerType = normalizeImageProviderType(profile?.provider);
+    const settings = imagePresetSettingsForProvider(preset, providerType);
+    const structure = buildImagePromptStructure(agentRequest, preset);
+    const finalPrompt = buildImagePromptForProvider(structure, providerType);
+    const payload = buildImageApiPayload(profile, preset, agentRequest);
+    const topLevelInput = typeof payload?.input === 'string' ? payload.input : '';
+    const v4Caption = payload?.parameters?.v4_prompt?.caption || {};
+    const v4BaseCaption = typeof v4Caption?.base_caption === 'string' ? v4Caption.base_caption : '';
+    const v4CharacterCaptions = Array.isArray(v4Caption?.char_captions) ? v4Caption.char_captions : [];
+    const stylePrefix = String(preset?.positivePrefix || '').trim();
+    const negativePrefix = String(preset?.negativePrompt || '').trim();
+    const naiCompatible = providerType === 'wellspring-nai' || providerType === 'novelai';
+    return {
+      promptRevision: IMAGE_RESIDENT_PROMPT_REVISION,
+      profileId: cleanString(profile?.id, ''),
+      provider: providerType,
+      model: cleanString(settings.model || settings.checkpoint, ''),
+      presetId: cleanString(preset?.id, ''),
+      presetName: cleanString(preset?.name, ''),
+      positivePrefix: imagePromptFingerprint(stylePrefix),
+      negativePrefix: imagePromptFingerprint(negativePrefix),
+      basePrompt: imagePromptFingerprint(structure.basePrompt),
+      finalPrompt: imagePromptFingerprint(finalPrompt),
+      topLevelInput: imagePromptFingerprint(topLevelInput),
+      characterPrompts: structure.characterPrompts.length,
+      v4CharacterCaptions: v4CharacterCaptions.length,
+      stylePrefixInFinalPrompt: !stylePrefix || finalPrompt.startsWith(stylePrefix),
+      negativePrefixInFinalPrompt: !negativePrefix || structure.negative.startsWith(negativePrefix),
+      stylePrefixInTopLevelInput: topLevelInput ? (!stylePrefix || topLevelInput.startsWith(stylePrefix)) : null,
+      stylePrefixInV4Base: v4BaseCaption ? (!stylePrefix || v4BaseCaption.startsWith(stylePrefix)) : null,
+      risuFlatPromptPreserved: naiCompatible
+        ? topLevelInput === structure.prompt
+          && v4BaseCaption === structure.prompt
+          && v4CharacterCaptions.length === 0
+        : null,
+    };
   }
 
   function imagePresetMediaStorageName(mediaKey) {
@@ -12412,6 +12688,7 @@ function normalizeAdaptiveQualityState(value) {
   async function persistGeneratedImageBytes(context, bytes, profile, preset, agentRequest = {}, options = {}) {
     const deadlineAt = Number(options.deadlineAt) || createImageJobDeadline(profile?.timeoutMs || DEFAULT_TIMEOUT_MS);
     const progress = options.progress;
+    const promptTrace = options.promptTrace || null;
     const ext = detectImageExtFromBytes(bytes);
     const result = await saveGeneratedImageOutputArtifact(context, bytes, {
       title: cleanString(agentRequest?.title, '추억 삽화'),
@@ -12426,7 +12703,7 @@ function normalizeAdaptiveQualityState(value) {
       paragraph: agentRequest?.paragraph || 0,
       visualCharacters: normalizeArtifactVisualCharacters(agentRequest?.characters),
     }, { deadlineAt, progress });
-    if (!result.saved) return { generated: false, reason: result.reason || 'asset-save-failed', artifact: result };
+    if (!result.saved) return { generated: false, reason: result.reason || 'asset-save-failed', artifact: result, promptTrace };
     await emitImageJobProgress(progress, 'image-asset-register', { assetPath: result.entry?.assetPath || '' });
     const assetTag = await registerImageArtifactReference(context, result, { ...agentRequest, ext }, { deadlineAt });
     if (assetTag && result.entry?.id) {
@@ -12443,7 +12720,7 @@ function normalizeAdaptiveQualityState(value) {
       }
     }
     await emitImageJobProgress(progress, 'image-job-complete', { assetTag, assetPath: result.entry?.assetPath || '' });
-    return { generated: true, artifact: result, assetTag };
+    return { generated: true, artifact: result, assetTag, promptTrace };
   }
 
   function buildImageApiRequestHeaders(profile, accept = 'application/json, image/*') {
@@ -12531,80 +12808,108 @@ function normalizeAdaptiveQualityState(value) {
     const profile = getRuntimeImageApiProfile(conf);
     const preset = getActiveImageApiPreset(conf);
     const deadlineAt = createImageJobDeadline(profile?.timeoutMs || DEFAULT_TIMEOUT_MS);
+    const promptTrace = buildImagePromptTrace(profile, preset, agentRequest);
     const bytes = await requestImageBytes(profile, preset, agentRequest, { deadlineAt, progress });
-    return await persistGeneratedImageBytes(context, bytes, profile, preset, agentRequest, { deadlineAt, progress });
+    return await persistGeneratedImageBytes(context, bytes, profile, preset, agentRequest, { deadlineAt, progress, promptTrace });
   }
 
-  function normalizeImageShot(rawShot = {}, scene = {}, index = 0) {
+  function normalizeImageShot(rawShot = {}, parent = {}, index = 0) {
     const shot = rawShot && typeof rawShot === 'object' && !Array.isArray(rawShot) ? rawShot : {};
-    const paragraph = Number.isFinite(Number(shot.paragraph)) ? Math.max(1, Math.floor(Number(shot.paragraph))) : 0;
-    const suppliedPrompt = cleanString(shot.prompt || shot.positive || shot.imagePrompt, '');
+    const paragraphValue = Number(shot.paragraph);
+    const paragraph = Number.isFinite(paragraphValue) && paragraphValue >= 1 ? Math.floor(paragraphValue) : 0;
+    const legacyScene = Array.from(new Set([parent.place, shot.place, shot.situation]
+      .map(value => cleanString(value, ''))
+      .filter(Boolean))).join(', ');
     const characters = (Array.isArray(shot.characters) ? shot.characters : [])
-      .map(character => character && typeof character === 'object' && !Array.isArray(character) ? {
-        name: cleanString(character.name, ''),
-        label: normalizeImageCharacterGenderTag(character.label || character.genderTag || character.gender),
-        visualAge: cleanString(character.visualAge || character.visual_age || character.age, ''),
-        age: cleanString(character.age || character.visualAge || character.visual_age, ''),
-        appearance: cleanString(character.appearance, ''),
-        body: cleanString(character.body, ''),
-        attire: cleanString(character.attire, ''),
-        expression: cleanString(character.expression, ''),
-        action: cleanString(character.action, ''),
-        position: cleanString(character.position, ''),
-        positive: cleanString(character.positive, ''),
-        negative: cleanString(character.negative, ''),
-      } : null)
+      .map(character => {
+        if (!character || typeof character !== 'object' || Array.isArray(character)) return null;
+        const positive = cleanString(character.positive, '') || [
+          firstNonEmpty(character.label, character.genderTag, character.gender),
+          firstNonEmpty(character.visualAge, character.visual_age, character.age),
+          character.appearance,
+          character.body,
+          character.attire,
+          character.expression,
+          character.action,
+        ].map(value => cleanString(value, '')).filter(Boolean).join(', ');
+        return {
+          name: cleanString(character.name, ''),
+          positive,
+          negative: cleanString(character.negative, ''),
+        };
+      })
       .filter(Boolean);
     const normalized = {
       title: cleanString(shot.title || shot.name, `장면 ${index + 1}`),
       memoryLine: cleanString(shot.memoryLine || shot.summary || shot.albumSummary || shot.caption, ''),
       summary: cleanString(shot.summary || shot.memoryLine || shot.albumSummary || shot.caption, ''),
       paragraph,
-      characterCount: cleanString(shot.characterCount || shot.character_count || shot.count, ''),
-      place: cleanString(shot.place || scene.place, ''),
       camera: cleanString(shot.camera, ''),
-      situation: cleanString(shot.situation, ''),
+      scene: cleanString(shot.scene || parent.scene, '') || legacyScene,
+      supplement: cleanString(shot.supplement, ''),
       characters,
-      basePrompt: suppliedPrompt,
-      prompt: '',
-      negative: cleanString(shot.negative || shot.negativePrompt, ''),
+      prompt: cleanString(shot.prompt, ''),
+      negative: cleanString(shot.negative, ''),
       placement: normalizeImagePlacement(shot.placement),
     };
-    normalized.prompt = buildImageShotPrompt(normalized);
+    if (!normalized.prompt) normalized.prompt = buildImageShotPrompt(normalized);
     return normalized.prompt ? normalized : null;
   }
 
-  function normalizeImageResidentRequest(value = {}, preset = null, maxImagesOverride = null) {
+  function imageShotStructuralIssue(shot, paragraphCount = 0) {
+    if (!shot) return 'empty-shot';
+    if (!Number.isFinite(Number(shot.paragraph)) || Number(shot.paragraph) < 1) return 'missing-paragraph';
+    if (paragraphCount > 0 && Number(shot.paragraph) > paragraphCount) return 'paragraph-out-of-range';
+    if (!cleanString(shot.camera, '')) return 'missing-camera';
+    if (!cleanString(shot.scene, '')) return 'missing-scene';
+    if (!Array.isArray(shot.characters) || !shot.characters.length) return 'missing-characters';
+    if (shot.characters.some(character => !cleanString(character?.positive, ''))) return 'missing-character-positive';
+    return '';
+  }
+
+  function normalizeImageResidentRequest(value = {}, preset = null, maxImagesOverride = null, sourceText = '', strictPlan = false) {
     const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
     const createRequested = source.create === true || /^(true|yes|1)$/i.test(String(source.create || ''));
     const shots = [];
-    if (Array.isArray(source.scenes)) {
+    const invalidShots = [];
+    const paragraphCount = splitImageStoryParagraphs(sourceText).length;
+    const addShot = (shot, parent = {}) => {
+      const normalized = normalizeImageShot(shot, parent, shots.length);
+      const issue = strictPlan ? imageShotStructuralIssue(normalized, paragraphCount) : '';
+      if (issue) invalidShots.push({ index: shots.length + invalidShots.length, issue });
+      else if (normalized) shots.push(normalized);
+    };
+    if (Array.isArray(source.shots)) source.shots.forEach(shot => addShot(shot));
+    if (!Array.isArray(source.shots) && Array.isArray(source.scenes)) {
       source.scenes.forEach(scene => {
         const sceneObj = scene && typeof scene === 'object' && !Array.isArray(scene) ? scene : {};
-        (Array.isArray(sceneObj.shots) ? sceneObj.shots : []).forEach(shot => {
-          const normalized = normalizeImageShot(shot, sceneObj, shots.length);
-          if (normalized) shots.push(normalized);
-        });
+        (Array.isArray(sceneObj.shots) ? sceneObj.shots : []).forEach(shot => addShot(shot, sceneObj));
       });
     }
-    const directPrompt = cleanString(source.prompt || source.positive || source.imagePrompt, '');
+    const directPrompt = cleanString(source.prompt, '');
     if (!shots.length && directPrompt) {
-      const normalized = normalizeImageShot({
-        title: source.title || source.name || '추억 삽화',
-        memoryLine: source.memoryLine || source.summary || source.albumSummary || source.caption || '',
-        prompt: directPrompt,
-        negative: source.negative || source.negativePrompt || '',
-        placement: source.placement,
-      }, {}, 0);
-      if (normalized) shots.push(normalized);
+      if (strictPlan) {
+        invalidShots.push({ index: invalidShots.length, issue: 'unstructured-direct-prompt' });
+      } else {
+        const normalized = normalizeImageShot({
+          title: source.title || source.name || '추억 삽화',
+          memoryLine: source.memoryLine || source.summary || source.albumSummary || source.caption || '',
+          prompt: directPrompt,
+          negative: source.negative || '',
+          placement: source.placement,
+        }, {}, 0);
+        if (normalized) shots.push(normalized);
+      }
     }
     const maxImages = Math.max(1, Math.floor(parseUserNumberSetting(maxImagesOverride ?? preset?.maxImages, 1)));
+    const invalidReason = invalidShots.length ? `invalid-image-plan:${invalidShots.map(item => item.issue).join(',')}` : '';
     return {
       create: createRequested && shots.length > 0,
       title: cleanString(source.title || source.name, shots[0]?.title || '추억 삽화'),
-      reason: cleanString(source.reason, ''),
+      reason: createRequested && !shots.length && invalidReason ? invalidReason : cleanString(source.reason, '') || invalidReason,
       shots: shots.slice(0, maxImages),
       totalShots: shots.length,
+      invalidShots,
     };
   }
 
@@ -12691,6 +12996,15 @@ function normalizeAdaptiveQualityState(value) {
   function getUserInput(messages) {
     const users = (Array.isArray(messages) ? messages : []).filter(m => m.role === 'user');
     return users.length ? users[users.length - 1].content : '';
+  }
+
+  function activationMessagesForContext(context = null) {
+    if (Array.isArray(context?.activationMessages)) return context.activationMessages;
+    return Array.isArray(context?.messages) ? context.messages : [];
+  }
+
+  function getActivationUserInput(context = null) {
+    return getUserInput(activationMessagesForContext(context));
   }
 
   function formatHistory(messages, windowSize, options = {}) {
@@ -13260,18 +13574,6 @@ function normalizeAdaptiveQualityState(value) {
       'Retrieval labels, profile headings, and source names are out-of-story handles unless Access notes, stored state, recent chat, or visible evidence make them knowable.',
       'When Access notes exist, keep private/future/source-only facts available for planning but do not turn them into a character recognition, document, rumor, or public reveal.',
     ];
-    const canonicalCandidates = (Array.isArray(candidates) ? candidates : [])
-      .filter(candidate => candidate?.kind === 'canonical' && candidate?.item?.canonicalUnit)
-      .map(candidate => ({
-        unit: candidate.item.canonicalUnit,
-        score: candidate.score,
-        semanticScore: Number(candidate.semanticScore || 0),
-        perspectiveGate: candidate.perspectiveGate,
-        activeLore: Boolean(candidate.activeLore),
-        reason: Number(candidate.semanticScore || 0) > 0
-          ? 'agent-semantic-source'
-          : candidate.activeLore ? 'agent-active-source' : 'agent-source',
-      }));
     const runtimeUnits = Array.isArray(opts?.cache?.canonicalRuntimeUnits)
       ? opts.cache.canonicalRuntimeUnits
       : buildCanonicalRuntimeUnits(context, state, conf);
@@ -13295,44 +13597,11 @@ function normalizeAdaptiveQualityState(value) {
       });
       return finalizeAgentSourceContext(context, header, selected, max);
     }
-    const activationQueryText = canonicalActivationQueryText(context, []);
-    const activationQueryTerms = extractQueryTerms(activationQueryText).slice(0, 100);
-    const activationCandidates = buildCanonicalStageCandidates(units, activationQueryTerms, activationQueryText, state, context, opts);
-    const runtimeIndex = opts?.cache?.runtimeIndex || opts?.runtimeIndex;
-    const bestByKey = new Map();
-    const addMerged = candidate => {
-      const unit = candidate?.unit;
-      const key = canonicalCandidateKey(unit);
-      if (!unit || !key) return;
-      const previous = bestByKey.get(key);
-      bestByKey.set(key, mergeCanonicalSelectionCandidate(previous, candidate));
-    };
-    activationCandidates.forEach(addMerged);
-    canonicalCandidates.forEach(candidate => {
-      const unit = candidate.unit;
-      const runtimeMeta = canonicalUnitRuntimeMeta(runtimeIndex, unit);
-      const directScore = canonicalUnitExplicitActivationScore(unit, activationQueryTerms, activationQueryText, runtimeMeta);
-      const semanticScore = Math.max(0, Number(candidate.semanticScore || 0));
-      const allowed = unit?.foundation
-        || unit?.alwaysActive
-        || unit?.kind === 'firstMessage'
-        || candidate.activeLore
-        || directScore > 0
-        || (semanticScore > 0 && candidate?.perspectiveGate?.allow !== false);
-      if (!allowed) return;
-      addMerged({
-        ...candidate,
-        score: Math.max(Number(candidate.score || 0), directScore, semanticScore * 1800),
-        directScore,
-      });
-    });
-    const selected = packCanonicalUnits(Array.from(bestByKey.values()), Math.max(0, max - header.join('\n').length - 2), {
-      limit: Math.max(1, bestByKey.size),
+    const selected = selectSourceContextCanonicalUnits(state, context, max, conf, {
+      ...opts,
+      semanticCandidates: candidates,
+      headerCost: header.join('\n').length + 2,
       section: 'agent-source-context',
-      allowSourceNeighbors: true,
-      allowOversizeFirst: true,
-      allUnits: units,
-      canIncludeUnit: unit => perspectiveGateItem(unit, state, context).allow,
     });
     if (selected.length) return finalizeAgentSourceContext(context, header, selected, max);
     const fallback = buildMainSourceContext(state, context, [], max, conf, opts);
@@ -13665,163 +13934,286 @@ function normalizeAdaptiveQualityState(value) {
       .find(trace => Array.isArray(trace?.canonicalPlan?.selectedCanonicalIds) || Array.isArray(trace?.canonical)) || null;
   }
 
-  function imageVisualIdentityMatchesOutput(path, item, output) {
-    const source = String(output || '').toLowerCase();
-    if (!source) return false;
-    const candidates = [
-      String(path || '').split('.').pop(),
-      item?.name,
-      item?.label,
-      item?.displayName,
-      ...normalizeStringArray(item?.aliases),
-    ]
-      .map(value => String(value || '').replace(/_/g, ' ').trim().toLowerCase())
-      .filter(value => value.length >= 2 && !/^(?:scene|character|unknown|none|null)$/.test(value));
-    return candidates.some(value => source.includes(value));
+  function imageVisualLookupKey(value) {
+    return String(value || '')
+      .normalize('NFKC')
+      .toLowerCase()
+      .replace(/[\s._·・:：()[\]{}'"`~\-]+/g, '');
   }
 
-  function selectImageVisualCanonicalUnits(state, context, finalOutput, maxUnits = 6) {
+  function imageVisualTextContains(source, candidate) {
+    const rawSource = String(source || '').normalize('NFKC').toLowerCase().replace(/_/g, ' ');
+    const rawCandidate = String(candidate || '').normalize('NFKC').toLowerCase().replace(/_/g, ' ').trim();
+    if (rawCandidate.length < 2) return false;
+    if (rawSource.includes(rawCandidate)) return true;
+    const compactCandidate = imageVisualLookupKey(rawCandidate);
+    return compactCandidate.length >= 2 && imageVisualLookupKey(rawSource).includes(compactCandidate);
+  }
+
+  function imageVisualUnitSubjectNames(unit, state = null) {
+    const refs = new Set([unit?.path, unit?.sourceId].map(value => String(value || '').trim()).filter(Boolean));
+    const subjects = normalizeCanonicalIdentity(state?.canonicalIdentity).subjects
+      .filter(subject => normalizeStringArray(subject?.sourceRefs).some(ref => refs.has(String(ref || '').trim())));
+    return uniqueStrings([
+      unit?.name,
+      unit?.label,
+      unit?.displayName,
+      ...normalizeStringArray(unit?.aliases),
+      ...normalizeStringArray(unit?.activationKeys || unit?.keys),
+      ...normalizeStringArray(unit?.subjectHints),
+      ...subjects.flatMap(subject => [subject?.name, ...normalizeStringArray(subject?.aliases)]),
+    ])
+      .map(value => String(value || '').trim())
+      .filter(value => value.length >= 2 && value.length <= 120 && !/[\n\r]/.test(value))
+      .filter(value => !/^(?:scene|character|character description|first message|unknown|none|null|global lore|module lore)$/i.test(value))
+      .filter(value => !isGenericCharacterStateToken(value));
+  }
+
+  function imageVisualIdentityMatchesOutput(path, item, output, state = null) {
+    return imageVisualUnitSubjectNames({ ...(item || {}), path: firstNonEmpty(item?.path, path) }, state)
+      .some(value => imageVisualTextContains(output, value));
+  }
+
+  function imageVisualHeadingRole(line) {
+    const raw = String(line || '').trim();
+    const match = raw.match(/^#{1,6}\s+(.+)$/)
+      || raw.match(/^\[([^\]\n]{2,100})\]\s*$/)
+      || raw.match(/^<([^>\n]{2,100})>\s*$/);
+    if (!match) return { heading: false, role: '' };
+    const title = String(match[1] || '').replace(/[：:]+$/, '').trim();
+    if (/^(?:appearance|attire|outfit|clothing|visual description|외형|외모|복장|의상|신체|특징|外貌|外形|外观|外觀|服装|服裝|衣装|衣裳|外見|容姿|身体|身體|体型|體型|特徴|特征)(?:\s*&.*)?$/i.test(title)) {
+      return { heading: true, role: 'appearance' };
+    }
+    if (/^(?:profile|basic information|character profile|프로필|기본 정보|신상|人物资料|人物資料|人物设定|人物設定|角色资料|角色資料|角色设定|角色設定|基本资料|基本資料|プロフィール|基本情報)$/i.test(title)) {
+      return { heading: true, role: 'identity' };
+    }
+    return { heading: true, role: 'other' };
+  }
+
+  function imageVisualFieldRole(line) {
+    const text = String(line || '');
+    if (hasProfileFieldLabel(text, PROFILE_APPEARANCE_LABELS)
+      || hasProfileFieldLabel(text, ['attire', 'outfit', 'clothing', 'features', 'marks', '복장', '의상', '착의', '특징', '표식', '服装', '服裝', '衣装', '衣裳', '特征', '特徵', '外見'])) return 'appearance';
+    if (hasProfileFieldLabel(text, PROFILE_NAME_LABELS)
+      || hasProfileFieldLabel(text, PROFILE_ALIAS_LABELS)
+      || hasProfileFieldLabel(text, PROFILE_GENDER_LABELS)
+      || hasProfileFieldLabel(text, PROFILE_AGE_LABELS)
+      || hasProfileFieldLabel(text, ['race', 'species', '종족', '종', '인종', '种族', '種族', '物种', '物種', '種'])) return 'identity';
+    if (hasProfileFieldLabel(text, PROFILE_PERSONALITY_LABELS)
+      || hasProfileFieldLabel(text, ['ability', 'abilities', 'skill', 'skills', 'power', 'powers', 'background', 'history', '능력', '기술', '배경', '과거', '能力', '技能', '背景', '過去'])) return 'other';
+    return '';
+  }
+
+  function imageVisualCanonicalExcerpt(unit, role = imageVisualCanonicalRole(unit)) {
+    const content = String(unit?.content || '').replace(/\r\n/g, '\n').trim();
+    if (!content || role === 'setting') return content;
+    const lines = content.split('\n');
+    const selected = [];
+    let activeRole = '';
+    lines.forEach(line => {
+      const heading = imageVisualHeadingRole(line);
+      if (heading.heading) {
+        activeRole = heading.role;
+        if (activeRole === 'identity' || activeRole === 'appearance') selected.push(line);
+        return;
+      }
+      const fieldRole = imageVisualFieldRole(line);
+      if (fieldRole) {
+        if (fieldRole === 'identity' || fieldRole === 'appearance') selected.push(line);
+        else activeRole = 'other';
+        return;
+      }
+      if (activeRole === 'identity' || activeRole === 'appearance') selected.push(line);
+    });
+    const excerpt = selected.join('\n').replace(/^\s+|\s+$/g, '').replace(/\n{3,}/g, '\n\n');
+    return excerpt || (looksLikeCharacterProfileUnit(unit) ? content : '');
+  }
+
+  function imageVisualCanonicalRole(unit) {
+    const content = String(unit?.content || '');
+    const lines = content.replace(/\r\n/g, '\n').split('\n');
+    const roles = lines.flatMap(line => {
+      const heading = imageVisualHeadingRole(line);
+      return [heading.role, imageVisualFieldRole(line)].filter(Boolean);
+    });
+    if (roles.includes('appearance')) return 'appearance';
+    if (roles.includes('identity') || looksLikeCharacterProfileUnit(unit)) return 'identity';
+    return 'setting';
+  }
+
+  function imageVisualFocusText(state, finalOutput) {
+    return [
+      finalOutput,
+      ...normalizeStringArray(state?.activePerspective?.presentCast),
+      ...normalizeStringArray(state?.activePerspective?.protectedNames),
+    ].filter(Boolean).join('\n');
+  }
+
+  function imageVisualTraceIsDirect(traceItem) {
+    const reasons = normalizeStringArray(traceItem?.selectionReasons)
+      .concat(normalizeStringArray(traceItem?.selectionClasses))
+      .join(' ')
+      .toLowerCase();
+    return /direct-current|trigger|active-memory-bridge|state-bridge|memory-bridge|recursive/.test(reasons);
+  }
+
+  function selectImageVisualCanonicalUnits(state, context, finalOutput, maxUnits = 14) {
     const units = getLiveCanonicalStoreUnits(state);
     const trace = latestMainInjectionTrace(state);
-    const selectedIds = new Set(normalizeStringArray(trace?.canonicalPlan?.selectedCanonicalIds));
-    const queryText = String(finalOutput || '').slice(0, 14000);
-    const queryTerms = extractQueryTerms(queryText).slice(0, 140);
-    const ranked = [];
-    const seen = new Set();
-    const evaluate = (unit, selected = false, allowLexicalFallback = false) => {
-      if (!unit || ['missing', 'superseded', 'archived'].includes(String(unit.status || 'active').toLowerCase())) return;
-      const key = unit.id || canonicalCandidateKey(unit);
-      if (!key || seen.has(key)) return;
-      if (!canInjectKnowledgeBoundaryCanonicalUnit(unit, queryText, queryText, { state, context, allowFutureSource: false })) return;
-      const directScore = canonicalUnitExplicitActivationScore(unit, queryTerms, queryText);
-      const profileFields = profileFieldHitCount(unit.content);
-      const profile = unit.kind === 'desc' || looksLikeCharacterProfileUnit(unit) || profileFields >= 2;
-      if (!profile) return;
-      const lexicalProfileScore = profile ? canonicalUnitQueryScore(unit, queryTerms, queryText) : 0;
-      const foundationProfile = unit.foundation && profile;
-      const lexicalProfileMatch = allowLexicalFallback && lexicalProfileScore >= 150;
-      if (!selected && directScore <= 0 && !foundationProfile && !lexicalProfileMatch) return;
-      seen.add(key);
-      ranked.push({
-        unit,
-        score: (profile ? 4000 : 0)
-          + (selected ? 2600 : 0)
-          + (foundationProfile ? 1800 : 0)
-          + ((unit?.part?.index || 1) === 1 ? 900 : 0)
-          - (unit.kind === 'desc' && (unit?.part?.index || 1) > 1 && profileFields === 0 ? 3000 : 0)
-          + directScore
-          + lexicalProfileScore,
-      });
-    };
-    const byId = new Map(units.map(unit => [unit?.id, unit]));
-    selectedIds.forEach(id => evaluate(byId.get(id), true, false));
-    units
-      .filter(unit => unit?.kind === 'desc' && (unit?.part?.index || 1) === 1)
-      .forEach(unit => evaluate(unit, selectedIds.has(unit.id), false));
-    if (ranked.length < 3) {
-      units.forEach(unit => evaluate(unit, selectedIds.has(unit?.id), true));
-    }
-    return ranked
-      .sort((a, b) => b.score - a.score)
-      .slice(0, Math.max(1, Number(maxUnits || 6)))
-      .map(item => item.unit);
+    const selectedIds = normalizeStringArray(trace?.canonicalPlan?.selectedCanonicalIds);
+    const selectedOrder = new Map(selectedIds.map((id, index) => [id, index]));
+    const traceById = new Map((Array.isArray(trace?.canonical) ? trace.canonical : []).map(item => [item?.id, item]));
+    const queryText = String(finalOutput || '').slice(0, 18000);
+    const focusText = imageVisualFocusText(state, queryText);
+    const queryTerms = extractQueryTerms(queryText);
+    const groups = new Map();
+
+    units.forEach(unit => {
+      if (!unit || !canInjectKnowledgeBoundaryCanonicalUnit(unit, queryText, queryText, { state, context, allowFutureSource: false })) return;
+      const groupKey = firstNonEmpty(unit.baseId, unit.sourceId, unit.path, unit.id);
+      if (!groupKey) return;
+      const group = groups.get(groupKey) || {
+        key: groupKey,
+        units: [],
+        names: [],
+        selected: false,
+        selectedOrder: Number.MAX_SAFE_INTEGER,
+        direct: false,
+        score: 0,
+      };
+      const role = imageVisualCanonicalRole(unit);
+      const names = imageVisualUnitSubjectNames(unit, state);
+      const selected = selectedOrder.has(unit.id);
+      const traceDirect = imageVisualTraceIsDirect(traceById.get(unit.id));
+      const focusMatch = names.some(name => imageVisualTextContains(focusText, name));
+      const directScore = canonicalDirectActivationScore(unit, queryTerms, queryText);
+      group.units.push({ unit, role });
+      group.names = uniqueStrings(group.names.concat(names));
+      group.selected = group.selected || selected;
+      if (selected) group.selectedOrder = Math.min(group.selectedOrder, selectedOrder.get(unit.id));
+      group.direct = group.direct || focusMatch || traceDirect || directScore > 0;
+      group.score = Math.max(group.score,
+        (focusMatch ? 100000 : 0)
+        + (traceDirect ? 60000 : 0)
+        + Math.min(40000, directScore * 40)
+        + (selected ? 12000 - Math.min(10000, selectedOrder.get(unit.id) * 200) : 0)
+        + (role === 'appearance' ? 6000 : role === 'identity' ? 4000 : 0));
+      groups.set(groupKey, group);
+    });
+
+    const characterGroups = Array.from(groups.values())
+      .filter(group => group.units.some(item => item.role === 'identity' || item.role === 'appearance'))
+      .sort((a, b) => b.score - a.score || a.selectedOrder - b.selectedOrder);
+    const directCharacters = characterGroups.filter(group => group.direct);
+    const chosenCharacters = (directCharacters.length ? directCharacters : characterGroups.filter(group => group.selected).slice(0, 2)).slice(0, 6);
+    const chosenCharacterKeys = new Set(chosenCharacters.map(group => group.key));
+    const settingGroups = Array.from(groups.values())
+      .filter(group => !chosenCharacterKeys.has(group.key))
+      .filter(group => group.direct && group.units.some(item => item.role === 'setting'))
+      .sort((a, b) => b.score - a.score || a.selectedOrder - b.selectedOrder)
+      .slice(0, 2);
+    const selected = [];
+    chosenCharacters.forEach(group => {
+      group.units
+        .filter(item => item.role === 'identity' || item.role === 'appearance')
+        .sort((a, b) => (a.role === 'identity' ? -1 : 1) - (b.role === 'identity' ? -1 : 1)
+          || (a.unit?.part?.index || 1) - (b.unit?.part?.index || 1))
+        .forEach(item => selected.push({ ...item, names: group.names, groupKey: group.key }));
+    });
+    settingGroups.forEach(group => {
+      const item = group.units
+        .filter(candidate => candidate.role === 'setting')
+        .sort((a, b) => (selectedOrder.get(a.unit?.id) ?? Number.MAX_SAFE_INTEGER) - (selectedOrder.get(b.unit?.id) ?? Number.MAX_SAFE_INTEGER))[0];
+      if (item) selected.push({ ...item, names: [], groupKey: group.key });
+    });
+    return selected.slice(0, Math.max(1, Number(maxUnits || 14)));
   }
 
-  function buildImageVisualStateContext(state, finalOutput, maxChars = 1800) {
+  function buildImageVisualStateContext(state, finalOutput, focusNames = [], maxChars = 1200) {
     const rows = [];
-    const scene = state?.scene && typeof state.scene === 'object' ? state.scene : null;
-    const hasSceneValue = scene && Object.values(scene).some(value => {
-      if (Array.isArray(value)) return value.length > 0;
-      if (value && typeof value === 'object') return Object.keys(value).length > 0;
-      return String(value || '').trim().length > 0;
+    const scene = state?.scene && typeof state.scene === 'object' ? state.scene : {};
+    const sceneVisual = {};
+    ['time', 'location', 'materialConditions'].forEach(key => {
+      const value = scene[key];
+      if (Array.isArray(value) ? value.length : String(value || '').trim()) sceneVisual[key] = value;
     });
-    if (hasSceneValue) rows.push(`scene: ${compactJson(scene)}`);
+    if (Object.keys(sceneVisual).length) rows.push(`scene: ${compactJson(sceneVisual)}`);
+    const focusText = [finalOutput, ...normalizeStringArray(focusNames)].filter(Boolean).join('\n');
+    const visualKeys = ['name', 'aliases', 'gender', 'age', 'species', 'race', 'appearance', 'body', 'attire', 'outfit', 'clothing', 'features', 'marks', 'injury', 'injuries', 'wounds'];
     Object.entries(state?.characters || {}).forEach(([key, value]) => {
-      if (!imageVisualIdentityMatchesOutput(key, value, finalOutput)) return;
-      rows.push(`character ${firstNonEmpty(value?.name, key)}: ${compactJson(value)}`);
+      if (!imageVisualIdentityMatchesOutput(key, value, focusText, state)) return;
+      const visual = {};
+      visualKeys.forEach(field => {
+        const item = value?.[field];
+        if (Array.isArray(item) ? item.length : item && (typeof item !== 'object' || Object.keys(item).length)) visual[field] = item;
+      });
+      if (Object.keys(visual).length) rows.push(`character ${firstNonEmpty(value?.name, key)}: ${compactJson(visual)}`);
     });
     if (!rows.length) return '';
     return trimBriefingBlockToBudget([
-      '[Managed Visual State]',
-      'This state can lag behind the new output. Use it only for persistent physical continuity; the current final output overrides it.',
+      '[Current Managed Visual Continuity]',
+      'Current physical appearance, clothing, and injury state only. Current Final Story Output overrides this block.',
       ...rows,
-    ].join('\n'), Math.max(360, Number(maxChars || 1800)));
+    ].join('\n'), Math.max(360, Number(maxChars || 1200)));
   }
 
-  async function buildImageVisualHistoryContext(scope, finalOutput, maxChars = 1800) {
-    const safeScope = cleanString(scope, '');
-    const output = String(finalOutput || '').toLowerCase();
-    if (!safeScope || !output) return '';
-    const index = await loadOutputArtifactIndex(safeScope);
-    const byName = new Map();
-    index.entries
-      .filter(entry => entry?.type === 'image')
-      .slice(0, 48)
-      .forEach(entry => {
-        normalizeArtifactVisualCharacters(entry.visualCharacters).forEach(character => {
-          const name = String(character.name || '').trim();
-          const key = name.toLowerCase();
-          if (!key || !output.includes(key) || byName.has(key)) return;
-          byName.set(key, character);
-        });
-      });
-    const characters = Array.from(byName.values()).slice(0, 8);
-    if (!characters.length) return '';
-    const rows = characters.map(character => [
-      `- ${character.name}`,
-      character.label ? `subject: ${character.label}` : '',
-      character.visualAge ? `visual age: ${character.visualAge}` : '',
-      character.appearance ? `appearance: ${character.appearance}` : '',
-      character.body ? `body: ${character.body}` : '',
-    ].filter(Boolean).join(' / '));
-    return trimBriefingBlockToBudget([
-      '[Recent Illustration Identity History]',
-      'Reuse only stable identity traits for characters visibly named in the current output. Current canonical source overrides this history; current output overrides attire, injury visibility, expression, pose, and action.',
-      ...rows,
-    ].join('\n'), Math.max(420, Number(maxChars || 1800)));
-  }
-
-  function buildImageResidentVisualContext(state, context, finalOutput, conf = null, budget = IMAGE_VISUAL_REFERENCE_CONTEXT_CHARS, visualHistory = '') {
+  async function buildImageResidentVisualContext(state, context, finalOutput, conf = null, budget = IMAGE_VISUAL_REFERENCE_CONTEXT_CHARS) {
     const max = Math.max(1200, Number(budget || IMAGE_VISUAL_REFERENCE_CONTEXT_CHARS));
-    if (!isDataContextInjectionEnabled(conf, context)) {
-      return buildHostInjectedRequestContext(context, max);
-    }
-    const units = selectImageVisualCanonicalUnits(state, context, finalOutput, 6);
-    const identityAnchors = buildAgentTurnIdentityAnchors(units, Math.min(1100, Math.floor(max * 0.18)));
-    const stateContext = buildImageVisualStateContext(state, finalOutput, Math.min(1800, Math.floor(max * 0.24)));
+    if (!isDataContextInjectionEnabled(conf, context)) return buildHostInjectedRequestContext(context, max);
+    const selected = selectImageVisualCanonicalUnits(state, context, finalOutput, 14);
+    const focusNames = uniqueStrings(selected.flatMap(item => item.names));
+    const stateContext = buildImageVisualStateContext(state, finalOutput, focusNames, Math.min(1200, Math.floor(max * 0.19)));
     const blocks = [
-      '[Visual Reference Context]',
-      'Identity/reference evidence only. Do not select scenes from this block. The Current Final Story Output decides visible cast, event, action, attire, and placement.',
-      identityAnchors,
-      visualHistory,
-    ].filter(Boolean);
-    let used = blocks.join('\n\n').length;
-    for (const unit of units) {
-      const content = String(unit?.content || '').trim();
+      '[Visual Ground]',
+      'Source-backed visual evidence only. Do not choose scenes or visible cast from this block; Current Final Story Output decides both.',
+    ];
+    const continuityReserve = Math.min(1200, stateContext.length + 2);
+    for (const item of selected) {
+      const unit = item.unit;
+      const content = imageVisualCanonicalExcerpt(unit, item.role);
       if (!content) continue;
-      const block = `<visual-reference label="${String(unit.label || unit.path || unit.id || 'canonical').replace(/"/g, '&quot;')}">\n${content}\n</visual-reference>`;
-      const remaining = max - used - stateContext.length - 4;
-      if (remaining < 260) break;
-      blocks.push(block.length <= remaining ? block : trimBriefingBlockToBudget(block, remaining));
-      used = blocks.join('\n\n').length;
+      const remaining = max - blocks.join('\n\n').length - continuityReserve - 220;
+      if (remaining < 220) break;
+      const tag = item.role === 'setting' ? 'setting-visual-source' : 'character-visual-source';
+      const label = String(unit.label || unit.path || unit.id || 'canonical').replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+      const subjects = item.names.slice(0, 8).join(', ').replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+      const clipped = trimBriefingBlockToBudget(content, remaining);
+      blocks.push(`<${tag} kind="${item.role}" label="${label}"${subjects ? ` subjects="${subjects}"` : ''}>\n${clipped}\n</${tag}>`);
     }
     if (stateContext) blocks.push(stateContext);
     return trimBriefingBlockToBudget(blocks.join('\n\n'), max);
   }
 
+  function splitImageStoryParagraphs(value) {
+    return String(value ?? '')
+      .trim()
+      .split(/\n\s*\n+/)
+      .map(paragraph => paragraph.trim())
+      .filter(Boolean);
+  }
+
+  function annotateImageStoryParagraphs(value) {
+    return splitImageStoryParagraphs(value)
+      .map((paragraph, index) => `[P${index + 1}]\n${paragraph.replace(/^\[P\d+\]\s*/i, '')}`)
+      .join('\n\n');
+  }
+
   function buildImageResidentMessages(agent, finalOutput, visualContext = '') {
+    const annotatedOutput = annotateImageStoryParagraphs(finalOutput);
+    const maxImages = Math.max(1, Math.floor(parseUserNumberSetting(agent?.maxImages, 1)));
     return [
       { role: 'system', content: agent?.systemPrompt || IMAGE_RESIDENT_SYSTEM_PROMPT },
       {
         role: 'user',
         content: [
-          visualContext ? '<source label="Visual Reference Context">' : '',
+          visualContext ? '<source label="Visual Ground">' : '',
           visualContext || '',
           visualContext ? '</source>' : '',
+          `Image capacity: at most ${maxImages}; this is not a target count.`,
           '<source label="Current Final Story Output">',
-          String(finalOutput ?? ''),
+          annotatedOutput,
           '</source>',
-          'Use the reference only for identity continuity. Select moments only from the Current Final Story Output and return the requested image-plan JSON object.',
+          'Use Visual Ground only for source-backed identity and current managed visual continuity. Select moments only from the numbered Current Final Story Output and return the image-plan JSON object.',
         ].filter(Boolean).join('\n'),
       },
     ];
@@ -14020,43 +14412,71 @@ function normalizeAdaptiveQualityState(value) {
     ];
   }
 
-  function selectMainSourceContextCanonicalUnits(state, context, notes, budget = 0, conf = null, opts = {}) {
+  function selectSourceContextCanonicalUnits(state, context, budget = 0, conf = null, opts = {}) {
     const max = Math.max(0, Number(budget || 0));
-    if (max < 260) return [];
-    const header = mainSourceContextHeader();
-    const queryText = canonicalActivationQueryText(context, []);
-    const queryTerms = extractQueryTerms(queryText).slice(0, 100);
+    const headerCost = Math.max(0, Number(opts.headerCost || 0));
+    if (max < headerCost + 120) return [];
+    const queryText = firstNonEmpty(opts.queryText, canonicalActivationQueryText(context, []));
+    const queryTerms = Array.isArray(opts.queryTerms) && opts.queryTerms.length
+      ? opts.queryTerms
+      : extractQueryTerms(queryText).slice(0, 100);
     const runtimeUnits = Array.isArray(opts?.cache?.canonicalRuntimeUnits)
       ? opts.cache.canonicalRuntimeUnits
       : buildCanonicalRuntimeUnits(context, state, conf);
     const units = (Array.isArray(runtimeUnits) ? runtimeUnits : [])
       .filter(unit => unit && !['missing', 'superseded', 'archived'].includes(String(unit.status || 'active').toLowerCase()));
-    const stageCandidates = buildCanonicalStageCandidates(units, queryTerms, queryText, state, context, opts);
+    const unitsByKey = new Map(units.map(unit => [canonicalCandidateKey(unit), unit]).filter(([key]) => Boolean(key)));
     const candidatesById = new Map();
     const addCandidate = candidate => {
-      const id = canonicalCandidateKey(candidate?.unit);
-      if (!id) return;
-      const previous = candidatesById.get(id);
-      candidatesById.set(id, mergeCanonicalSelectionCandidate(previous, candidate));
+      const key = canonicalCandidateKey(candidate?.unit);
+      if (!key) return;
+      const runtimeUnit = unitsByKey.get(key);
+      if (!runtimeUnit) return;
+      const incoming = { ...candidate, unit: runtimeUnit };
+      candidatesById.set(key, mergeCanonicalSelectionCandidate(candidatesById.get(key), incoming));
     };
-    stageCandidates.forEach(addCandidate);
-    (Array.isArray(opts?.cache?.candidates) ? opts.cache.candidates : [])
+    buildCanonicalStageCandidates(units, queryTerms, queryText, state, context, opts).forEach(addCandidate);
+
+    const semanticCandidates = Array.isArray(opts.semanticCandidates)
+      ? opts.semanticCandidates
+      : (Array.isArray(opts?.cache?.candidates) ? opts.cache.candidates : []);
+    semanticCandidates
       .filter(candidate => candidate?.kind === 'canonical' && candidate?.item?.canonicalUnit)
       .filter(candidate => Number(candidate.semanticScore || 0) > 0 && candidate?.perspectiveGate?.allow !== false)
-      .forEach(candidate => addCandidate({
-        unit: candidate.item.canonicalUnit,
-        score: Math.max(Number(candidate.score || 0), Number(candidate.semanticScore || 0) * 1800),
-        semanticScore: Number(candidate.semanticScore || 0),
-        reason: 'embedding',
-      }));
+      .forEach(candidate => {
+        const key = canonicalCandidateKey(candidate.item.canonicalUnit);
+        const existing = candidatesById.get(key);
+        if (!existing) return;
+        const semanticScore = Math.min(1, Math.max(0, Number(candidate.semanticScore || 0)));
+        addCandidate({
+          ...existing,
+          score: Number(existing.score || 0) + semanticScore * 240,
+          semanticScore,
+          reason: existing.reason,
+          reasons: uniqueStrings(canonicalSelectionReasonList(existing).concat('embedding')),
+        });
+      });
+
     const candidates = Array.from(candidatesById.values());
-    return packCanonicalUnits(candidates, Math.max(0, max - header.join('\n').length - 2), {
-      limit: Math.max(1, candidates.length),
-      section: 'source-context',
-      allowSourceNeighbors: true,
+    return packCanonicalUnits(candidates, Math.max(0, max - headerCost), {
+      limit: Math.max(1, units.length),
+      section: opts.section || 'source-context',
+      allowSourceNeighbors: opts.allowSourceNeighbors !== false,
       allowOversizeFirst: true,
       allUnits: units,
       canIncludeUnit: unit => perspectiveGateItem(unit, state, context).allow,
+    });
+  }
+
+  function selectMainSourceContextCanonicalUnits(state, context, notes, budget = 0, conf = null, opts = {}) {
+    const max = Math.max(0, Number(budget || 0));
+    if (max < 260) return [];
+    const header = mainSourceContextHeader();
+    void notes;
+    return selectSourceContextCanonicalUnits(state, context, max, conf, {
+      ...opts,
+      headerCost: header.join('\n').length + 2,
+      section: 'source-context',
     });
   }
 
@@ -14722,9 +15142,10 @@ function normalizeAdaptiveQualityState(value) {
   }
 
   function buildRetrievalQuery(context, notes = [], extraKeywords = []) {
+    const messages = activationMessagesForContext(context);
     const text = [
-      getUserInput(context.messages),
-      context.messages.slice(-4).map(m => m.content).join('\n'),
+      getUserInput(messages),
+      messages.slice(-4).map(m => m.content).join('\n'),
       includedAgentNotes(notes).map(note => note.text || '').join('\n'),
       extraKeywords.join(' '),
     ].join('\n');
@@ -14826,12 +15247,6 @@ function normalizeAdaptiveQualityState(value) {
       group.sourceRefs.forEach(value => sourceRefs.add(value));
       group.subjectKeys.forEach(value => subjectKeys.add(value));
     });
-    if (canonicalIds.size || sourceRefs.size) {
-      terms.forEach(term => {
-        addActivationFrameKey(subjectKeys, term);
-        addActivationFrameKey(groups['direct-current'].subjectKeys, term);
-      });
-    }
     return {
       canonicalIds,
       sourceRefs,
@@ -14931,7 +15346,7 @@ function normalizeAdaptiveQualityState(value) {
   function currentTurnCharacterActivation(candidate, state, queryTerms, frameMatch = null) {
     if (candidate?.kind !== 'character') return { active: false, route: '' };
     const currentAuthority = normalizeStringArray(frameMatch?.authorities)
-      .some(authority => authority === 'direct-current' || authority === 'state-bridge');
+      .some(authority => authority === 'direct-current');
     if (Number(frameMatch?.boost || 0) > 0 && currentAuthority) {
       return { active: true, route: frameMatch.routes?.[0] || 'canonical-activation' };
     }
@@ -14943,7 +15358,6 @@ function normalizeAdaptiveQualityState(value) {
     if (activationFrameIntersectsExactly(query, identityKeys)) return { active: true, route: 'direct-current:query-name' };
     const perspective = normalizeActivePerspective(state?.activePerspective);
     const present = new Set(uniqueStrings([])
-      .concat(normalizeStringArray(state?.scene?.presentCast))
       .concat(normalizeStringArray(perspective.presentCast))
       .concat(normalizeStringArray(perspective.protectedNames))
       .map(normalizeActivationFrameKey)
@@ -15032,12 +15446,15 @@ function normalizeAdaptiveQualityState(value) {
         const stateActivationRoutes = uniqueStrings(frameMatch.routes.concat(characterActivation.route ? [characterActivation.route] : []));
         const directCharacterAuthority = characterActivation.route.startsWith('direct-current:') ? ['direct-current'] : [];
         const stateActivationAuthorities = uniqueStrings(frameMatch.authorities.concat(directCharacterAuthority));
+        const stateActivationEligible = candidate.kind === 'character'
+          ? characterActivation.active || stateActivationAuthorities.includes('direct-current')
+          : frameBoost > 0;
         const enriched = {
           ...candidate,
           activeLore,
           activationFrameHit: frameBoost > 0,
           activationFrameBoost: frameBoost,
-          stateActivationEligible: frameBoost > 0 || characterActivation.active,
+          stateActivationEligible,
           stateActivationRoutes,
           stateActivationAuthorities,
           currentTurnCharacter: characterActivation.active,
@@ -15152,13 +15569,20 @@ function normalizeAdaptiveQualityState(value) {
       '부터', '까지', '처럼', '보다', '마다', '조차', '마저', '라도',
       '와', '과', '을', '를', '은', '는', '이', '가', '의', '도', '만', '로',
     ];
-    for (const suffix of suffixes) {
-      if (!raw.endsWith(suffix)) continue;
-      const stem = raw.slice(0, raw.length - suffix.length);
-      if (stem.length >= 2) variants.push(stem);
-      break;
+    let current = raw;
+    for (let depth = 0; depth < 8; depth += 1) {
+      let next = '';
+      for (const suffix of suffixes) {
+        if (!current.endsWith(suffix)) continue;
+        const stem = current.slice(0, current.length - suffix.length);
+        if (stem.length >= 2) next = stem;
+        break;
+      }
+      if (!next || next === current) break;
+      variants.push(next);
+      current = next;
     }
-    return variants;
+    return uniqueStrings(variants);
   }
 
   function rankStateCandidates(state, queryTerms, profile, context = null) {
@@ -15243,14 +15667,9 @@ function normalizeAdaptiveQualityState(value) {
       extractQueryTerms(text).forEach(term => addTerm(term, weight));
     };
     (Array.isArray(queryTerms) ? queryTerms : []).forEach(term => addTerm(term, 1.1));
-    addText(getUserInput(context?.messages || []), 2.2);
-    addText((Array.isArray(context?.messages) ? context.messages : []).slice(-4).map(item => item.content).join('\n'), 1.4);
-    selectPinnedIdentityLoreSources(context || {}).forEach(source => addText(`${source.label}\n${source.content}`, 1.8));
-    buildCanonicalIdentitySnapshot(context || {}).subjects.forEach(subject => {
-      addTerm(subject.name, 2.4);
-      normalizeStringArray(subject.aliases).forEach(alias => addTerm(alias, 2));
-      addText([subject.immutable?.gender, subject.mutableBaseline?.affiliation, normalizeStringArray(subject.notes).join(' ')].join(' '), 1.6);
-    });
+    const messages = activationMessagesForContext(context);
+    addText(getUserInput(messages), 2.2);
+    addText(messages.slice(-4).map(item => item.content).join('\n'), 1.4);
     return {
       terms: Array.from(weights.entries()).map(([term, weight]) => ({ term, weight })),
     };
@@ -16604,11 +17023,9 @@ function normalizeAdaptiveQualityState(value) {
       }
       const translationResident = agent.id === TRANSLATION_AGENT_ID;
       const standardTextResident = !imageResident && !translationResident;
-      const imageVisualHistory = imageResident
-        ? await safeCall(() => buildImageVisualHistoryContext(context?.scope || Runtime.lastScope, current, 1800), '')
-        : '';
+      const imageStorySource = imageResident ? canonicalText : '';
       const imageVisualContext = imageResident
-        ? buildImageResidentVisualContext(state, context, current, conf, IMAGE_VISUAL_REFERENCE_CONTEXT_CHARS, imageVisualHistory)
+        ? await buildImageResidentVisualContext(state, context, imageStorySource, conf, IMAGE_VISUAL_REFERENCE_CONTEXT_CHARS)
         : '';
       const agentContext = imageResident
         ? ''
@@ -16639,7 +17056,7 @@ function normalizeAdaptiveQualityState(value) {
       const messages = agent.id === TRANSLATION_AGENT_ID
         ? buildTranslationAgentMessages(agent, current, conf, context, state, notes, agentContext)
         : imageResident
-          ? buildImageResidentMessages(agent, current, imageVisualContext)
+          ? buildImageResidentMessages(agent, imageStorySource, imageVisualContext)
         : [
           { role: 'system', content: goeMode?.prompt || agent.systemPrompt || '' },
           { role: 'user', content: renderTemplate(agent.userTemplate, values || {}) },
@@ -16665,7 +17082,8 @@ function normalizeAdaptiveQualityState(value) {
         let imageResult = null;
         if (imageResident) {
           const imagePreset = getActiveImageApiPreset(imageRuntimeConf);
-          const request = normalizeImageResidentRequest(extractJsonObject(rawOutput) || {}, imagePreset, agent.maxImages);
+          const strictImagePlan = isKnownBuiltinImageResidentPrompt(agent.systemPrompt);
+          const request = normalizeImageResidentRequest(extractJsonObject(rawOutput) || {}, imagePreset, agent.maxImages, imageStorySource, strictImagePlan);
           if (typeof progress === 'function') {
             await progress({
               phase: 'image-plan-complete',
@@ -16736,10 +17154,11 @@ function normalizeAdaptiveQualityState(value) {
               generated: generated.some(item => item.result?.generated),
               totalShots: request.totalShots,
               attemptedShots: generated.length,
+              invalidShots: request.invalidShots,
               results: generated,
             };
           } else {
-            imageResult = { generated: false, reason: request.reason || 'not-needed' };
+            imageResult = { generated: false, reason: request.reason || 'not-needed', invalidShots: request.invalidShots };
           }
         }
         const translationOutputTarget = agent.id === TRANSLATION_AGENT_ID ? normalizeTranslationOutputTarget(agent.translationOutputTarget) : 'replace';
@@ -17415,13 +17834,12 @@ function normalizeAdaptiveQualityState(value) {
     const out = { ...(existing || {}) };
     Object.entries(incoming || {}).forEach(([key, value]) => {
       if (value === undefined || value === null || value === '') return;
-      if (Array.isArray(value) && !value.length) return;
       if (key === 'presentCast') {
         const cast = normalizeStringArray(value).filter(name => !isGenericCharacterStateToken(name));
-        if (!cast.length) return;
         out[key] = cast.slice(0, 20);
         return;
       }
+      if (Array.isArray(value) && !value.length) return;
       out[key] = value;
     });
     return out;
@@ -17461,6 +17879,155 @@ function normalizeAdaptiveQualityState(value) {
     }).length;
   }
 
+  function currentTurnCanonicalTraceItems(state, context) {
+    const current = Array.isArray(context?._canonicalInjectionTrace)
+      ? context._canonicalInjectionTrace.filter(item => item?.included !== false)
+      : [];
+    if (current.length) return current;
+    const latest = latestMainInjectionTrace(state);
+    return (Array.isArray(latest?.canonical) ? latest.canonical : []).filter(item => item?.included !== false);
+  }
+
+  function canonicalTraceHasStateAuthority(item) {
+    if (item?.stateActivation?.eligible === true) return true;
+    const values = normalizeStringArray(item?.selectionClasses)
+      .concat(normalizeStringArray(item?.selectionReasons))
+      .map(value => String(value || '').toLowerCase());
+    return values.some(value => ['direct-current', 'state-bridge', 'trigger', 'active-memory-bridge'].includes(value));
+  }
+
+  function currentTurnGroundingIdentitySubjects(state, context) {
+    const ids = new Set(currentTurnCanonicalTraceItems(state, context)
+      .filter(canonicalTraceHasStateAuthority)
+      .map(item => item?.id)
+      .filter(Boolean));
+    if (!ids.size) return [];
+    const sources = buildCanonicalRuntimeUnits(context, state)
+      .filter(unit => ids.has(unit?.id))
+      .map(canonicalUnitIdentityProjectionSource)
+      .filter(Boolean);
+    return consolidateCanonicalIdentitySubjects(extractIdentitySubjectsFromSources(sources, null));
+  }
+
+  function identityAppearsInText(character, text) {
+    const values = uniqueStrings([
+      character?.id,
+      character?.name,
+      character?.displayName,
+      character?.alias,
+      ...normalizeStringArray(character?.aliases),
+    ]).filter(value => value && !isGenericCharacterStateToken(value));
+    return values.some(value => imageVisualTextContains(text, value));
+  }
+
+  function hasTrustedCharacterGrounding(character) {
+    if (!character || typeof character !== 'object') return false;
+    if (String(character?.commitGrounding?.kind || '').trim()) return true;
+    return normalizeEvidenceArray(character.evidence)
+      .some(item => ['canonical_identity', 'character_card'].includes(String(item?.source || '').toLowerCase()));
+  }
+
+  function matchesHostIdentity(character, context) {
+    const persona = getEffectiveSelectedPersona(context?.db, context?.currentChat);
+    const hostKeys = identityLookupKeys([
+      context?.character?.name,
+      context?.character?.data?.name,
+      context?.userName,
+      context?.username,
+      persona?.name,
+    ]);
+    if (!hostKeys.size) return false;
+    return Array.from(characterIdentityKeys(character)).some(key => hostKeys.has(key));
+  }
+
+  function findTrustedStateCharacterByName(state, value) {
+    const lookup = characterIdentityKeys({ name: value });
+    if (!lookup.size) return null;
+    return Object.values(state?.characters || {}).find(character => {
+      if (!hasTrustedCharacterGrounding(character)) return false;
+      return Array.from(characterIdentityKeys(character)).some(key => lookup.has(key));
+    }) || null;
+  }
+
+  function groundCommittedCharacters(characters, state, context, finalOutput, turn, conflicts, subjects) {
+    const visibleText = [getActivationUserInput(context), finalOutput].filter(Boolean).join('\n');
+    return (Array.isArray(characters) ? characters : []).filter(character => {
+      const subject = resolveCanonicalIdentitySubject(subjects, character);
+      const trusted = findTrustedStateCharacterByName(state, firstNonEmpty(character?.name, character?.id));
+      const visible = identityAppearsInText(character, visibleText);
+      const hostIdentity = matchesHostIdentity(character, context);
+      if (!visible && !subject && !trusted && !hostIdentity) {
+        conflicts.push(makeConflict('ungrounded_character_identity', 'Rejected a character state entry with no current visible, direct canonical, or trusted persistent identity source.', character, null, turn, {
+          resolution: 'rejected',
+          winner: 'grounded-state',
+          reasonCodes: ['no-current-identity-ground'],
+        }));
+        return false;
+      }
+      const kind = visible
+        ? 'current-visible-text'
+        : subject
+          ? 'direct-canonical'
+          : hostIdentity ? 'host-identity' : trusted?.commitGrounding?.kind || 'trusted-state';
+      character.commitGrounding = {
+        kind,
+        turn,
+        sourceRef: subject?.sourceRefs?.[0] || trusted?.commitGrounding?.sourceRef || '',
+      };
+      if (subject?.id) character.canonicalIdentityRef = subject.id;
+      return true;
+    });
+  }
+
+  function groundCommittedSceneCast(scene, characters, state, context, finalOutput, turn, conflicts, subjects) {
+    if (!scene || typeof scene !== 'object' || !Object.prototype.hasOwnProperty.call(scene, 'presentCast')) return scene;
+    const visibleText = [getActivationUserInput(context), finalOutput].filter(Boolean).join('\n');
+    const committedKeys = new Set((Array.isArray(characters) ? characters : [])
+      .flatMap(character => Array.from(characterIdentityKeys(character))));
+    const accepted = normalizeStringArray(scene.presentCast).filter(name => {
+      if (isGenericCharacterStateToken(name)) return false;
+      const probe = { name };
+      const visible = identityAppearsInText(probe, visibleText);
+      const subject = resolveCanonicalIdentitySubject(subjects, probe);
+      const trusted = findTrustedStateCharacterByName(state, name);
+      const committed = Array.from(characterIdentityKeys(probe)).some(key => committedKeys.has(key));
+      const hostIdentity = matchesHostIdentity(probe, context);
+      if (visible || subject || trusted || committed || hostIdentity) return true;
+      conflicts.push(makeConflict('ungrounded_scene_cast', 'Rejected a present-cast name with no current visible, direct canonical, committed-character, or trusted persistent identity source.', probe, null, turn, {
+        resolution: 'rejected',
+        winner: 'grounded-state',
+        reasonCodes: ['no-current-present-cast-ground'],
+      }));
+      return false;
+    });
+    return { ...scene, presentCast: accepted.slice(0, 20) };
+  }
+
+  function groundCommittedRelationships(relationships, characters, state, context, finalOutput, turn, conflicts, subjects) {
+    const visibleText = [getActivationUserInput(context), finalOutput].filter(Boolean).join('\n');
+    const committedKeys = new Set((Array.isArray(characters) ? characters : [])
+      .flatMap(character => Array.from(characterIdentityKeys(character))));
+    const endpointGrounded = value => {
+      const probe = { name: value };
+      if (identityAppearsInText(probe, visibleText)) return true;
+      if (resolveCanonicalIdentitySubject(subjects, probe)) return true;
+      if (findTrustedStateCharacterByName(state, value)) return true;
+      if (matchesHostIdentity(probe, context)) return true;
+      return Array.from(characterIdentityKeys(probe)).some(key => committedKeys.has(key));
+    };
+    return (Array.isArray(relationships) ? relationships : []).filter(relationship => {
+      const a = normalizeRelationshipEndpoint(relationship, 'a');
+      const b = normalizeRelationshipEndpoint(relationship, 'b');
+      if (a && b && endpointGrounded(a) && endpointGrounded(b)) return true;
+      conflicts.push(makeConflict('ungrounded_relationship', 'Rejected a relationship update whose endpoints were not grounded in the current visible turn, direct canonical sources, host identity, or trusted persistent state.', relationship, null, turn, {
+        resolution: 'rejected',
+        winner: 'grounded-state',
+        reasonCodes: ['no-current-relationship-ground'],
+      }));
+      return false;
+    });
+  }
+
   function resolveEvidenceCommit(commit, state, context, finalOutput, turn) {
     const out = { ...(commit || {}) };
     const conflicts = [];
@@ -17468,9 +18035,29 @@ function normalizeAdaptiveQualityState(value) {
     out.secretLedger = normalizeSecretEntries([...(out.secretLedger || []), ...(out.plotThreads?.secrets || [])], state, turn, finalOutput, conflicts);
     out.relationships = normalizeRelationshipEntries(out.relationships, state, turn);
     out.characters = normalizeCommittedCharacters(out.characters, turn);
-    const identity = buildCanonicalIdentitySnapshot(context || {});
+    const groundingSubjects = currentTurnGroundingIdentitySubjects(state, context);
+    out.characters = groundCommittedCharacters(out.characters, state, context, finalOutput, turn, conflicts, groundingSubjects);
+    out.relationships = groundCommittedRelationships(out.relationships, out.characters, state, context, finalOutput, turn, conflicts, groundingSubjects);
+    out.scene = groundCommittedSceneCast(out.scene, out.characters, state, context, finalOutput, turn, conflicts, groundingSubjects);
+    const baseIdentity = buildCanonicalIdentitySnapshot(context || {});
+    const identity = normalizeCanonicalIdentity({
+      ...baseIdentity,
+      subjects: consolidateCanonicalIdentitySubjects(
+        enrichIdentitySubjectsFromCanonicalAnnotations(baseIdentity.subjects, state, context || {})
+      ),
+    });
     if (identity.subjects.length) {
       state.canonicalIdentity = identity;
+      const coalesced = coalesceStateCharactersByCanonicalIdentity(state, identity);
+      if (coalesced.merged > 0) {
+        state.migrationLog = (Array.isArray(state.migrationLog) ? state.migrationLog : []).concat({
+          at: nowIso(),
+          type: 'canonical-character-alias-coalesce',
+          summary: `Canonical identity alias state ${coalesced.merged}개 병합`,
+          names: coalesced.names.slice(0, 20),
+        }).slice(-80);
+      }
+      out.characters = coalesceCommittedCharactersByCanonicalIdentity(out.characters, identity, state);
       applyCanonicalIdentityGuard(out, identity, conflicts, turn);
     }
     out.worldFronts = normalizeCommittedLedgerArray(out.worldFronts, 'worldFront', turn);
@@ -17494,7 +18081,7 @@ function normalizeAdaptiveQualityState(value) {
     if (!subjects.length || !Array.isArray(commit?.characters)) return;
     commit.characters.forEach(character => {
       if (!character || typeof character !== 'object') return;
-      const subject = subjects.find(item => identitySubjectMatchesCharacter(item, character));
+      const subject = resolveCanonicalIdentitySubject(subjects, character);
       if (!subject) return;
       const canonicalGender = normalizeIdentityGender(subject.immutable?.gender);
       if (!canonicalGender) return;
@@ -17517,10 +18104,155 @@ function normalizeAdaptiveQualityState(value) {
     });
   }
 
-  function identitySubjectMatchesCharacter(subject, character) {
-    const haystack = [character?.id, character?.name, character?.displayName, character?.alias, normalizeStringArray(character?.aliases).join(' ')].join('\n');
-    const names = [subject?.name].concat(normalizeStringArray(subject?.aliases)).filter(Boolean);
-    return names.some(name => name && haystack.toLowerCase().includes(String(name).toLowerCase()));
+  function normalizeIdentityLookupKey(value) {
+    const text = String(value || '').normalize('NFKC').toLowerCase().trim();
+    if (!text) return '';
+    return text.replace(/[\s_\-·ㆍ.,:;|/\\()[\]{}<>"'`~!?，、（）【】]+/g, '');
+  }
+
+  function identityLookupKeys(values) {
+    const out = new Set();
+    normalizeStringArray(values).forEach(value => {
+      const raw = String(value || '').normalize('NFKC').trim();
+      if (!raw || isForbiddenIdentityAlias(raw) || isGenericCharacterStateToken(raw)) return;
+      const parts = [raw].concat(raw.split(/[.,:;|/\\()[\]{}<>"'`~!?，、（）【】]+/g));
+      parts.forEach(part => {
+        const key = normalizeIdentityLookupKey(part);
+        if (key.length >= 2 && !isGenericCharacterStateToken(key) && !isForbiddenIdentityAlias(key)) out.add(key);
+      });
+    });
+    return out;
+  }
+
+  function canonicalIdentitySubjectKeys(subject) {
+    return identityLookupKeys([subject?.id, subject?.name].concat(normalizeStringArray(subject?.aliases)));
+  }
+
+  function characterIdentityKeys(character) {
+    return identityLookupKeys([
+      character?.canonicalIdentityRef,
+      character?.id,
+      character?.name,
+      character?.displayName,
+      character?.alias,
+    ].concat(normalizeStringArray(character?.aliases)));
+  }
+
+  function resolveCanonicalIdentitySubject(subjects, character) {
+    const list = Array.isArray(subjects) ? subjects.filter(Boolean) : [];
+    if (!list.length || !character) return null;
+    const directRef = normalizeIdentityLookupKey(character.canonicalIdentityRef);
+    if (directRef) {
+      const direct = list.filter(subject => normalizeIdentityLookupKey(subject.id) === directRef);
+      if (direct.length === 1) return direct[0];
+    }
+    const characterKeys = characterIdentityKeys(character);
+    if (!characterKeys.size) return null;
+    const matches = list.filter(subject => Array.from(canonicalIdentitySubjectKeys(subject)).some(key => characterKeys.has(key)));
+    return matches.length === 1 ? matches[0] : null;
+  }
+
+  function consolidateCanonicalIdentitySubjects(subjects) {
+    const consolidated = [];
+    (Array.isArray(subjects) ? subjects : []).map(normalizeCanonicalIdentitySubject).filter(Boolean).forEach(subject => {
+      const keys = canonicalIdentitySubjectKeys(subject);
+      const index = consolidated.findIndex(existing => {
+        if (normalizeIdentityLookupKey(existing.name) === normalizeIdentityLookupKey(subject.name)) return true;
+        const existingKeys = canonicalIdentitySubjectKeys(existing);
+        let overlap = 0;
+        keys.forEach(key => { if (existingKeys.has(key)) overlap += 1; });
+        return overlap >= 2;
+      });
+      if (index < 0) {
+        consolidated.push(subject);
+        return;
+      }
+      const existing = consolidated[index];
+      consolidated[index] = normalizeCanonicalIdentitySubject({
+        ...existing,
+        aliases: uniqueStrings([existing.name, subject.name]
+          .concat(normalizeStringArray(existing.aliases), normalizeStringArray(subject.aliases)))
+          .filter(value => value !== existing.name),
+        immutable: mergeObject(existing.immutable, subject.immutable),
+        mutableBaseline: mergeObject(existing.mutableBaseline, subject.mutableBaseline),
+        notes: uniqueStrings(normalizeStringArray(existing.notes).concat(normalizeStringArray(subject.notes))),
+        sourceRefs: uniqueStrings(normalizeStringArray(existing.sourceRefs).concat(normalizeStringArray(subject.sourceRefs))),
+        confidence: Math.max(Number(existing.confidence || 0), Number(subject.confidence || 0)),
+      });
+    });
+    return consolidated.filter(Boolean);
+  }
+
+  function preferredCanonicalCharacterStateId(state, subject) {
+    const entries = Object.entries(state?.characters || {});
+    const direct = entries.find(([, character]) => normalizeIdentityLookupKey(character?.canonicalIdentityRef) === normalizeIdentityLookupKey(subject?.id));
+    if (direct) return direct[0];
+    const exact = entries.find(([id]) => normalizeIdentityLookupKey(id) === normalizeIdentityLookupKey(subject?.id));
+    return exact ? exact[0] : slug(firstNonEmpty(subject?.id, subject?.name));
+  }
+
+  function mergeCanonicalCharacterRecords(existing, incoming, subject, id) {
+    const merged = mergeObject(existing || {}, incoming || {});
+    merged.id = id;
+    merged.name = firstNonEmpty(subject?.name, incoming?.name, existing?.name, id);
+    merged.aliases = uniqueStrings([])
+      .concat(normalizeStringArray(existing?.aliases))
+      .concat(normalizeStringArray(incoming?.aliases))
+      .concat(normalizeStringArray(subject?.aliases))
+      .concat([existing?.name, incoming?.name].filter(Boolean))
+      .filter(value => value && value !== merged.name)
+      .slice(0, 32);
+    ['conditions', 'access', 'desires', 'fears', 'incentives', 'resources', 'knowledgeLimits'].forEach(key => {
+      merged[key] = uniqueStrings([]
+        .concat(Array.isArray(existing?.[key]) ? existing[key] : [])
+        .concat(Array.isArray(incoming?.[key]) ? incoming[key] : []))
+        .slice(0, 40);
+    });
+    merged.canonicalIdentityRef = subject?.id || merged.canonicalIdentityRef || '';
+    const evidenceSeen = new Set();
+    merged.evidence = []
+      .concat(Array.isArray(existing?.evidence) ? existing.evidence : [])
+      .concat(Array.isArray(incoming?.evidence) ? incoming.evidence : [])
+      .filter(item => {
+        const key = JSON.stringify(item);
+        if (evidenceSeen.has(key)) return false;
+        evidenceSeen.add(key);
+        return true;
+      })
+      .slice(-40);
+    return normalizeCharacterState(merged);
+  }
+
+  function coalesceCommittedCharactersByCanonicalIdentity(characters, identity, state) {
+    const byId = new Map();
+    (Array.isArray(characters) ? characters : []).forEach(character => {
+      const subject = resolveCanonicalIdentitySubject(identity?.subjects, character);
+      const id = subject ? preferredCanonicalCharacterStateId(state, subject) : slug(firstNonEmpty(character?.id, character?.name));
+      if (!id) return;
+      const normalized = subject
+        ? mergeCanonicalCharacterRecords(byId.get(id), character, subject, id)
+        : normalizeCharacterState({ ...(byId.get(id) || {}), ...character, id });
+      byId.set(id, normalized);
+    });
+    return Array.from(byId.values());
+  }
+
+  function coalesceStateCharactersByCanonicalIdentity(state, identity) {
+    if (!state?.characters || typeof state.characters !== 'object') return { merged: 0, names: [] };
+    const next = {};
+    const mergedNames = [];
+    Object.entries(state.characters).forEach(([key, character]) => {
+      const subject = resolveCanonicalIdentitySubject(identity?.subjects, character);
+      if (!subject) {
+        next[key] = character;
+        return;
+      }
+      const id = preferredCanonicalCharacterStateId(state, subject);
+      if (next[id]) mergedNames.push(firstNonEmpty(character?.name, key));
+      next[id] = mergeCanonicalCharacterRecords(next[id], character, subject, id);
+    });
+    state.characters = next;
+    return { merged: mergedNames.length, names: uniqueStrings(mergedNames) };
   }
 
   function identityGenderConflict(value, canonicalGender) {
@@ -17742,7 +18474,6 @@ function normalizeAdaptiveQualityState(value) {
 
   function findEvidenceConflicts(commit, state, turn) {
     const conflicts = [];
-    detectObjectConflicts(state.scene, commit.scene, ['time', 'location', 'presentCast', 'unfinishedAction', 'materialConditions'], 'scene', conflicts, turn);
     detectArrayConflicts(Object.values(state.characters || {}), commit.characters, itemKey, ['name', 'location', 'status', 'goal', 'rank'], 'character', conflicts, turn);
     detectArrayConflicts(state.memoryLedger, commit.memoryLedger, memoryKey, ['summary', 'canonLevel'], 'memory', conflicts, turn);
     detectArrayConflicts(state.secretLedger, commit.secretLedger, secretKey, ['truth', 'status', 'tier', 'owners', 'knowers', 'suspecters', 'cannotKnow'], 'secret', conflicts, turn);
@@ -17757,24 +18488,6 @@ function normalizeAdaptiveQualityState(value) {
     detectArrayConflicts(state.plotThreads?.resourceChannels, commit.plotThreads?.resourceChannels, itemKey, ['resource', 'channel', 'holder', 'constraint', 'visibility', 'status'], 'resourceChannel', conflicts, turn);
     detectArrayConflicts(state.knowledge?.units, commit.knowledge?.units, itemKey, ['summary', 'visibility', 'knownBy', 'cannotKnow'], 'knowledge', conflicts, turn);
     return conflicts;
-  }
-
-  function detectObjectConflicts(existing, incoming, fields, kind, conflicts, turn) {
-    if (!incoming || typeof incoming !== 'object' || !existing || typeof existing !== 'object') return;
-    fields.forEach(field => {
-      const oldValue = existing?.[field];
-      const newValue = incoming?.[field];
-      if (!isMeaningfulValue(oldValue) || !isMeaningfulValue(newValue) || sameComparableValue(oldValue, newValue)) return;
-      const decision = resolveEvidenceDecision(existing, incoming, field, kind, turn, oldValue, newValue);
-      if (decision.resolution === 'rejected' || decision.resolution === 'disputed') {
-        incoming[field] = oldValue;
-        if (decision.resolution === 'disputed') incoming.memoryTier = 'disputed';
-        incoming.resolvedByConflictId = decision.decisionId;
-        conflicts.push(makeConflict(`${kind}_${field}`, `${kind} ${decision.resolution} conflicting ${field}.`, incoming, existing, turn, decision));
-      } else {
-        conflicts.push(makeConflict(`${kind}_${field}`, `${kind} accepted newer/higher evidence for ${field}.`, incoming, existing, turn, decision));
-      }
-    });
   }
 
   function detectArrayConflicts(existingList, incomingList, keyFn, fields, kind, conflicts, turn) {
@@ -20717,6 +21430,34 @@ function normalizeAdaptiveQualityState(value) {
     };
   }
 
+  function compactImagePromptTraceForRunLog(trace) {
+    if (!trace || typeof trace !== 'object') return null;
+    const fingerprint = value => ({
+      chars: parseNumber(value?.chars, 0, 0, 9999999),
+      hash: clipRunLogText(value?.hash || '', 80),
+    });
+    return {
+      promptRevision: clipRunLogText(trace.promptRevision || '', 120),
+      profileId: clipRunLogText(trace.profileId || '', 160),
+      provider: clipRunLogText(trace.provider || '', 80),
+      model: clipRunLogText(trace.model || '', 160),
+      presetId: clipRunLogText(trace.presetId || '', 160),
+      presetName: clipRunLogText(trace.presetName || '', 160),
+      positivePrefix: fingerprint(trace.positivePrefix),
+      negativePrefix: fingerprint(trace.negativePrefix),
+      basePrompt: fingerprint(trace.basePrompt),
+      finalPrompt: fingerprint(trace.finalPrompt),
+      topLevelInput: fingerprint(trace.topLevelInput),
+      characterPrompts: parseNumber(trace.characterPrompts, 0, 0, 100),
+      v4CharacterCaptions: parseNumber(trace.v4CharacterCaptions, 0, 0, 100),
+      stylePrefixInFinalPrompt: trace.stylePrefixInFinalPrompt === true,
+      negativePrefixInFinalPrompt: trace.negativePrefixInFinalPrompt === true,
+      stylePrefixInTopLevelInput: trace.stylePrefixInTopLevelInput,
+      stylePrefixInV4Base: trace.stylePrefixInV4Base,
+      risuFlatPromptPreserved: trace.risuFlatPromptPreserved,
+    };
+  }
+
   function compactImageResidentResultForRunLog(image) {
     if (!image || typeof image !== 'object') return null;
     return {
@@ -20724,6 +21465,10 @@ function normalizeAdaptiveQualityState(value) {
       reason: clipRunLogText(image.reason || '', 300),
       totalShots: parseNumber(image.totalShots, 0, 0, 9999),
       attemptedShots: parseNumber(image.attemptedShots, 0, 0, 9999),
+      invalidShots: (Array.isArray(image.invalidShots) ? image.invalidShots : []).slice(0, 12).map(item => ({
+        index: parseNumber(item?.index, 0, 0, 9999),
+        issue: clipRunLogText(item?.issue || '', 120),
+      })),
       results: (Array.isArray(image.results) ? image.results : []).slice(0, 12).map(item => ({
         title: clipRunLogText(item?.shot?.title || item?.title || '', 160),
         paragraph: parseNumber(item?.shot?.paragraph ?? item?.paragraph, 0, 0, 999999),
@@ -20731,6 +21476,7 @@ function normalizeAdaptiveQualityState(value) {
         reason: clipRunLogText(item?.result?.reason || item?.reason || '', 240),
         assetPath: clipRunLogText(item?.result?.artifact?.entry?.assetPath || item?.assetPath || '', 500),
         assetTag: clipRunLogText(item?.result?.assetTag || item?.assetTag || '', 240),
+        promptTrace: compactImagePromptTraceForRunLog(item?.result?.promptTrace || item?.promptTrace),
       })),
     };
   }
@@ -22308,7 +23054,7 @@ function normalizeAdaptiveQualityState(value) {
       .et-album-select input { width:16px; height:16px; min-height:0; margin:0; }
       .et-sr-only { position:absolute !important; width:1px !important; height:1px !important; padding:0 !important; margin:-1px !important; overflow:hidden !important; clip:rect(0,0,0,0) !important; white-space:nowrap !important; border:0 !important; }
       .et-album-overlay { position:fixed; inset:0; z-index:1000; background:rgba(42,26,28,.48); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; padding:18px; box-sizing:border-box; }
-      .et-album-window { position:relative; width:min(1260px, 96vw); height:min(90vh, 860px); overflow:hidden; border:1px solid #d9ad9f; border-radius:12px; background:#fffefa; box-shadow:0 24px 80px rgba(67,34,38,.34); display:flex; flex-direction:column; }
+      .et-album-window { position:relative; width:min(1260px, 96vw); height:min(90vh, 860px); height:min(90dvh, 860px); max-height:calc(100dvh - 36px); overflow:hidden; border:1px solid #d9ad9f; border-radius:12px; background:#fffefa; box-shadow:0 24px 80px rgba(67,34,38,.34); display:flex; flex-direction:column; }
       .et-album-window-head { flex:0 0 auto; min-height:44px; display:flex; align-items:center; justify-content:space-between; gap:10px; padding:0 14px; border-bottom:1px solid #ead2c3; background:#fffefa; }
       .et-album-window-title { display:flex; align-items:baseline; gap:10px; min-width:0; }
       .et-album-window-title h2 { margin:0; font-size:16px; color:#6f3444; white-space:nowrap; }
@@ -22322,7 +23068,7 @@ function normalizeAdaptiveQualityState(value) {
       .et-album-photo { width:min(920px, 100%); height:100%; min-height:0; margin:0 auto; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; box-sizing:border-box; }
       .et-album-photo-title { flex:0 0 auto; margin:0; color:#bea8a5; text-align:center; font-size:11px; font-weight:500; line-height:1.35; letter-spacing:0; }
       .et-album-photo-frame { width:100%; flex:0 1 auto; min-width:0; min-height:0; margin:0; display:grid; place-items:center; overflow:hidden; }
-      .et-album-photo-frame img { display:block; width:auto; max-width:100%; height:auto; max-height:100%; object-fit:contain; box-sizing:border-box; padding:clamp(7px, 1.2vw, 12px); border:1px solid #6f555b; background:#1f191b; box-shadow:0 18px 54px rgba(8,5,6,.42); }
+      .et-album-photo-frame img { display:block; width:auto; max-width:100%; height:auto; max-height:min(710px, calc(90vh - 160px)); max-height:min(710px, calc(90dvh - 160px)); object-fit:contain; box-sizing:border-box; padding:clamp(7px, 1.2vw, 12px); border:1px solid #6f555b; background:#1f191b; box-shadow:0 18px 54px rgba(8,5,6,.42); }
       .et-album-photo-line { width:min(720px, 92%); flex:0 0 auto; margin:0 auto; color:#ead7d1; text-align:center; font-family:ui-serif, Georgia, "Noto Serif KR", serif; font-size:14px; line-height:1.8; letter-spacing:0; white-space:pre-line; overflow-wrap:anywhere; }
       #et-artifact-status:empty { display:none; }
       .et-badge { display:inline-flex; align-items:center; max-width:180px; overflow:hidden; text-overflow:ellipsis; border:1px solid #d6b4a8; border-radius:999px; padding:2px 7px; color:#704a50; font-size:11px; white-space:nowrap; }
@@ -22351,7 +23097,7 @@ function normalizeAdaptiveQualityState(value) {
         .et-ops-head { display:block; }
         .et-toggle-row { justify-content:flex-start; margin-top:10px; }
         .et-album-overlay { padding:0; }
-        .et-album-window { width:100vw; height:100vh; max-height:none; border-radius:0; }
+        .et-album-window { width:100vw; height:100vh; height:100dvh; max-height:100dvh; border-radius:0; }
         .et-album-window-head { padding:10px 12px; flex-wrap:wrap; }
         .et-album-window-title { flex-wrap:wrap; }
       }
@@ -22379,7 +23125,7 @@ function normalizeAdaptiveQualityState(value) {
         .et-album-photo-stage { padding:0 10px 12px; }
         .et-album-photo { gap:8px; }
         .et-album-photo-title { font-size:10px; }
-        .et-album-photo-frame img { padding:5px; }
+        .et-album-photo-frame img { max-height:calc(100vh - 140px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); max-height:calc(100dvh - 140px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); padding:5px; }
         .et-album-photo-line { width:94%; font-size:13px; line-height:1.75; }
       }
     `;
@@ -22704,7 +23450,7 @@ function normalizeAdaptiveQualityState(value) {
             <div class="et-note" style="margin-top:10px">Wellspring/챈섭은 사이트에 저장된 활성 모델·크기·샘플러·LoRA 설정을 사용합니다. 이 프리셋에서는 공통 긍정/부정 프롬프트와 이미진씨가 분리한 장면·캐릭터 프롬프트만 전송합니다.</div>
           `)}
           ${providerPanel('novelai', `
-            <div class="et-note" style="margin-top:10px">NovelAI는 장면·작화 태그를 Base prompt로, 등장인물을 캐릭터별 V4 prompt와 negative prompt로 분리해 전송합니다.</div>
+            <div class="et-note" style="margin-top:10px">NovelAI는 RisuAI와 같은 평탄 계약을 사용합니다. 완성된 긍정·부정 프롬프트를 각각 일반 입력과 V4 Base에 동일하게 전송하며, 캐릭터 좌표나 별도 V4 캡션은 만들지 않습니다.</div>
             <div class="et-row" style="margin-top:10px">
               ${selectField('NAI 모델', 'et-image-preset-nai-model', nai.model, novelAiModelOptions())}
               ${selectField('Sampler', 'et-image-preset-nai-sampler', nai.sampler, novelAiSamplerOptions())}
@@ -27811,7 +28557,10 @@ function normalizeAdaptiveQualityState(value) {
             detailFitsViewportWithoutScroll: /\.et-album-photo-stage\s*\{[^}]*overflow:hidden/.test(styles)
               && /\.et-album-photo\s*\{[^}]*height:100%[^}]*display:flex[^}]*justify-content:center/.test(styles)
               && /\.et-album-photo-frame\s*\{[^}]*flex:0 1 auto/.test(styles)
-              && /\.et-album-photo-frame img\s*\{[^}]*max-height:100%/.test(styles),
+              && /\.et-album-window\s*\{[^}]*height:min\(90dvh, 860px\)[^}]*max-height:calc\(100dvh - 36px\)/.test(styles)
+              && /\.et-album-photo-frame img\s*\{[^}]*max-height:min\(710px, calc\(90dvh - 160px\)\)/.test(styles)
+              && /@media \(max-width: 980px\)[\s\S]*\.et-album-window\s*\{[^}]*height:100dvh[^}]*max-height:100dvh/.test(styles)
+              && /@media \(max-width: 640px\)[\s\S]*\.et-album-photo-frame img\s*\{[^}]*max-height:calc\(100dvh - 140px - env\(safe-area-inset-top\) - env\(safe-area-inset-bottom\)\)/.test(styles),
             detailKeepsTextNearPhoto: /\.et-album-photo\s*\{[^}]*gap:12px/.test(styles)
               && /@media \(max-width: 640px\)[\s\S]*\.et-album-photo\s*\{[^}]*gap:8px/.test(styles)
               && !/\.et-album-photo\s*\{[^}]*grid-template-rows/.test(styles),
@@ -28253,15 +29002,36 @@ function normalizeAdaptiveQualityState(value) {
         testImageResidentVisualReferenceMessages: () => {
           const marker = 'CURRENT_OUTPUT_IMAGE_MARKER';
           const visualMarker = 'VISUAL_REFERENCE_MARKER';
-          const messages = buildImageResidentMessages({ systemPrompt: IMAGE_RESIDENT_SYSTEM_PROMPT }, marker, visualMarker);
+          const messages = buildImageResidentMessages({ systemPrompt: IMAGE_RESIDENT_SYSTEM_PROMPT, maxImages: 2 }, `${marker}\n\nSECOND_PARAGRAPH_MARKER`, visualMarker);
           const text = messages.map(message => message.content).join('\n');
           return {
             roles: messages.map(message => message.role),
             hasCurrentOutput: text.includes(marker),
             hasCurrentOutputWrapper: text.includes('Current Final Story Output'),
-            hasVisualReference: text.includes(visualMarker) && text.includes('Visual Reference Context'),
+            hasVisualGround: text.includes(visualMarker) && text.includes('Visual Ground'),
             visualBeforeCurrentOutput: text.indexOf(visualMarker) < text.indexOf(marker),
-            hasStateJson: text.includes('{{state_json}}') || text.includes('memoryLedger'),
+            hasNumberedParagraphs: text.includes('[P1]') && text.includes('[P2]'),
+            hasImageCapacity: text.includes('Image capacity: at most 2') && text.includes('not a target count'),
+            doesNotInjectFullStateJson: !text.includes('{{state_json}}') && !text.includes('memoryLedger'),
+            usesFlatShotSchema: IMAGE_RESIDENT_SYSTEM_PROMPT.includes('"shots": [')
+              && !IMAGE_RESIDENT_SYSTEM_PROMPT.includes('"scenes": ['),
+            usesFlatCharacterPositive: IMAGE_RESIDENT_SYSTEM_PROMPT.includes('"positive": "one complete English character tag string'),
+            removesPositionContract: !IMAGE_RESIDENT_SYSTEM_PROMPT.includes('"position"')
+              && IMAGE_RESIDENT_SYSTEM_PROMPT.includes('Do not output positions or coordinates.'),
+            doesNotForceFraming: !IMAGE_RESIDENT_SYSTEM_PROMPT.includes('Default to portrait')
+              && !IMAGE_RESIDENT_SYSTEM_PROMPT.includes('wide shot only'),
+          };
+        },
+        testImageResidentMultilingualParagraphMapping: () => {
+          const source = '한국어 장면.\n\nEnglish scene.\n\n日本語の場面。\n\n中文场景。';
+          const annotated = annotateImageStoryParagraphs(source);
+          return {
+            paragraphCount: splitImageStoryParagraphs(source).length,
+            hasAllMarkers: ['[P1]', '[P2]', '[P3]', '[P4]'].every(marker => annotated.includes(marker)),
+            preservesKorean: annotated.includes('한국어 장면.'),
+            preservesEnglish: annotated.includes('English scene.'),
+            preservesJapanese: annotated.includes('日本語の場面。'),
+            preservesChinese: annotated.includes('中文场景。'),
           };
         },
         testImageResidentPromptMigration: () => {
@@ -28277,101 +29047,227 @@ function normalizeAdaptiveQualityState(value) {
             promptRevision: '',
             systemPrompt: customPrompt,
           }, fallback);
+          const legacyCustomRequest = normalizeImageResidentRequest({
+            create: true,
+            scenes: [{
+              place: 'quiet clinic, night',
+              shots: [{
+                paragraph: 1,
+                camera: 'three-quarter view, medium shot',
+                situation: 'reading a patient chart under a desk lamp',
+                characters: [{
+                  name: 'Moon Hae-on',
+                  label: 'boy',
+                  visualAge: 'adult male',
+                  appearance: 'short black hair, dark eyes',
+                  body: 'slender body',
+                  attire: 'white doctor coat',
+                  expression: 'tired eyes',
+                  action: 'rubbing his neck',
+                  position: 'upper-center',
+                }],
+              }],
+            }],
+          }, { maxImages: 1 }, 1, 'Moon Hae-on reads a chart.', true);
+          const legacyShot = legacyCustomRequest.shots[0] || {};
           return {
             builtinRevision: builtin.promptRevision,
             builtinMigrated: builtin.promptRevision === IMAGE_RESIDENT_PROMPT_REVISION && builtin.systemPrompt === IMAGE_RESIDENT_SYSTEM_PROMPT,
+            previousBuiltInSignaturesRegistered: IMAGE_RESIDENT_LEGACY_BUILTIN_SIGNATURES.some(item => item.length === 7092 && item.hash === '3zovkf')
+              && IMAGE_RESIDENT_LEGACY_BUILTIN_SIGNATURES.some(item => item.length === 8125 && item.hash === 'd2yjih')
+              && IMAGE_RESIDENT_LEGACY_BUILTIN_SIGNATURES.some(item => item.length === 8130 && item.hash === '1u2ocwg'),
             customPreserved: custom.systemPrompt === customPrompt,
             customRevision: custom.promptRevision,
+            legacyCustomShapeRuns: legacyCustomRequest.create === true
+              && legacyShot.scene === 'quiet clinic, night, reading a patient chart under a desk lamp'
+              && String(legacyShot.characters?.[0]?.positive || '').includes('white doctor coat'),
+            legacyCustomDropsLocalPosition: !String(legacyShot.prompt || '').includes('upper-center'),
           };
         },
         testImageResidentCharacterPromptContract: () => {
           const request = normalizeImageResidentRequest({
             create: true,
-            scenes: [{
-              place: 'quiet clinic at night',
-              shots: [{
+            shots: [{
                 paragraph: 1,
                 title: '늦은 진료실',
                 memoryLine: '오늘도 불은 나보다 늦게 꺼졌다.',
-                camera: 'medium shot',
-                situation: 'computer glow, medical office',
+                camera: 'three-quarter view, medium shot',
+                scene: '1boy, quiet clinic, night, warm desk lamp, patient chart',
+                supplement: 'He rubs his neck while reading at the desk.',
                 characters: [{
                   name: 'Moon Hae-on',
-                  label: 'boy',
-                  visualAge: 'male',
-                  appearance: 'short black hair, dark eyes, pale skin, slender male body',
-                  attire: 'white doctor coat',
-                  expression: 'tired eyes',
-                  action: 'rubbing neck at desk',
+                  positive: 'boy, adult male, short black hair, dark eyes, pale skin, slender body, white doctor coat, tired eyes, rubbing neck, reading a patient chart',
+                  negative: '',
                 }],
-              }],
             }],
-          }, { maxImages: 1 }, 1);
+          }, { maxImages: 1 }, 1, 'Moon Hae-on sat alone in his clinic.', true);
           const shot = request.shots[0] || {};
           const negative = buildImageShotNegative(shot);
           return {
             prompt: shot.prompt,
             negative,
-            hasStrictCount: /\b1boy\b/.test(shot.prompt || ''),
-            hasMaleFocus: String(shot.prompt || '').includes('male focus'),
+            acceptedFlatPlan: request.create === true && request.shots.length === 1,
+            preservesSceneCount: /\b1boy\b/.test(shot.prompt || ''),
+            keepsCompleteCharacterPositive: String(shot.prompt || '').includes('white doctor coat, tired eyes, rubbing neck'),
+            keepsSupplementOnce: String(shot.prompt || '').split('He rubs his neck while reading at the desk.').length === 2,
             omitsCharacterNameFromImageTags: !String(shot.prompt || '').includes('Moon Hae-on'),
-            blocksContradictoryFemaleTag: /female|1girl/.test(negative),
+            doesNotInferNegative: negative === '',
+            noLocalFocusOrPositionTags: !/male focus|female focus|at the center|upper-left|upper-center/.test(String(shot.prompt || '')),
+            characterSchemaIsFlat: Object.keys(shot.characters?.[0] || {}).sort().join(',') === 'name,negative,positive',
           };
         },
         testNovelAiCharacterPromptPayload: () => {
           const request = normalizeImageResidentRequest({
             create: true,
-            scenes: [{
-              place: 'moonlit station platform',
-              shots: [{
+            shots: [{
                 paragraph: 1,
-                characterCount: '1boy, 1girl',
-                camera: 'two shot',
-                situation: 'night, rain, backlighting',
+                title: '빗속의 대치',
+                memoryLine: '빗소리 사이로 두 시선만이 부딪혔다.',
+                camera: 'straight-on, cowboy shot',
+                scene: '1boy, 1girl, rain-soaked station platform, night, backlight',
+                supplement: 'The two students face each other across the platform.',
                 characters: [{
-                  label: 'boy',
-                  appearance: 'short black hair, gray eyes',
-                  attire: 'dark school uniform',
-                  action: 'standing on the left',
+                  name: 'Rain Boy',
+                  positive: 'boy, short black hair, gray eyes, slender body, dark school uniform, pointing at the other student',
                   negative: 'long hair',
                 }, {
-                  label: 'girl',
-                  appearance: 'long silver hair, blue eyes',
-                  attire: 'white coat',
-                  action: 'standing on the right',
+                  name: 'Silver Girl',
+                  positive: 'girl, long silver hair, blue eyes, slender body, white coat, meeting his gaze',
                   negative: 'black hair',
                 }],
-              }],
             }],
-          }, { maxImages: 1 }, 1).shots[0];
+          }, { maxImages: 1 }, 1, 'Two students faced each other on the rain-soaked station platform.', true).shots[0];
           const payload = buildImageApiPayload(
-            { provider: 'novelai', requestTemplateJson: '' },
-            { positivePrefix: 'very aesthetic', negativePrompt: 'lowres', width: 832, height: 1216, steps: 28, cfg: 5.5 },
+            { id: 'debug-novelai', provider: 'novelai', requestTemplateJson: '' },
+            { id: 'debug-style', name: 'Debug Style', positivePrefix: '1.4::artist:fixed_style::, very aesthetic', negativePrompt: '2::lowres::, bad anatomy', width: 832, height: 1216, steps: 28, cfg: 5.5 },
             request
           );
           const positive = payload?.parameters?.v4_prompt?.caption;
           const negative = payload?.parameters?.v4_negative_prompt?.caption;
+          const promptTrace = buildImagePromptTrace(
+            { id: 'debug-novelai', provider: 'novelai', requestTemplateJson: '' },
+            { id: 'debug-style', name: 'Debug Style', positivePrefix: '1.4::artist:fixed_style::, very aesthetic', negativePrompt: '2::lowres::, bad anatomy', width: 832, height: 1216, steps: 28, cfg: 5.5 },
+            request
+          );
+          const compactPromptTrace = compactImagePromptTraceForRunLog(promptTrace);
+          const v3Payload = buildImageApiPayload(
+            { id: 'debug-novelai-v3', provider: 'novelai', requestTemplateJson: '' },
+            normalizeImageApiPreset({
+              id: 'debug-style-v3',
+              name: 'Debug Style V3',
+              positivePrefix: '1.4::artist:fixed_style::, very aesthetic',
+              negativePrompt: '2::lowres::, bad anatomy',
+              providerSettings: { novelai: { model: 'nai-diffusion-3' } },
+            }),
+            request
+          );
+          const sparseNegativePayload = buildImageApiPayload(
+            { id: 'debug-novelai-sparse-negative', provider: 'novelai', requestTemplateJson: '' },
+            { positivePrefix: 'fixed style', negativePrompt: 'lowres' },
+            {
+              ...request,
+              characters: request.characters.map((character, index) => ({
+                ...character,
+                negative: index === 1 ? 'black hair' : '',
+              })),
+            }
+          );
+          const twoBoysPayload = buildImageApiPayload(
+            { id: 'debug-novelai-two-boys', provider: 'novelai', requestTemplateJson: '' },
+            { positivePrefix: 'fixed style', negativePrompt: '' },
+            {
+              camera: 'medium shot',
+              scene: '2boys, grassy hilltop, morning light',
+              characters: [
+                { name: 'Yuki Nagi', positive: 'boy, adolescent, short silver-white hair, dark blue-gray eyes, dark navy kimono, watching the stranger' },
+                { name: 'Bing', positive: 'boy, adult male, long white hair, black eyes, modern clothes, standing in confusion' },
+              ],
+            }
+          );
           const comfyVars = buildImageApiTemplateVars(normalizeImageApiPreset({ positivePrefix: 'very aesthetic' }), request, 'comfyui-local');
           const customVars = buildImageApiTemplateVars(normalizeImageApiPreset({ positivePrefix: 'very aesthetic' }), request, 'custom-json');
+          const input = String(payload?.input || '');
+          const v3Input = String(v3Payload?.input || '');
+          const flatNegative = String(payload?.parameters?.negative_prompt || '');
           return {
-            input: payload?.input || '',
+            input,
             baseCaption: positive?.base_caption || '',
             characterCaptions: positive?.char_captions || [],
             negativeCharacterCaptions: negative?.char_captions || [],
-            inputHasNoPipe: !String(payload?.input || '').includes('|'),
-            separatesTwoCharacters: positive?.char_captions?.length === 2,
-            alignsCharacterNegatives: negative?.char_captions?.length === 2,
-            baseOmitsCharacterAppearance: !String(positive?.base_caption || '').includes('short black hair')
-              && !String(positive?.base_caption || '').includes('long silver hair'),
+            topLevelAndV4BaseMatch: input === String(positive?.base_caption || ''),
+            flatPromptKeepsBothCharacters: input.includes(' | ')
+              && input.includes('short black hair, gray eyes')
+              && input.includes('long silver hair, blue eyes'),
+            v3UsesSameRisuFlatContract: v3Input.includes(' | ')
+              && v3Input.includes('short black hair, gray eyes')
+              && v3Input === String(v3Payload?.parameters?.v4_prompt?.caption?.base_caption || ''),
+            leavesV4CharacterCaptionsEmpty: positive?.char_captions?.length === 0
+              && negative?.char_captions?.length === 0,
+            disablesCharacterCoordinates: payload?.parameters?.use_coords === false
+              && payload?.parameters?.v4_prompt?.use_coords === false,
+            preservesSceneCount: /1boy, 1girl/.test(input),
+            preservesCharacterOrder: input.indexOf('short black hair') < input.indexOf('long silver hair'),
+            omitsBindingNames: !input.includes('Rain Boy') && !input.includes('Silver Girl'),
+            fixedStylePreservedInInput: input.startsWith('1.4::artist:fixed_style::, very aesthetic'),
+            fixedStylePreservedInV4Base: String(positive?.base_caption || '').startsWith('1.4::artist:fixed_style::, very aesthetic'),
+            flatNegativeMatchesV4Base: flatNegative === String(negative?.base_caption || '')
+              && flatNegative === '2::lowres::, bad anatomy | long hair | black hair',
+            sparseNegativeKeepsCharacterSlots: sparseNegativePayload?.parameters?.negative_prompt === 'lowres |  | black hair',
+            twoBoysStaySeparateWithoutLocalGuards: String(twoBoysPayload?.input || '').includes('2boys')
+              && String(twoBoysPayload?.input || '').split(' | ').length === 3
+              && twoBoysPayload?.parameters?.use_coords === false
+              && twoBoysPayload?.parameters?.negative_prompt === '',
+            noDuplicateLegacyNegativeField: !Object.prototype.hasOwnProperty.call(payload?.parameters || {}, 'uc'),
+            promptTraceConfirmsStyle: promptTrace.stylePrefixInFinalPrompt === true
+              && promptTrace.stylePrefixInTopLevelInput === true
+              && promptTrace.stylePrefixInV4Base === true
+              && promptTrace.risuFlatPromptPreserved === true
+              && promptTrace.characterPrompts === 2
+              && promptTrace.v4CharacterCaptions === 0,
+            diagnosticTraceKeepsProof: compactPromptTrace?.promptRevision === IMAGE_RESIDENT_PROMPT_REVISION
+              && compactPromptTrace?.positivePrefix?.hash === promptTrace.positivePrefix.hash
+              && compactPromptTrace?.positivePrefix?.chars === promptTrace.positivePrefix.chars
+              && compactPromptTrace?.risuFlatPromptPreserved === true,
             comfyPromptHasNoNaiPipe: !String(comfyVars.prompt || '').includes('|'),
             customPromptHasNoNaiPipe: !String(customVars.prompt || '').includes('|'),
+            comfyNegativeHasNoNaiPipe: !String(comfyVars.negative || '').includes('|')
+              && String(comfyVars.negative || '').includes('long hair')
+              && String(comfyVars.negative || '').includes('black hair'),
+            customNegativeHasNoNaiPipe: !String(customVars.negative || '').includes('|'),
+            exposesProviderSpecificNegativeVars: String(comfyVars.naiNegative || '').includes(' | ')
+              && !String(comfyVars.comfyNegative || '').includes('|'),
           };
         },
-        testImageResidentCanonicalVisualContext: () => {
+        testImageResidentCanonicalVisualContext: async () => {
           const targetCharacter = {
             id: 'visual-context-subject',
             name: 'Moon Hae-on',
-            description: 'Name: Moon Hae-on\nGender: male\nAge: 31\nAppearance: short black hair, dark eyes, pale skin, slender male body.\nOccupation: urologist.',
+            description: 'A quiet medical drama set in Moon Clinic.',
+            lorebook: { type: 'risu', ver: 1, data: [
+              {
+                comment: 'Moon Hae-on',
+                key: ['Moon Hae-on', 'Hae-on'],
+                alwaysActive: true,
+                content: [
+                  '### Profile',
+                  '- Name: Moon Hae-on',
+                  '- Gender: male',
+                  '- Age: 31',
+                  '### Appearance & Attire',
+                  '- Appearance: short black hair, dark eyes, pale skin.',
+                  '- Physique: slender male body.',
+                  '- Attire: white doctor coat.',
+                  '### Abilities',
+                  '- Can diagnose rare illnesses and remembers every patient file.',
+                ].join('\n'),
+              },
+              {
+                comment: 'Moon Clinic',
+                key: ['clinic', 'Moon Clinic'],
+                alwaysActive: false,
+                content: 'Moon Clinic has narrow green-tiled corridors, old brass lamps, and dark walnut medicine cabinets.',
+              },
+            ] },
           };
           const targetContext = {
             character: targetCharacter,
@@ -28385,13 +29281,81 @@ function normalizeAdaptiveQualityState(value) {
           syncCanonicalUnitStore(targetState, targetContext, DEFAULT_CONFIG);
           const selectedIds = getLiveCanonicalStoreUnits(targetState).map(unit => unit.id);
           targetState.injectionTrace = [{ canonicalPlan: { selectedCanonicalIds: selectedIds } }];
-          const visual = buildImageResidentVisualContext(targetState, targetContext, 'Moon Hae-on sat alone in his clinic.', DEFAULT_CONFIG, 5000);
+          targetState.scene = { time: 'late night', location: 'Moon Clinic', materialConditions: ['rain-soaked windows'] };
+          targetState.characters['Moon Hae-on'] = {
+            name: 'Moon Hae-on',
+            aliases: ['Hae-on'],
+            attire: 'blood-stained white doctor coat',
+            injury: 'bandaged right hand',
+            status: 'exhausted',
+          };
+          const visual = await buildImageResidentVisualContext(targetState, targetContext, 'Moon Hae-on sat alone in Moon Clinic.', DEFAULT_CONFIG, 5000);
           return {
             visual,
-            hasVisualHeader: visual.includes('[Visual Reference Context]'),
+            hasVisualHeader: visual.includes('[Visual Ground]'),
             hasName: visual.includes('Moon Hae-on'),
             hasMaleIdentity: /male|남성/i.test(visual),
+            hasAppearanceSource: visual.includes('short black hair') && visual.includes('kind="appearance"'),
+            hasSettingReference: visual.includes('green-tiled corridors') && visual.includes('setting-visual-source'),
+            hasManagedContinuity: visual.includes('[Current Managed Visual Continuity]'),
+            hasCurrentAttireAndInjury: visual.includes('blood-stained white doctor coat') && visual.includes('bandaged right hand'),
+            hasCurrentSceneState: visual.includes('late night') && visual.includes('rain-soaked windows'),
+            excludesNonVisualManagedStatus: !visual.includes('exhausted'),
+            excludesGeneratedImageHistory: !visual.includes('Recent Illustration Identity History'),
+            excludesNonVisualProfile: !visual.includes('rare illnesses') && !visual.includes('patient file'),
             excludesAgentNotes: !visual.includes('[Eros Agent Notes]'),
+          };
+        },
+        testImageResidentStrictPlanValidation: () => {
+          const source = 'First paragraph.\n\nSecond paragraph.';
+          const valid = normalizeImageResidentRequest({
+            create: true,
+            shots: [{
+                paragraph: 2,
+                camera: 'from above, upper body',
+                scene: '1boy, old library interior, warm lamplight, open book, floating dust',
+                characters: [{
+                  name: 'Reader',
+                  positive: 'boy, short black hair, brown eyes, slender body, dark wool coat, focused, looking down, turning a brittle page',
+                }],
+            }],
+          }, { maxImages: 1 }, 1, source, true);
+          const invalid = normalizeImageResidentRequest({
+            create: true,
+            shots: [{
+                paragraph: 3,
+                camera: 'medium shot',
+                scene: '1boy, library',
+                characters: [{ name: 'Reader', positive: '' }],
+            }],
+          }, { maxImages: 1 }, 1, source, true);
+          const missingScene = normalizeImageResidentRequest({
+            create: true,
+            shots: [{
+              paragraph: 1,
+              camera: 'medium shot',
+              characters: [{ positive: 'boy, reading' }],
+            }],
+          }, { maxImages: 1 }, 1, source, true);
+          const strictDirectPrompt = normalizeImageResidentRequest({
+            create: true,
+            prompt: 'boy, reading in a library',
+          }, { maxImages: 1 }, 1, source, true);
+          const customDirectPrompt = normalizeImageResidentRequest({
+            create: true,
+            prompt: 'boy, reading in a library',
+          }, { maxImages: 1 }, 1, source, false);
+          return {
+            validAccepted: valid.create === true && valid.shots.length === 1,
+            validParagraph: valid.shots[0]?.paragraph === 2,
+            invalidRejected: invalid.create === false && invalid.shots.length === 0,
+            invalidParagraphReported: invalid.invalidShots.some(item => item.issue === 'paragraph-out-of-range'),
+            missingSceneRejected: missingScene.create === false
+              && missingScene.invalidShots.some(item => item.issue === 'missing-scene'),
+            strictDirectPromptRejected: strictDirectPrompt.create === false
+              && strictDirectPrompt.invalidShots.some(item => item.issue === 'unstructured-direct-prompt'),
+            customDirectPromptPreserved: customDirectPrompt.create === true
+              && customDirectPrompt.shots[0]?.prompt === 'boy, reading in a library',
           };
         },
         testImageResponseBodyDeadline: async () => {
@@ -28836,7 +29800,7 @@ function normalizeAdaptiveQualityState(value) {
             hasAlways: selected.some(unit => unit.label === '세계의 법칙'),
             hasTriggered: selected.some(unit => unit.label === '화산의 용'),
             excludesUnrelated: !selected.some(unit => unit.label === '남쪽 항구'),
-            includesEmbeddingHit: selectedWithEmbedding.some(unit => unit.label === '남쪽 항구'),
+            excludesEmbeddingOnlyHit: !selectedWithEmbedding.some(unit => unit.label === '남쪽 항구'),
             runtimeSelection,
           };
         },
@@ -29187,6 +30151,267 @@ function normalizeAdaptiveQualityState(value) {
             recallsExplicitAsh: ashSelected.includes('Ash'),
           };
         },
+        testCanonicalActivationEvidenceIsolation: () => {
+          const backgroundNames = Array.from({ length: 34 }, (_, index) => `Person${String(index + 1).padStart(2, '0')}`);
+          const requestedNames = ['TailA', 'TailB'];
+          const allNames = backgroundNames.concat(requestedNames);
+          const request = normalizeRequestMessages([
+            { role: 'system', content: `NPC index: ${allNames.join(', ')}` },
+            { role: 'user', content: 'TailA와 TailB를 만난다.', memo: 'chat-user-1' },
+            { role: 'user', content: 'Always answer in Korean.' },
+          ]);
+          const activationMessages = mergeActivationChatMessages([], normalizeRisuRequestChatMessages(request));
+          const targetCharacter = {
+            id: 'activation-evidence-test',
+            name: 'Activation Evidence Test',
+            lorebook: {
+              type: 'risu',
+              ver: 1,
+              data: [{ comment: 'NPC index', alwaysActive: true, content: allNames.join(', ') }]
+                .concat(allNames.map(name => ({
+                  comment: `${name} profile`,
+                  key: [name],
+                  content: `Name: ${name}\nSex: Male\nAffiliation: Test Order`,
+                }))),
+            },
+          };
+          const targetContext = {
+            mode: 'novel',
+            character: targetCharacter,
+            currentChat: { id: 'activation-evidence-chat', message: [] },
+            db: { modules: [], enabledModules: [] },
+            messages: activationMessages,
+            activationMessages,
+          };
+          targetContext.canonicalSources = collectCanonicalSources(targetCharacter, targetContext.db, targetContext.currentChat, conf || DEFAULT_CONFIG);
+          const units = buildCanonicalRuntimeUnits(targetContext, createDefaultState('novel'), conf || DEFAULT_CONFIG);
+          const queryText = canonicalActivationQueryText(targetContext, []);
+          const queryTerms = extractQueryTerms(queryText);
+          const candidates = buildCanonicalStageCandidates(units, queryTerms, queryText, createDefaultState('novel'), targetContext);
+          const triggeredLabels = uniqueStrings(candidates
+            .filter(candidate => canonicalSelectionReasonList(candidate).includes('trigger'))
+            .map(candidate => candidate.unit?.label));
+          return {
+            activationMessageCount: activationMessages.length,
+            activationText: queryText,
+            triggeredLabels,
+            profileCount: allNames.length,
+            excludesSystemIndex: backgroundNames.every(name => !queryText.includes(name)),
+            triggersOnlyRequestedProfiles: triggeredLabels.length === 2
+              && requestedNames.every(name => triggeredLabels.includes(`${name} profile`)),
+            explicitKeysOnly: targetContext.canonicalSources
+              .filter(source => /profile/.test(source.label))
+              .every(source => source.activationKeys.length === 1),
+            repeatedKoreanSuffix: koreanQueryTokenVariants('차린과의').includes('차린'),
+          };
+        },
+        testSharedCanonicalSelectorAuthority: () => {
+          const targetContext = {
+            mode: 'novel',
+            messages: [{ role: 'user', content: 'TailA enters the eastern archive.' }],
+            activationMessages: [{ role: 'user', content: 'TailA enters the eastern archive.' }],
+            canonicalSources: [
+              { id: 'shared-first', kind: 'firstMessage', label: 'First Message', content: 'The archive opens at dawn.', meta: {} },
+              { id: 'shared-desc', kind: 'desc', label: 'Character Description', content: 'An ensemble story in the eastern archive.', meta: {} },
+              { id: 'shared-index', kind: 'globalLore', label: 'NPC Index', content: 'TailA, Person01, Person02, HarborKeeper', meta: { alwaysActive: true } },
+              { id: 'shared-tail-a', kind: 'globalLore', label: 'TailA profile', content: 'Character Sheet\nName: TailA\nGender: male\nAffiliation: Eastern Archive', activationKeys: ['TailA'], meta: { alwaysActive: true } },
+              { id: 'shared-harbor', kind: 'globalLore', label: 'Harbor Keeper', content: 'Character Sheet\nName: HarborKeeper\nGender: female\nAffiliation: Southern Harbor', activationKeys: ['HarborKeeper'], meta: {} },
+            ],
+          };
+          const targetState = createDefaultState('novel');
+          syncCanonicalUnitStore(targetState, targetContext, DEFAULT_CONFIG);
+          const units = getLiveCanonicalStoreUnits(targetState);
+          const harbor = units.find(unit => unit.label === 'Harbor Keeper');
+          const semanticCandidates = harbor ? [{
+            kind: 'canonical',
+            item: { canonicalUnit: harbor },
+            semanticScore: 1,
+            score: 99999,
+            perspectiveGate: { allow: true },
+          }] : [];
+          const cache = { canonicalRuntimeUnits: units, candidates: semanticCandidates };
+          const mainContext = { ...targetContext, _canonicalInjectionTrace: [] };
+          const agentContext = { ...targetContext, _canonicalInjectionTrace: [] };
+          const main = selectMainSourceContextCanonicalUnits(targetState, mainContext, [], 12000, DEFAULT_CONFIG, { cache });
+          const agent = buildAgentSourceContextFromCandidates(
+            targetState,
+            agentContext,
+            semanticCandidates,
+            [],
+            '',
+            12000,
+            DEFAULT_CONFIG,
+            { cache }
+          ).selected;
+          const mainIds = main.map(item => item.unit.id);
+          const agentIds = agent.map(item => item.unit.id);
+          const tail = main.find(item => item.unit.label === 'TailA profile');
+          const background = main.find(item => item.unit.label === 'NPC Index');
+          return {
+            mainLabels: main.map(item => item.unit.label),
+            agentLabels: agent.map(item => item.unit.label),
+            mainAgentSameIds: JSON.stringify(mainIds) === JSON.stringify(agentIds),
+            directAlwaysHasTriggerAuthority: canonicalSelectionReasonList(tail).includes('trigger')
+              && canonicalSelectionProvenance(tail).stateActivation.authority === 'direct-current',
+            backgroundRemainsBackground: canonicalSelectionReasonList(background).includes('always-background')
+              && canonicalSelectionProvenance(background).stateActivation.eligible === false,
+            embeddingOnlySourceExcluded: !main.some(item => item.unit.label === 'Harbor Keeper')
+              && !agent.some(item => item.unit.label === 'Harbor Keeper'),
+            directPrecedesBackground: main.findIndex(item => item.unit.label === 'TailA profile')
+              < main.findIndex(item => item.unit.label === 'NPC Index'),
+          };
+        },
+        testRecursiveCanonicalReferenceAuthority: () => {
+          const targetContext = {
+            mode: 'novel',
+            messages: [{ role: 'user', content: 'Aerin enters the archive.' }],
+            activationMessages: [{ role: 'user', content: 'Aerin enters the archive.' }],
+            canonicalSources: [
+              {
+                id: 'recursive-aerin',
+                kind: 'globalLore',
+                label: 'Aerin profile',
+                content: 'Character Sheet\nName: Aerin\nGender: female\nAffiliation: Mage Division\nAerin consults Borin at Moon Clinic.',
+                activationKeys: ['Aerin', 'Mage Division'],
+                meta: { alwaysActive: true },
+              },
+              {
+                id: 'recursive-borin',
+                kind: 'globalLore',
+                label: 'Borin profile',
+                content: 'Character Sheet\nName: Borin\nGender: male\nAffiliation: Mage Division',
+                activationKeys: ['Borin', 'Mage Division'],
+                meta: {},
+              },
+              {
+                id: 'recursive-celine',
+                kind: 'globalLore',
+                label: 'Celine profile',
+                content: 'Character Sheet\nName: Celine\nGender: female\nAffiliation: Mage Division',
+                activationKeys: ['Celine', 'Mage Division'],
+                meta: {},
+              },
+              {
+                id: 'recursive-clinic',
+                kind: 'globalLore',
+                label: 'Moon Clinic',
+                content: 'Moon Clinic is an infirmary beside the eastern archive.',
+                activationKeys: ['Moon Clinic'],
+                meta: {},
+              },
+            ],
+          };
+          const targetState = createDefaultState('novel');
+          syncCanonicalUnitStore(targetState, targetContext, DEFAULT_CONFIG);
+          const units = getLiveCanonicalStoreUnits(targetState);
+          const cache = { canonicalRuntimeUnits: units, candidates: [] };
+          const main = selectMainSourceContextCanonicalUnits(targetState, targetContext, [], 16000, DEFAULT_CONFIG, { cache });
+          const agent = buildAgentSourceContextFromCandidates(
+            targetState,
+            targetContext,
+            [],
+            [],
+            '',
+            16000,
+            DEFAULT_CONFIG,
+            { cache }
+          ).selected;
+          const mainLabels = main.map(item => item.unit.label);
+          const agentLabels = agent.map(item => item.unit.label);
+          const borin = main.find(item => item.unit.label === 'Borin profile');
+          const clinic = main.find(item => item.unit.label === 'Moon Clinic');
+          return {
+            mainLabels,
+            agentLabels,
+            mainAgentSameIds: JSON.stringify(main.map(item => item.unit.id)) === JSON.stringify(agent.map(item => item.unit.id)),
+            directProfileSelected: mainLabels.includes('Aerin profile'),
+            explicitCharacterReferenceSelected: canonicalSelectionReasonList(borin).includes('recursive'),
+            explicitSettingReferenceSelected: canonicalSelectionReasonList(clinic).includes('recursive'),
+            sharedAffiliationDoesNotExpand: !mainLabels.includes('Celine profile'),
+            recursiveReferencesLinkedToSeed: normalizeStringArray(borin?.linkedFrom).length > 0
+              && normalizeStringArray(clinic?.linkedFrom).length > 0,
+          };
+        },
+        testStateCommitIdentityGrounding: async () => {
+          const targetContext = {
+            mode: 'novel',
+            messages: [{ role: 'user', content: 'Nagi meets Mira at the gate.' }],
+            activationMessages: [{ role: 'user', content: 'Nagi meets Mira at the gate.' }],
+            canonicalSources: [{
+              id: 'grounding-nagi',
+              kind: 'globalLore',
+              label: 'Nagi profile',
+              content: 'Character Sheet\nName: Nagi\nGender: male\nAppearance: black hair and gray eyes.',
+              activationKeys: ['Nagi'],
+              meta: { alwaysActive: true },
+            }],
+          };
+          const targetState = createDefaultState('novel');
+          targetState.characters = {
+            bing: normalizeCharacterState({ id: 'bing', name: 'Bing', status: 'active' }),
+          };
+          targetState.scene.presentCast = ['Bing'];
+          syncCanonicalUnitStore(targetState, targetContext, DEFAULT_CONFIG);
+          const units = getLiveCanonicalStoreUnits(targetState);
+          const queryText = canonicalActivationQueryText(targetContext, []);
+          const selected = selectSourceContextCanonicalUnits(targetState, targetContext, 6000, DEFAULT_CONFIG, {
+            queryText,
+            queryTerms: extractQueryTerms(queryText),
+            section: 'source-context',
+          });
+          appendCanonicalInjectionTrace(targetContext, selected, 'source-context');
+          const commit = resolveEvidenceCommit({
+            scene: { presentCast: ['Nagi', 'Mira', 'Bing'] },
+            characters: [
+              { id: 'nagi', name: 'Nagi', status: 'active' },
+              { id: 'mira', name: 'Mira', status: 'active' },
+              { id: 'bing', name: 'Bing', status: 'active' },
+            ],
+            relationships: [
+              { a: 'Nagi', b: 'Mira', lastChange: 'They met at the gate.' },
+              { a: 'Nagi', b: 'Bing', lastChange: 'Invented relation.' },
+            ],
+          }, targetState, targetContext, 'Nagi met Mira at the gate.', 1);
+          applyStateCommit(targetState, commit, { context: targetContext, finalOutput: 'Nagi met Mira at the gate.', turn: 1 });
+          syncCurrentCharacterBootstrap(targetState, contextWithAssistantOutput(targetContext, 'Nagi met Mira at the gate.'), { useCanonicalAnnotations: true });
+          targetState.injectionTrace = [{
+            canonicalPlan: { selectedCanonicalIds: selected.map(item => item.unit.id) },
+            canonical: targetContext._canonicalInjectionTrace.slice(),
+          }];
+          const visual = await buildImageResidentVisualContext(targetState, targetContext, 'Nagi met Mira at the gate.', DEFAULT_CONFIG, 5000);
+          return {
+            committedCharacters: commit.characters.map(character => character.name),
+            committedCast: commit.scene?.presentCast || [],
+            committedRelationships: commit.relationships.map(relationship => `${normalizeRelationshipEndpoint(relationship, 'a')}:${normalizeRelationshipEndpoint(relationship, 'b')}`),
+            rejectsUngroundedBingCharacter: !commit.characters.some(character => character.name === 'Bing'),
+            rejectsUngroundedBingCast: !normalizeStringArray(commit.scene?.presentCast).includes('Bing'),
+            rejectsUngroundedBingRelationship: !commit.relationships.some(relationship => normalizeRelationshipEndpoint(relationship, 'b') === 'Bing'),
+            acceptsDirectCanonicalNagi: commit.characters.some(character => character.name === 'Nagi' && character.commitGrounding?.kind),
+            acceptsVisibleSessionBornMira: commit.characters.some(character => character.name === 'Mira' && character.commitGrounding?.kind === 'current-visible-text'),
+            staleSceneNameNotActive: !normalizeStringArray(targetState.activePerspective?.presentCast).includes('Bing'),
+            visualUsesNagiSource: visual.includes('Nagi') && visual.includes('black hair'),
+            visualExcludesBing: !visual.includes('Bing'),
+            conflicts: (commit._evidenceConflicts || []).map(item => item.type),
+          };
+        },
+        testCanonicalCharacterAliasCoalescing: () => {
+          const targetState = createDefaultState('novel');
+          targetState.characters = {
+            bing_cheonhwi: normalizeCharacterState({ id: 'bing_cheonhwi', name: 'Bing Cheonhwi', aliases: ['빙천휘'], status: 'active' }),
+            Bing_Cheonhwei: normalizeCharacterState({ id: 'Bing_Cheonhwei', name: 'Bing Cheonhwei', status: 'active', goal: 'observe Nagi' }),
+            unrelated: normalizeCharacterState({ id: 'unrelated', name: 'Bing Horan', status: 'background' }),
+          };
+          const identity = normalizeCanonicalIdentity({
+            subjects: [{ id: '빙천휘', name: '빙천휘', aliases: ['Bing Cheonhwi', 'Bing Cheonhwei', '天輝', '천휘'] }],
+          });
+          const result = coalesceStateCharactersByCanonicalIdentity(targetState, identity);
+          return {
+            merged: result.merged,
+            characterKeys: Object.keys(targetState.characters),
+            canonicalCount: Object.values(targetState.characters).filter(character => character.canonicalIdentityRef === '빙천휘').length,
+            unrelatedPreserved: Object.values(targetState.characters).some(character => character.name === 'Bing Horan'),
+          };
+        },
         testCanonicalStateActivationAuthority: () => {
           const targetState = createDefaultState('novel');
           targetState.turn = 1;
@@ -29260,7 +30485,7 @@ function normalizeAdaptiveQualityState(value) {
               sourceLinePresent: packed.some(item => item.line.includes(unit.content)),
             };
           };
-          const backgroundRuns = ['foundation-always', 'recursive', 'source-neighbor', 'embedding'].map(reason => run(reason));
+          const backgroundRuns = ['foundation', 'always-background', 'recursive', 'source-neighbor', 'embedding'].map(reason => run(reason));
           const direct = run('trigger');
           const bridge = run('active-memory-bridge');
           const worldBackground = run('embedding', 'world');
@@ -29286,9 +30511,9 @@ function normalizeAdaptiveQualityState(value) {
             backgroundDoesNotActivateState: backgroundRuns.every(result => result.ranked?.stateActivationEligible !== true && result.selected.length === 0),
             directCurrentActivatesState: direct.ranked?.stateActivationEligible === true && direct.selected.length === 1,
             directCurrentRoute: direct.ranked?.stateActivationRoutes || [],
-            stateBridgeActivatesState: bridge.ranked?.stateActivationEligible === true && bridge.selected.length === 1,
+            stateBridgeDoesNotPromoteCharacter: bridge.ranked?.stateActivationEligible !== true && bridge.selected.length === 0,
             stateBridgeRoute: bridge.ranked?.stateActivationRoutes || [],
-            worldBackgroundStateAvailable: worldBackground.ranked?.stateActivationEligible === true && worldBackground.selected.length === 1,
+            worldBackgroundDoesNotPromoteCharacter: worldBackground.ranked?.stateActivationEligible !== true && worldBackground.selected.length === 0,
             worldBackgroundRoute: worldBackground.ranked?.stateActivationRoutes || [],
             worldBackgroundIsNotCurrentCast: worldBackground.ranked?.currentTurnCharacter !== true,
             worldUnrelatedStateExcluded: worldUnrelated.ranked?.stateActivationEligible !== true && worldUnrelated.selected.length === 0,
