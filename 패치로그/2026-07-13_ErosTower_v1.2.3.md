@@ -82,7 +82,12 @@
 
 ## 원격 배포 검증
 
-- 배포 커밋: 배포 후 기록
-- `origin/main`: 배포 후 기록
-- commit-pinned raw 파일과 로컬 SHA-256 비교: 배포 후 기록
-- 실제 update URL의 metadata와 SHA-256 비교: 배포 후 기록
+- 배포 커밋: `ca1feede698a6c3f7100985d2b6fc13adac3010b`
+- 최종 확인 시각: `2026-07-13 23:33:25 KST`
+- `origin/main`이 배포 커밋을 가리키는 것을 확인했다.
+- 커밋 고정 v1 raw: HTTP 200, `//@version 1.2.3`, SHA-256 `ED85ABD628DDD0129A0827F0706DCB29FF86E88B8129F6E9F19115904D0B9F7F`로 로컬과 일치.
+- 커밋 고정 local raw: HTTP 200, SHA-256 `ED85ABD628DDD0129A0827F0706DCB29FF86E88B8129F6E9F19115904D0B9F7F`로 로컬과 일치.
+- 커밋 고정 compat raw: HTTP 200, `//@version 4.0.31`, SHA-256 `F3AEB7334416C0811EC70A5EC8366BE605B0A383F01592DD5A4AFF2AF9E2EE7A`로 로컬과 일치.
+- `main` v1 업데이트 URL: HTTP 200, `//@version 1.2.3`, SHA-256 `ED85ABD628DDD0129A0827F0706DCB29FF86E88B8129F6E9F19115904D0B9F7F`로 로컬과 일치.
+- `main` compat 업데이트 URL: HTTP 200, `//@version 4.0.31`, SHA-256 `F3AEB7334416C0811EC70A5EC8366BE605B0A383F01592DD5A4AFF2AF9E2EE7A`로 로컬과 일치.
+- 초기 exact `main` v1 raw는 GitHub CDN `Source-Age: 285` 캐시로 1.2.2를 반환했다. `refs/heads/main`에서 즉시 1.2.3을 확인한 뒤 캐시 만료 후 exact 업데이트 URL을 다시 요청해 최신 헤더와 해시로 확인했다.
