@@ -92,4 +92,14 @@
 
 ## 원격 배포 검증
 
-- 배포 후 커밋 고정 raw URL과 실제 `main` 업데이트 URL의 버전·SHA-256을 로컬 파일과 대조한다.
+- 배포 커밋: `4322e29717216798c9fa004d7a2242df9acd5d94`
+- 최종 확인 시각: `2026-07-15 09:12:59 KST`
+- `origin/main`이 배포 커밋을 가리키는 것을 확인했다.
+- 커밋 고정 v1 raw: HTTP 200, `//@version 1.2.4`, SHA-256 `49F0AE38F1270855C4FF51E3B99AA242CA2393A1EAAB68D2702AD7481E8B7677`로 로컬과 일치.
+- 커밋 고정 local raw: HTTP 200, `//@version 1.2.4`, SHA-256 `49F0AE38F1270855C4FF51E3B99AA242CA2393A1EAAB68D2702AD7481E8B7677`로 로컬과 일치.
+- 커밋 고정 compat raw: HTTP 200, `//@version 4.0.32`, SHA-256 `B366612CCBD296AFA00477A62A4C12E77F485831EF05B648D2730E6C765ED9B5`로 로컬과 일치.
+- `main` v1 업데이트 URL: HTTP 200, `//@version 1.2.4`, SHA-256 `49F0AE38F1270855C4FF51E3B99AA242CA2393A1EAAB68D2702AD7481E8B7677`로 로컬과 일치.
+- `main` local raw: HTTP 200, `//@version 1.2.4`, SHA-256 `49F0AE38F1270855C4FF51E3B99AA242CA2393A1EAAB68D2702AD7481E8B7677`로 로컬과 일치.
+- `main` compat 업데이트 URL: HTTP 200, `//@version 4.0.32`, SHA-256 `B366612CCBD296AFA00477A62A4C12E77F485831EF05B648D2730E6C765ED9B5`로 로컬과 일치.
+- Risu의 0–512 byte 버전 확인 방식도 v1 `1.2.4`, compat `4.0.32`를 반환했다.
+- 초기 exact `main` v1 raw는 GitHub CDN `Source-Age: 137` 캐시로 1.2.3을 반환했다. `refs/heads/main`에서 즉시 1.2.4를 확인했고, `Source-Age: 283` 뒤 캐시가 만료되어 `X-Cache: MISS`, `Source-Age: 0`과 최신 해시로 다시 검증했다.
