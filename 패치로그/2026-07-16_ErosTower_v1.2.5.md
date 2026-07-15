@@ -80,3 +80,11 @@
 ## 원격 배포 검증
 
 - 배포 후 커밋 고정 raw URL과 실제 `main` 업데이트 URL의 버전, SHA-256, cache header를 로컬 파일과 대조한다.
+- 릴리스 커밋: `af7bc0b5c14d09dfc0b9ccd3ed3d49ca7354af33`
+- 검증 시각: `2026-07-16 04:26:59 KST`
+- 커밋 고정 raw 3개와 실제 `main` raw 3개 모두 HTTP 200, 버전, SHA-256이 로컬 배포 후보와 일치했다.
+- `main/ErosTower.v1.update.js`는 기존 `1.2.4` CDN 객체가 `Source-Age: 299`까지 유지된 뒤 `2026-07-16 04:26:40 KST`에 `1.2.5`, `X-Cache: MISS`로 갱신됐다. 이후 재검증에서도 새 ETag와 SHA-256을 반환했다.
+- 원격 `main` 릴리스 파일 SHA-256:
+  - `ErosTower.v1.update.js`: `8063F68F3F1B1EA9F44208A29C3D01505238E3E31103D0222DBCE5F560A92C0F`
+  - `☸에로스 타워.js`: `8063F68F3F1B1EA9F44208A29C3D01505238E3E31103D0222DBCE5F560A92C0F`
+  - `ErosTower.update.js`: `22141B5E47B0E2468C2796FEC8187DFAB9536E38905705CA8292B9C9FCEACFC5`
