@@ -87,7 +87,8 @@
 
 ## 되돌림
 
-- 직전 배포 채널 3개 파일 백업: `../백업/ErosTower_before_v1.2.4_release_20260715-085455/`
+- 직전 원격 배포 기준: git commit `47bb105a88fcc6608b9fb029c70630defc712ad5`
+- 1.2.4 세 채널 동기화 직전 작업본·기존 채널 백업: `../백업/ErosTower_before_v1.2.4_release_20260715-085455/`
 - 앨범·인물 연속성 수정 직전 기준본: `../pre_apply_backups/1.2.3-album-metadata-character-continuity-20260715-085057/ErosTower.v1.update.before.js`
 
 ## 원격 배포 검증
