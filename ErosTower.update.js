@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.2.5
+//@display-name ☸Eros Tower 1.2.6
 //@api 3.0
-//@version 4.0.33
+//@version 4.0.34
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -42,19 +42,19 @@
 //@arg et_provider_keys_json string Provider API keys JSON
 
 /**
- * Eros Tower 1.2.5
+ * Eros Tower 1.2.6
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.2.5 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.2.6 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.2.5';
+  const VERSION = '1.2.6';
   const PREFIX = 'eros_tower_v02:';
   const LEGACY_STORAGE_PREFIXES = Object.freeze(['eros_tower_v01:']);
   const MASKED_SECRET = '*****';
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.2.5`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.2.6`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -87,6 +87,7 @@
   const PSYCHE_SOURCE_ANNOTATION_REPAIR_RATIO = 0.5;
   const STATE_COMMIT_HEARTBEAT_MS = 10000;
   const STATE_COMMIT_FAST_RETRY_WINDOW_MS = 20000;
+  const STARTUP_SAVED_ASSISTANT_RECOVERY_ENABLED = false;
   const MEMORY_LIFECYCLE_TIERS = Object.freeze(['hot', 'warm', 'cold', 'archived', 'disputed']);
   const MAX_RECALL_TRACE = 8;
   const MAX_INJECTION_TRACE = 8;
@@ -106,6 +107,11 @@
     { index: 7, label: '초장편', englishLabel: 'very long-form', instruction: 'Write at least 9000 words.', scale: 'Very long-form: prepare dense continuity, layered character movement, multiple world threads, and long-range setup while preserving knowledge boundaries.' },
   ]);
   const SYSTEM_PATCH_NOTES = Object.freeze([
+    {
+      version: '1.2.6',
+      kind: 'startup-memory-safety-hotfix',
+      summary: 'Stops eager saved-assistant recovery from hydrating full chat/lore/database context during plugin startup, removes the global pluginCustomStorage projection from normal context loads, and leaves saved-assistant reconciliation on the existing demand-driven request and post-response paths.',
+    },
     {
       version: '1.2.5',
       kind: 'provider-preagent-lore-image-settings-stability',
@@ -7427,7 +7433,6 @@ function normalizeAdaptiveQualityState(value) {
       'moduleIntergration',
       'plugins',
       'pluginV2',
-      'pluginCustomStorage',
       'globalChatVariables',
       'templateDefaultVariables',
       'loreBookDepth',
@@ -26811,6 +26816,7 @@ function normalizeAdaptiveQualityState(value) {
   }
 
   function scheduleStartupSavedAssistantRecovery() {
+    if (!STARTUP_SAVED_ASSISTANT_RECOVERY_ENABLED) return;
     if (Runtime.storageResetInProgress) {
       const resetPromise = Runtime.storageResetPromise;
       if (resetPromise && typeof resetPromise.then === 'function') resetPromise.then(() => scheduleStartupSavedAssistantRecovery()).catch(() => {});
@@ -33631,6 +33637,20 @@ function normalizeAdaptiveQualityState(value) {
               && compact.afterRequestTimings?.stateHydrateMs === 22
               && compact.afterRequestTimings?.residentPipelineMs === 33
               && compact.afterRequestTimings?.foregroundTotalMs === 44,
+          };
+        },
+        testStartupMemorySafetyContract: () => {
+          const contextSource = String(loadScopeAndContext);
+          const startupSource = String(scheduleStartupSavedAssistantRecovery);
+          const requestSource = String(beforeRequest);
+          const maintenanceSource = String(schedulePostResponseStateMaintenance);
+          return {
+            eagerStartupRecoveryDisabled: STARTUP_SAVED_ASSISTANT_RECOVERY_ENABLED === false,
+            globalPluginStorageExcludedFromContextProjection: !/["']pluginCustomStorage["']/.test(contextSource),
+            startupGuardPrecedesContextHydration: startupSource.indexOf('if (!STARTUP_SAVED_ASSISTANT_RECOVERY_ENABLED) return;') >= 0
+              && startupSource.indexOf('if (!STARTUP_SAVED_ASSISTANT_RECOVERY_ENABLED) return;') < startupSource.indexOf('loadScopeAndContext'),
+            requestRecoveryRetained: requestSource.includes('recoverSavedAssistantDelta(state, context, conf)'),
+            postResponseRecoveryRetained: maintenanceSource.includes('recoverSavedAssistantDelta(latestState, liveContext, conf'),
           };
         },
         testCurrentConversationAuthority: () => {
