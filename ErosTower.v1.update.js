@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.2.8
+//@display-name ☸Eros Tower 1.2.9
 //@api 3.0
-//@version 1.2.8
+//@version 1.2.9
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -43,20 +43,20 @@
 //@arg et_image_character_tags_json string User-authored per-character illustration tag registry JSON
 
 /**
- * Eros Tower 1.2.8
+ * Eros Tower 1.2.9
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.2.8 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.2.9 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.2.8';
+  const VERSION = '1.2.9';
   const PREFIX = 'eros_tower_v02:';
   const LEGACY_STORAGE_PREFIXES = Object.freeze(['eros_tower_v01:']);
   const MASKED_SECRET = '*****';
   const PROVIDER_CREDENTIAL_MAX_ENTRIES = 32;
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.2.8`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.2.9`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -152,6 +152,11 @@
     { index: 7, label: '초장편', englishLabel: 'very long-form', instruction: 'Write at least 9000 words.', scale: 'Very long-form: prepare dense continuity, layered character movement, multiple world threads, and long-range setup while preserving knowledge boundaries.' },
   ]);
   const SYSTEM_PATCH_NOTES = Object.freeze([
+    {
+      version: '1.2.9',
+      kind: 'main-dom-lifecycle-and-startup-bridge-hotfix',
+      summary: 'Acquires the Risu main-DOM capability once during plugin initialization so opt-in in-chat launchers mount immediately when enabled later, while startup configuration hydration uses persisted settings without reading the 40 legacy argument overrides.',
+    },
     {
       version: '1.2.8',
       kind: 'agent-settings-persistence-and-nonblocking-startup-hotfix',
@@ -1261,6 +1266,7 @@
     startupInChatToolsUiSyncScheduled: false,
     startupInChatToolsUiSyncCancelled: false,
     startupInChatToolsUiSyncTimer: null,
+    inChatToolsRoot: null,
     activeRequestPhases: 0,
     settingsImportInProgress: false,
     activeSettingsMutations: 0,
@@ -2376,10 +2382,11 @@
     return Object.fromEntries(entries);
   }
 
-  async function getConfig() {
+  async function getConfig(options = {}) {
+    const includeArgumentOverrides = options?.includeArgumentOverrides !== false;
     const [storedConfig, argumentValues] = await Promise.all([
       Storage.get(STORAGE.config, {}),
-      readConfigArgumentValues(),
+      includeArgumentOverrides ? readConfigArgumentValues() : {},
     ]);
     const migration = migrateStoredConfig(storedConfig);
     const stored = migration.config;
@@ -55394,6 +55401,7 @@ function normalizeAdaptiveQualityState(value) {
           const schedulerSource = String(scheduleStartupInChatToolsUiSync);
           const argumentReaderSource = String(readConfigArgumentValues);
           const configSource = String(getConfig);
+          const rootInitializerSource = String(initializeInChatToolsRoot);
           const offGuard = schedulerSource.indexOf('!isGameplayAgentEnabled(conf) && !isCommunicationAgentEnabled(conf)');
           const launcherSync = schedulerSource.indexOf('await syncInChatToolsUi(conf)');
           return {
@@ -55401,9 +55409,13 @@ function normalizeAdaptiveQualityState(value) {
               && !registrationSource.includes('syncInChatToolsUi'),
             optionalLauncherSyncIsDeferred: schedulerSource.includes("setTimeout(() => { run().catch(() => {}); }, 0)"),
             bothResidentsOffSkipLauncherInitialization: offGuard >= 0 && launcherSync > offGuard,
+            startupSkipsLegacyArgumentBridge: schedulerSource.includes('getConfig({ includeArgumentOverrides: false })'),
             argumentBridgeReadsAreBatched: argumentReaderSource.includes('Promise.all')
               && argumentReaderSource.includes('CONFIG_ARGUMENT_NAMES.map'),
             storageAndArgumentsHydrateTogether: configSource.includes('const [storedConfig, argumentValues] = await Promise.all'),
+            mainDomCapabilityIsCachedOnceForBothLaunchers: rootInitializerSource.includes('if (Runtime.inChatToolsRoot) return Runtime.inChatToolsRoot')
+              && String(installGameplayComposerLauncher).includes('initializeInChatToolsRoot()')
+              && String(installCommunicationLauncher).includes('initializeInChatToolsRoot()'),
             eagerSavedAssistantRecoveryRemainsOff: STARTUP_SAVED_ASSISTANT_RECOVERY_ENABLED === false,
           };
         },
@@ -64858,13 +64870,25 @@ function normalizeAdaptiveQualityState(value) {
     if (keyId && active()) Runtime.gameplayLauncherListenerIds.push({ type: 'keydown', id: keyId });
   }
 
+  async function initializeInChatToolsRoot() {
+    if (Runtime.inChatToolsRoot) return Runtime.inChatToolsRoot;
+    if (typeof api.getRootDocument !== 'function') return null;
+    try {
+      const root = await api.getRootDocument();
+      if (root) Runtime.inChatToolsRoot = root;
+      return root || null;
+    } catch (err) {
+      Runtime.lastError = `main DOM initialization: ${err?.message || err}`;
+      return null;
+    }
+  }
+
   async function installGameplayComposerLauncher(conf, epoch = Runtime.gameplayLauncherEpoch) {
     if (!isGameplayAgentEnabled(conf) || !gameplayLauncherLifecycleIsCurrent(epoch)) return { supported: false, disabled: true };
     try {
       let root = Runtime.gameplayLauncherRoot;
       if (!root) {
-        if (typeof api.getRootDocument !== 'function') return { supported: false, reason: 'main-dom-api-unavailable' };
-        root = await api.getRootDocument();
+        root = await initializeInChatToolsRoot();
         if (!gameplayLauncherLifecycleIsCurrent(epoch)) return { supported: false, stale: true };
         if (!root) return { supported: false, reason: 'main-dom-permission-denied' };
         Runtime.gameplayLauncherRoot = root;
@@ -65149,8 +65173,7 @@ function normalizeAdaptiveQualityState(value) {
     try {
       let root = Runtime.communicationLauncherRoot;
       if (!root) {
-        if (typeof api.getRootDocument !== 'function') return { supported: false, reason: 'main-dom-api-unavailable' };
-        root = await api.getRootDocument();
+        root = await initializeInChatToolsRoot();
         if (!communicationLauncherLifecycleIsCurrent(epoch)) return { supported: false, stale: true };
         if (!root) return { supported: false, reason: 'main-dom-permission-denied' };
         Runtime.communicationLauncherRoot = root;
@@ -65258,7 +65281,7 @@ function normalizeAdaptiveQualityState(value) {
       Runtime.startupInChatToolsUiSyncTimer = null;
       try {
         if (Runtime.startupInChatToolsUiSyncCancelled) return;
-        const conf = await getConfig();
+        const conf = await getConfig({ includeArgumentOverrides: false });
         if (Runtime.startupInChatToolsUiSyncCancelled) return;
         if (!isGameplayAgentEnabled(conf) && !isCommunicationAgentEnabled(conf)) return;
         await syncInChatToolsUi(conf);
@@ -65303,6 +65326,7 @@ function normalizeAdaptiveQualityState(value) {
   }
 
   await registerUi();
+  await initializeInChatToolsRoot();
   if (typeof api.onUnload === 'function') {
     await api.onUnload(async () => {
       Runtime.startupInChatToolsUiSyncCancelled = true;
@@ -65329,6 +65353,7 @@ function normalizeAdaptiveQualityState(value) {
       Runtime.communicationJobs = new Map();
       await clearGameplayComposerLauncher().catch(() => {});
       await clearCommunicationLauncher().catch(() => {});
+      Runtime.inChatToolsRoot = null;
     });
   }
   await api.addRisuReplacer('beforeRequest', async (messages, type) => {
