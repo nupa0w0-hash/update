@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.3.2
+//@display-name ☸Eros Tower 1.3.4
 //@api 3.0
-//@version 1.3.2
+//@version 1.3.4
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -43,20 +43,20 @@
 //@arg et_image_character_tags_json string User-authored per-character illustration tag registry JSON
 
 /**
- * Eros Tower 1.3.2
+ * Eros Tower 1.3.4
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.3.2 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.3.4 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.3.2';
+  const VERSION = '1.3.4';
   const PREFIX = 'eros_tower_v02:';
   const LEGACY_STORAGE_PREFIXES = Object.freeze(['eros_tower_v01:', 'eros_tower_game_agent_test_v01:']);
   const MASKED_SECRET = '*****';
   const PROVIDER_CREDENTIAL_MAX_ENTRIES = 32;
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.3.2`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.3.4`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -152,6 +152,36 @@
     { index: 7, label: '초장편', englishLabel: 'very long-form', instruction: 'Write at least 9000 words.', scale: 'Very long-form: prepare dense continuity, layered character movement, multiple world threads, and long-range setup while preserving knowledge boundaries.' },
   ]);
   const SYSTEM_PATCH_NOTES = Object.freeze([
+    {
+      version: '1.3.4',
+      kind: 'coarse-genre-aware-gameplay-categories',
+      summary: 'Groups fine committed labels into broad genre-aware inventories such as Magic, Techniques, Traits, Martial Arts, Ninja Arts, Taoist Arts, Abilities, and one Items inventory while preserving each exact source category as the entry detail badge.',
+    },
+    {
+      version: '1.3.4',
+      kind: 'instant-gameplay-status-controls',
+      summary: 'Keeps the mounted gameplay surface and its listeners alive so tabs, inventory pages, status controls, and skill or item selection repaint through one SafeElement update; slow control measurement and selection persistence continue safely in the background while request-time synchronization preserves the next direct action.',
+    },
+    {
+      version: '1.3.3',
+      kind: 'actor-grounded-gameplay-categories',
+      summary: 'Builds inventory tabs from the selected actor’s committed player-language categoryLabel values, so setting-specific disciplines such as martial arts, techniques, ninjutsu, taijutsu, magic, traits, artifacts, and equipment stay distinct without promoting combat-role tags into categories.',
+    },
+    {
+      version: '1.3.3',
+      kind: 'live-choice-setting-consistency',
+      summary: 'Reloads saved gameplay-advisor settings for panel commands, rechecks them after long character preparation, and refreshes an open panel on advisor save so a stale enabled snapshot cannot generate choices after the user disables them.',
+    },
+    {
+      version: '1.3.3',
+      kind: 'optional-choice-generation-and-direct-special-input',
+      summary: 'Adds an enabled-by-default choice-generation setting for the gameplay advisor and binds a selected skill or item to the next direct Risu input with its requirements, costs, and deterministic outcome contract in either setting.',
+    },
+    {
+      version: '1.3.3',
+      kind: 'active-only-resource-depletion-indicators',
+      summary: 'Hides zero-resource consequences while gauges are above their minimum and shows them as compact tap-to-open warning bubbles only when a resource is actually depleted.',
+    },
     {
       version: '1.3.2',
       kind: 'lazy-current-chat-dashboard-startup',
@@ -1073,7 +1103,7 @@
     synthesis: '앞선 노트를 합성해 메인 모델에 들어갈 최종 RP/소설 작성 계약과 Chronicle을 만듭니다.',
     'state-commit': '사이키 메인입니다. 최종 응답에서 실제 발생한 사건만 canon 관리상태 JSON으로 커밋합니다.',
     'state-aux': '사이키 보조입니다. 오래된 채팅 chunk cold-start 추출처럼 여러 번 호출될 수 있는 작업을 맡습니다. 없어도 됩니다.',
-    [GAMEPLAY_ADVISOR_AGENT_ID]: '장르와 Psyche 확정 상태를 지키며 클릭 가능한 행동·기술·아이템 선택지를 제안하는 수동 호출 입주민 에이전트입니다.',
+    [GAMEPLAY_ADVISOR_AGENT_ID]: '장르와 Psyche 확정 상태를 지키며 선택지를 제안하고, 선택한 기술·아이템을 직접 입력에도 판정·비용과 함께 연결하는 수동 호출 입주민 에이전트입니다.',
     [COMMUNICATION_AGENT_ID]: '알려진 인물과의 1:1 문자·실시간 통화를 짧게 판정하고, 먼저 연락하거나 답하지 않는 선택까지 인물의 성격·상황·지식 경계 안에서 처리합니다.',
     translation: '선택한 번역 프롬프트로 최종 응답을 번역하거나 재작성하는 입주민 에이전트입니다.',
     [GOE_RESIDENT_AGENT_ID]: '선택한 고에양 프롬프트로 최종 출력의 후처리 표현을 다듬는 resident입니다.',
@@ -1284,6 +1314,9 @@
     gameplayComposerListenerRoot: null,
     gameplayComposerListenerIds: [],
     gameplayComposerListenerSession: null,
+    gameplayComposerLiveBinding: null,
+    gameplayComposerRenderEpoch: 0,
+    gameplayComposerPerformanceTrace: [],
     gameplayComposerSnapshot: null,
     gameplayComposerPanelOpen: false,
     gameplayComposerRefreshBusy: false,
@@ -1299,10 +1332,13 @@
     gameplayComposerNoticeKind: 'info',
     gameplayComposerOutputLanguage: 'ko',
     gameplayComposerGenerationBusy: false,
+    gameplayComposerUiFeedbackBusy: false,
     gameplayColdStartConfirm: false,
     gameplayInstructionsEditorOpen: false,
     gameplayComposerMountedData: null,
     gameplayComposerQueuedFastCommand: null,
+    gameplayComposerSelectionSaves: new Map(),
+    gameplayComposerSelectionRevision: 0,
     gameplayInstructionsDraft: '',
     gameplayInstructionsDraftSession: null,
     gameplayActorInputOpen: false,
@@ -1611,6 +1647,11 @@
     Runtime.gameplayComposerPanelScope = '';
     Runtime.gameplayComposerPanelScopeSession = null;
     Runtime.gameplayComposerRefreshBusy = false;
+    Runtime.gameplayComposerUiFeedbackBusy = false;
+    Runtime.gameplayComposerLiveBinding = null;
+    Runtime.gameplayComposerRenderEpoch = Math.max(0, Number(Runtime.gameplayComposerRenderEpoch || 0)) + 1;
+    Runtime.gameplayComposerPerformanceTrace = [];
+    Runtime.gameplayComposerSelectionSaves = new Map();
     Runtime.gameplayActionBusy = false;
     Runtime.gameplayFatalConfirm = null;
     Runtime.inChatPanelOwner = 'none';
@@ -3764,6 +3805,7 @@
       ...(agent.id === GAMEPLAY_ADVISOR_AGENT_ID || fallback?.id === GAMEPLAY_ADVISOR_AGENT_ID ? {
         outputLanguage: normalizeGameplayOutputLanguage(agent.outputLanguage ?? fallback?.outputLanguage),
         customGameplayInstructions: normalizeGameplayCustomInstructions(agent.customGameplayInstructions ?? fallback?.customGameplayInstructions),
+        choicesEnabled: parseBool(agent.choicesEnabled ?? fallback?.choicesEnabled, true) !== false,
       } : {}),
       ...(agent.id === COMMUNICATION_AGENT_ID || fallback?.id === COMMUNICATION_AGENT_ID ? {
         outputLanguage: normalizeGameplayOutputLanguage(agent.outputLanguage ?? fallback?.outputLanguage),
@@ -3886,7 +3928,7 @@
     'When an established actor actively uses an expendable power system, create exactly the supported operating gauge using the source term (for example Arcane, chakra, qi, stamina, focus, faith, ammunition, or energy). Cross-reference the actor\'s established class/rank with an explicit capacity table in the supplied world rules. If a rank table establishes maximum 500, preserve 500 instead of replacing it with a generic mana value. At first preparation only, current may equal the established maximum when no depletion evidence exists; mark that current value as gameplay-bootstrap-inference. Never reset current during manual reprepare.',
     'Do not create every component word as a separate gauge: a formula such as Vitality + Spirit = Arcane establishes Arcane as the spendable result only when the rules say so. Choose the operating gauge from the actor and world: Arcane for an Arcane system, chakra for chakra users, qi for wuxia/qi users, spirit for spiritual systems, magic/mana only for a magical actor when no more specific term exists, energy for technological actors, and stamina for ordinary physical actors. Never add several familiar resource names when one supported operating gauge is enough.',
     'Preserve an established zero-resource consequence in depletionEffect (for example Arcane Exhaustion), and preserve recovery rules in status or evidence when supplied.',
-    'For every ability and inventory entry, use a specific machine kind supported by the source (for example magic, spell, ninjutsu, taijutsu, technique, trait, weapon, artifact, consumable) instead of generic ability/item when the source distinguishes it. Preserve the canonical source name in name and the canonical/source description in description. Always add displayName in the exact player outputLanguage, and add displayDescription in that language whenever a canonical/source description exists. Preserve every established passive, active, conditional, equipped, set, curse, blessing, bonus, penalty, or other special effect in effects as concise player-language strings; never discard an effect merely because description is already present. Also return a concise categoryLabel in that language using the actor/world term (for example 마법, 인술, 체술, 무공, 마도구). These display fields classify and explain an already grounded entry; they must not infer ownership or a power system from its name alone.',
+    'For every ability and inventory entry, use a specific machine kind supported by the source (for example magic, spell, ninjutsu, taijutsu, technique, trait, weapon, artifact, consumable) instead of generic ability/item when the source distinguishes it. Preserve the canonical source name in name and the canonical/source description in description. Always add displayName in the exact player outputLanguage, and add displayDescription in that language whenever a canonical/source description exists. Preserve every established passive, active, conditional, equipped, set, curse, blessing, bonus, penalty, or other special effect in effects as concise player-language strings; never discard an effect merely because description is already present. Also return a concise categoryLabel in that language using the selected actor and world\'s established taxonomy (for example 마법, 인술, 체술, 무공, 마도구). The UI preserves this exact label on the entry while deterministically grouping related fine labels into a broad inventory family; do not replace an established fine label with a generic UI family. Never invent categoryLabel from a combat role, equipment slot, effect, or tag such as attack, defense, support, main weapon, or sub weapon unless the source explicitly defines that term as a real category. These display fields classify and explain an already grounded entry; they must not infer ownership or a power system from its name alone.',
     'Keep ability/item descriptions and evidence concise. An explicit actor focus or named primary equipment is owned evidence; a global compendium or world system alone is not actor ownership.',
     'Return a compact delta for that selected actor. A gameplay.genreProfile delta is allowed only when the supplied setting evidence establishes it.',
     'Do not create scene events, relationships, memories, plot threads, other characters, or consequences merely because this bootstrap ran.',
@@ -3944,6 +3986,7 @@
           ...makeAgent(GAMEPLAY_ADVISOR_AGENT_ID, GAMEPLAY_ADVISOR_NAME, 'gameplay-advisor', GAMEPLAY_ADVISOR_PROMPT, true, 'ollama-kimi-k2-7-code-cloud', 'ollama-local', 'kimi-k2.7-code:cloud'),
           outputLanguage: 'ko',
           customGameplayInstructions: '',
+          choicesEnabled: true,
         },
         {
           ...makeAgent(COMMUNICATION_AGENT_ID, COMMUNICATION_AGENT_NAME, 'communication', COMMUNICATION_AGENT_PROMPT, false, 'ollama-kimi-k2-7-code-cloud', 'ollama-local', 'kimi-k2.7-code:cloud'),
@@ -4110,6 +4153,10 @@
 
   function getGameplayAdvisorAgent(conf) {
     return isGameplayAgentEnabled(conf) ? gameplayAdvisorAgentRecord(conf) : null;
+  }
+
+  function gameplayAdvisorChoicesEnabled(conf) {
+    return parseBool(gameplayAdvisorAgentRecord(conf)?.choicesEnabled, true) !== false;
   }
 
   function communicationAgentRecord(conf) {
@@ -5250,6 +5297,7 @@
       preparedKind: ['ability', 'item'].includes(String(value.preparedKind || '').toLowerCase()) ? String(value.preparedKind).toLowerCase() : '',
       preparedEntryId: slug(value.preparedEntryId || '').slice(0, 96),
       preparedLabel: cleanString(value.preparedLabel, '').slice(0, 120),
+      directInput: value.directInput === true,
       customAction: normalizeGameplayCustomAction(value.customAction),
       label: String(label).slice(0, 120),
       command: cleanString(value.command, label).slice(0, 900),
@@ -7959,26 +8007,19 @@
       context?.currentChat?.meta?.bindedPersona,
       context?.db?.selectedPersona
     );
-    const rawSelectedRefs = activeReference === undefined || activeReference === null
-      ? []
-      : [String(activeReference).trim()].filter(Boolean);
     const selectedPersona = activeReference === undefined || activeReference === null
       ? null
       : findPersonaByReference(list, activeReference);
-    const selectedKeys = new Set([
-      selectedPersona?.id,
-      selectedPersona?.name,
-      selectedPersona?.data?.id,
-      selectedPersona?.data?.name,
-      ...rawSelectedRefs,
-    ].map(normalizeGameplayLookupKey).filter(Boolean));
+    // Mark only the one record that the host reference actually resolves to.
+    // Expanding that record's name/id into a key set made same-name personas,
+    // and numeric references that also matched another persona id, all appear
+    // selected. The cold-start guard then rejected the unchanged actor because
+    // it requires one selected host persona.
+    const selectedPersonaIndex = selectedPersona ? list.indexOf(selectedPersona) : -1;
     return list.map((item, index) => {
       if (!item || typeof item !== 'object') return null;
       const id = firstNonEmpty(item.id, item.key, item.data?.id, `persona-${index}`);
-      const selected = rawSelectedRefs.includes(String(index))
-        || selectedKeys.has(normalizeGameplayLookupKey(id))
-        || [item.name, item.displayName, item.personaName, item.label, item.data?.name]
-          .some(value => selectedKeys.has(normalizeGameplayLookupKey(value)));
+      const selected = index === selectedPersonaIndex;
       const displayCandidates = [
         item.displayName,
         item.nickname,
@@ -9106,6 +9147,45 @@
     };
   }
 
+  function buildGameplayDirectInputAction(state, context = null, actorId = '') {
+    const actor = resolveGameplayActor(state, context, actorId);
+    const customAction = normalizeGameplayCustomAction(state?.gameplay?.customAction);
+    if (!actor || !customAction) return null;
+    const prepared = normalizeGameplayPreparedSpecial(state?.gameplay?.preparedSpecial);
+    const preparedAction = prepared ? resolvePreparedGameplaySpecial(state, context, actor.id) : null;
+    if (prepared && !preparedAction) return null;
+    const base = preparedAction || {};
+    const requirements = normalizeGameplayRequirements(base.requirements);
+    const checkStats = uniqueStrings([
+      ...normalizeStringArray(base.checkStats),
+      ...Object.keys(requirements.stats),
+    ]).map(canonicalGameplayResourceKey).filter(Boolean).slice(0, 8);
+    const directKey = hashString(JSON.stringify({
+      actorId: actor.id,
+      customAction: gameplayCustomActionKey(customAction),
+      preparedSpecial: gameplayPreparedSpecialKey(prepared),
+    }));
+    const action = {
+      ...base,
+      id: `direct-input:${directKey}`,
+      entryId: `direct-${directKey}`,
+      name: customAction.request,
+      label: customAction.request,
+      command: customAction.request,
+      kind: 'context',
+      directInput: true,
+      preparedKind: preparedAction?.kind || '',
+      preparedEntryId: preparedAction?.entryId || '',
+      preparedLabel: preparedAction?.label || '',
+      difficulty: GAMEPLAY_DIFFICULTY_CHANCE[base.difficulty] === undefined ? 'standard' : base.difficulty,
+      checkStats,
+      risk: GAMEPLAY_RISK_LABEL[base.risk] ? base.risk : 'medium',
+      _committed: Boolean(preparedAction),
+    };
+    action.availability = preparedAction?.availability || evaluateGameplayAction(actor, action, state);
+    return { ...action, ...gameplayChoiceProbability(actor, action, preparedAction) };
+  }
+
   function buildGameplayActions(state, context = null, actorId = '') {
     const actor = resolveGameplayActor(state, context, actorId);
     const specialActions = buildGameplaySpecialActions(state, context, actor?.id || actorId);
@@ -9367,6 +9447,7 @@
       preparedKind: action.preparedKind || '',
       preparedEntryId: action.preparedEntryId || '',
       preparedLabel: action.preparedLabel || '',
+      directInput: action.directInput === true,
       customAction: normalizeGameplayCustomAction(state?.gameplay?.customAction),
       label: action.label || action.name,
       command: action.command || action.label || action.name,
@@ -9419,7 +9500,10 @@
     for (let index = messages.length - 1; index >= 0; index -= 1) {
       const message = messages[index];
       if (String(message?.role || '').toLowerCase() !== 'user') continue;
-      return cleanString(firstNonEmpty(message?.id, message?.memo, message?.chatId), '') === pending.id;
+      const messageId = cleanString(firstNonEmpty(message?.id, message?.memo, message?.chatId), '');
+      if (messageId && messageId === pending.id) return true;
+      return pending.directInput === true
+        && cleanString(stringifyContent(message?.content ?? message?.data), '').slice(0, 900) === pending.command;
     }
     return false;
   }
@@ -9435,6 +9519,98 @@
       return { changed: true, pending };
     }
     return { changed: false, pending };
+  }
+
+  function gameplayLatestDirectUserInput(context) {
+    const messages = Array.isArray(context?.messages) ? context.messages : [];
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const message = messages[index];
+      if (!['user', 'human'].includes(String(message?.role || '').toLowerCase())) continue;
+      if (isGameplaySyntheticOpeningUserMessage(message, context)) return null;
+      const command = cleanString(stringifyContent(message?.content ?? message?.data), '').slice(0, 900);
+      return command ? { message, command, index } : null;
+    }
+    return null;
+  }
+
+  function captureGameplayDirectInputForRequest(state, context) {
+    state.gameplay = normalizeGameplayState(state.gameplay);
+    const existingPending = normalizeGameplayPendingAction(state.gameplay.pendingAction);
+    if (existingPending && ['queued', 'dispatched'].includes(existingPending.status)) {
+      return { changed: false, pending: null, skipped: true, reason: 'pending-action-exists' };
+    }
+    const prepared = normalizeGameplayPreparedSpecial(state.gameplay.preparedSpecial);
+    if (!prepared) return { changed: false, pending: null, skipped: true, reason: 'no-prepared-special' };
+    const directInput = gameplayLatestDirectUserInput(context);
+    if (!directInput) return { changed: false, pending: null, skipped: true, reason: 'no-direct-user-input' };
+    const actor = resolveGameplayActor(state, context, prepared.actorId);
+    if (!actor || (prepared.actorId && actor.id !== prepared.actorId)) {
+      return { changed: false, pending: null, skipped: true, reason: 'prepared-actor-mismatch' };
+    }
+    state.gameplay.customAction = normalizeGameplayCustomAction({
+      request: directInput.command,
+      instructions: state.gameplay.userGameplayInstructions,
+      createdAt: nowIso(),
+    });
+    const action = buildGameplayDirectInputAction(state, context, actor.id);
+    if (!action) return { changed: false, pending: null, skipped: true, reason: 'prepared-special-missing' };
+    let pending;
+    if (action.availability?.available === true) {
+      pending = createGameplayPendingAction(state, context, action, actor);
+    } else {
+      const restriction = uniqueStrings(normalizeStringArray(action.availability?.blocked)).join(' · ')
+        || '현재 상태에서는 선택한 스킬 또는 아이템을 사용할 수 없습니다.';
+      pending = normalizeGameplayPendingAction({
+        id: `gameplay-direct-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+        actorId: actor.id,
+        actorName: actor.name,
+        actorSnapshot: buildGameplayActorActionSnapshot(actor, context),
+        kind: 'context',
+        entryId: action.entryId,
+        preparedKind: action.preparedKind,
+        preparedEntryId: action.preparedEntryId,
+        preparedLabel: action.preparedLabel,
+        directInput: true,
+        customAction: state.gameplay.customAction,
+        label: action.label,
+        command: action.command,
+        status: 'dispatched',
+        delivery: 'sent',
+        predictedCosts: [],
+        successChance: 0,
+        outcomeRoll: 100,
+        outcome: 'failure',
+        difficulty: action.difficulty,
+        risk: 'critical',
+        riskText: restriction,
+        probabilityBasis: ['선택 항목 사용 조건 미충족'],
+        createdAt: nowIso(),
+        dispatchedAt: nowIso(),
+        sourceTurn: state?.turn || 0,
+        error: restriction,
+      });
+    }
+    pending = normalizeGameplayPendingAction({
+      ...pending,
+      directInput: true,
+      status: 'dispatched',
+      delivery: 'sent',
+      dispatchedAt: pending?.dispatchedAt || nowIso(),
+    });
+    state.gameplay.pendingAction = pending;
+    state.gameplay.updatedAt = nowIso();
+    return {
+      changed: true,
+      pending,
+      directInput: true,
+      blocked: action.availability?.available !== true,
+    };
+  }
+
+  function syncGameplayIntentForRequest(conf, state, context) {
+    const pendingSync = syncGameplayPendingForRequest(state, context);
+    if (pendingSync.pending || !isGameplayAgentEnabled(conf)) return pendingSync;
+    return captureGameplayDirectInputForRequest(state, context);
   }
 
   function resolveGameplayActionAfterAssistant(state, finalOutput, turn = null) {
@@ -9506,9 +9682,14 @@
       pending.preparedLabel ? `Prepared special: ${pending.preparedKind}/${pending.preparedLabel} (${pending.preparedEntryId}).` : '',
       pending.targetNames.length ? `Targets: ${pending.targetNames.join(', ')}` : 'Targets: resolve only from the visible scene.',
       pending.risk ? `Consequence risk: ${pending.risk}${pending.riskText ? ` — ${pending.riskText}` : ''}.` : '',
-      pending.lethalOverdraw ? 'The user confirmed potentially lethal HP overdraw. Apply death/incapacitation only if the narrated outcome establishes HP at or below zero.' : '',
+      pending.lethalOverdraw
+        ? pending.directInput
+          ? 'This directly submitted action has potentially lethal HP overdraw. Apply death/incapacitation only if the authoritative result and narrated outcome establish HP at or below zero.'
+          : 'The user confirmed potentially lethal HP overdraw. Apply death/incapacitation only if the narrated outcome establishes HP at or below zero.'
+        : '',
       pending.customAction?.request ? `Player custom action request: ${pending.customAction.request}` : '',
       pending.customAction?.instructions ? `Player-authored custom action rules:\n${pending.customAction.instructions}` : '',
+      pending.error ? `Mechanical restriction: ${pending.error}. The selected skill or item cannot succeed unless the visible narrative first resolves that restriction.` : '',
       `Action id: ${pending.id}`,
       'Respect genre constraints and committed abilities/items. Do not invent a power or item. Do not reverse the authoritative roll. Narrate degree, cost, complication, and consequences according to current evidence.',
     ].filter(Boolean);
@@ -10649,6 +10830,7 @@
   }
 
   async function runGameplayAdvisor(conf, context, state, options = {}) {
+    if (!gameplayAdvisorChoicesEnabled(conf)) throw new Error('으아악씨 설정에서 선택지 사용이 미사용으로 되어 있습니다.');
     const agent = getGameplayAdvisorAgent(conf);
     if (!agent) throw new Error('게임플레이 추천 에이전트가 꺼져 있습니다.');
     const runtime = resolveAgentConf(agent, conf);
@@ -37797,6 +37979,9 @@ function normalizeAdaptiveQualityState(value) {
         });
       }
     }
+    const gameplaySelectionOverlay = canPersistState && isGameplayAgentEnabled(conf)
+      ? await settleGameplayComposerSelectionSave(context.scope)
+      : null;
     let state = canPersistState ? await loadState(context.scope, context.mode, conf) : createDefaultState(context.mode);
     let savedAssistantRecovery = { processed: 0, deferred: false, status: transientSession ? 'no-session-transient' : 'not-run' };
     if (canPersistState && !transientSession) {
@@ -37813,8 +37998,9 @@ function normalizeAdaptiveQualityState(value) {
         };
       }
     }
+    if (gameplaySelectionOverlay) applyGameplayComposerSelectionOverlay(state, context, gameplaySelectionOverlay);
     const gameplayIntentSync = isGameplayAgentEnabled(conf)
-      ? syncGameplayPendingForRequest(state, context)
+      ? syncGameplayIntentForRequest(conf, state, context)
       : { changed: false, pending: null, skipped: true, reason: 'gameplay-agent-disabled' };
     let sessionSync = transientSession
       ? {
@@ -37957,7 +38143,10 @@ function normalizeAdaptiveQualityState(value) {
         log('lore sticky scriptstate save failed', err?.message || err);
         return { changed: false, written: 0, deferred: true, reason: err?.message || 'scriptstate-save-failed' };
       });
-    if (canPersistState) await saveState(context.scope, state, conf);
+    if (canPersistState) {
+      await saveState(context.scope, state, conf);
+      if (gameplaySelectionOverlay) clearGameplayComposerSelectionSave(context.scope, gameplaySelectionOverlay);
+    }
     await updateRunProgress(100, '에로스 타워 모델 응답 대기 중', ['전처리 완료. 메인 모델의 응답을 기다립니다.'].concat(preToastLines), notes.some(note => note.error) || memoryRecoverySync?.changed || sessionRewindSync?.changed ? 'warn' : 'info', '전처리 완료', `injection ${String(injection || '').length} chars`);
     const run = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -39279,9 +39468,105 @@ function normalizeAdaptiveQualityState(value) {
     return state;
   }
 
+  function gameplayComposerSelectionSaveMap() {
+    if (!(Runtime.gameplayComposerSelectionSaves instanceof Map)) {
+      Runtime.gameplayComposerSelectionSaves = new Map();
+    }
+    return Runtime.gameplayComposerSelectionSaves;
+  }
+
+  function gameplayComposerSelectionSaveForScope(scope) {
+    const safeScope = cleanString(scope, '');
+    return safeScope ? gameplayComposerSelectionSaveMap().get(safeScope) || null : null;
+  }
+
+  function clearGameplayComposerSelectionSave(scope, expected = null) {
+    const safeScope = cleanString(scope, '');
+    if (!safeScope) return false;
+    const records = gameplayComposerSelectionSaveMap();
+    const current = records.get(safeScope) || null;
+    if (!current || (expected && current !== expected)) return false;
+    records.delete(safeScope);
+    return true;
+  }
+
+  function scheduleGameplayComposerSelectionSave(conf, context, state) {
+    const scope = cleanString(context?.scope, '');
+    if (!scope || context?.noSession || !canPersistStateForContext(context)) return null;
+    const records = gameplayComposerSelectionSaveMap();
+    const revision = Math.max(0, Number(Runtime.gameplayComposerSelectionRevision || 0)) + 1;
+    Runtime.gameplayComposerSelectionRevision = revision;
+    const gameplay = normalizeGameplayState(deepCloneJson(state?.gameplay));
+    const record = {
+      scope,
+      revision,
+      status: 'pending',
+      preparedSpecial: gameplay.preparedSpecial ? deepCloneJson(gameplay.preparedSpecial) : null,
+      customAction: gameplay.customAction ? deepCloneJson(gameplay.customAction) : null,
+      promise: null,
+      error: null,
+    };
+    records.set(scope, record);
+    const stateSnapshot = deepCloneJson(state);
+    record.promise = (async () => {
+      const liveAnchor = await readGameplayComposerChatAnchor();
+      if (liveAnchor && !gameplayComposerAnchorMatchesContext(liveAnchor, context)) {
+        return { saved: false, stale: true };
+      }
+      await saveGameplayStateForContext(conf, context, stateSnapshot, { includeAdvisor: false });
+      return { saved: true, stale: false };
+    })().catch(error => ({ saved: false, stale: false, error }));
+    record.promise.then(result => {
+      if (records.get(scope) !== record) return;
+      if (result?.saved === true || result?.stale === true) {
+        clearGameplayComposerSelectionSave(scope, record);
+        return;
+      }
+      record.status = 'failed';
+      record.error = result?.error || new Error('gameplay selection save failed');
+      Runtime.lastError = `gameplay selection background save: ${record.error?.message || record.error}`;
+      const outputLanguage = gameplayAdvisorOutputLanguage(conf);
+      safeGameplayToast(
+        gameplayUiText(outputLanguage, 'gameAgent'),
+        [gameplayLocalizedErrorMessage(record.error, outputLanguage)],
+        'error',
+        3200,
+      ).catch(() => {});
+    }).catch(() => {});
+    return record;
+  }
+
+  async function settleGameplayComposerSelectionSave(scope) {
+    const safeScope = cleanString(scope, '');
+    if (!safeScope) return null;
+    while (true) {
+      const record = gameplayComposerSelectionSaveForScope(safeScope);
+      if (!record) return null;
+      if (record.status !== 'pending' || !record.promise) return record;
+      await record.promise.catch(() => {});
+      const current = gameplayComposerSelectionSaveForScope(safeScope);
+      if (!current || current === record) return current;
+    }
+    return gameplayComposerSelectionSaveForScope(safeScope);
+  }
+
+  function applyGameplayComposerSelectionOverlay(state, context, record) {
+    if (!state || !record || cleanString(context?.scope, '') !== cleanString(record.scope, '')) return false;
+    state.gameplay = normalizeGameplayState(state.gameplay);
+    state.gameplay.preparedSpecial = record.preparedSpecial
+      ? normalizeGameplayPreparedSpecial(deepCloneJson(record.preparedSpecial))
+      : null;
+    state.gameplay.customAction = record.customAction
+      ? normalizeGameplayCustomAction(deepCloneJson(record.customAction))
+      : null;
+    state.gameplay.updatedAt = nowIso();
+    return true;
+  }
+
   async function persistGameplayPendingFromLatest(conf, context, state, action) {
     if (!context?.scope || context?.noSession || !canPersistStateForContext(context)) throw new Error('현재 채팅 세션에는 게임 행동을 저장할 수 없습니다.');
     const requestedActionId = cleanString(action?.id, '');
+    const requestedDirectInput = action?.directInput === true;
     const requestedActor = resolveGameplayActor(state, context);
     const requestedActorId = firstNonEmpty(state?.gameplay?.activeActorId, requestedActor?.id);
     const storedActiveActorId = gameplayStoredActiveActorId(state, requestedActor);
@@ -39306,7 +39591,12 @@ function normalizeAdaptiveQualityState(value) {
       if (!actor) throw new Error('선택한 행동 인물을 최신 Psyche 상태에서 찾지 못했습니다.');
       latest.gameplay.activeActorId = storedActiveActorId;
       latest.gameplay.selectedTargetIds = [];
-      const latestAction = buildGameplayActions(latest, context, actor.id).find(item => item.id === requestedActionId);
+      const rebuiltDirectInput = requestedDirectInput
+        ? buildGameplayDirectInputAction(latest, context, actor.id)
+        : null;
+      const latestAction = requestedDirectInput
+        ? (rebuiltDirectInput?.id === requestedActionId ? rebuiltDirectInput : null)
+        : buildGameplayActions(latest, context, actor.id).find(item => item.id === requestedActionId);
       if (!latestAction) throw new Error('선택한 행동을 최신 Psyche 상태에서 찾지 못했습니다.');
       if (!latestAction.availability?.available) {
         throw new Error((latestAction.availability?.blocked || []).join(' · ') || '최신 상태에서는 이 행동을 사용할 수 없습니다.');
@@ -40694,6 +40984,7 @@ function normalizeAdaptiveQualityState(value) {
       const translationSourceParallelEnabled = agent.translationSourceParallelEnabled === true;
       const translationOutputTarget = normalizeTranslationOutputTarget(agent.translationOutputTarget);
       const gameplayOutputLanguage = normalizeGameplayOutputLanguage(agent.outputLanguage);
+      const gameplayChoicesEnabled = parseBool(agent.choicesEnabled, true) !== false;
       const reasoningRuntime = {
         provider: provider?.provider || conf.provider,
         providerId: provider?.id || agent.providerId || conf.activeProviderId || '',
@@ -40736,8 +41027,12 @@ function normalizeAdaptiveQualityState(value) {
               <div class="et-note">문자와 통화 대사만 이 언어로 만듭니다. 인물 지식·관계·세계 사실의 판정과 저장은 에로스 타워/Psyche가 담당합니다.</div>` : ''}
               ${agent.id === GAMEPLAY_ADVISOR_AGENT_ID ? `<div class="et-row">
                 ${selectField('사용 언어', `et-agent-output-language-${agent.id}`, gameplayOutputLanguage, gameplayOutputLanguageOptions(), 'et-agent-output-language', `data-agent-id="${escHtml(agent.id)}"`)}
+                ${selectField('선택지 사용 여부', `et-agent-choices-enabled-${agent.id}`, boolString(gameplayChoicesEnabled), [
+                  { value: 'true', label: '사용' },
+                  { value: 'false', label: '미사용' },
+                ], 'et-agent-choices-enabled', `data-agent-id="${escHtml(agent.id)}"`)}
               </div>
-              <div class="et-note">선택지와 스킬·아이템의 표시 이름 및 설명을 이 언어로 만듭니다. 채팅별 게임 진행 지침은 채팅창의 으아악씨 패널에서 📝 버튼으로 저장합니다.</div>` : ''}
+              <div class="et-note">사용은 장면 선택지 3개를 만들고, 미사용은 선택지 생성과 리롤을 끕니다. 어느 쪽이든 패널에서 고른 스킬·아이템은 다음 Risu 직접 입력에 비용·조건·확률과 함께 적용됩니다.</div>` : ''}
               ${agent.id === IMAGE_RESIDENT_AGENT_ID ? `<div class="et-row et-row-4">
                 ${inputField('Temperature', `et-agent-temperature-${agent.id}`, 'number', String(agent.temperature ?? conf.temperature), '0.25', `class="et-agent-temperature" data-agent-id="${escHtml(agent.id)}"`)}
                 ${inputField('Max Tokens', `et-agent-max-tokens-${agent.id}`, 'number', String(agent.maxTokens ?? conf.maxTokens), '4096', `class="et-agent-max-tokens" data-agent-id="${escHtml(agent.id)}"`)}
@@ -44899,6 +45194,9 @@ function normalizeAdaptiveQualityState(value) {
         await withBusy(event.currentTarget, async () => {
           const agent = readAgentConfigFromUI(conf, agentId);
           await saveCurrent((text, kind) => setStatus(agentId, text, kind), `${agent.name || agent.id} 설정 저장 완료. 다음 요청부터 적용됩니다.`);
+          if (agentId === GAMEPLAY_ADVISOR_AGENT_ID && Runtime.gameplayComposerPanelOpen === true) {
+            scheduleGameplayComposerPanelRefresh(80);
+          }
         }, `et-agent-status-${agentId}`);
       });
     });
@@ -45546,6 +45844,9 @@ function normalizeAdaptiveQualityState(value) {
       ...([GAMEPLAY_ADVISOR_AGENT_ID, COMMUNICATION_AGENT_ID].includes(agentId) ? {
         outputLanguage: normalizeGameplayOutputLanguage(value('et-agent-output-language', base.outputLanguage || 'ko')),
       } : {}),
+      ...(agentId === GAMEPLAY_ADVISOR_AGENT_ID ? {
+        choicesEnabled: value('et-agent-choices-enabled', boolString(parseBool(base.choicesEnabled, true) !== false)) === 'true',
+      } : {}),
       temperature: parseUserNumberSetting(value('et-agent-temperature', base.temperature ?? conf.temperature), base.temperature ?? conf.temperature),
       maxTokens: parseUserNumberSetting(value('et-agent-max-tokens', base.maxTokens ?? conf.maxTokens), base.maxTokens ?? conf.maxTokens),
       contextWindow: agentId === IMAGE_RESIDENT_AGENT_ID ? 0 : parseUserNumberSetting(value('et-agent-context-window', base.contextWindow ?? conf.contextWindow), base.contextWindow ?? conf.contextWindow),
@@ -46190,6 +46491,7 @@ function normalizeAdaptiveQualityState(value) {
         version: VERSION,
         scope: context?.scope || Runtime.lastScope || '',
         report: () => buildDiagnosticsReport(conf, context, state, snapshots, backup),
+        gameplayComposerPerformance: () => deepCloneJson(Runtime.gameplayComposerPerformanceTrace || []),
         snapshotsCount: () => Array.isArray(snapshots) ? snapshots.length : 0,
         stateSize: () => {
           try { return JSON.stringify(state || {}).length; } catch (_) { return 0; }
@@ -46460,6 +46762,144 @@ function normalizeAdaptiveQualityState(value) {
               && !String(runStateCommit).includes('bootstrapJsonRepair'),
           };
         },
+        testGameplayInstantStatusControls: async () => {
+          const originalSaveGameplayStateForContext = saveGameplayStateForContext;
+          const originalReadGameplayComposerChatAnchor = readGameplayComposerChatAnchor;
+          const originalSelectionSaves = Runtime.gameplayComposerSelectionSaves;
+          const originalSelectionRevision = Runtime.gameplayComposerSelectionRevision;
+          const originalPanelRuntime = {
+            inChatPanelOwner: Runtime.inChatPanelOwner,
+            inChatPanelEpoch: Runtime.inChatPanelEpoch,
+            inChatPanelSession: Runtime.inChatPanelSession,
+            gameplayComposerPanelSession: Runtime.gameplayComposerPanelSession,
+            gameplayComposerPanelOpen: Runtime.gameplayComposerPanelOpen,
+            gameplayComposerLiveBinding: Runtime.gameplayComposerLiveBinding,
+            gameplayComposerRenderEpoch: Runtime.gameplayComposerRenderEpoch,
+            gameplayComposerPerformanceTrace: Runtime.gameplayComposerPerformanceTrace,
+          };
+          const scope = `instant-status-controls-${Date.now().toString(36)}`;
+          let releaseSave = null;
+          try {
+            Runtime.gameplayComposerSelectionSaves = new Map();
+            Runtime.gameplayComposerSelectionRevision = 0;
+            readGameplayComposerChatAnchor = async () => null;
+            const context = { scope, mode: 'rp', noSession: false, db: { personas: [] }, messages: [] };
+            const state = createDefaultState('rp');
+            state.gameplay.preparedSpecial = normalizeGameplayPreparedSpecial({
+              kind: 'ability', entryId: 'instant-skill', label: '즉시 기술', actorId: 'character:instant', preparedAt: nowIso(),
+            });
+            let saveCalls = 0;
+            const saveGate = new Promise(resolve => { releaseSave = resolve; });
+            saveGameplayStateForContext = async (_conf, _context, target) => {
+              saveCalls += 1;
+              await saveGate;
+              return target;
+            };
+            const pendingRecord = scheduleGameplayComposerSelectionSave(DEFAULT_CONFIG, context, state);
+            const returnedBeforeSave = pendingRecord?.status === 'pending' && saveCalls === 0;
+            releaseSave();
+            const successfulSave = await pendingRecord.promise;
+            await Promise.resolve();
+            const successfulRecordCleared = successfulSave?.saved === true
+              && gameplayComposerSelectionSaveForScope(scope) === null;
+
+            state.gameplay.preparedSpecial = normalizeGameplayPreparedSpecial({
+              kind: 'item', entryId: 'instant-item', label: '즉시 아이템', actorId: 'character:instant', preparedAt: nowIso(),
+            });
+            saveGameplayStateForContext = async () => { throw new Error('simulated selection save failure'); };
+            const failedRecord = scheduleGameplayComposerSelectionSave(DEFAULT_CONFIG, context, state);
+            await failedRecord.promise;
+            await Promise.resolve();
+            const settledRecord = await settleGameplayComposerSelectionSave(scope);
+            const overlayState = createDefaultState('rp');
+            const overlayApplied = applyGameplayComposerSelectionOverlay(overlayState, context, settledRecord);
+            let surfacePatchResult = null;
+            let surfacePainted = '';
+            let surfacePaintReturnedBeforeMeasurement = false;
+            let releaseSurfaceMeasure = null;
+            try {
+              const surfaceSession = claimInChatPanelOwner('gameplay');
+              Runtime.gameplayComposerPanelSession = surfaceSession;
+              Runtime.gameplayComposerPanelOpen = true;
+              const fakeSurface = {
+                setInnerHTML: async value => { surfacePainted = value; },
+                getBoundingClientRect: () => new Promise(resolve => {
+                  releaseSurfaceMeasure = () => resolve({ left: 0, right: 200, top: 0, bottom: 120 });
+                }),
+              };
+              Runtime.gameplayComposerLiveBinding = {
+                session: surfaceSession,
+                root: { getElementById: async () => null },
+                conf: DEFAULT_CONFIG,
+                viewModel: { controls: [] },
+                entries: [],
+                controlElements: [],
+                controlBounds: [],
+                surfaceElement: fakeSurface,
+                surfaceRect: { left: 0, right: 200, top: 0, bottom: 120 },
+                measureEpoch: 0,
+              };
+              surfacePatchResult = await patchGameplayComposerPanelSurface(
+                { controls: [] },
+                DEFAULT_CONFIG,
+                surfaceSession,
+                `<div id="${gameplayComposerSurfaceId()}"><span>instant surface</span></div>`,
+              );
+              await Promise.resolve();
+              surfacePaintReturnedBeforeMeasurement = surfacePatchResult?.fastSurface === true
+                && typeof releaseSurfaceMeasure === 'function';
+              if (releaseSurfaceMeasure) releaseSurfaceMeasure();
+              await Promise.resolve();
+            } finally {
+              Object.assign(Runtime, originalPanelRuntime);
+            }
+            const bindSource = String(bindGameplayComposerPanel);
+            const handlerSource = String(handleGameplayComposerCommand);
+            const mountSource = String(mountGameplayComposerPanel);
+            const remappedInventoryBounds = gameplayComposerRemapCachedBounds({
+              viewModel: { tabs: [{ kind: 'ability', active: true }] },
+              controlBounds: [{
+                entry: { slot: 'action-row', command: 'select-action:old', value: 'old' },
+                rect: { left: 1, right: 20, top: 2, bottom: 22 },
+              }],
+            }, [{ slot: 'action-row', command: 'select-action:new', value: 'new' }], {
+              tabs: [{ kind: 'item', active: true }],
+            });
+            return {
+              selectionSaveStartsWithoutBlockingTheTap: returnedBeforeSave && saveCalls === 1,
+              successfulBackgroundSelectionSaveClearsItsOverlay: successfulRecordCleared,
+              failedBackgroundSaveRetainsTheExactRequestOverlay: failedRecord?.status === 'failed'
+                && overlayApplied
+                && overlayState.gameplay.preparedSpecial?.entryId === 'instant-item',
+              cachedControlTapHasNoPerTapDomMeasurement: bindSource.includes('pointerStart = { ...start, control: cachedBound.entry }')
+                && !bindSource.includes('gameplayComposerControlBounds([cachedElement])'),
+              pureUiCommandsUseFastMountWithoutChatRoundTrips: handlerSource.includes('{ fastUi: true }')
+                && mountSource.includes('if (!fastUi && !await gameplayComposerPanelSessionMatchesCurrentChat(session))'),
+              fastUiPaintsTheExistingSurfaceWithoutAFullPanelRemount: mountSource.indexOf('patchGameplayComposerPanelSurface') >= 0
+                && mountSource.indexOf('patchGameplayComposerPanelSurface') < mountSource.indexOf("setOwnedChatPanel('gameplay'")
+                && String(patchGameplayComposerPanelSurface).includes('binding.surfaceElement.setInnerHTML(innerHtml)')
+                && String(patchGameplayComposerPanelSurface).includes('refreshGameplayComposerLiveBinding(binding, entries, measureEpoch).catch'),
+              slowHostMeasurementsRunAfterTheFastPaint: String(patchGameplayComposerPanelSurface).indexOf('recordGameplayComposerPerformance')
+                < String(patchGameplayComposerPanelSurface).indexOf('refreshGameplayComposerLiveBinding(binding, entries, measureEpoch).catch')
+                && String(recordGameplayComposerPerformance).includes('gameplayComposerPerformanceTrace'),
+              fastSurfacePatchActuallyReusesTheMountedElement: surfacePatchResult?.fastSurface === true
+                && surfacePainted === '<span>instant surface</span>'
+                && surfacePaintReturnedBeforeMeasurement,
+              compatibleInventoryGridsRemainClickableWhileRemeasuring: remappedInventoryBounds[0]?.entry?.value === 'new'
+                && remappedInventoryBounds[0]?.rect?.right === 20,
+              requestBoundarySettlesAndOverlaysAnUnfinishedSelectionSave: String(beforeRequest).includes('settleGameplayComposerSelectionSave(context.scope)')
+                && String(beforeRequest).includes('applyGameplayComposerSelectionOverlay(state, context, gameplaySelectionOverlay)'),
+            };
+          } finally {
+            if (releaseSave) releaseSave();
+            saveGameplayStateForContext = originalSaveGameplayStateForContext;
+            readGameplayComposerChatAnchor = originalReadGameplayComposerChatAnchor;
+            clearGameplayComposerSelectionSave(scope);
+            Runtime.gameplayComposerSelectionSaves = originalSelectionSaves;
+            Runtime.gameplayComposerSelectionRevision = originalSelectionRevision;
+            Object.assign(Runtime, originalPanelRuntime);
+          }
+        },
         testGameAgentComposerUiContract: async () => {
           const runtimeBefore = {
             tab: Runtime.gameplayComposerActiveTab,
@@ -46499,7 +46939,7 @@ function normalizeAdaptiveQualityState(value) {
                 rank: { label: '숙련도', value: '상급', kind: 'rank' },
               },
               abilities: [
-                { id: 'dash', name: 'Clockwork Dash', displayName: '태엽 질주', displayLanguage: 'ko', kind: 'technique', categoryLabel: '기계술', status: 'learned', effects: ['첫 이동 판정 +15%'], costs: [{ resource: 'mp', amount: 4 }] },
+                { id: 'dash', name: 'Clockwork Dash', displayName: '태엽 질주', displayLanguage: 'ko', kind: 'technique', categoryLabel: '기계술', status: 'learned', tags: ['attack', 'defense', 'mobility'], effects: ['첫 이동 판정 +15%'], costs: [{ resource: 'mp', amount: 4 }] },
                 { id: 'sealed', name: 'Sealed Art', displayName: '봉인된 기술', displayLanguage: 'ko', kind: 'technique', categoryLabel: '기계술', status: 'locked', costs: [{ resource: 'mp', amount: 20 }] },
               ],
               inventory: [{ id: 'rope', name: 'Silk Rope', displayName: '비단 밧줄', displayLanguage: 'ko', kind: 'tool', categoryLabel: '도구', quantity: 1, effects: ['등반 판정 +10%', '추락 피해 1회 경감'] }],
@@ -46845,12 +47285,13 @@ function normalizeAdaptiveQualityState(value) {
               onlyPopulatedCategoriesRenderAsCompactIcons: view.tabs.length === 3
                 && view.tabs.every(tab => tab.total > 0 && tab.glyph)
                 && view.tabs.some(tab => tab.kind === 'context' && tab.total === GAMEPLAY_ADVISOR_SUGGESTION_MAX)
-                && view.tabs.some(tab => tab.kind === 'ability' && tab.id === 'ability' && tab.label === '스킬' && tab.total === 2)
-                && view.tabs.some(tab => tab.kind === 'item' && tab.id === 'item' && tab.label === '인벤토리' && tab.total === 1)
+                && view.tabs.some(tab => tab.kind === 'ability' && tab.label === '기술' && tab.total === 2)
+                && view.tabs.some(tab => tab.kind === 'item' && tab.label === '아이템' && tab.total === 1)
+                && !view.tabs.some(tab => /공격|방어|attack|defense/i.test(tab.label))
                 && (categoryNavHtml.match(/data-gameplay-category-icon(?:\s|>)/g) || []).length === view.tabs.length
                 && /data-gameplay-category-icon[^>]*width:26px[^>]*height:26px/.test(categoryNavHtml)
                 && view.tabs.some(tab => tab.kind === 'context' && tab.glyph === '🎯')
-                && view.tabs.some(tab => tab.kind === 'ability' && tab.glyph === '✨')
+                && view.tabs.some(tab => tab.kind === 'ability' && tab.glyph === '⚡')
                 && view.tabs.some(tab => tab.kind === 'item' && tab.glyph === '🎒')
                 && !/<small\b/i.test(categoryNavHtml)
                 && !/>\s*\d+\s*</.test(categoryNavHtml)
@@ -47208,18 +47649,25 @@ function normalizeAdaptiveQualityState(value) {
                 && handlerSource.includes("value.startsWith('select-action:')")
                 && handlerSource.includes('return { fast: true }')
                 && String(mountGameplayComposerPanel).includes('Runtime.gameplayComposerMountedData = { session, conf, context, state }')
-                && bindSource.includes('const cachedBound = controlBounds.find')
-                && bindSource.includes('gameplayComposerControlBounds([cachedElement])')
+                && bindSource.includes('const cachedBound = binding.controlBounds.find')
+                && bindSource.includes('pointerStart = { ...start, control: cachedBound.entry }')
+                && !bindSource.includes('gameplayComposerControlBounds([cachedElement])')
                 && bindSource.includes('await refreshControlBounds().catch')
-                && bindSource.includes('controlBounds = next')
-                && !bindSource.includes('if (next.length) controlBounds = next')
+                && bindSource.includes('binding.controlBounds = next')
+                && !bindSource.includes('if (next.length) binding.controlBounds = next')
                 && bindSource.includes('if (pointerDownRefresh) await pointerDownRefresh.catch')
                 && bindSource.includes('const control = start?.control')
                 && String(queueGameplayComposerFastCommand).includes('Runtime.gameplayComposerQueuedFastCommand')
                 && scheduleFastSource.includes('const currentSession = Runtime.gameplayComposerPanelSession')
                 && scheduleFastSource.includes('queued.panelSession === currentSession')
+                && handlerSource.includes('{ fastUi: true }')
+                && String(mountGameplayComposerPanel).includes("const fastUi = options?.fastUi === true")
+                && String(mountGameplayComposerPanel).includes('patchGameplayComposerPanelSurface(viewModel, conf, session, html)')
+                && String(patchGameplayComposerPanelSurface).includes('binding.surfaceElement.setInnerHTML(innerHtml)')
+                && String(patchGameplayComposerPanelSurface).includes('gameplayComposerRemapCachedBounds(binding, entries, viewModel)')
                 && String(clearGameplayComposerListeners).includes('await Promise.all(listeners.map')
-                && bindSource.includes('await Promise.all(pending.map'),
+                && bindSource.includes('await Promise.all(pending.map')
+                && bindSource.includes('const [pointerDownId, pointerUpId, pointerCancelId, keyId] = await Promise.all'),
               gameplayTextInputsUseRealPromptWithoutUnsafeInlineEditors: String(promptGameplayText).includes('globalThis.prompt')
                 && handlerSource.includes("'gameplayInstructionsPrompt'")
                 && handlerSource.includes("'customActionPrompt'")
@@ -47975,7 +48423,7 @@ function normalizeAdaptiveQualityState(value) {
               ));
               const canonicalTextHidden = expected.language === 'en' || !['Canonical spark description.', 'Canonical robe description.', 'Moon Thread', 'Moon Glass']
                 .some(text => preparedHtml.includes(text));
-              return [expected.language, view.outputLanguage === expected.language && state.gameplay.outputLanguage === expected.language && initialHtml.includes(expected.select) && unpreparedHtml.includes(expected.hint) && unpreparedHtml.includes('data-gameplay-non-persona-select-hint') && [expected.details, expected.status, expected.conditions].every(text => preparedHtml.includes(text)) && playerFacingSheetText.every(text => preparedHtml.includes(text)) && view.tabs.some(tab => tab.kind === 'ability' && tab.id === 'ability' && tab.label === gameplayUiText(expected.language, 'skills') && tab.total === 2) && view.tabs.some(tab => tab.kind === 'item' && tab.id === 'item' && tab.label === gameplayUiText(expected.language, 'inventory') && tab.total === 2) && specialActions.some(action => action.kind === 'item' && action.categoryLabel === expected.equipment) && customCategoriesCorrect && expectedActionLabels.every(label => specialActions.some(action => action.label === label)) && fallbackCommandsLocalized && canonicalTextHidden && gameplayUiText(expected.language, 'choicesFailed', { reason: 'test' }) === expected.failed];
+              return [expected.language, view.outputLanguage === expected.language && state.gameplay.outputLanguage === expected.language && initialHtml.includes(expected.select) && unpreparedHtml.includes(expected.hint) && unpreparedHtml.includes('data-gameplay-non-persona-select-hint') && [expected.details, expected.status, expected.conditions].every(text => preparedHtml.includes(text)) && playerFacingSheetText.every(text => preparedHtml.includes(text)) && view.tabs.some(tab => tab.kind === 'ability' && tab.label === expected.magic && tab.total === 1) && view.tabs.some(tab => tab.kind === 'ability' && tab.label === gameplayBroadCategoryLabel('ability', expected.language) && tab.total === 1) && view.tabs.filter(tab => tab.kind === 'item').length === 1 && view.tabs.some(tab => tab.kind === 'item' && tab.label === gameplayBroadCategoryLabel('item', expected.language) && tab.total === 2) && specialActions.some(action => action.kind === 'item' && action.categoryLabel === expected.equipment) && customCategoriesCorrect && expectedActionLabels.every(label => specialActions.some(action => action.label === label)) && fallbackCommandsLocalized && canonicalTextHidden && gameplayUiText(expected.language, 'choicesFailed', { reason: 'test' }) === expected.failed];
             });
             return Object.fromEntries(results);
           } finally {
@@ -48055,9 +48503,9 @@ function normalizeAdaptiveQualityState(value) {
             const advisorContextMatches = gameplayAdvisorMatchesContext(target, fakeContext, selectedActor, target.gameplay.advisor);
             const view = buildGameplayComposerViewModel({ ...DEFAULT_CONFIG, enabled: true }, fakeContext, target);
             const html = renderGameplayComposerPanel(view);
-            const skillCategory = view.tabs.find(tab => tab.kind === 'ability');
-            Runtime.gameplayComposerActiveTab = skillCategory?.id || '';
-            const skillView = buildGameplayComposerViewModel({ ...DEFAULT_CONFIG, enabled: true }, fakeContext, target);
+            const ninjaCategory = view.tabs.find(tab => tab.kind === 'ability' && tab.label === '닌술');
+            Runtime.gameplayComposerActiveTab = ninjaCategory?.id || '';
+            const ninjaView = buildGameplayComposerViewModel({ ...DEFAULT_CONFIG, enabled: true }, fakeContext, target);
             Runtime.gameplayComposerActiveTab = 'item';
             const emptyItemView = buildGameplayComposerViewModel({ ...DEFAULT_CONFIG, enabled: true }, fakeContext, target);
             const emptyItemHtml = renderGameplayComposerPanel(emptyItemView);
@@ -48126,6 +48574,32 @@ function normalizeAdaptiveQualityState(value) {
               messages: [],
             };
             const homonymResolution = resolveGameplayActorQuery(homonymState, homonymContext, 'Alex');
+            const duplicatePersonaContext = {
+              scope: 'actor-duplicate-persona-selection', mode: 'rp', noSession: false,
+              db: {
+                selectedPersona: 'persona-alex-primary',
+                personas: [
+                  { id: 'persona-alex-primary', name: 'Alex' },
+                  { id: 'persona-alex-secondary', name: 'Alex' },
+                ],
+              },
+              currentChat: { bindedPersona: 'persona-alex-primary' },
+              messages: [],
+            };
+            const duplicatePersonaRecords = gameplayPersonaRecords(duplicatePersonaContext);
+            const numericPersonaContext = {
+              scope: 'actor-numeric-persona-selection', mode: 'rp', noSession: false,
+              db: {
+                selectedPersona: '1',
+                personas: [
+                  { id: '1', name: 'ID One' },
+                  { id: 'persona-index-one', name: 'Index One' },
+                ],
+              },
+              currentChat: { bindedPersona: '1' },
+              messages: [],
+            };
+            const numericPersonaRecords = gameplayPersonaRecords(numericPersonaContext);
             const opaquePersonaId = 'fb35f685-a10d-4a29-8c99-e3accc07b5f6';
             const uuidContext = {
               scope: 'actor-uuid-label', mode: 'rp', noSession: false,
@@ -48192,6 +48666,11 @@ function normalizeAdaptiveQualityState(value) {
                 && homonymResolution.matches.length === 2
                 && homonymResolution.matches.some(item => item.id === 'persona:persona-alex')
                 && homonymResolution.matches.some(item => item.id === 'card:card-alex'),
+              hostPersonaSelectionMarksOnlyTheResolvedRecord: duplicatePersonaRecords.filter(item => item.selected).length === 1
+                && duplicatePersonaRecords.find(item => item.selected)?.id === 'persona:persona-alex-primary'
+                && resolveGameplayActor(createDefaultState('rp'), duplicatePersonaContext)?.id === 'persona:persona-alex-primary'
+                && numericPersonaRecords.filter(item => item.selected).length === 1
+                && numericPersonaRecords.find(item => item.selected)?.id === 'persona:persona-index-one',
               opaquePersonaIdsNeverBecomePlayerFacingNames: uuidRecords.length === 1
                 && uuidRecords[0].name === '실제 사용자명'
                 && uuidActor?.name === '실제 사용자명'
@@ -48212,12 +48691,11 @@ function normalizeAdaptiveQualityState(value) {
                 && psycheAliasActors.some(item => item.name === '사이키 인물 별칭')
                 && canonicalAliasRecords.some(item => item.name === '정식 인물 별칭')
                 && !psycheAliasActors.concat(canonicalAliasRecords, opaqueTargets).some(item => item.name?.includes(uuidV7)),
-              narutoKeepsChakraAndUnifiesTaijutsuNinjutsuInOneSkillInventory: skillCategory?.id === 'ability'
-                && skillCategory?.label === '스킬'
-                && skillCategory?.total === 2
-                && skillView.actionRows.length === 2
-                && skillView.actionRows.some(row => row.entryId === 'leaf-hurricane' && row.composerCategoryLabel === '체술')
-                && skillView.actionRows.some(row => row.entryId === 'shadow-clone' && row.composerCategoryLabel === '인술')
+              narutoGroupsGroundedTaijutsuAndNinjutsuUnderNinjaArts: ninjaCategory?.total === 2
+                && view.tabs.filter(tab => tab.kind === 'ability').length === 1
+                && ninjaView.actionRows.length === 2
+                && ninjaView.actionRows.some(row => row.entryId === 'leaf-hurricane' && row.composerCategoryLabel === '체술')
+                && ninjaView.actionRows.some(row => row.entryId === 'shadow-clone' && row.composerCategoryLabel === '인술')
                 && view.hud.resources.some(resource => resource.key === 'chakra' && resource.current === 35 && resource.max === 50)
                 && !view.hud.resources.some(resource => ['mp', 'mana'].includes(resource.key) || /^(?:MP|Mana|마나|마력)$/i.test(resource.label))
                 && html.includes('data-gameplay-category-icons'),
@@ -48236,9 +48714,9 @@ function normalizeAdaptiveQualityState(value) {
                 && crowdedSpecialActions.filter(action => action.kind === 'item').length === 2
                 && crowdedActions.filter(action => action.kind === 'ability').length === 90
                 && crowdedActions.filter(action => action.kind === 'item').length === 2
-                && crowdedView.tabs.find(tab => tab.kind === 'ability' && tab.id === 'ability' && tab.label === '스킬')?.total === 90
+                && crowdedView.tabs.find(tab => tab.kind === 'ability' && tab.label === '기술')?.total === 90
                 && crowdedView.tabs.filter(tab => tab.kind === 'item').length === 1
-                && crowdedView.tabs.some(tab => tab.kind === 'item' && tab.id === 'item' && tab.label === '인벤토리' && tab.total === 2)
+                && crowdedView.tabs.some(tab => tab.kind === 'item' && tab.label === '아이템' && tab.total === 2)
                 && crowdedView.tabs.every(tab => tab.total > 0),
               largeCatalogUsesSixteenCellPagesWithoutDroppingEntries: crowdedView.actionRows.length === GAMEPLAY_INVENTORY_PAGE_SIZE
                 && crowdedView.inventoryPagination?.page === 1
@@ -48401,7 +48879,7 @@ function normalizeAdaptiveQualityState(value) {
             deterministicSemanticRoll: rollA.outcomeRoll === rollB.outcomeRoll && rollA.outcome === rollB.outcome,
             pendingCarriesRollAndSpecial: roundTrip.successChance === pending.successChance && roundTrip.outcomeRoll === pending.outcomeRoll && roundTrip.outcome === pending.outcome && roundTrip.preparedEntryId === 'water-step',
             contractBindsOutcome: contract.includes('Authoritative roll:') && contract.includes(`=> ${pending.outcome}`) && contract.includes('Do not reverse'),
-            inventoryTileOnlyInspectsAndNaturalInputCreatesChoices: abilityView.controls.some(control => control.slot === 'action-row' && control.command.startsWith('select-action:'))
+            inventoryTileSelectsPreparedEntryAndOffersNaturalInput: abilityView.controls.some(control => control.slot === 'action-row' && control.command.startsWith('select-action:'))
               && abilityView.controls.some(control => control.command === 'custom-action')
               && !abilityView.controls.some(control => ['prepare-special', 'execute-choice'].includes(control.command)),
             onlyChoiceTabCanDispatch: contextView.controls.some(control => control.slot === 'action-row' && control.command === 'execute-choice')
@@ -48686,6 +49164,34 @@ function normalizeAdaptiveQualityState(value) {
           const matchingContext = { ...fakeContext, messages: [{ role: 'user', content: visibleMessage, id: pending.id, memo: pending.id }] };
           const actionContract = buildGameplayActionContract(target, matchingContext);
           const pendingPsycheProjection = projectGameplayStateForPsyche(target, matchingContext);
+          const noChoiceConf = {
+            ...conf,
+            pipeline: {
+              ...conf.pipeline,
+              agents: conf.pipeline.agents.map(agent => agent.id === GAMEPLAY_ADVISOR_AGENT_ID
+                ? { ...agent, choicesEnabled: false }
+                : agent),
+            },
+          };
+          const noChoiceState = JSON.parse(JSON.stringify(target));
+          noChoiceState.gameplay.pendingAction = null;
+          const noChoiceDirectAction = buildGameplayDirectInputAction(noChoiceState, fakeContext, actor.id);
+          const noChoiceView = buildGameplayComposerViewModel(noChoiceConf, fakeContext, noChoiceState);
+          const noChoiceHtml = renderGameplayComposerPanel(noChoiceView);
+          const nativeDirectCommand = '나는 마법을 시전하며 옆으로 굴러 바로 사용했다.';
+          const nativeDirectState = JSON.parse(JSON.stringify(target));
+          nativeDirectState.gameplay.pendingAction = null;
+          nativeDirectState.gameplay.customAction = null;
+          const nativeDirectContext = {
+            ...fakeContext,
+            messages: [
+              ...fakeContext.messages,
+              { role: 'user', content: nativeDirectCommand },
+            ],
+          };
+          const nativeDirectSync = syncGameplayIntentForRequest(conf, nativeDirectState, nativeDirectContext);
+          const nativeDirectPending = normalizeGameplayPendingAction(nativeDirectState.gameplay.pendingAction);
+          const nativeDirectContract = buildGameplayActionContract(nativeDirectState, nativeDirectContext);
           const runtimeTab = Runtime.gameplayComposerActiveTab;
           const runtimeSelected = Runtime.gameplayComposerSelectedActionId;
           const runtimeInstructionsOpen = Runtime.gameplayInstructionsEditorOpen;
@@ -48748,6 +49254,33 @@ function normalizeAdaptiveQualityState(value) {
               && settingsHtml.includes(`et-agent-model-${GAMEPLAY_ADVISOR_AGENT_ID}`)
               && settingsHtml.includes(`et-agent-enabled-${COMMUNICATION_AGENT_ID}`)
               && settingsHtml.includes(`et-agent-model-${COMMUNICATION_AGENT_ID}`),
+            choiceUseDropdownDefaultsEnabledAndPersistsOnTheAdvisorCard: gameplayAgent.choicesEnabled === true
+              && gameplayAdvisorChoicesEnabled(conf) === true
+              && gameplayAdvisorChoicesEnabled(noChoiceConf) === false
+              && settingsHtml.includes(`et-agent-choices-enabled-${GAMEPLAY_ADVISOR_AGENT_ID}`)
+              && settingsHtml.includes('선택지 사용 여부')
+              && settingsHtml.includes('>사용</option>')
+              && settingsHtml.includes('>미사용</option>')
+              && String(readAgentConfigFromUI).includes('choicesEnabled'),
+            disabledChoiceModeHidesAndNeverOffersStoredChoicesOrReroll: noChoiceView.choicesEnabled === false
+              && !noChoiceView.tabs.some(tab => tab.kind === 'context')
+              && !noChoiceView.actionRows.some(row => row.kind === 'context')
+              && !noChoiceView.controls.some(control => control.command === 'reroll-choices')
+              && !noChoiceHtml.includes('data-gameplay-choice-section')
+              && !noChoiceHtml.includes('data-gameplay-choice-reroll')
+              && noChoiceHtml.includes(gameplayUiText('ko', 'directActionSubmitTitle'))
+              && String(regenerateGameplayChoices).includes('if (!gameplayAdvisorChoicesEnabled(conf)) return false')
+              && noChoiceDirectAction?.directInput === true
+              && noChoiceDirectAction?.preparedEntryId === 'fireball'
+              && String(persistGameplayPendingFromLatest).includes('buildGameplayDirectInputAction')
+              && String(handleGameplayComposerCommand).includes('if (gameplayAdvisorChoicesEnabled(latestConf))')
+              && String(handleGameplayComposerCommand).includes('return await dispatchGameplayAction(latestConf, context, state, directAction'),
+            disabledChoiceSettingUsesFreshConfigAcrossOpenPanelAndLongPreparation: String(handleGameplayComposerCommand).includes('latestConf = await getConfig()')
+              && String(handleGameplayComposerCommand).includes('loadLatestConf: getConfig')
+              && String(prepareSelectedGameplayActor).includes("typeof options?.loadLatestConf === 'function'")
+              && String(prepareSelectedGameplayActor).includes('repairGameplayAdvisorDeck(advisorConf')
+              && String(prepareSelectedGameplayActor).includes('tryRegenerateGameplayChoices(advisorConf')
+              && String(wireAgentActionButtons).includes('scheduleGameplayComposerPanelRefresh(80)'),
             advisorPayloadCombinesActorEvidenceRulesSpecialAndIntent: payload.userGameplayInstructions === ruleMarker
               && payload.customAction?.request === requestMarker
               && payload.preparedSpecial?.entryId === 'fireball'
@@ -48808,6 +49341,19 @@ function normalizeAdaptiveQualityState(value) {
               && actionContract.includes(`Player custom action request: ${requestMarker}`)
               && actionContract.includes(ruleMarker)
               && actionContract.includes('Prepared special: ability/파이어볼'),
+            selectedSpecialAppliesToNativeDirectInputInEitherChoiceMode: nativeDirectSync.changed === true
+              && nativeDirectSync.directInput === true
+              && nativeDirectPending?.directInput === true
+              && nativeDirectPending?.preparedKind === 'ability'
+              && nativeDirectPending?.preparedEntryId === 'fireball'
+              && nativeDirectPending?.preparedLabel === '파이어볼'
+              && nativeDirectPending?.customAction?.request === nativeDirectCommand
+              && nativeDirectPending?.predictedCosts.some(cost => cost.resource === 'mp' && cost.after === 0)
+              && nativeDirectPending?.predictedCosts.some(cost => cost.resource === 'hp' && cost.after === 15)
+              && nativeDirectPending?.successChance === 60
+              && nativeDirectContract.includes(`Attempt: ${nativeDirectCommand}`)
+              && nativeDirectContract.includes('Prepared special: ability/파이어볼')
+              && nativeDirectContract.includes('Predicted costs: 마나 5, HP 5 (대체 소모)'),
             visibleRisuInputIsExactlyTheChoiceCommand: visibleMessage === choice.command
               && !visibleMessage.includes(ruleMarker)
               && !visibleMessage.includes(pending.id)
@@ -48835,12 +49381,12 @@ function normalizeAdaptiveQualityState(value) {
               && abilityHtml.includes('조건 ·')
               && !abilityHtml.includes('사용 준비')
               && !abilityHtml.includes('이 스킬로 선택지 만들기'),
-            abilityAndItemIconsOpenDistinctPopulatedInventoryWindows: abilityView.tabs.some(tab => tab.kind === 'ability' && tab.id === 'ability' && tab.label === '스킬' && tab.total === 1)
-              && itemView.tabs.some(tab => tab.kind === 'item' && tab.id === 'item' && tab.label === '인벤토리' && tab.total === 1)
+            abilityAndItemIconsOpenDistinctPopulatedInventoryWindows: abilityView.tabs.some(tab => tab.kind === 'ability' && tab.label === '마법' && tab.total === 1)
+              && itemView.tabs.some(tab => tab.kind === 'item' && tab.label === '아이템' && tab.total === 1)
               && /data-gameplay-inventory-window[^>]*data-gameplay-inventory-kind="ability"/.test(abilityHtml)
               && /data-gameplay-inventory-window[^>]*data-gameplay-inventory-kind="item"/.test(itemHtml)
-              && abilityHtml.includes('>스킬</strong>')
-              && itemHtml.includes('>인벤토리</strong>')
+              && abilityHtml.includes('>마법</strong>')
+              && itemHtml.includes('>아이템</strong>')
               && itemHtml.includes('>촉매</span>')
               && itemHtml.includes('잿빛 촉매병')
               && itemHtml.includes('data-gameplay-inventory-grid')
@@ -48850,7 +49396,7 @@ function normalizeAdaptiveQualityState(value) {
               && !itemHtml.includes('data-gameplay-choice-section')
               && !abilityHtml.includes('0개')
               && !itemHtml.includes('0개'),
-            dynamicCategoryComesFromCommittedActorSheetNotAdvisorPresentation: abilityView.tabs.some(tab => tab.kind === 'ability' && tab.label === '스킬' && tab.total === 1)
+            dynamicCategoryComesFromCommittedActorSheetNotAdvisorPresentation: abilityView.tabs.some(tab => tab.kind === 'ability' && tab.label === '마법' && tab.total === 1)
               && abilityView.actionRows.some(row => row.id === 'ability:fireball' && row.composerCategoryLabel === '마법')
               && abilityHtml.includes('>마법</span>')
               && typeof gameplayAbilityCategoryCode === 'undefined',
@@ -48859,9 +49405,14 @@ function normalizeAdaptiveQualityState(value) {
               && !abilityHtml.includes('contenteditable=')
               && abilityView.controls.some(control => control.command === 'custom-action')
               && handlerSource.includes('promptGameplayText'),
-            selectedTileAndIntentAreCombinedOnlyWhenSubmitting: handlerSource.includes('const selectedSpecial = buildGameplayActions')
+            selectedTilePersistsForChoicesAndTheNextNativeDirectInput: handlerSource.includes('mountedData.state.gameplay.preparedSpecial')
+              && handlerSource.includes('scheduleGameplayComposerSelectionSave(mountedData.conf')
+              && handlerSource.includes('const selectedSpecial = buildGameplayActions')
               && handlerSource.indexOf('state.gameplay.preparedSpecial = normalizeGameplayPreparedSpecial') < handlerSource.indexOf('state.gameplay.customAction = normalizeGameplayCustomAction')
               && String(saveGameplayStateForContext).includes('customAction: desired.customAction')
+              && String(scheduleGameplayComposerSelectionSave).includes('record.promise = (async () =>')
+              && String(beforeRequest).includes('settleGameplayComposerSelectionSave(context.scope)')
+              && String(beforeRequest).includes('applyGameplayComposerSelectionOverlay(state, context, gameplaySelectionOverlay)')
               && !handlerSource.includes("value === 'prepare-special'"),
             defaultChoicesRemainUsableWithoutTypingAndTapDirectlyIntoRisu: contextView.actionRows.length === GAMEPLAY_ADVISOR_SUGGESTION_MAX
               && contextView.controls.filter(control => control.slot === 'action-row').every(control => control.command === 'execute-choice')
@@ -48870,7 +49421,7 @@ function normalizeAdaptiveQualityState(value) {
               && !contextHtml.includes('data-gameplay-inventory-window')
               && contextHtml.includes(escHtml(choice.command))
               && !contextHtml.includes('이 선택지로 진행'),
-            detailToggleUsesOneRuntimeSelectionWithoutAnotherStateEngine: handlerSource.includes("Runtime.gameplayComposerSelectedActionId === actionId ? '' : actionId"),
+            detailToggleUsesOneRuntimeSelectionWithoutAnotherStateEngine: handlerSource.includes('const selected = Runtime.gameplayComposerSelectedActionId !== actionId'),
             inCharacterWorldSpecificExpressionIsEvidenceGated: GAMEPLAY_ADVISOR_PROMPT.includes('this specific actor performing it in this specific world')
               && GAMEPLAY_ADVISOR_PROMPT.includes('brief performable utterance plus action')
               && GAMEPLAY_ADVISOR_PROMPT.includes('Never paste generic fantasy flavor')
@@ -49039,7 +49590,8 @@ function normalizeAdaptiveQualityState(value) {
           const arcaneResource = view.hud.resources.find(resource => resource.key === 'arcane');
           const ithrilionSource = context.canonicalSources[0]?.content || '';
           const ageFact = view.hud.facts.find(fact => fact.key === 'age');
-          const skillCategory = view.tabs.find(tab => tab.kind === 'ability' && tab.id === 'ability' && tab.label === '스킬');
+          const magicCategory = view.tabs.find(tab => tab.kind === 'ability' && tab.label === '마법');
+          const traitCategory = view.tabs.find(tab => tab.kind === 'ability' && tab.label === '특성');
           const payload = buildGameplayAdvisorPayload(state, context, {
             evidenceContext: '에델가르드는 세계관 문서이고 얼어붙은 회랑이 현재 장면이다.',
           });
@@ -49100,7 +49652,8 @@ function normalizeAdaptiveQualityState(value) {
               && /Master 500/.test(ithrilionSource)
               && /0 Arcane[\s\S]*Arcane Exhaustion/.test(ithrilionSource)
               && html.includes('500 / 500')
-              && html.includes('비전력 고갈'),
+              && !html.includes('data-gameplay-resource-depletion-indicator')
+              && !html.includes('비전력 고갈'),
             groundedDisciplinesTraitsAndOwnedEquipmentKeepExactCategories: actor.character?.abilities?.length === 6
               && ['Hydromancy', 'Aeromancy', 'Lumina', 'Cryomancy'].every(name => actor.character.abilities.some(entry => entry.name === name && entry.kind === 'magic' && entry.categoryLabel === '마법'))
               && ['Lumina Affinity', 'Arcane Sensitivity'].every(name => actor.character.abilities.some(entry => entry.name === name && entry.kind === 'trait' && entry.categoryLabel === '특성'))
@@ -49114,11 +49667,12 @@ function normalizeAdaptiveQualityState(value) {
               && actor.character.inventory[1]?.categoryLabel === '장비',
             onlyPopulatedDynamicCategoriesRenderAsCompactIcons: {
               categoryCounts: {
-                exactlyThreeWithUnifiedSkillsAndInventory: view.tabs.length === 3,
+                exactlyFourWithBroadGroundedCategories: view.tabs.length === 4,
                 allPopulated: view.tabs.every(tab => tab.total > 0),
                 choices: view.tabs.some(tab => tab.kind === 'context' && tab.total === GAMEPLAY_ADVISOR_SUGGESTION_MAX),
-                skills: skillCategory?.total === 6,
-                inventory: view.tabs.find(tab => tab.kind === 'item' && tab.id === 'item' && tab.label === '인벤토리')?.total === 2,
+                magicAndTraits: magicCategory?.total === 4 && traitCategory?.total === 2,
+                inventory: view.tabs.filter(tab => tab.kind === 'item').length === 1
+                  && view.tabs.some(tab => tab.kind === 'item' && tab.label === '아이템' && tab.total === 2),
                 abilityCategoriesRemainOnEntries: actor.character.abilities.filter(entry => entry.categoryLabel === '마법').length === 4
                   && actor.character.abilities.filter(entry => entry.categoryLabel === '특성').length === 2,
                 itemKindsRemainOnEntries: actor.character.inventory.some(item => item.kind === 'artifact' && item.categoryLabel === '마도구')
@@ -49859,15 +50413,20 @@ function normalizeAdaptiveQualityState(value) {
             Runtime.gameplayComposerSelectedActionId = 'ability:old-action';
             const firstView = buildGameplayComposerViewModel({ ...DEFAULT_CONFIG, enabled: true }, context, state);
             const firstHtml = renderGameplayComposerPanel(firstView);
-            const firstCategory = firstView.tabs.find(tab => tab.kind === 'ability' && tab.id === 'ability' && tab.label === '스킬');
+            const firstCategory = firstView.tabs.find(tab => tab.kind === 'ability' && tab.label === '기술');
             const oxygenResource = firstView.hud.resources.find(resource => resource.key === 'oxygen');
+            const depletedState = JSON.parse(JSON.stringify(state));
+            depletedState.characters.surveyor.stats.oxygen.current = 0;
+            const depletedView = buildGameplayComposerViewModel({ ...DEFAULT_CONFIG, enabled: true }, context, depletedState);
+            const depletedHtml = renderGameplayComposerPanel(depletedView);
+            const depletedOxygenResource = depletedView.hud.resources.find(resource => resource.key === 'oxygen');
 
             state.gameplay.activeActorId = 'character:investigator';
             Runtime.gameplayComposerActiveTab = firstCategory?.id || 'ability:stale-category';
             Runtime.gameplayComposerSelectedActionId = 'ability:field-repair';
             const switchedView = buildGameplayComposerViewModel({ ...DEFAULT_CONFIG, enabled: true }, context, state);
             const switchedHtml = renderGameplayComposerPanel(switchedView);
-            const switchedCategory = switchedView.tabs.find(tab => tab.kind === 'ability' && tab.id === 'ability' && tab.label === '스킬');
+            const switchedCategory = switchedView.tabs.find(tab => tab.kind === 'ability' && tab.label === '기술');
 
             const identityOnlyState = createDefaultState('rp');
             identityOnlyState.characters.blank = normalizeCharacterState({
@@ -49878,6 +50437,18 @@ function normalizeAdaptiveQualityState(value) {
             identityOnlyState.gameplay.activeActorId = 'character:blank';
             const identityOnlyView = buildGameplayComposerViewModel({ ...DEFAULT_CONFIG, enabled: true }, context, identityOnlyState);
             const identityOnlyHtml = renderGameplayComposerPanel(identityOnlyView);
+            const broadCategorySamples = {
+              technique: gameplayInventoryCategoryGroup({ kind: 'ability', entryKind: 'technique', categoryLabel: '기계술' }, 'ko'),
+              ninja: gameplayInventoryCategoryGroup({ kind: 'ability', entryKind: 'taijutsu', categoryLabel: '체술' }, 'ko'),
+              martial: gameplayInventoryCategoryGroup({ kind: 'ability', entryKind: 'ability', categoryLabel: '검술' }, 'ko'),
+              taoist: gameplayInventoryCategoryGroup({ kind: 'ability', entryKind: 'skill', categoryLabel: '도술' }, 'ko'),
+              magic: gameplayInventoryCategoryGroup({ kind: 'ability', entryKind: 'spell', categoryLabel: '주문' }, 'ko'),
+              trait: gameplayInventoryCategoryGroup({ kind: 'ability', entryKind: 'trait', categoryLabel: '혈통 특성' }, 'ko'),
+              ability: gameplayInventoryCategoryGroup({ kind: 'ability', entryKind: 'power', categoryLabel: '초능력' }, 'ko'),
+              custom: gameplayInventoryCategoryGroup({ kind: 'ability', entryKind: 'world-art', categoryLabel: '월광술' }, 'ko'),
+              magicTool: gameplayInventoryCategoryGroup({ kind: 'item', entryKind: 'artifact', categoryLabel: '마법도구' }, 'ko'),
+              clothing: gameplayInventoryCategoryGroup({ kind: 'item', entryKind: 'equipment', categoryLabel: '옷' }, 'ko'),
+            };
             return {
               unpreparedConfirmedStatsGainVitalFallbackWithoutLeakingActions: unpreparedView.tabs.length === 0
                 && unpreparedView.actionRows.length === 0
@@ -49905,7 +50476,7 @@ function normalizeAdaptiveQualityState(value) {
                 && legacyVitalsHtml.includes('aria-valuenow="70"')
                 && legacyVitalsHtml.includes('aria-valuemax="100"')
                 && legacyVitalsHtml.includes('width:70.0%'),
-              maxOnlyOpenVocabularyResourceUsesPercentageFallbackAndKeepsConsequence: oxygenResource?.current === 100
+              maxOnlyOpenVocabularyResourceUsesPercentageFallbackAndShowsConsequenceOnlyAtZero: oxygenResource?.current === 100
                 && oxygenResource?.max === 100
                 && oxygenResource?.ratio === 100
                 && oxygenResource?.percentageFallback === true
@@ -49913,7 +50484,14 @@ function normalizeAdaptiveQualityState(value) {
                 && gameplayResourceValueText(oxygenResource, 'ko') === '100%'
                 && firstHtml.includes('data-gameplay-percentage-fallback="true"')
                 && !firstHtml.includes('data-indeterminate="true"')
-                && firstHtml.includes('질식'),
+                && !firstHtml.includes('data-gameplay-resource-depletion-indicator')
+                && !firstHtml.includes('질식')
+                && depletedOxygenResource?.current === 0
+                && depletedHtml.includes('data-gameplay-resource-depletion-indicator')
+                && depletedHtml.includes('data-gameplay-resource-depletion-popover')
+                && depletedHtml.includes('data-gameplay-resource-depletion-effect')
+                && depletedHtml.includes('질식')
+                && depletedHtml.includes('🪫'),
               mundaneActorGetsOnlyGroundedResourcesAndTechniqueCategory: firstView.hud.resources.length === 2
                 && firstView.hud.resources.some(resource => resource.key === 'vitality')
                 && firstView.hud.resources.some(resource => resource.key === 'oxygen')
@@ -49930,6 +50508,19 @@ function normalizeAdaptiveQualityState(value) {
                 && switchedView.actionRows.some(row => row.id === 'ability:trace-analysis' && row.composerCategoryLabel === '조사 기술')
                 && !switchedView.actionRows.some(row => row.id === 'ability:field-repair')
                 && !switchedHtml.includes('Field Repair'),
+              broadFamiliesKeepGenreScaleWithoutLosingExactEntryLabels: broadCategorySamples.technique?.label === '기술'
+                && broadCategorySamples.ninja?.label === '닌술'
+                && broadCategorySamples.martial?.label === '무공'
+                && broadCategorySamples.taoist?.label === '도술'
+                && broadCategorySamples.magic?.label === '마법'
+                && broadCategorySamples.trait?.label === '특성'
+                && broadCategorySamples.ability?.label === '능력'
+                && broadCategorySamples.custom?.label === '능력'
+                && broadCategorySamples.magicTool?.label === '아이템'
+                && broadCategorySamples.clothing?.label === '아이템'
+                && broadCategorySamples.magicTool?.id === broadCategorySamples.clothing?.id
+                && gameplayActionCategoryLabel({ kind: 'ability', entryKind: 'technique', categoryLabel: '검술' }, 'ko') === '검술'
+                && gameplayActionCategoryLabel({ kind: 'item', entryKind: 'artifact', categoryLabel: '마법도구' }, 'ko') === '마법도구',
               identityOnlyActorStillGetsTwoPercentageGaugesWithoutActions: identityOnlyView.tabs.length === 0
                 && identityOnlyView.actionRows.length === 0
                 && identityOnlyView.hud.visible === true
@@ -62035,6 +62626,11 @@ function normalizeAdaptiveQualityState(value) {
     Runtime.gameplayComposerListenerRoot = null;
     Runtime.gameplayComposerListenerIds = [];
     Runtime.gameplayComposerListenerSession = null;
+    const liveBinding = Runtime.gameplayComposerLiveBinding;
+    if (!expectedSession || !liveBinding?.session || liveBinding.session === expectedSession) {
+      Runtime.gameplayComposerLiveBinding = null;
+      if (liveBinding) liveBinding.measureEpoch = Math.max(0, Number(liveBinding.measureEpoch || 0)) + 1;
+    }
     await Promise.all(listeners.map(async item => {
       try { await root?.removeEventListener?.(item.type, item.id); } catch (_) {}
     }));
@@ -62047,6 +62643,45 @@ function normalizeAdaptiveQualityState(value) {
 
   function gameplayComposerSurfaceId() {
     return `${UI_ID_IN_CHAT_PANEL}-surface`;
+  }
+
+  function gameplayComposerIndexedControls(viewModel) {
+    return (viewModel?.controls || []).map((control, index) => ({ ...control, id: gameplayComposerButtonId(index) }));
+  }
+
+  function gameplayComposerControlKey(control) {
+    return [
+      cleanString(control?.slot, ''),
+      cleanString(control?.command, ''),
+      cleanString(control?.value, ''),
+    ].join('\u001f');
+  }
+
+  function gameplayComposerPanelInnerHtml(html) {
+    const source = String(html || '');
+    const openIndex = source.indexOf('>');
+    const closeIndex = source.lastIndexOf('</div>');
+    return openIndex >= 0 && closeIndex > openIndex
+      ? source.slice(openIndex + 1, closeIndex)
+      : '';
+  }
+
+  function recordGameplayComposerPerformance(kind, startedAt, details = {}) {
+    const entry = {
+      kind: cleanString(kind, 'unknown'),
+      durationMs: Math.max(0, Date.now() - Number(startedAt || Date.now())),
+      at: nowIso(),
+      ...(details && typeof details === 'object' ? details : {}),
+    };
+    const trace = Array.isArray(Runtime.gameplayComposerPerformanceTrace)
+      ? Runtime.gameplayComposerPerformanceTrace
+      : [];
+    trace.push(entry);
+    Runtime.gameplayComposerPerformanceTrace = trace.slice(-24);
+    if (entry.durationMs >= 750 && typeof console !== 'undefined' && typeof console.info === 'function') {
+      console.info('[Eros Tower] gameplay panel timing', entry);
+    }
+    return entry;
   }
 
   function gameplayCustomActionInputId() {
@@ -62110,7 +62745,8 @@ function normalizeAdaptiveQualityState(value) {
 
   function gameplayComposerTab(value) {
     const normalized = cleanString(value, '').slice(0, 80);
-    return ['context', 'ability', 'item'].includes(normalized) ? normalized : '';
+    if (['context', 'ability', 'item'].includes(normalized)) return normalized;
+    return /^(?:ability|item)-category-[a-z0-9]+$/.test(normalized) ? normalized : '';
   }
 
   function gameplayInventoryPageSize() {
@@ -62131,12 +62767,12 @@ function normalizeAdaptiveQualityState(value) {
       cooldownTurns: '재사용 대기 {count}턴', uses: '사용 횟수 {current}/{max}', owned: '보유 {count}', successChance: '성공 가능성 {chance}%',
       minimum: '{label} {value} 이상', prerequisite: '선행 {value}', requiredCondition: '필요 상태 {value}', excludedCondition: '불가 상태 {value}', requirements: '조건',
       pendingTransfer: '전송 대기', pendingNative: 'Risu 기본 전송 버튼(➤)을 한 번 누르면 진행됩니다.', pendingUncertain: '채팅 준비 상태를 다시 읽어 확인해야 합니다.', pendingWaiting: '결과를 기다리고 있습니다.',
-      preparedItemHeading: '선택지에 반영한 항목', releasePrepared: '선택지 항목 해제', releaseItem: '항목 해제', userDirective: '사용자 지시', releaseDirective: '사용자 지시 해제', releaseInstruction: '지시 해제',
+      preparedItemHeading: '선택한 스킬·아이템', releasePrepared: '선택 항목 해제', releaseItem: '항목 해제', userDirective: '사용자 지시', releaseDirective: '사용자 지시 해제', releaseInstruction: '지시 해제',
       reprepareHelp: '현재 진행 상태를 보존하면서 이 인물의 근거를 다시 동기화합니다.', prepareHelp: '선택 인물의 현재 근거에서 스테이터스·스킬·아이템을 추출해 Psyche에 저장합니다.',
       selectActor: '플레이 인물 선택', selectActorDescriptionCandidates: '이야기를 진행할 인물을 먼저 선택하세요. 아래 후보를 바로 고르거나 이름으로 찾을 수 있습니다.', selectActorDescriptionPrompt: '이야기를 진행할 인물을 먼저 선택하세요. 버튼을 눌러 이름이나 별칭을 입력할 수 있습니다.',
       prepareRequired: '스테이터스 준비 필요', prepareRequiredDescription: '오른쪽 위 ⚙ 버튼으로 {actor}의 스테이터스를 준비하면 확인된 상태·기술·아이템과 선택지가 표시됩니다.', nonPersonaSelectHint: '페르소나가 아닌 인물로 진행하려면 오른쪽 위 👤 인물 선택 버튼을 누르고 이름이나 별칭을 입력하세요.', prepareActorStatus: '인물 스테이터스 준비',
       rerollChoice: '선택지 리롤', rerollTitle: '현재 장면의 선택지만 새로 뽑습니다. 인물 스테이터스는 바꾸지 않습니다.',
-      specialIntent: '{label} 사용 의도를 입력', preparedIntent: '{label} 활용 방식을 입력하거나 기본 선택지를 고르세요', customActionHint: '원하는 행동이 있을 때만 입력하세요', customActionInput: '원하는 행동 입력', customActionPrompt: '원하는 행동을 입력하세요. 선택한 스킬·아이템이 있으면 그 활용 방식으로 반영됩니다.', customActionSubmit: '원하는 행동 입력', customActionSubmitTitle: '원하는 행동을 입력해 선택지 3개 만들기',
+      specialIntent: '{label} 사용 의도를 입력', preparedIntent: '{label} 활용 방식을 입력하거나 기본 선택지를 고르세요', customActionHint: '원하는 행동이 있을 때만 입력하세요', customActionInput: '원하는 행동 입력', customActionPrompt: '원하는 행동을 입력하세요. 선택한 스킬·아이템이 있으면 그 활용 방식으로 반영됩니다.', customActionSubmit: '원하는 행동 입력', customActionSubmitTitle: '원하는 행동을 입력해 선택지 3개 만들기', directActionSubmitTitle: '선택한 스킬·아이템과 입력 행동을 바로 Risu 입력창에 준비',
       noDescription: '세부 설명이 아직 확립되지 않았습니다.', percentageFallbackHint: '정확한 수치 단위가 없어 으아악씨가 0–100% 기준으로 보정한 게이지입니다.', abilityDefaultCommand: '{label} 능력을 현재 상황과 대상에 맞게 사용한다.', itemDefaultCommand: '{label} 아이템을 현재 상황과 대상에 맞게 사용한다.', coldReprepareDescription: 'Psyche가 현재 진행 상태를 보존하면서 페르소나·디스크립션·로어북의 근거로 이 인물을 다시 정리합니다.', coldPrepareDescription: 'Psyche가 페르소나·디스크립션·로어북을 읽어 스테이터스·스킬·아이템을 준비하고, 으아악씨가 그 상태로 선택지와 특수 행동을 관리합니다.',
       prepare: '준비하기', cancel: '취소', coldConfirmLabel: '콜드스타트 실행 확인', coldCancelLabel: '콜드스타트 취소', playerActorInput: '플레이 인물 입력', playerActorTitle: '플레이 인물: {actor} · 눌러서 이름 입력', unselected: '미선택', gameplayInstructions: '게임 진행 지침', gameplayInstructionsTitle: '이 채팅의 게임 진행 지침', gameplayInstructionsPrompt: '이 채팅의 게임 진행 지침을 입력하세요. 비우고 확인하면 저장된 지침을 삭제합니다.', gameplayInstructionsHint: '이 채팅에만 저장되며 다음 선택지 생성부터 적용됩니다.', gameplayInstructionsPlaceholder: '예: 선택지는 짧고 능동적으로 쓰고, 전투에서는 주변 지형을 활용한다. 아이템은 현재 보유한 것만 제안한다.', saveInstructions: '저장', cancelInstructions: '취소', instructionsSaved: '이 채팅에 게임 진행 지침을 저장했습니다. 다음 선택지 생성부터 적용됩니다.',
       generatingChoices: '선택지 생성 중', directAction: '원하는 행동 직접 입력', syncingStatus: '인물 스테이터스 준비 중', reprepareActorStatus: '인물 스테이터스 다시 준비', pendingCancel: '대기 행동 취소',
@@ -62155,12 +62791,12 @@ function normalizeAdaptiveQualityState(value) {
       cooldownTurns: 'Cooldown: {count} turns', uses: 'Uses {current}/{max}', owned: 'Owned {count}', successChance: 'Success chance {chance}%',
       minimum: '{label} {value} or higher', prerequisite: 'Prerequisite: {value}', requiredCondition: 'Required: {value}', excludedCondition: 'Blocked by: {value}', requirements: 'Requirements',
       pendingTransfer: 'Pending send', pendingNative: 'Press the Risu send button (➤) once to continue.', pendingUncertain: 'Reload the prepared chat state to verify it.', pendingWaiting: 'Waiting for the result.',
-      preparedItemHeading: 'Applied to choices', releasePrepared: 'Clear applied entry', releaseItem: 'Clear entry', userDirective: 'User instruction', releaseDirective: 'Clear user instruction', releaseInstruction: 'Clear instruction',
+      preparedItemHeading: 'Selected skill or item', releasePrepared: 'Clear selected entry', releaseItem: 'Clear entry', userDirective: 'User instruction', releaseDirective: 'Clear user instruction', releaseInstruction: 'Clear instruction',
       reprepareHelp: 'Resync this character’s evidence while preserving current progress.', prepareHelp: 'Extract this character’s status, skills, and items from current evidence and save them to Psyche.',
       selectActor: 'Select player character', selectActorDescriptionCandidates: 'Select the character whose story you will play. Choose a candidate below or search by name.', selectActorDescriptionPrompt: 'Select the character whose story you will play. Press the button to enter a name or alias.',
       prepareRequired: 'Character status required', prepareRequiredDescription: 'Use the ⚙ button at the top right to prepare {actor} and show verified status, skills, items, and choices.', nonPersonaSelectHint: 'For a non-persona character, press the 👤 button at the top right and enter a name or alias.', prepareActorStatus: 'Prepare character status',
       rerollChoice: 'Reroll choices', rerollTitle: 'Generate new choices for the current scene without changing character status.',
-      specialIntent: 'Describe how to use {label}', preparedIntent: 'Describe how to use {label}, or choose a default option', customActionHint: 'Enter text only when you want a custom action', customActionInput: 'Enter a custom action', customActionPrompt: 'Enter the action you want. If a skill or item is selected, describe how to use it.', customActionSubmit: 'Enter a custom action', customActionSubmitTitle: 'Enter an action and create 3 choices',
+      specialIntent: 'Describe how to use {label}', preparedIntent: 'Describe how to use {label}, or choose a default option', customActionHint: 'Enter text only when you want a custom action', customActionInput: 'Enter a custom action', customActionPrompt: 'Enter the action you want. If a skill or item is selected, describe how to use it.', customActionSubmit: 'Enter a custom action', customActionSubmitTitle: 'Enter an action and create 3 choices', directActionSubmitTitle: 'Prepare the selected skill or item and this action directly in the Risu input',
       noDescription: 'No detailed description has been established yet.', percentageFallbackHint: 'No exact scale is established, so 으아악씨 is showing this gauge on a normalized 0–100% scale.', abilityDefaultCommand: 'Use {label} to fit the current situation and target.', itemDefaultCommand: 'Use {label} to fit the current situation and target.', coldReprepareDescription: 'Psyche will preserve current progress and rebuild this character from persona, description, and lorebook evidence.', coldPrepareDescription: 'Psyche will read persona, description, and lorebook evidence to prepare status, skills, and items. 으아악씨 will then manage choices and special actions from that state.',
       prepare: 'Prepare', cancel: 'Cancel', coldConfirmLabel: 'Confirm character preparation', coldCancelLabel: 'Cancel character preparation', playerActorInput: 'Enter player character', playerActorTitle: 'Player character: {actor} · press to enter a name', unselected: 'Not selected', gameplayInstructions: 'Gameplay instructions', gameplayInstructionsTitle: 'Instructions for this chat', gameplayInstructionsPrompt: 'Enter gameplay instructions for this chat. Confirm an empty value to clear the saved instructions.', gameplayInstructionsHint: 'Saved only in this chat and applied from the next choice generation.', gameplayInstructionsPlaceholder: 'Example: Keep choices short and active, use nearby terrain in combat, and suggest only currently owned items.', saveInstructions: 'Save', cancelInstructions: 'Cancel', instructionsSaved: 'Saved the gameplay instructions for this chat. They apply from the next choice generation.',
       generatingChoices: 'Generating choices', directAction: 'Enter a custom action', syncingStatus: 'Preparing character status', reprepareActorStatus: 'Prepare character status again', pendingCancel: 'Cancel pending action',
@@ -62179,12 +62815,12 @@ function normalizeAdaptiveQualityState(value) {
       cooldownTurns: '再使用まで{count}ターン', uses: '使用回数 {current}/{max}', owned: '所持 {count}', successChance: '成功可能性 {chance}%',
       minimum: '{label} {value}以上', prerequisite: '前提 {value}', requiredCondition: '必要状態 {value}', excludedCondition: '使用不可状態 {value}', requirements: '条件',
       pendingTransfer: '送信待ち', pendingNative: 'Risuの送信ボタン（➤）を一度押すと進行します。', pendingUncertain: 'チャットの準備状態を再読込して確認してください。', pendingWaiting: '結果を待っています。',
-      preparedItemHeading: '選択肢に反映した項目', releasePrepared: '反映項目を解除', releaseItem: '項目を解除', userDirective: 'ユーザー指示', releaseDirective: 'ユーザー指示を解除', releaseInstruction: '指示を解除',
+      preparedItemHeading: '選択した技能・アイテム', releasePrepared: '選択項目を解除', releaseItem: '項目を解除', userDirective: 'ユーザー指示', releaseDirective: 'ユーザー指示を解除', releaseInstruction: '指示を解除',
       reprepareHelp: '現在の進行状態を保ったまま、このキャラクターの根拠を再同期します。', prepareHelp: '現在の根拠からこのキャラクターのステータス・技能・アイテムを抽出してPsycheに保存します。',
       selectActor: 'プレイヤーキャラクターを選択', selectActorDescriptionCandidates: '物語を進めるキャラクターを選択してください。下の候補を選ぶか、名前で検索できます。', selectActorDescriptionPrompt: '物語を進めるキャラクターを選択してください。ボタンを押して名前や別名を入力できます。',
       prepareRequired: 'ステータスの準備が必要', prepareRequiredDescription: '右上の⚙ボタンで{actor}を準備すると、確認済みの状態・技能・アイテムと選択肢が表示されます。', nonPersonaSelectHint: 'ペルソナ以外の人物で進める場合は、右上の👤ボタンを押して名前または別名を入力してください。', prepareActorStatus: 'キャラクターステータスを準備',
       rerollChoice: '選択肢を再生成', rerollTitle: 'キャラクターステータスを変えず、現在の場面の選択肢だけを再生成します。',
-      specialIntent: '{label}の使い方を入力', preparedIntent: '{label}の活用方法を入力するか、既定の選択肢を選んでください', customActionHint: '希望する行動がある場合のみ入力してください', customActionInput: '希望する行動を入力', customActionPrompt: '希望する行動を入力してください。技能やアイテムを選択した場合は、その使い方として反映されます。', customActionSubmit: '希望する行動を入力', customActionSubmitTitle: '行動を入力して選択肢を3つ作成',
+      specialIntent: '{label}の使い方を入力', preparedIntent: '{label}の活用方法を入力するか、既定の選択肢を選んでください', customActionHint: '希望する行動がある場合のみ入力してください', customActionInput: '希望する行動を入力', customActionPrompt: '希望する行動を入力してください。技能やアイテムを選択した場合は、その使い方として反映されます。', customActionSubmit: '希望する行動を入力', customActionSubmitTitle: '行動を入力して選択肢を3つ作成', directActionSubmitTitle: '選択した技能・アイテムと入力行動をRisu入力欄に直接準備',
       noDescription: '詳細説明はまだ確立されていません。', percentageFallbackHint: '正確な数値尺度がないため、으아악씨が0～100%基準で補正したゲージです。', abilityDefaultCommand: '現在の状況と対象に合わせて{label}を使う。', itemDefaultCommand: '現在の状況と対象に合わせて{label}を使う。', coldReprepareDescription: 'Psycheが現在の進行状態を保ち、ペルソナ・説明・ロアブックの根拠からこのキャラクターを再整理します。', coldPrepareDescription: 'Psycheがペルソナ・説明・ロアブックを読み、ステータス・技能・アイテムを準備します。以後、으아악씨がその状態から選択肢と特殊行動を管理します。',
       prepare: '準備する', cancel: 'キャンセル', coldConfirmLabel: 'キャラクター準備を確認', coldCancelLabel: 'キャラクター準備をキャンセル', playerActorInput: 'プレイヤーキャラクターを入力', playerActorTitle: 'プレイヤーキャラクター：{actor}・押して名前を入力', unselected: '未選択', gameplayInstructions: 'ゲーム進行指示', gameplayInstructionsTitle: 'このチャットのゲーム進行指示', gameplayInstructionsHint: 'このチャットにだけ保存され、次の選択肢生成から適用されます。', gameplayInstructionsPlaceholder: '例：選択肢は短く能動的にし、戦闘では周囲の地形を活用し、現在所持しているアイテムだけを提案する。', saveInstructions: '保存', cancelInstructions: 'キャンセル', instructionsSaved: 'このチャットにゲーム進行指示を保存しました。次の選択肢生成から適用されます。',
       gameplayInstructionsPrompt: 'このチャットのゲーム進行指示を入力してください。空欄で確定すると保存済みの指示を削除します。',
@@ -62204,12 +62840,12 @@ function normalizeAdaptiveQualityState(value) {
       cooldownTurns: '冷却 {count}回合', uses: '使用次数 {current}/{max}', owned: '持有 {count}', successChance: '成功可能性 {chance}%',
       minimum: '{label} {value}以上', prerequisite: '前置 {value}', requiredCondition: '需要状态 {value}', excludedCondition: '禁用状态 {value}', requirements: '条件',
       pendingTransfer: '等待发送', pendingNative: '按一次Risu发送按钮（➤）即可继续。', pendingUncertain: '请重新读取聊天准备状态以确认。', pendingWaiting: '正在等待结果。',
-      preparedItemHeading: '已应用于选项的条目', releasePrepared: '清除已应用条目', releaseItem: '清除条目', userDirective: '用户指示', releaseDirective: '清除用户指示', releaseInstruction: '清除指示',
+      preparedItemHeading: '已选技能或物品', releasePrepared: '清除所选条目', releaseItem: '清除条目', userDirective: '用户指示', releaseDirective: '清除用户指示', releaseInstruction: '清除指示',
       reprepareHelp: '保留当前进度，同时重新同步该角色的依据。', prepareHelp: '从当前依据中提取该角色的状态、技能和物品并保存到Psyche。',
       selectActor: '选择玩家角色', selectActorDescriptionCandidates: '请先选择要推进故事的角色。可直接选择下方候选，或按名称查找。', selectActorDescriptionPrompt: '请先选择要推进故事的角色。按下按钮可输入名称或别名。',
       prepareRequired: '需要准备角色状态', prepareRequiredDescription: '使用右上角的⚙按钮准备{actor}后，将显示已确认的状态、技能、物品和选项。', nonPersonaSelectHint: '若要使用非人格角色推进，请按右上角的👤按钮并输入名称或别名。', prepareActorStatus: '准备角色状态',
       rerollChoice: '重抽选项', rerollTitle: '仅重新生成当前场景的选项，不更改角色状态。',
-      specialIntent: '输入{label}的使用方式', preparedIntent: '输入{label}的使用方式，或选择默认选项', customActionHint: '仅在想执行自定义行动时输入', customActionInput: '输入想执行的行动', customActionPrompt: '请输入想执行的行动。若已选择技能或物品，将作为其使用方式处理。', customActionSubmit: '输入想执行的行动', customActionSubmitTitle: '输入行动并生成3个选项',
+      specialIntent: '输入{label}的使用方式', preparedIntent: '输入{label}的使用方式，或选择默认选项', customActionHint: '仅在想执行自定义行动时输入', customActionInput: '输入想执行的行动', customActionPrompt: '请输入想执行的行动。若已选择技能或物品，将作为其使用方式处理。', customActionSubmit: '输入想执行的行动', customActionSubmitTitle: '输入行动并生成3个选项', directActionSubmitTitle: '将所选技能或物品与输入行动直接准备到Risu输入框',
       noDescription: '尚未确立详细说明。', percentageFallbackHint: '尚无精确数值尺度，因此由으아악씨按0–100%标准显示该量表。', abilityDefaultCommand: '根据当前情况和目标使用{label}。', itemDefaultCommand: '根据当前情况和目标使用{label}。', coldReprepareDescription: 'Psyche会保留当前进度，并根据人格、描述和世界书依据重新整理该角色。', coldPrepareDescription: 'Psyche会读取人格、描述和世界书，准备状态、技能和物品；之后由으아악씨依据该状态管理选项和特殊行动。',
       prepare: '准备', cancel: '取消', coldConfirmLabel: '确认准备角色', coldCancelLabel: '取消准备角色', playerActorInput: '输入玩家角色', playerActorTitle: '玩家角色：{actor} · 点击输入名称', unselected: '未选择', gameplayInstructions: '游戏推进指示', gameplayInstructionsTitle: '本聊天的游戏推进指示', gameplayInstructionsHint: '仅保存在本聊天中，并从下一次生成选项开始应用。', gameplayInstructionsPlaceholder: '示例：让选项简短主动，战斗时利用周围地形，并且只建议当前拥有的物品。', saveInstructions: '保存', cancelInstructions: '取消', instructionsSaved: '已为本聊天保存游戏推进指示，将从下一次生成选项开始应用。',
       gameplayInstructionsPrompt: '请输入本聊天的游戏推进指示。留空并确认将清除已保存的指示。',
@@ -62290,9 +62926,9 @@ function normalizeAdaptiveQualityState(value) {
     const kind = ['ability', 'item'].includes(action?.kind) ? action.kind : '';
     if (!kind) return '';
     const declared = cleanString(action?.categoryLabel, '').slice(0, 40);
+    if (declared && !gameplayCategoryLabelIsGeneric(declared, kind) && gameplayLabelUsesLanguage(declared, language)) return declared;
     const localizedDeclared = gameplayMachineCategoryLabel(declared, language);
     if (localizedDeclared) return localizedDeclared;
-    if (declared && !gameplayCategoryLabelIsGeneric(declared, kind) && gameplayLabelUsesLanguage(declared, language)) return declared;
     const machineKind = cleanString(action?.entryKind, '').slice(0, 40);
     const localized = gameplayMachineCategoryLabel(machineKind, language);
     if (localized) return localized;
@@ -62309,6 +62945,74 @@ function normalizeAdaptiveQualityState(value) {
     return glyphs[key] || (kind === 'item' ? '🎒' : '✨');
   }
 
+  const GAMEPLAY_BROAD_CATEGORY_LABELS = Object.freeze({
+    ko: Object.freeze({ item: '아이템', magic: '마법', technique: '기술', ability: '능력', trait: '특성', martial: '무공', ninja: '닌술', taoist: '도술' }),
+    en: Object.freeze({ item: 'Items', magic: 'Magic', technique: 'Techniques', ability: 'Abilities', trait: 'Traits', martial: 'Martial Arts', ninja: 'Ninja Arts', taoist: 'Taoist Arts' }),
+    ja: Object.freeze({ item: 'アイテム', magic: '魔法', technique: '技術', ability: '能力', trait: '特性', martial: '武功', ninja: '忍術', taoist: '道術' }),
+    zh: Object.freeze({ item: '物品', magic: '魔法', technique: '技术', ability: '能力', trait: '特性', martial: '武功', ninja: '忍术', taoist: '道术' }),
+  });
+  const GAMEPLAY_BROAD_CATEGORY_GLYPHS = Object.freeze({
+    item: '🎒', magic: '🪄', technique: '⚡', ability: '✨', trait: '🧬', martial: '🥋', ninja: '🥷', taoist: '☯️',
+  });
+
+  function gameplayBroadCategoryLabel(key, language = 'ko') {
+    const normalizedLanguage = normalizeGameplayOutputLanguage(language);
+    return GAMEPLAY_BROAD_CATEGORY_LABELS[normalizedLanguage]?.[key]
+      || GAMEPLAY_BROAD_CATEGORY_LABELS.ko[key]
+      || '';
+  }
+
+  function gameplayBroadAbilityCategoryKey(value) {
+    const text = cleanString(value, '').toLowerCase();
+    const normalized = normalizeGameplayLookupKey(text);
+    if (!normalized) return '';
+    const standard = gameplayStandardCategoryKey(text);
+    if (['magic', 'spell'].includes(standard)
+      || /마법|주문|주술|마도|magic|spell|sorcer|wizardry|魔法|呪文|咒文|法术|法術/.test(text)) return 'magic';
+    if (['ninjutsu', 'taijutsu'].includes(standard)
+      || /닌술|인술|체술|환술|ninjutsu|taijutsu|genjutsu|忍術|忍术|体術|体术|幻術|幻术/.test(text)) return 'ninja';
+    if (['martialart', 'martialarts', 'qinggong'].includes(standard)
+      || /무공|무술|검술|권법|장법|경공|내공|심법|martial|qinggong|sword\s*art|武功|武術|武术|剣術|剑术|劍術|軽功|轻功|輕功|内功|內功/.test(text)) return 'martial';
+    if (/도술|도법|선법|선술|taoist|daoist|道術|道术|道法|仙法|仙術|仙术/.test(text)) return 'taoist';
+    if (standard === 'trait'
+      || /특성|재능|패시브|친화|혈통|trait|talent|passive|affinity|特性|才能|天赋|天賦|血統|血统/.test(text)) return 'trait';
+    if (['technique', 'skill'].includes(standard)
+      || /기술|스킬|기예|technique|skill|技術|技术|技能/.test(text)) return 'technique';
+    if (/능력|이능|초능력|권능|power|ability|abilities|gift|能力|異能|异能|権能|权能/.test(text)) return 'ability';
+    return '';
+  }
+
+  function gameplayInventoryCategoryGroup(row, language = 'ko') {
+    const kind = ['ability', 'item'].includes(row?.kind) ? row.kind : '';
+    if (!kind) return null;
+    if (kind === 'item') {
+      const broadKey = 'item';
+      const semanticKey = `broad:${broadKey}`;
+      return {
+        key: `${kind}:${semanticKey}`,
+        id: `${kind}-category-${hashString(`${kind}:${semanticKey}`)}`,
+        kind,
+        label: gameplayBroadCategoryLabel(broadKey, language),
+        glyph: GAMEPLAY_BROAD_CATEGORY_GLYPHS[broadKey],
+      };
+    }
+    const declared = cleanString(row?.categoryLabel, '').slice(0, 40);
+    const machineKind = cleanString(row?.entryKind, '').slice(0, 40);
+    const machineBroadKey = gameplayBroadAbilityCategoryKey(machineKind);
+    const declaredBroadKey = gameplayBroadAbilityCategoryKey(declared);
+    const broadKey = declaredBroadKey || machineBroadKey;
+    const resolvedBroadKey = broadKey || 'ability';
+    const semanticKey = `broad:${resolvedBroadKey}`;
+    const label = gameplayBroadCategoryLabel(resolvedBroadKey, language);
+    return {
+      key: `${kind}:${semanticKey}`,
+      id: `${kind}-category-${hashString(`${kind}:${semanticKey}`)}`,
+      kind,
+      label,
+      glyph: GAMEPLAY_BROAD_CATEGORY_GLYPHS[resolvedBroadKey] || gameplayCategoryGlyph(label, kind),
+    };
+  }
+
   function buildGameplayComposerActionGroups(rows, actorPrepared, outputLanguage) {
     if (!actorPrepared) return [];
     const allRows = Array.isArray(rows) ? rows : [];
@@ -62323,26 +63027,14 @@ function normalizeAdaptiveQualityState(value) {
         rows: contextRows,
       });
     }
-    const abilityRows = allRows.filter(row => row.kind === 'ability');
-    if (abilityRows.length) {
-      groups.push({
-        id: 'ability',
-        kind: 'ability',
-        label: gameplayUiText(outputLanguage, 'skills'),
-        glyph: '✨',
-        rows: abilityRows,
-      });
-    }
-    const inventoryRows = allRows.filter(row => row.kind === 'item');
-    if (inventoryRows.length) {
-      groups.push({
-        id: 'item',
-        kind: 'item',
-        label: gameplayUiText(outputLanguage, 'inventory'),
-        glyph: '🎒',
-        rows: inventoryRows,
-      });
-    }
+    const categoryGroups = new Map();
+    allRows.filter(row => ['ability', 'item'].includes(row.kind)).forEach(row => {
+      const category = gameplayInventoryCategoryGroup(row, outputLanguage);
+      if (!category) return;
+      if (!categoryGroups.has(category.key)) categoryGroups.set(category.key, { ...category, rows: [] });
+      categoryGroups.get(category.key).rows.push(row);
+    });
+    groups.push(...categoryGroups.values());
     return groups;
   }
 
@@ -62503,11 +63195,13 @@ function normalizeAdaptiveQualityState(value) {
     const actorPrepared = gameplayActorHasCommittedSheet(actor, context, outputLanguage);
     const resources = buildGameplayGuaranteedHudResources(actor, state, context, outputLanguage);
     const facts = gameplayCharacterProfileFacts(actor?.character, outputLanguage);
+    const choicesEnabled = gameplayAdvisorChoicesEnabled(conf);
     const advisor = normalizeGameplayAdvisor(state?.gameplay?.advisor);
-    const currentAdvisor = gameplayAdvisorMatchesContext(state, context, actor, advisor, state?.gameplay?.preparedSpecial)
+    const currentAdvisor = choicesEnabled && gameplayAdvisorMatchesContext(state, context, actor, advisor, state?.gameplay?.preparedSpecial)
       ? advisor
       : normalizeGameplayAdvisor(null);
     const allRows = buildGameplayActions(state, context, actor?.id)
+      .filter(action => choicesEnabled || action.kind !== 'context')
       .map((action, index) => ({ ...gameplayComposerActionRow(action, outputLanguage), _order: index }));
     const actionGroups = buildGameplayComposerActionGroups(allRows, actorPrepared, outputLanguage);
     const visibleTabIds = actionGroups.map(group => group.id);
@@ -62577,7 +63271,8 @@ function normalizeAdaptiveQualityState(value) {
       ? { ...coldStartBase, allowed: false, reason: coldStartRuntime.reason }
       : coldStartBase;
     const showColdStart = Boolean(actor);
-    const generationBusy = Runtime.gameplayComposerGenerationBusy === true;
+    const generationBusy = Runtime.gameplayComposerGenerationBusy === true
+      || Runtime.gameplayComposerUiFeedbackBusy === true;
     const coldStartConfirm = Runtime.gameplayColdStartConfirm === true;
     const conditionSource = actor?.character?.conditions;
     const rawConditions = Array.isArray(conditionSource)
@@ -62689,6 +63384,7 @@ function normalizeAdaptiveQualityState(value) {
       coldStart: { ...coldStart, visible: showColdStart },
       coldStartConfirm,
       generationBusy,
+      choicesEnabled,
       advisorChatter: currentAdvisor.chatter,
       choiceRevision: normalizeGameplayAdvisor(state?.gameplay?.advisor).revision,
       picker: Runtime.gameplayComposerPicker,
@@ -62702,7 +63398,7 @@ function normalizeAdaptiveQualityState(value) {
     const outputLanguage = normalizeGameplayOutputLanguage(viewModel?.outputLanguage);
     const ui = (key, values = null) => gameplayUiText(outputLanguage, key, values);
     Runtime.gameplayComposerOutputLanguage = outputLanguage;
-    const indexed = (viewModel?.controls || []).map((control, index) => ({ ...control, id: gameplayComposerButtonId(index) }));
+    const indexed = gameplayComposerIndexedControls(viewModel);
     const bySlot = slot => indexed.filter(control => control.slot === slot);
     const one = slot => bySlot(slot)[0] || null;
     const button = (control, style = '', attrs = '', content = '') => control ? `<button id="${escHtml(control.id)}" type="button" ${control.disabled ? 'disabled' : ''} ${attrs} style="box-sizing:border-box;min-height:34px;border:1px solid #554b50;border-radius:7px;background:#302b31;color:#f4ece6;font:inherit;font-size:11px;font-weight:700;cursor:${control.disabled ? 'not-allowed' : 'pointer'};touch-action:manipulation;opacity:${control.disabled ? '.46' : '1'};${style}">${content || escHtml(control.label)}</button>` : '';
@@ -62753,8 +63449,23 @@ function normalizeAdaptiveQualityState(value) {
         : `<div style="margin-top:4px;color:#a99da1;font-size:8px">${escHtml(ui('noDescription'))}</div>`;
       return `<details data-gameplay-condition-indicator data-gameplay-condition-kind="${escHtml(condition.kind)}" style="position:relative;display:block;flex:none;width:22px;height:22px"><summary aria-label="${escHtml(accessibleLabel)}" title="${escHtml(accessibleLabel)}" style="box-sizing:border-box;display:flex;align-items:center;justify-content:center;width:22px;height:22px;padding:0;border:1px solid ${escHtml(condition.tone.border)};border-radius:6px;background:${escHtml(condition.tone.background)};color:${escHtml(condition.tone.text)};font-size:11px;font-weight:800;line-height:1;list-style:none;cursor:pointer;touch-action:manipulation">${escHtml(condition.icon)}</summary><div data-gameplay-condition-popover role="tooltip" style="position:absolute;z-index:20;right:-4px;top:calc(100% + 7px);box-sizing:border-box;width:max-content;min-width:170px;max-width:min(240px,calc(100vw - 36px));padding:7px 8px;border:1px solid ${escHtml(condition.tone.border)};border-radius:8px;background:#211d23;color:#eee5e1;box-shadow:0 8px 20px rgba(0,0,0,.45)"><i aria-hidden="true" style="position:absolute;right:10px;bottom:100%;width:7px;height:7px;transform:translateY(4px) rotate(45deg);border-left:1px solid ${escHtml(condition.tone.border)};border-top:1px solid ${escHtml(condition.tone.border)};background:#211d23"></i><div style="position:relative;display:flex;align-items:center;justify-content:space-between;gap:7px"><strong style="min-width:0;color:${escHtml(condition.tone.text)};font-size:10px;overflow-wrap:anywhere">${escHtml(condition.label)}</strong><small style="flex:none;color:#a99da1;font-size:8px">${escHtml(gameplayConditionKindLabel(condition.kind, outputLanguage))}</small></div>${explanation}</div></details>`;
     }).join('');
-    const characterHeaderTools = `${conditionIndicators}${button(fullRefresh,'width:24px;min-width:24px;height:24px;min-height:24px;padding:0;border-radius:6px;font-size:13px;line-height:1;border-color:#66574f;background:#2b2528;color:#d9bd91;',`data-gameplay-state-sync aria-label="${escHtml(ui('syncStatus'))}" title="${escHtml(ui('syncStatusTitle'))}"`,'⟳')}`;
-    const resources = (viewModel?.hud?.resources || []).map(resource => `<div data-gameplay-resource ${resource.percentageFallback === true ? `data-gameplay-percentage-fallback="true" title="${escHtml(ui('percentageFallbackHint'))}"` : ''} style="min-width:0;padding:7px 8px;border:1px solid #443c42;border-radius:8px;background:#242127"><div style="display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:10px"><strong style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(resource.label)}</strong><span style="color:#d9cfc9;white-space:nowrap">${escHtml(gameplayResourceValueText(resource, viewModel?.outputLanguage))}</span></div><div data-gameplay-resource-bar role="progressbar" aria-valuemin="${resource.min}" aria-valuemax="${resource.max}" aria-valuenow="${resource.current}" style="height:5px;margin-top:5px;border-radius:999px;background:#151318;overflow:hidden"><i style="display:block;width:${Number(resource.ratio || 0).toFixed(1)}%;height:100%;border-radius:inherit;background:${escHtml(resource.tone.bar)};opacity:1;box-shadow:0 0 7px ${escHtml(resource.tone.glow)}"></i></div>${resource.depletionEffect ? `<small data-gameplay-resource-depletion style="display:block;margin-top:4px;color:#a99b96;font-size:8px;line-height:1.35;overflow-wrap:anywhere">${escHtml(resource.depletionEffect)}</small>` : ''}</div>`).join('');
+    const resourceDepletionIndicators = (viewModel?.hud?.resources || []).filter(resource => {
+      if (!cleanString(resource?.depletionEffect, '')) return false;
+      const current = Number(resource?.current);
+      const minimum = Number(resource?.min);
+      return Number.isFinite(current) && Number.isFinite(minimum) && current <= minimum;
+    }).map(resource => {
+      const vital = gameplayGaugeKeyIsVital(resource.canonicalKey || resource.key);
+      const icon = vital ? '☠️' : '🪫';
+      const border = vital ? '#9a555b' : '#9a7748';
+      const background = vital ? '#3a2429' : '#382f24';
+      const textColor = vital ? '#f0a7ad' : '#e9c27f';
+      const effect = cleanString(resource.depletionEffect, '');
+      const accessibleLabel = `${resource.label} · ${effect}`;
+      return `<details data-gameplay-resource-depletion-indicator style="position:relative;display:block;flex:none;width:22px;height:22px"><summary aria-label="${escHtml(accessibleLabel)}" title="${escHtml(accessibleLabel)}" style="box-sizing:border-box;display:flex;align-items:center;justify-content:center;width:22px;height:22px;padding:0;border:1px solid ${border};border-radius:6px;background:${background};color:${textColor};font-size:11px;font-weight:800;line-height:1;list-style:none;cursor:pointer;touch-action:manipulation">${escHtml(icon)}</summary><div data-gameplay-resource-depletion-popover role="tooltip" style="position:absolute;z-index:20;right:-4px;top:calc(100% + 7px);box-sizing:border-box;width:max-content;min-width:170px;max-width:min(240px,calc(100vw - 36px));padding:7px 8px;border:1px solid ${border};border-radius:8px;background:#211d23;color:#eee5e1;box-shadow:0 8px 20px rgba(0,0,0,.45)"><i aria-hidden="true" style="position:absolute;right:10px;bottom:100%;width:7px;height:7px;transform:translateY(4px) rotate(45deg);border-left:1px solid ${border};border-top:1px solid ${border};background:#211d23"></i><div style="position:relative;display:flex;align-items:center;justify-content:space-between;gap:7px"><strong style="min-width:0;color:${textColor};font-size:10px;overflow-wrap:anywhere">${escHtml(resource.label)}</strong><small style="flex:none;color:#a99da1;font-size:8px">${escHtml(gameplayResourceValueText(resource, outputLanguage))}</small></div><div data-gameplay-resource-depletion-effect style="margin-top:4px;color:#d7cbc6;font-size:9px;line-height:1.4;overflow-wrap:anywhere">${escHtml(effect)}</div></div></details>`;
+    }).join('');
+    const characterHeaderTools = `${conditionIndicators}${resourceDepletionIndicators}${button(fullRefresh,'width:24px;min-width:24px;height:24px;min-height:24px;padding:0;border-radius:6px;font-size:13px;line-height:1;border-color:#66574f;background:#2b2528;color:#d9bd91;',`data-gameplay-state-sync aria-label="${escHtml(ui('syncStatus'))}" title="${escHtml(ui('syncStatusTitle'))}"`,'⟳')}`;
+    const resources = (viewModel?.hud?.resources || []).map(resource => `<div data-gameplay-resource ${resource.percentageFallback === true ? `data-gameplay-percentage-fallback="true" title="${escHtml(ui('percentageFallbackHint'))}"` : ''} style="min-width:0;padding:7px 8px;border:1px solid #443c42;border-radius:8px;background:#242127"><div style="display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:10px"><strong style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(resource.label)}</strong><span style="color:#d9cfc9;white-space:nowrap">${escHtml(gameplayResourceValueText(resource, viewModel?.outputLanguage))}</span></div><div data-gameplay-resource-bar role="progressbar" aria-valuemin="${resource.min}" aria-valuemax="${resource.max}" aria-valuenow="${resource.current}" style="height:5px;margin-top:5px;border-radius:999px;background:#151318;overflow:hidden"><i style="display:block;width:${Number(resource.ratio || 0).toFixed(1)}%;height:100%;border-radius:inherit;background:${escHtml(resource.tone.bar)};opacity:1;box-shadow:0 0 7px ${escHtml(resource.tone.glow)}"></i></div></div>`).join('');
     const detailFacts = (viewModel?.hud?.detailFacts || []).map(fact => {
       const factText = `${fact.value}${fact.unit ? ` ${fact.unit}` : ''}`;
       return `<div data-gameplay-profile-fact data-gameplay-profile-detail-fact style="box-sizing:border-box;min-width:0;padding:5px 0;border-bottom:1px solid #3e373c"><strong style="display:block;color:#b89b75;font-size:8px">${escHtml(fact.label)}</strong><span style="display:block;margin-top:2px;color:#cfc4bf;font-size:9px;line-height:1.4;overflow-wrap:anywhere">${escHtml(factText)}</span></div>`;
@@ -62869,7 +63580,8 @@ function normalizeAdaptiveQualityState(value) {
       : viewModel?.prepared?.label
         ? ui('preparedIntent', { label: viewModel.prepared.label })
         : ui('customActionHint');
-    const customActionComposer = customActionControl ? `<section data-gameplay-custom-action-composer style="box-sizing:border-box;margin:6px 0;padding:6px;border:1px solid #4f474f;border-radius:8px;background:#211e23"><div style="margin:0 2px 5px;color:#948990;font-size:8px;line-height:1.25">${escHtml(customActionHint)}</div>${button(customActionControl,'width:100%;min-height:32px;padding:5px 8px;border-color:#66566d;background:#2b2530;color:#e6d6eb;',`data-gameplay-custom-action-submit aria-label="${escHtml(ui('customActionSubmit'))}" title="${escHtml(ui('customActionSubmitTitle'))}"`,'✎ '+escHtml(ui('customActionSubmit')))}</section>` : '';
+    const customActionSubmitTitle = ui(viewModel?.choicesEnabled === false ? 'directActionSubmitTitle' : 'customActionSubmitTitle');
+    const customActionComposer = customActionControl ? `<section data-gameplay-custom-action-composer style="box-sizing:border-box;margin:6px 0;padding:6px;border:1px solid #4f474f;border-radius:8px;background:#211e23"><div style="margin:0 2px 5px;color:#948990;font-size:8px;line-height:1.25">${escHtml(customActionHint)}</div>${button(customActionControl,'width:100%;min-height:32px;padding:5px 8px;border-color:#66566d;background:#2b2530;color:#e6d6eb;',`data-gameplay-custom-action-submit aria-label="${escHtml(ui('customActionSubmit'))}" title="${escHtml(customActionSubmitTitle)}"`,'✎ '+escHtml(ui('customActionSubmit')))}</section>` : '';
     const selectedDetail = selectedSpecial
       ? `<section data-gameplay-special-detail style="box-sizing:border-box;width:min(100%,300px);margin:7px 0 0 auto;padding:7px 8px;border:1px solid #5a4d53;border-radius:8px;background:#211e23;box-shadow:0 5px 14px rgba(0,0,0,.2)"><div style="display:flex;align-items:center;justify-content:space-between;gap:6px"><strong style="min-width:0;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(selectedSpecial.label)}</strong><span style="flex:none;font-size:8px;color:#d5ad74">${escHtml(firstNonEmpty(selectedSpecial.composerCategoryLabel, gameplayActionCategoryLabel(selectedSpecial, outputLanguage), ui('unclassified')))}</span></div><div style="margin-top:4px;font-size:9px;line-height:1.4;color:#c5b8b2;overflow-wrap:anywhere">${escHtml(firstNonEmpty(selectedSpecial.description, ui('noDescription')))}</div>${selectedEffectsHtml}${detailMeta ? `<div style="margin-top:4px;font-size:9px;color:#e0bf89;overflow-wrap:anywhere">${escHtml(detailMeta)}</div>` : ''}${requirementText ? `<div style="margin-top:3px;font-size:8px;line-height:1.35;color:#aaa0b1;overflow-wrap:anywhere">${escHtml(ui('requirements'))} · ${escHtml(requirementText)}</div>` : ''}${detailReason ? `<div style="margin-top:3px;font-size:8px;line-height:1.35;color:${selectedSpecial.available ? '#91cda2' : '#e2a0a0'}">${escHtml(detailReason)}</div>` : ''}</section>`
       : '';
@@ -62942,6 +63654,7 @@ function normalizeAdaptiveQualityState(value) {
   }
 
   async function regenerateGameplayChoices(conf, context, state, reason = 'reroll', advisorOptions = {}) {
+    if (!gameplayAdvisorChoicesEnabled(conf)) return false;
     const outputLanguage = gameplayAdvisorOutputLanguage(conf);
     const ui = (key, values = null) => gameplayUiText(outputLanguage, key, values);
     const actor = resolveGameplayActor(state, context);
@@ -63003,6 +63716,7 @@ function normalizeAdaptiveQualityState(value) {
   }
 
   async function repairGameplayAdvisorDeck(conf, context, state, reason = 'repair', advisorOptions = {}) {
+    if (!gameplayAdvisorChoicesEnabled(conf)) return false;
     state.gameplay = normalizeGameplayState(state?.gameplay);
     const outputLanguage = gameplayAdvisorOutputLanguage(conf);
     const actor = resolveGameplayActor(state, context);
@@ -63042,6 +63756,14 @@ function normalizeAdaptiveQualityState(value) {
     }
     actor = resolveGameplayActor(state, context, actor?.id) || actor;
     if (!gameplayActorHasCommittedSheet(actor, context, outputLanguage)) throw new Error(ui('preparationIncomplete'));
+    let advisorConf = conf;
+    if (typeof options?.loadLatestConf === 'function') {
+      try {
+        advisorConf = await options.loadLatestConf() || conf;
+      } catch (_) {
+        advisorConf = conf;
+      }
+    }
     const advisorOptions = {
       turnEvidence: evidenceTarget.turnEvidence,
       turnEvidenceTarget: evidenceTarget.target,
@@ -63049,8 +63771,8 @@ function normalizeAdaptiveQualityState(value) {
       panelScope: options?.panelScope || context?.scope,
     };
     const choicesPrepared = force
-      ? await tryRegenerateGameplayChoices(conf, context, state, reason, advisorOptions)
-      : await repairGameplayAdvisorDeck(conf, context, state, reason, advisorOptions);
+      ? await tryRegenerateGameplayChoices(advisorConf, context, state, reason, advisorOptions)
+      : await repairGameplayAdvisorDeck(advisorConf, context, state, reason, advisorOptions);
     return { actor, coldStarted, choicesPrepared };
   }
 
@@ -63117,7 +63839,17 @@ function normalizeAdaptiveQualityState(value) {
 
   function gameplayComposerCommandIsFast(value) {
     const command = String(value || '');
-    return command.startsWith('tab:') || command.startsWith('inventory-page:') || command.startsWith('select-action:');
+    return command.startsWith('tab:')
+      || command.startsWith('inventory-page:')
+      || command.startsWith('select-action:')
+      || ['cold-start', 'cold-start-cancel'].includes(command);
+  }
+
+  function gameplayComposerSlowFeedbackKey(value) {
+    const command = String(value || '');
+    if (command === 'refresh' || command === 'cold-start-confirm') return 'syncingStatus';
+    if (['reroll-choices', 'clear-custom-action', 'clear-prepared'].includes(command)) return 'generatingChoices';
+    return '';
   }
 
   function queueGameplayComposerFastCommand(command, conf, options, panelSession) {
@@ -63180,13 +63912,39 @@ function normalizeAdaptiveQualityState(value) {
           Runtime.gameplayFatalConfirm = null;
         } else if (value.startsWith('select-action:')) {
           const actionId = cleanString(options?.controlValue || value.slice('select-action:'.length), '');
-          if (!buildGameplayActions(mountedData.state, mountedData.context).some(action => action.id === actionId)) {
+          const selectedSpecial = buildGameplayActions(mountedData.state, mountedData.context)
+            .find(action => action.id === actionId && ['ability', 'item'].includes(action.kind));
+          if (!selectedSpecial) {
             throw new Error(gameplayUiText(gameplayAdvisorOutputLanguage(mountedData.conf), 'selectedEntryNotFound'));
           }
-          Runtime.gameplayComposerSelectedActionId = Runtime.gameplayComposerSelectedActionId === actionId ? '' : actionId;
+          const selected = Runtime.gameplayComposerSelectedActionId !== actionId;
+          Runtime.gameplayComposerSelectedActionId = selected ? actionId : '';
+          mountedData.state.gameplay = normalizeGameplayState(mountedData.state.gameplay);
+          mountedData.state.gameplay.preparedSpecial = selected
+            ? normalizeGameplayPreparedSpecial({
+              kind: selectedSpecial.kind,
+              entryId: selectedSpecial.entryId,
+              label: selectedSpecial.label,
+              actorId: resolveGameplayActor(mountedData.state, mountedData.context)?.id || '',
+              targetIds: [],
+              preparedAt: nowIso(),
+            })
+            : null;
+          mountedData.state.gameplay.customAction = null;
+          scheduleGameplayComposerSelectionSave(mountedData.conf, mountedData.context, mountedData.state);
           Runtime.gameplayFatalConfirm = null;
+        } else if (value === 'cold-start') {
+          Runtime.gameplayColdStartConfirm = true;
+        } else if (value === 'cold-start-cancel') {
+          Runtime.gameplayColdStartConfirm = false;
         }
-        await mountGameplayComposerPanel(mountedData.conf, mountedData.context, mountedData.state, panelSession);
+        await mountGameplayComposerPanel(
+          mountedData.conf,
+          mountedData.context,
+          mountedData.state,
+          panelSession,
+          { fastUi: true },
+        );
         return { fast: true };
       } finally {
         Runtime.gameplayComposerRefreshBusy = false;
@@ -63234,10 +63992,23 @@ function normalizeAdaptiveQualityState(value) {
     let context = null;
     let state = null;
     let panelScope = '';
-    const panelOperationOptions = () => ({ panelSession, panelScope });
+    const panelOperationOptions = () => ({ panelSession, panelScope, loadLatestConf: getConfig });
     const panelOperationIsCurrent = () => gameplayUiOperationIsCurrent(panelOperationOptions(), context);
+    const feedbackKey = gameplayComposerSlowFeedbackKey(value);
+    if (feedbackKey && mountedData?.session === panelSession && mountedData.conf && mountedData.context && mountedData.state) {
+      Runtime.gameplayComposerUiFeedbackBusy = true;
+      Runtime.gameplayComposerNotice = ui(feedbackKey);
+      Runtime.gameplayComposerNoticeKind = 'info';
+      mountGameplayComposerPanel(
+        mountedData.conf,
+        mountedData.context,
+        mountedData.state,
+        panelSession,
+        { fastUi: true },
+      ).catch(() => {});
+    }
     try {
-      latestConf = latestConf || await getConfig();
+      latestConf = await getConfig();
       outputLanguage = gameplayAdvisorOutputLanguage(latestConf);
       Runtime.gameplayComposerOutputLanguage = outputLanguage;
       if (!inChatPanelSessionIsCurrent(panelSession)) return { stale: true };
@@ -63433,7 +64204,32 @@ function normalizeAdaptiveQualityState(value) {
         Runtime.gameplayComposerActiveTab = 'context';
         Runtime.gameplayComposerSelectedActionId = '';
         await saveGameplayStateForContext(latestConf, context, state, { includeAdvisor: false });
-        await tryRegenerateGameplayChoices(latestConf, context, state, 'custom-action', panelOperationOptions());
+        if (gameplayAdvisorChoicesEnabled(latestConf)) {
+          await tryRegenerateGameplayChoices(latestConf, context, state, 'custom-action', panelOperationOptions());
+        } else {
+          const directAction = buildGameplayDirectInputAction(state, context, actor.id);
+          if (!directAction) throw new Error(ui('specialUnavailable'));
+          if (!directAction.availability?.available) {
+            throw new Error(gameplayLocalizedErrorMessage(directAction.availability?.blocked?.[0] || ui('specialUnavailable'), outputLanguage));
+          }
+          if (directAction.availability.requiresFatalConfirm) {
+            const now = Date.now();
+            const confirmation = Runtime.gameplayFatalConfirm;
+            const confirmKey = gameplayFatalConfirmKey(context, actor, directAction, state);
+            if (!confirmation || confirmation.key !== confirmKey || confirmation.expiresAt < now) {
+              Runtime.gameplayFatalConfirm = { key: confirmKey, expiresAt: now + GAMEPLAY_FATAL_CONFIRM_WINDOW_MS };
+              Runtime.gameplayComposerNotice = ui('fatalConfirmNotice');
+              Runtime.gameplayComposerNoticeKind = 'native-send';
+              await mountGameplayComposerPanel(latestConf, context, state, panelSession);
+              await safeGameplayToast(ui('fatalConfirmTitle'), [ui('fatalConfirmToast')], 'warn', 3600);
+              return;
+            }
+          }
+          return await dispatchGameplayAction(latestConf, context, state, directAction, {
+            panelSession,
+            panelScope: context.scope,
+          });
+        }
       } else if (value === 'clear-custom-action') {
         state.gameplay.customAction = null;
         Runtime.gameplayComposerSelectedActionId = '';
@@ -63471,17 +64267,20 @@ function normalizeAdaptiveQualityState(value) {
           panelScope: context.scope,
         });
       }
+      Runtime.gameplayComposerUiFeedbackBusy = false;
       await mountGameplayComposerPanel(latestConf, context, state, panelSession);
     } catch (err) {
       if (!panelOperationIsCurrent()) return { stale: true };
       Runtime.lastError = `gameplay panel: ${err?.message || err}`;
       Runtime.gameplayComposerGenerationBusy = false;
+      Runtime.gameplayComposerUiFeedbackBusy = false;
       const localizedError = gameplayLocalizedErrorMessage(err, outputLanguage);
       Runtime.gameplayComposerNotice = localizedError;
       Runtime.gameplayComposerNoticeKind = 'error';
       if (latestConf && context && state) await mountGameplayComposerPanel(latestConf, context, state, panelSession).catch(() => {});
       await safeGameplayToast(ui('gameAgent'), [localizedError], 'error', 3800);
     } finally {
+      Runtime.gameplayComposerUiFeedbackBusy = false;
       Runtime.gameplayComposerRefreshBusy = false;
       scheduleQueuedGameplayComposerFastCommand(panelSession);
       if (Runtime.gameplayComposerPanelOpen === true && Runtime.inChatPanelOwner === 'gameplay'
@@ -63605,28 +64404,44 @@ function normalizeAdaptiveQualityState(value) {
       }));
     };
     if (!active()) return { interactive: false, stale: true };
-    const entries = (viewModel?.controls || []).map((control, index) => ({ ...control, id: gameplayComposerButtonId(index) }));
+    const entries = gameplayComposerIndexedControls(viewModel);
     const controlElements = await gameplayComposerControlElements(root, entries);
-    let controlBounds = await gameplayComposerControlBounds(controlElements);
+    const controlBounds = await gameplayComposerControlBounds(controlElements);
     const surfaceElement = await root?.getElementById?.(gameplayComposerSurfaceId());
-    let surfaceRect = await surfaceElement?.getBoundingClientRect?.() || gameplayComposerBoundsEnvelope(controlBounds);
+    const surfaceRect = await surfaceElement?.getBoundingClientRect?.() || gameplayComposerBoundsEnvelope(controlBounds);
+    const binding = {
+      session,
+      root,
+      conf,
+      viewModel,
+      entries,
+      controlElements,
+      controlBounds,
+      surfaceElement,
+      surfaceRect,
+      measureEpoch: 0,
+    };
     let boundsRefresh = null;
     let pointerDownRefresh = null;
     let pointerStart = null;
     let pointerSequence = 0;
     const refreshControlBounds = () => {
       if (boundsRefresh) return boundsRefresh;
+      const measureEpoch = binding.measureEpoch;
       boundsRefresh = Promise.all([
-        gameplayComposerControlBounds(controlElements),
-        surfaceElement?.getBoundingClientRect?.(),
+        gameplayComposerControlBounds(binding.controlElements),
+        binding.surfaceElement?.getBoundingClientRect?.(),
       ])
         .then(([next, nextSurfaceRect]) => {
+          if (binding.measureEpoch !== measureEpoch || Runtime.gameplayComposerLiveBinding !== binding) {
+            return binding.controlBounds;
+          }
           // An empty measurement means the old controls disappeared. Keeping
           // their previous rectangles could activate a different, stale
           // command after details/keyboard/layout changes.
-          controlBounds = next;
-          surfaceRect = nextSurfaceRect || gameplayComposerBoundsEnvelope(next) || null;
-          return controlBounds;
+          binding.controlBounds = next;
+          binding.surfaceRect = nextSurfaceRect || gameplayComposerBoundsEnvelope(next) || null;
+          return binding.controlBounds;
         })
         .finally(() => { boundsRefresh = null; });
       return boundsRefresh;
@@ -63650,7 +64465,7 @@ function normalizeAdaptiveQualityState(value) {
       }
       return options;
     };
-    const pointerDownId = await root.addEventListener('pointerdown', event => {
+    const pointerDownPromise = root.addEventListener('pointerdown', event => {
       if (!active() || !gameplayComposerPointerCanActivate(event)) {
         pointerSequence += 1;
         pointerStart = null;
@@ -63663,30 +64478,26 @@ function normalizeAdaptiveQualityState(value) {
         clientY: Number(event?.clientY),
         pointerId: gameplayComposerPointerIdentity(event),
       };
-      const cachedBound = controlBounds.find(item => gameplayComposerPointInRect(item?.rect, start)) || null;
+      const cachedBound = binding.controlBounds.find(item => gameplayComposerPointInRect(item?.rect, start)) || null;
+      if (cachedBound) {
+        // Bounds are rebuilt after every panel paint. A cache hit can therefore
+        // dispatch this tap without another SafeDOM round-trip; cache misses
+        // still remeasure to recover from scroll, resize, or native <details>
+        // layout changes.
+        pointerStart = { ...start, control: cachedBound.entry };
+        pointerDownRefresh = null;
+        return;
+      }
       pointerStart = null;
       pointerDownRefresh = (async () => {
-        if (cachedBound) {
-          const cachedElement = controlElements.find(item => item.entry?.id === cachedBound.entry?.id);
-          const verified = cachedElement ? (await gameplayComposerControlBounds([cachedElement]))[0] : null;
-          if (active() && sequence === pointerSequence && gameplayComposerPointInRect(verified?.rect, start)) {
-            pointerStart = { ...start, control: verified.entry };
-            return;
-          }
-        }
         await refreshControlBounds().catch(() => {});
-        if (!active() || sequence !== pointerSequence || !gameplayComposerPointInRect(surfaceRect, start)) return;
-        const refreshedControl = gameplayComposerControlAtPoint(controlBounds, start);
+        if (!active() || sequence !== pointerSequence || !gameplayComposerPointInRect(binding.surfaceRect, start)) return;
+        const refreshedControl = gameplayComposerControlAtPoint(binding.controlBounds, start);
         if (refreshedControl) pointerStart = { ...start, control: refreshedControl };
       })();
       pointerDownRefresh?.catch(() => {});
     });
-    if (pointerDownId) listenerIds.push({ type: 'pointerdown', id: pointerDownId });
-    if (!active()) {
-      await removeLocalListeners();
-      return { interactive: false, stale: true };
-    }
-    const pointerId = await root.addEventListener('pointerup', async event => {
+    const pointerUpPromise = root.addEventListener('pointerup', async event => {
       if (!active()) return;
       const sequence = pointerSequence;
       if (pointerDownRefresh) await pointerDownRefresh.catch(() => {});
@@ -63698,36 +64509,37 @@ function normalizeAdaptiveQualityState(value) {
       pointerSequence += 1;
       if (!gameplayComposerPointerStayedTap(start, event)) return;
       const control = start?.control;
-      if (control && active()) handleGameplayComposerCommand(control.command, conf, await commandOptions(control)).catch(() => {});
+      if (control && active()) handleGameplayComposerCommand(control.command, binding.conf, await commandOptions(control)).catch(() => {});
     });
-    if (pointerId) listenerIds.push({ type: 'pointerup', id: pointerId });
-    if (!active()) {
-      await removeLocalListeners();
-      return { interactive: false, stale: true };
-    }
-    const pointerCancelId = await root.addEventListener('pointercancel', event => {
+    const pointerCancelPromise = root.addEventListener('pointercancel', event => {
       if (pointerStart && !gameplayComposerSamePointer(pointerStart, event)) return;
       pointerSequence += 1;
       pointerStart = null;
       pointerDownRefresh = null;
     });
-    if (pointerCancelId) listenerIds.push({ type: 'pointercancel', id: pointerCancelId });
-    if (!active()) {
-      await removeLocalListeners();
-      return { interactive: false, stale: true };
-    }
-    const keyId = await root.addEventListener('keydown', async event => {
+    const keyPromise = root.addEventListener('keydown', async event => {
       if (!active()) return;
       if (String(event?.key || '') === 'Escape') {
         handleGameplayComposerCommand(
           Runtime.gameplayInstructionsEditorOpen === true ? 'instructions-cancel' : 'close',
-          conf,
+          binding.conf,
           { panelSession: session },
         ).catch(() => {});
         return;
       }
     });
-    if (keyId) listenerIds.push({ type: 'keydown', id: keyId });
+    const [pointerDownId, pointerUpId, pointerCancelId, keyId] = await Promise.all([
+      pointerDownPromise,
+      pointerUpPromise,
+      pointerCancelPromise,
+      keyPromise,
+    ]);
+    [
+      ['pointerdown', pointerDownId],
+      ['pointerup', pointerUpId],
+      ['pointercancel', pointerCancelId],
+      ['keydown', keyId],
+    ].forEach(([type, id]) => { if (id) listenerIds.push({ type, id }); });
     if (!active()) {
       await removeLocalListeners();
       return { interactive: false, stale: true };
@@ -63735,8 +64547,96 @@ function normalizeAdaptiveQualityState(value) {
     Runtime.gameplayComposerListenerRoot = root;
     Runtime.gameplayComposerListenerIds = listenerIds;
     Runtime.gameplayComposerListenerSession = session;
+    Runtime.gameplayComposerLiveBinding = binding;
     Runtime.gameplayComposerPanelSupported = true;
     return { interactive: true };
+  }
+
+  function gameplayComposerRemapCachedBounds(binding, entries, viewModel = null) {
+    const previous = Array.isArray(binding?.controlBounds) ? binding.controlBounds : [];
+    const byKey = new Map(previous.map(item => [gameplayComposerControlKey(item?.entry), item?.rect]));
+    const bySlot = new Map();
+    previous.forEach(item => {
+      const slot = cleanString(item?.entry?.slot, '');
+      if (!bySlot.has(slot)) bySlot.set(slot, []);
+      bySlot.get(slot).push(item);
+    });
+    const slotIndexes = new Map();
+    const oldKind = (binding?.viewModel?.tabs || []).find(tab => tab.active)?.kind || '';
+    const newKind = (viewModel?.tabs || []).find(tab => tab.active)?.kind || '';
+    const actionLayoutCompatible = oldKind === newKind
+      || (['ability', 'item'].includes(oldKind) && ['ability', 'item'].includes(newKind));
+    return (Array.isArray(entries) ? entries : []).map(entry => {
+      const slot = cleanString(entry?.slot, '');
+      const slotIndex = Math.max(0, Number(slotIndexes.get(slot) || 0));
+      slotIndexes.set(slot, slotIndex + 1);
+      let rect = byKey.get(gameplayComposerControlKey(entry));
+      if (!rect && (actionLayoutCompatible && slot === 'action-row'
+        || ['inventory-page-previous', 'inventory-page-next'].includes(slot))) {
+        rect = bySlot.get(slot)?.[slotIndex]?.rect || null;
+      }
+      return rect ? { entry, rect } : null;
+    }).filter(Boolean);
+  }
+
+  async function refreshGameplayComposerLiveBinding(binding, entries, measureEpoch) {
+    const startedAt = Date.now();
+    const controlElements = await gameplayComposerControlElements(binding.root, entries);
+    const [controlBounds, surfaceRect] = await Promise.all([
+      gameplayComposerControlBounds(controlElements),
+      binding.surfaceElement?.getBoundingClientRect?.(),
+    ]);
+    if (Runtime.gameplayComposerLiveBinding !== binding
+      || binding.measureEpoch !== measureEpoch
+      || !inChatPanelSessionIsCurrent(binding.session)) {
+      return { refreshed: false, stale: true };
+    }
+    binding.controlElements = controlElements;
+    binding.controlBounds = controlBounds;
+    binding.surfaceRect = surfaceRect || gameplayComposerBoundsEnvelope(controlBounds) || binding.surfaceRect || null;
+    recordGameplayComposerPerformance('fast-surface-measure', startedAt, {
+      controls: entries.length,
+      measured: controlBounds.length,
+    });
+    return { refreshed: true, controls: controlBounds.length };
+  }
+
+  async function patchGameplayComposerPanelSurface(viewModel, conf, session, html) {
+    const binding = Runtime.gameplayComposerLiveBinding;
+    if (!binding || binding.session !== session || !binding.surfaceElement
+      || typeof binding.surfaceElement.setInnerHTML !== 'function'
+      || !inChatPanelSessionIsCurrent(session)) {
+      return { patched: false, reason: 'live-surface-unavailable' };
+    }
+    const innerHtml = gameplayComposerPanelInnerHtml(html);
+    if (!innerHtml) return { patched: false, reason: 'panel-inner-html-unavailable' };
+    const startedAt = Date.now();
+    const entries = gameplayComposerIndexedControls(viewModel);
+    const optimisticBounds = gameplayComposerRemapCachedBounds(binding, entries, viewModel);
+    const renderEpoch = Math.max(0, Number(Runtime.gameplayComposerRenderEpoch || 0)) + 1;
+    Runtime.gameplayComposerRenderEpoch = renderEpoch;
+    await binding.surfaceElement.setInnerHTML(innerHtml);
+    if (Runtime.gameplayComposerLiveBinding !== binding
+      || binding.session !== session
+      || !inChatPanelSessionIsCurrent(session)
+      || Runtime.gameplayComposerRenderEpoch !== renderEpoch) {
+      return { patched: false, stale: true };
+    }
+    binding.conf = conf;
+    binding.viewModel = viewModel;
+    binding.entries = entries;
+    binding.controlElements = [];
+    binding.controlBounds = optimisticBounds;
+    binding.measureEpoch = Math.max(0, Number(binding.measureEpoch || 0)) + 1;
+    const measureEpoch = binding.measureEpoch;
+    recordGameplayComposerPerformance('fast-surface-paint', startedAt, {
+      controls: entries.length,
+      cachedBounds: optimisticBounds.length,
+    });
+    refreshGameplayComposerLiveBinding(binding, entries, measureEpoch).catch(err => {
+      Runtime.lastError = `gameplay fast surface measure: ${err?.message || err}`;
+    });
+    return { mounted: true, interactive: true, patched: true, fastSurface: true };
   }
 
   function enqueueInChatPanelWork(work) {
@@ -63893,6 +64793,7 @@ function normalizeAdaptiveQualityState(value) {
     Runtime.gameplayComposerNotice = '';
     Runtime.gameplayComposerNoticeKind = 'info';
     Runtime.gameplayComposerGenerationBusy = false;
+    Runtime.gameplayComposerUiFeedbackBusy = false;
     Runtime.gameplayColdStartConfirm = false;
     Runtime.gameplayInstructionsEditorOpen = false;
     Runtime.gameplayComposerQueuedFastCommand = null;
@@ -63902,7 +64803,7 @@ function normalizeAdaptiveQualityState(value) {
     return wasOpen;
   }
 
-  async function mountGameplayComposerPanel(conf, context = null, state = null, session = Runtime.gameplayComposerPanelSession) {
+  async function mountGameplayComposerPanel(conf, context = null, state = null, session = Runtime.gameplayComposerPanelSession, options = {}) {
     if (!isGameplayAgentEnabled(conf)) return await unmountGameplayComposerPanel({ reconcileLauncher: false, session });
     if (Runtime.gameplayComposerPanelOpen !== true) return { mounted: false, closed: true };
     if (!inChatPanelSessionIsCurrent(session) || session?.owner !== 'gameplay'
@@ -63912,34 +64813,54 @@ function normalizeAdaptiveQualityState(value) {
     if (context?.scope && !gameplayComposerPanelSessionMatchesScope(session, context.scope, { adopt: true, context })) {
       return { mounted: false, stale: true, scopeMismatch: true };
     }
-    if (!await gameplayComposerPanelSessionMatchesCurrentChat(session)) {
+    const fastUi = options?.fastUi === true && Boolean(context && state);
+    if (!fastUi && !await gameplayComposerPanelSessionMatchesCurrentChat(session)) {
       return { mounted: false, stale: true, chatBoundary: true };
     }
-    await captureGameplayInstructionsDraftFromDom(session);
+    if (!fastUi) await captureGameplayInstructionsDraftFromDom(session);
     if (context && state) Runtime.gameplayComposerMountedData = { session, conf, context, state };
     const viewModel = buildGameplayComposerViewModel(conf, context, state);
     const html = renderGameplayComposerPanel(viewModel);
+    const publishSnapshot = () => {
+      if (!context || !state) return;
+      Runtime.gameplayComposerSnapshot = {
+        scope: cleanString(context.scope, ''),
+        actorId: cleanString(viewModel?.actor?.id, ''),
+        characterIndex: hostIndex(context.charIndex),
+        chatIndex: hostIndex(context.chatIndex),
+        hostChatIdentity: hostChatReadIdentity(context.currentChat, context.charIndex, context.chatIndex),
+        renderedAt: nowIso(),
+      };
+    };
+    if (fastUi) {
+      try {
+        const patched = await patchGameplayComposerPanelSurface(viewModel, conf, session, html);
+        if (patched?.patched === true) {
+          Runtime.gameplayComposerPanelSupported = true;
+          publishSnapshot();
+          return patched;
+        }
+      } catch (err) {
+        Runtime.lastError = `gameplay fast surface paint: ${err?.message || err}`;
+      }
+    }
+    const fullMountStartedAt = Date.now();
     try {
       const mounted = await setOwnedChatPanel('gameplay', session, html, {
         className: 'eros-tower-game-agent-panel',
       }, async () => await bindGameplayComposerPanel(viewModel, conf, session));
       if (mounted?.stale || !inChatPanelSessionIsCurrent(session)) return { ...mounted, stale: true };
-      if (!await gameplayComposerPanelSessionMatchesCurrentChat(session)) {
+      if (!fastUi && !await gameplayComposerPanelSessionMatchesCurrentChat(session)) {
         const cleared = await clearOwnedChatPanel('gameplay', session);
         await resetGameplayComposerPanelState(session);
         return { mounted: false, stale: true, chatBoundary: true, cleared };
       }
       Runtime.gameplayComposerPanelSupported = true;
-      if (context && state) {
-        Runtime.gameplayComposerSnapshot = {
-          scope: cleanString(context.scope, ''),
-          actorId: cleanString(viewModel?.actor?.id, ''),
-          characterIndex: hostIndex(context.charIndex),
-          chatIndex: hostIndex(context.chatIndex),
-          hostChatIdentity: hostChatReadIdentity(context.currentChat, context.charIndex, context.chatIndex),
-          renderedAt: nowIso(),
-        };
-      }
+      publishSnapshot();
+      recordGameplayComposerPerformance('full-panel-mount', fullMountStartedAt, {
+        controls: viewModel?.controls?.length || 0,
+        fastFallback: fastUi,
+      });
       return mounted;
     } catch (err) {
       if (!inChatPanelSessionIsCurrent(session)) return { interactive: false, stale: true };
