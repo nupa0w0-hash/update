@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.3.0
+//@display-name ☸Eros Tower 1.3.1
 //@api 3.0
-//@version 4.0.38
+//@version 4.0.39
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -43,33 +43,34 @@
 //@arg et_image_character_tags_json string User-authored per-character illustration tag registry JSON
 
 /**
- * Eros Tower 1.3.0
+ * Eros Tower 1.3.1
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.3.0 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.3.1 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.3.0';
-  const PREFIX = 'eros_tower_game_agent_test_v01:';
+  const VERSION = '1.3.1';
+  const PREFIX = 'eros_tower_v02:';
+  const LEGACY_STORAGE_PREFIXES = Object.freeze(['eros_tower_v01:', 'eros_tower_game_agent_test_v01:']);
   const MASKED_SECRET = '*****';
   const PROVIDER_CREDENTIAL_MAX_ENTRIES = 32;
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.3.0`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.3.1`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
-  const UI_ID_SETTINGS = 'eros-tower-game-agent-test-v01-settings';
-  const UI_ID_CHAT = 'eros-tower-game-agent-test-v01-chat';
-  const LEGACY_UI_ID_GAMEPLAY_CHAT = 'eros-tower-game-agent-test-v01-gameplay-chat';
-  const UI_ID_HAMBURGER = 'eros-tower-game-agent-test-v01-hamburger';
-  const UI_ID_IN_CHAT_PANEL = 'eros-tower-game-agent-test-v01-panel';
-  const UI_ID_GAMEPLAY_LAUNCHER = 'eros-tower-game-agent-test-v01-composer-launcher';
-  const UI_ID_COMMUNICATION_LAUNCHER = 'eros-tower-game-agent-test-v01-communication-launcher';
+  const UI_ID_SETTINGS = 'eros-tower-v03-settings';
+  const UI_ID_CHAT = 'eros-tower-v03-chat';
+  const LEGACY_UI_ID_GAMEPLAY_CHAT = 'eros-tower-v03-gameplay-chat';
+  const UI_ID_HAMBURGER = 'eros-tower-v03-hamburger';
+  const UI_ID_IN_CHAT_PANEL = 'eros-tower-v03-panel';
+  const UI_ID_GAMEPLAY_LAUNCHER = 'eros-tower-v03-composer-launcher';
+  const UI_ID_COMMUNICATION_LAUNCHER = 'eros-tower-v03-communication-launcher';
   const COMMUNICATION_LAUNCHER_CLASS = 'eros-tower-communication-fixed-launcher';
   const LEGACY_COMMUNICATION_SEND_LAUNCHER_CLASS = 'eros-tower-communication-send-launcher';
   const COMMUNICATION_LAUNCHER_FIXED_STYLE = 'pointer-events:none;position:fixed;top:72px;right:12px;z-index:40;display:flex;flex-direction:column;align-items:flex-end;gap:6px;overflow:visible;';
-  const LEGACY_UI_ID_ACTION = 'eros-tower-game-agent-test-v01-action';
+  const LEGACY_UI_ID_ACTION = 'eros-tower-v02-action';
   const UI_REGISTRATION_STORAGE = 'uiRegistrations';
-  const CHAT_SCOPE_ID_FIELD = 'erosTowerGameAgentTestChatId';
+  const CHAT_SCOPE_ID_FIELD = 'erosTowerChatId';
   const MAX_EVENT_LOG = 100;
   const MAX_RUN_LOGS = 6;
   const MAX_RUN_LOG_TEXT_CHARS = 8000;
@@ -151,6 +152,11 @@
     { index: 7, label: '초장편', englishLabel: 'very long-form', instruction: 'Write at least 9000 words.', scale: 'Very long-form: prepare dense continuity, layered character movement, multiple world threads, and long-range setup while preserving knowledge boundaries.' },
   ]);
   const SYSTEM_PATCH_NOTES = Object.freeze([
+    {
+      version: '1.3.1',
+      kind: 'production-identity-and-launcher-activation-restore',
+      summary: 'Restores the production storage and UI namespaces plus the production-enabled startup default so existing Eros Tower settings remain authoritative and enabled gameplay or communication resident launchers mount normally.',
+    },
     {
       version: '1.3.0',
       kind: 'lossless-shared-state-storage-v3',
@@ -683,9 +689,7 @@
   let goePromptBuiltinCache = null;
   const DEFAULT_CONFIG = {
     configSchemaVersion: CONFIG_SCHEMA_VERSION,
-    // The test build starts behind a deliberate safety lock so it cannot run
-    // its hooks beside an installed production build until the user opts in.
-    enabled: false,
+    enabled: true,
     mode: 'auto',
     promptModeDetectionEnabled: true,
     promptLengthDetectionEnabled: true,
@@ -1181,7 +1185,7 @@
     quota: 'quota-snapshots',
     embeddingCache: (providerId, model) => `embedding-cache:${slug(providerId || 'provider')}:${hashString(model || 'model')}`,
   };
-  const SETTINGS_BACKUP_TYPE = 'eros-tower-game-agent-test-settings';
+  const SETTINGS_BACKUP_TYPE = 'eros-tower-settings';
   const SETTINGS_BACKUP_RUNTIME_KEYS = Object.freeze([
     'state',
     'backup',
@@ -1480,7 +1484,8 @@
   }
 
   function isErosTowerStorageKey(key) {
-    return String(key || '').startsWith(PREFIX);
+    const value = String(key || '');
+    return value.startsWith(PREFIX) || LEGACY_STORAGE_PREFIXES.some(prefix => value.startsWith(prefix));
   }
 
   function pluginStorageResetBusyReason() {
@@ -1606,7 +1611,7 @@
     Runtime.communicationJobs = new Map();
     Runtime.communicationNotices = new Map();
     Runtime.communicationBadges = new Map();
-    try { delete globalThis.__EROS_TOWER_GAME_AGENT_TEST_DEBUG; } catch (_) {}
+    try { delete globalThis.__EROS_TOWER_DEBUG; } catch (_) {}
     if (resumeConfig && typeof resumeConfig === 'object') {
       try {
         const inChatUi = await syncInChatToolsUi(resumeConfig);
@@ -40089,7 +40094,7 @@ function normalizeAdaptiveQualityState(value) {
           <div class="et-actions">
             <button id="et-import-settings-file-button">파일에서 설정 불러오기</button>
           </div>
-          ${textarea('설정 JSON 붙여넣기', 'et-import-settings-json', '', '다른 환경에서 내보낸 game-agent-test 설정 JSON을 붙여넣은 뒤 불러오세요.')}
+          ${textarea('설정 JSON 붙여넣기', 'et-import-settings-json', '', '다른 환경에서 내보낸 에로스 타워 설정 JSON을 붙여넣은 뒤 불러오세요.')}
           <div class="et-actions">
             <button id="et-import-settings">붙여넣은 설정 불러오기</button>
           </div>
@@ -44137,7 +44142,7 @@ function normalizeAdaptiveQualityState(value) {
       await withBusy(event.currentTarget, async () => {
         setSettingsBackupStatus('현재 화면의 설정을 백업 JSON으로 만드는 중입니다.', 'info');
         const packageData = await buildCurrentSettingsBackupPackage();
-        await downloadTextFile(`eros-tower-game-agent-test-settings-${diagnosticTimestamp()}.json`, JSON.stringify(packageData, null, 2), 'application/json;charset=utf-8');
+        await downloadTextFile(`eros-tower-settings-${diagnosticTimestamp()}.json`, JSON.stringify(packageData, null, 2), 'application/json;charset=utf-8');
         setSettingsBackupStatus('설정 JSON을 다운로드했습니다. Provider API Key가 포함될 수 있으니 공유에 주의하세요.', 'success');
       }, 'et-settings-backup-status');
     });
@@ -46026,7 +46031,7 @@ function normalizeAdaptiveQualityState(value) {
 
   function installDebugApi(conf = null, context = null, state = null, snapshots = [], backup = null) {
     try {
-      globalThis.__EROS_TOWER_GAME_AGENT_TEST_DEBUG = {
+      globalThis.__EROS_TOWER_DEBUG = {
         version: VERSION,
         scope: context?.scope || Runtime.lastScope || '',
         report: () => buildDiagnosticsReport(conf, context, state, snapshots, backup),
@@ -47138,7 +47143,7 @@ function normalizeAdaptiveQualityState(value) {
               namedAgentListedAsResident: residentPanelAgents(defaultPipeline().agents).some(agent => agent.id === GAMEPLAY_ADVISOR_AGENT_ID && agent.name === GAMEPLAY_ADVISOR_NAME),
               legacyDefaultNameMigratesWithoutOverwritingCustomName: migratedLegacyAdvisor.name === GAMEPLAY_ADVISOR_NAME
                 && preservedCustomAdvisor.name === '내가 붙인 사용자 이름',
-              isolatedUiId: UI_ID_IN_CHAT_PANEL.includes('game-agent-test'),
+              productionUiNamespace: UI_ID_IN_CHAT_PANEL.startsWith('eros-tower-v03-'),
             };
           } finally {
             Runtime.gameplayComposerActiveTab = runtimeBefore.tab;
@@ -47493,6 +47498,27 @@ function normalizeAdaptiveQualityState(value) {
               && sceneProjection.retrievalState.characters.finn?.abilities?.length === 0
               && sceneProjection.retrievalState.characters.finn?.inventory?.length === 0
               && !/FINN_HIDDEN_MARKER|Wayfarer Union|Finn Secret Art|Finn Hidden Key/i.test(`${sceneText}\n${projectedCacheText}`),
+          };
+        },
+        testProductionLauncherActivationContract: () => {
+          const freshPipeline = defaultPipeline();
+          const freshConf = { ...DEFAULT_CONFIG, pipeline: freshPipeline };
+          const bothResidentsPipeline = {
+            ...freshPipeline,
+            agents: freshPipeline.agents.map(agent => agent.id === COMMUNICATION_AGENT_ID
+              ? { ...agent, enabled: true }
+              : agent),
+          };
+          const bothResidentsConf = { ...freshConf, pipeline: bothResidentsPipeline };
+          return {
+            productionStartsEnabled: DEFAULT_CONFIG.enabled === true,
+            productionStorageNamespaceIsRestored: PREFIX === 'eros_tower_v02:',
+            productionUiNamespaceIsRestored: UI_ID_IN_CHAT_PANEL.startsWith('eros-tower-v03-'),
+            freshProductionConfigEnablesGameplayLauncher: isGameplayAgentEnabled(freshConf) === true,
+            savedEnabledResidentsEnableBothLaunchers: isGameplayAgentEnabled(bothResidentsConf) === true
+              && isCommunicationAgentEnabled(bothResidentsConf) === true,
+            bothEmbeddedIconPayloadsRemainPresent: GAMEPLAY_ADVISOR_ICON_DATA_URI.startsWith('data:image/png;base64,')
+              && COMMUNICATION_ICON_DATA_URI.startsWith('data:image/png;base64,'),
           };
         },
         testGameAgentLauncherLifecycle: async () => {
