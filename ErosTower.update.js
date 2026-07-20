@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.3.1
+//@display-name ☸Eros Tower 1.3.2
 //@api 3.0
-//@version 4.0.39
+//@version 4.0.40
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -43,20 +43,20 @@
 //@arg et_image_character_tags_json string User-authored per-character illustration tag registry JSON
 
 /**
- * Eros Tower 1.3.1
+ * Eros Tower 1.3.2
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.3.1 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.3.2 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.3.1';
+  const VERSION = '1.3.2';
   const PREFIX = 'eros_tower_v02:';
   const LEGACY_STORAGE_PREFIXES = Object.freeze(['eros_tower_v01:', 'eros_tower_game_agent_test_v01:']);
   const MASKED_SECRET = '*****';
   const PROVIDER_CREDENTIAL_MAX_ENTRIES = 32;
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.3.1`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.3.2`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -127,7 +127,7 @@
   const COMMUNICATION_ICON_DATA_URI = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAABYDSURBVHhe7Vp5VFRXmoeiAMVM0t0np7VVQI2aEIEqqooqFnGPCrIWyKISE20XdkSRRUnsdJyOUSNLFa7RKDu1sSmapLtnev6YmTO9xI0dt9jdOT0zssjMJAL1m/N971WB9pw2Gjo5p8fvnHvue/fde9/7fvfb7v2eg8MzekbPaKKpx1Ts/Wjb/yt68L4Bj7b9zdJ/6etx/73WBePbHhQ3/hkADz4w/1nb3xR9ebLl/2RwqP7MtOFjfw7I3ywpXeWQuXpB4eIzIUyrpUrInX3g5+wDpbMvFM6+XCulVGR87+8s57ZHx37r9JLDy3oc+xWg+weg+BN8tKaw1Mdh7sxH+31dmu/wytF/LKrHLwpr8EleJT7Nr8InuRX4eUE1flFYjU/zK/GLPdX4JPccWvNO4VUHn9pH5/hWKchVgeGiagy/Z8LInnrUhufC63mvwkf7fV0KdlHCkqGDOVMHU4YOpkw9LNnlMKfrYckqR2PucVgy9DCn6rlfkIvqu5MCfxdfPNhvgHV4BCMjw4DVigfv1gM/MUApeTJ1kLvIsc0nnplrTj8Ka38HrH1dGO3rxGh/F0YH6Fq87+sA7t9CU0Y5GtL0UDrJn+hdE0YRk5biQVENHrxTh+F3jXjwMxOG3zEAhy/Bz/HVJ/oopbMSabINMKfqYB3ognWgG9b+Tlj7e7keHewVAKDrgR5Y+65j9F4bGrLK4e+kfKJ3TSgtcw3Bg5/U48F+I4b31cEY/zZCHAOOP9rvcaRx0WCbdxIaM4/COtAOb6k31I5KBgP4E2ROviwJdK9wksN3ki9G77WjIVMPzXcJAJGHw3y4O8zBXIe5T/0hahc1ti5IgCVND2t/Gxa7+mOB4yxecQzfwSJXf1j7Olg1lrpoIH/+FVj72mBJ10MlUTz1eyeEaAV8nL0QLNE89Yf4OcuR4rMelhQdizsz29cJ60APRu91wEqF9V8o1r52tguWjHKWiEfn+1ZJ4aTA1fIWqFz8nvpDglwCkaX8McypZWjK0rEUsPHra7czTqCwDbh3Hda+bjRml6MhtQxBTuqnfu+EkK/EF5XbSqBy+eaiuNBZDVO6Hg05R2FJL0dDhh6NaXoBiP5Odo0NWUfRmEqusBRB0u/QDRL5TvJD/eZiGFPKYNxehiiPld/4g/ykSmikGvhJFDCm6GBOKWUJoFjAnFUOpVSFQKkGCofvSPT9pH6QO3tD7eyHQxF5KIkqhC66CMVRhTgUugt5IVvh7+QHlZMM/k5yKJ18oZTIoJD4QCWRie30XA61WFMfjUQBhZMPApz8oXJSQOOkQs3WUliydRjq+VdUbPgAJ+LfRYhzMDRSJYIl39HqB05WY4XbYqycshhl2iKURu+FLvYtlMbshT6mCDtUm7DQTcN9Fk0OwhK3YIRMDsRSt4VcL5kchMWTA7F4chAWTQ7ksmLyEgRNUmPZ5BCsmLIE/q4EgD8sKcdQt+UIzNnlkEkXYKFUg4VSNeRSbwQ6+X/7ANAKdZy6iK4PW9F1muqLXHeeakXnh63oOHkBXWcuoevsx/Y+3Wcuofvsx+j+6CK6z17i+07qc+YiOk+3ouujS0I5+zE6xbk6Tl+Ev8QXwU5qBDn5w0/ijY7Tl9B1+hI6T15A+8kL6PjwAvydn97wPjHJpD5oO9YMU2Y5zBl6WDL1XBvTqehgokJxeobwnNpNaToY0sq45rY06qfnftw/0zZeaKN5DDxPOUxpQsxvprHUJ7WMbQCNM2aUoSGzHO1HW1gqHv3WCSWNkxq3q/6Z0aeNicCkUAxk/FJ1MKXq+AP5Ok0PU6rIbBq1lQlGMrWM+9eL18SIgZ5RPwanDIbtpTDwOHHONGFeA10T4+I4BoNKhp4lcpP3evi4PVn4/bXJX+KH35t/jc7jF+wrRR9xct1PsWHWWiR5xCDRPRqJHjFI8tQi0T0GSe4xSJgRjbjpEUicGY0E92jEz4jC2hmRSPSI5v4JM4Wan8+MQtLMaCRxvwgkzIxEPI+N4mfxNI6ezYyE0SZJtAjpenSevIjN3kkImvJXigcCJAp80fRbdJ1s5VWiVU2YE4nkObFImhWFd7Q7sHvlVuxYshlZC19HSsA6bJLF4U3fOGzyjcNmeRySvaLxxgItNvrEYoNXFJK9YrBhfjQS5oQjzj0M2hmrsfr7S7DihRCs+F4IXvv+Erz2gyUIfXExkuaGI1WzDvkrt0HrvgZxnhEoT9gvqFaqDu0nWrF+fgwC3CZgT7DINQiLJwWzlQ5xDeIJ5RJv/On8Z+g8ep5Fc/2cGMS6hyPRIxyhLy5Ch6kB3U0t6LI0osPcyPdtBjPaTQ3oNDWgw2jhtg4jtVu43VauGyy4LvZtM1nQRn1M1GZCm9GMdrMFbQYj2k1mXK83YfP89YhzD0fMzFV4fW4sq0LH8VYkzI2Eym0C4oLIFwOxdvpyJLuHIn76Up7QT+KLP1r+DZ1HWxiAWI812DQnHnEzVqLdYEanpRmjg12w3u+BlbatYm0d7BG2tYM9QnzPtXh9v5evqRbGdfM2d3SQ+nePzXFfuKd52k0WtJsbsWF2LBI8IpE4Yw3MGTq0H7+AN16Nh8pN9s0ACJIqcTvvNG7tPIFbOcdwa+dx+EvlUEtU+MLwL+g41cpWed0cLS7XmtFmtKCr6TxGBzrHMSkyR4zZGbzBTPKenmrxWmi3jbkhgGfvQ+3dGHq3Btahz2EdFA5F2khyzI0InboM69wjYU4nFbiA1bNfg3rKU0rAPAfZpyGTAnEr90OYtYVoiCtEQ2whLNpC3Mo9BbmjDD/fWw9zGh1DlSPBMwpXaiy4fLYa1kFivhejA+KqMcNjQEBkTFhx8Rmv7o1x90L/MYkQ7wmIgS4M5lVg9P4dAYT7PawyodOWYe30MDaE5I7feDkeGren2IsonOX4oqASf8j7CKbI3bDE7YEptgBmbQFM2gLcyjkFjUSF87kVMJP/T9cjwTMSl6tNuFJdL4q0TVwF5kaJOZs6jGfKBoht5cUi9BEkg4AZeya09RdWwDp4XQSmG9frzFg9dQkSZoSLAJRj08sJULs9RVBE+t2/z4i72adgjsmHKSYf5thCBsEYk4dbuSehlPjhYn41BzCkAgmzogQAquoEAEjPH2JmbMXH9J3q8SIvirnIKPfhWrymeQkwloRuDL1dw/dka9rqLFg1dSnixwGQPE8L5eQnO4dkUksUGHi7DndzTvGqW2KFYtYSEAW4mXMcARIVWguq2eLSFjVxVjR+V2XE1WqD/UPH9F9cTdv9+PIQwzYAaNXHi754bQeuRwCBpUwo1+ssWPnDJYifvsauAhteikaw21PsDSjGHthXh7u7PmSRJ6YZiPg9qI/Ixe2CM9BI1Gja9ZEQ/qaVCxJQZcLVKgKArLTw4YLhsoFBINwcY2A8U+P62VWFPYAACGjlh0iNxkkUzSPW12pMrAJkAyggopPkDXNjeecZ7OwPlfMTeAN/iQx9b9fjbu5pmLRk+PJhWVuAxtg8kHTwttVRhta8KpjSy2AhFfCIxGeVJlypHLMBD9kCYqi/ExfWFrHI2hkVxZwA4T52kR+nNgO9+KctPwPIrTKoAuN2dRjoxrVaE1b9cDHipoVyREqeIPklLQKdVfggIh8fF5yG2vVrGkTapw/8pB53d5INKIAlLh9y2qdL5AiRBjAI62fFoCHrBMft5AkSPKLwuwojrpERtPnrcSJKPvuXm/+ePcSY6I5jerxIPyT61NaFrz7vwqWEIljvE3iifbFLRzdLwKqpi1kFaH9AscD6l6KhcVGiVLsXJdGF+GVRBY6sL4BiivdfBkIhkaP/7Tp8nnOKVcAUvRsKqQIqBx+UxOxlA5g8OxaW7JN8HEWntms9IvBZlQHXa4x2sRyTgG72AlY6wrYzOmboBCAEL2E3kDYAxBUXgh8KrAQDSCBQEd4leIHQaUuRODNCsEuZOiTPjcby54JRqt2D0ri9+OVb5/B+5E4EOT8mPCYJ6CuqxZ0dJ2GMzoc5Jg8aZw18HbxQEr0HKomSAWgigGgTlKpjFbhcbcY1NoJCpCeA0A3r0G0M9d3G0D3y87bVszE2JgE2AycwN0566NnQTdz/904M/qH9YeMqgnyt1oxVbATD7SqQKn8d0dNWsgSUMQAVKI7bA430McGRSuKH/yiswZ2sE+wCyQP4Sv0EALR7+cw9eXYcGnd8KOzpSQUoEKo142pV3VjYKgYtfi/K4MdHX3JopslgHRrTfxvjfNRtV4tx7pDD5l7Mfv4lHs9GbZrCbhhtQFytNmL1tKVImB4hAlCGFFkyIqe+htLYIujWvgV9/D5k+b8JtfQxGWT62Ht7CYDjMFIMEJ0Hf6kGSkc5ipamcRi8fpaWJYBsAEuAZxQ+qzTiSqUNADF+H7wBPwmd9wnGUyH1FuL48frOq0iMCNIx3spzGehgtaOFoXyDTPLqOPsgqAcZwdXTliCBJaCMAdgu22AHgFSgNHYPspUboXocAIR0X1ENPt9xAsboPPb/dOrq4+CFDNlGZuj1OXFoyD7JLsecXs424Hc2AFiXiRnasHRg2fMLOVlJh52h31smMjpOxO/3YmTgJkb6uzAyeEtUA1vQJDC69LkgqAkEJx+EPK8Wx9s2VeQGjQglAGaEw5gubM/TFRsZAJLastg9dgDUzo9RATqpvfd2LT7PPgETBT/R+VC7arDIVS2spESBjXO0aMo+xf7WlCLagBoTrlbWipsUmx53YnToJoAvOJ83OtDxsPEb6MYXN37L8wY4qeDlPA/48g9jKiSqgzDHfwK4y9fkDQSjKESd12uNHAeMN4JpfqQCgg0o0RayMcxWboL/42ICOu3p21fHRtCiLeBNEElCc2whAqRKBDgpeEUv7D4nnOGl6pDoGSUCQKEwMd+FkXcbMXLkUwzfu4KRQ82w9l+zi64tMPqq/y4UUl+8LUvEngWxeMd3PR9i2Cw+gcQ+n+Yc6uR5RilDdOA8ht9rEaTgfi97n7Bpy5A4I0Jwg+llSPfbiPCpK1ASswelMYUojilEhnI9FJO9/jIApAL33qrB7ZzjMIkqQNGgKSYPJm0eerOPsRS05FbwuRy5QToFulxtwNUaAQCWgvcaMHqwFaMEAF0P0C7QZrkFAL7sv40l0kD8z74qPNhfDxxoho9kAe8ROOVttxfdGP3vWwzq6GAnRvY3YGSPmY0sAdpubEDYj5YzAOyaM3TIVG6E9kercCSyAGUxe+Dl8MpfZtxGlIy4k/MRG0HyAsx4bD4DYYzejZu5J9kTnN9VwV7Athe4WmvGFdoOk58mEaYzAVHfhehPXH17oNSLL/vuIECqRv6CJOx8JQ5Z87XQOAUIEjDOJY65ReG/AMHAdmL0/g1gsJMBWD11KRLdI+0SQIuikfix8Q2UPvGe4IcHpjlM53DYHE3b4DxBCrT5uLnjGAIlarQQAKQCKaVImh2Na7VGtBstaK+jWIB03WbhbR8/7iTI5uZEhkYGujAydAcjA90YGSC7YVMV0ZiK89hAFMYLHoKOxtoNFoRPX4UkEQCSAALA/2l2g0S+L3jvD3BR4UaKDobIXFi0eSwJVN/IPw25RIbmnLMwpJSyxd04L55ByFSsE87y6o3AkG2lBKbZb4uGbawWoz6bwRPbbEzaxtgBE9t4uz3Qha7GZn7futlaJHiG4/VZsXxIS4HQxvlroZ70FOcB4ymY1CH/DD7ffQq/zzuNP+4+gyAnFduAxuwzMKTT+Tyd25chwTMGcZ5rsGVeMjobmnGloo4jtKtVJlw5Z8DVCnKTRlwld0n3dF1lxOWzdbh81sD9uFSacK2aagM/u1JhwOVzdbhC95VGXD5n4OvfnK5Gu6kR2155A/GzIvHGyzFsk0gqyTu9Pm8tfFwfY/C+DtHpj7+jAipHP/g7Cj7U1/FVXNhZyRJAfpcyN7VbSrBv+Q68OS+eVaGn6Tx6Glu43Gi6gN7G8+hpaOHSS8XSgh5LM3rMzVx3W5q5Ty/VDVSo/3ncaG5Fb9MFdFta0GVqRpexCV1m6t+CLkMD4jwiULnlMOq2FgvZqNQy/OaIGVt8E6H5phJgI43UH0oHr8u2ezoQOb/z3MPZnAwd3lmRhbiZq5E0aw0SPMMQ7xGKdZ5rsNZjNeI9hHut+2rEe4YhkYpHGPeLmb4CiZ7hiJ25ktujpq+wj9HOXIk499VCmblKvA7lmvonz4lC7bYj9lScJU2HNn0zcgK2wHvSyxMDgOz7CyBzlRtt9ypHOVpEAA6F54r5PMrPiflAMQdozhQyRqSX/IGU26P8IW9ZxWsawyk1QZoY1AxhjD1nSIVSYtQmjhPeI6bKSArTSu3633bsPLbJk6GYtGBiALCRarKwlyYALu6q4rzekagCHI7MQ+22YhiJQUpiEkP0MRlH+YcGgTEhyWnYViLmEkUQMvRYOysSibOjET8rgvOEnEtkEEph2lGO+u2lfF+3nd6hQ/32EtRu/YCBtwMhAk3zmbaXYatXElSTHhP3f12if3LlDl6/tt9LfHF+RwUnLWu3FONQ+G4uBv6jU/ioZc8FoSn7BCc3F7mpYdhehte+twQrX1jIQFGfokUZiJ29BiONv8JwzSUMV19C0uwYzjaTd6Es8PIXQrDyByEwbi/F8r8LRs2mD5ATsBnLpwShnuJ+AookKlMvbM7o/Rl6JM+NhcJ1giVA7iJIANmACzsrWAIOhOeiPrUMR6LzRZEVUtyGrSUwUlqcV13I+NZvLWUg6DidRH3fshzeWD0obsBwaSO+KmlArHsEjFkEkJhqTxVXmdRoK6mJkAglyeJcIIGeJTB/OKqA1ZCkK+mlKMgmTYAXGE8UJlMtc/IWjCAxRynsDJs7FPTQkFaCRW4BaNpxHFUbDiBkkhr1KaUImKzC4klq0SaUIX9hKtZ6huGr/UZ89VMDHhTWINYzDE07TwhApuux9LmFCJniD8OWI1jqFoyqHx9GbvA2rHALEdSM1CutFAcj8/j3nOKoAlaRNykxMlFeIPB5NQKkKiicfKGmHaFUgfXzorHOM1wAQGTIZon5Ok3PK05MCKtIUkEfLPwswTaA+qbokDgrCkmeUZwmN6QK0iHYCB0MZEO22/4PEH6KILWq/XGxaASFYKxy80EciszDB+G7kTQ3BsHOqk2P8vGNyd9FAV8XHyhd5Ah2CoCv4wJe/XoSd3EfTtbcVsgns/Xma4EJ+vfXtL1U/MtDBwP7b5qjGMbtJYIhIxuQUsohLek+tbNhJANp+/NE/HmC2vhv8Uw9DkfsxqE1uRyohTgEKB79/gkntUQJhcQXB9fk4v2wXTgQmoNDYbk4SNdhu3AwNBfvh+7CgVU7cTB0l/CM6104GJaLA6t34nD4bu5zODwPh9bk4eCaXWxQqf1g2E6ei/pSH7oW5s9lRqk+HJHPY+nZ+2E5UDspebuudJCpH/3evwrRMTkdpNKui84S6Lc3Orujmtoph8DneRKhja7ptzh6puZ+vtDQWPHonTwM9bXNyePpNzrqz7s7Ol2iOeTQOCnE9/jyM4Uj/Vr3mFPfZ/SMntEzekbP6CH6X9dtmLvKug9/AAAAAElFTkSuQmCC';
   const GAMEPLAY_ACTION_HISTORY_MAX = 40;
   const GAMEPLAY_ADVISOR_SUGGESTION_MAX = 3;
-  const GAMEPLAY_SPECIAL_ENTRY_MAX_PER_KIND = 30;
+  const GAMEPLAY_INVENTORY_PAGE_SIZE = 16;
   const GAMEPLAY_CUSTOM_INSTRUCTIONS_MAX = 6000;
   const GAMEPLAY_CUSTOM_ACTION_REQUEST_MAX = 900;
   const GAMEPLAY_ADVISOR_PAYLOAD_MAX_CHARS = 28000;
@@ -152,6 +152,16 @@
     { index: 7, label: '초장편', englishLabel: 'very long-form', instruction: 'Write at least 9000 words.', scale: 'Very long-form: prepare dense continuity, layered character movement, multiple world threads, and long-range setup while preserving knowledge boundaries.' },
   ]);
   const SYSTEM_PATCH_NOTES = Object.freeze([
+    {
+      version: '1.3.2',
+      kind: 'lazy-current-chat-dashboard-startup',
+      summary: 'Opens the dashboard from stored settings and the current chat identity only, loads diagnostics and history per tab, and runs the full storage inventory only when explicitly requested.',
+    },
+    {
+      version: '1.3.2',
+      kind: 'paged-gameplay-inventory-grid',
+      summary: 'Unifies abilities under Skills and possessions under Inventory, shows 16 compact emoji cells as an eight-column grid, and pages large catalogs without dropping later entries.',
+    },
     {
       version: '1.3.1',
       kind: 'production-identity-and-launcher-activation-restore',
@@ -1265,6 +1275,8 @@
     storageResetInProgress: false,
     storageResetPromise: null,
     dashboardInitialView: 'api',
+    dashboardOpenEpoch: 0,
+    dashboardMenuGlobalHandlersBound: false,
     gameplayComposerPanelSupported: null,
     gameplayComposerPanelSession: null,
     gameplayComposerPanelScope: '',
@@ -1278,6 +1290,8 @@
     gameplayActionBusy: false,
     gameplayFatalConfirm: null,
     gameplayComposerActiveTab: '',
+    gameplayComposerInventoryPage: 1,
+    gameplayComposerInventoryPageTab: '',
     gameplayComposerSelectedActionId: '',
     gameplayComposerPicker: '',
     gameplayComposerActorMatchIds: [],
@@ -2321,53 +2335,57 @@
     };
   }
 
-  async function getConfig() {
+  async function getConfig(options = {}) {
+    const includeArgumentOverrides = options?.includeArgumentOverrides !== false;
+    const readArg = includeArgumentOverrides
+      ? getArg
+      : async (_name, fallback = '') => fallback;
     const migration = migrateStoredConfig(await Storage.get(STORAGE.config, {}));
     const stored = migration.config;
     if (migration.changed) await Storage.set(STORAGE.config, stored);
-    const timeoutSecondsArg = cleanOverrideArg(await getArg('et_timeout_s', ''), '', { zeroIsUnset: true });
-    const legacyTimeoutMsArg = cleanOverrideArg(await getArg('et_timeout_ms', ''), '', { zeroIsUnset: true });
-    const injectionBudgetArg = cleanString(await getArg('et_injection_budget', ''), '');
+    const timeoutSecondsArg = cleanOverrideArg(await readArg('et_timeout_s', ''), '', { zeroIsUnset: true });
+    const legacyTimeoutMsArg = cleanOverrideArg(await readArg('et_timeout_ms', ''), '', { zeroIsUnset: true });
+    const injectionBudgetArg = cleanString(await readArg('et_injection_budget', ''), '');
     const args = {
-      enabled: parseBool(await getArg('et_enabled', ''), undefined),
-      mode: cleanString(await getArg('et_mode', ''), ''),
-      promptModeDetectionEnabled: parseBool(await getArg('et_prompt_mode_detection_enabled', ''), undefined),
-      promptLengthDetectionEnabled: parseBool(await getArg('et_prompt_length_detection_enabled', ''), undefined),
-      erosAgentsEnabled: parseBool(await getArg('et_eros_agents_enabled', ''), undefined),
-      psycheAgentsEnabled: parseBool(await getArg('et_psyche_agents_enabled', ''), undefined),
-      dataContextInjectionEnabled: parseBool(await getArg('et_data_context_injection_enabled', ''), undefined),
-      provider: cleanString(await getArg('et_provider', ''), ''),
-      baseUrl: cleanString(await getArg('et_base_url', ''), ''),
-      apiKey: cleanString(await getArg('et_api_key', ''), ''),
-      model: cleanString(await getArg('et_model', ''), ''),
-      temperature: cleanString(await getArg('et_temperature', ''), ''),
-      maxTokens: cleanOverrideArg(await getArg('et_max_tokens', ''), '', { zeroIsUnset: true }),
-      contextWindow: cleanOverrideArg(await getArg('et_context_window', ''), '', { zeroIsUnset: true }),
+      enabled: parseBool(await readArg('et_enabled', ''), undefined),
+      mode: cleanString(await readArg('et_mode', ''), ''),
+      promptModeDetectionEnabled: parseBool(await readArg('et_prompt_mode_detection_enabled', ''), undefined),
+      promptLengthDetectionEnabled: parseBool(await readArg('et_prompt_length_detection_enabled', ''), undefined),
+      erosAgentsEnabled: parseBool(await readArg('et_eros_agents_enabled', ''), undefined),
+      psycheAgentsEnabled: parseBool(await readArg('et_psyche_agents_enabled', ''), undefined),
+      dataContextInjectionEnabled: parseBool(await readArg('et_data_context_injection_enabled', ''), undefined),
+      provider: cleanString(await readArg('et_provider', ''), ''),
+      baseUrl: cleanString(await readArg('et_base_url', ''), ''),
+      apiKey: cleanString(await readArg('et_api_key', ''), ''),
+      model: cleanString(await readArg('et_model', ''), ''),
+      temperature: cleanString(await readArg('et_temperature', ''), ''),
+      maxTokens: cleanOverrideArg(await readArg('et_max_tokens', ''), '', { zeroIsUnset: true }),
+      contextWindow: cleanOverrideArg(await readArg('et_context_window', ''), '', { zeroIsUnset: true }),
       timeoutMs: timeoutSecondsArg ? timeoutSecondsToMs(timeoutSecondsArg) : legacyTimeoutMsArg,
-      debugLog: parseBool(await getArg('et_debug_log', ''), undefined),
-      runLogEnabled: parseBool(await getArg('et_run_log_enabled', ''), undefined),
-      bypassAuxRequests: parseBool(await getArg('et_bypass_aux_requests', ''), undefined),
-      stateApiEnabled: parseBool(await getArg('et_state_api_enabled', ''), undefined),
-      qualityRegexEnabled: parseBool(await getArg('et_quality_regex_enabled', ''), undefined),
-      embeddingEnabled: parseBool(await getArg('et_embedding_enabled', ''), undefined),
-      embeddingProviderId: cleanString(await getArg('et_embedding_provider_id', ''), ''),
-      embeddingBaseUrl: cleanString(await getArg('et_embedding_base_url', ''), ''),
-      embeddingApiKey: cleanString(await getArg('et_embedding_api_key', ''), ''),
-      embeddingModel: cleanString(await getArg('et_embedding_model', ''), ''),
-      parallelPreAgentsSameProvider: parseBool(await getArg('et_parallel_pre_agents_same_provider', ''), undefined),
-      autoMemoryEnabled: parseBool(await getArg('et_auto_memory_enabled', ''), undefined),
-      autoColdStartEnabled: parseBool(await getArg('et_auto_cold_start_enabled', ''), undefined),
+      debugLog: parseBool(await readArg('et_debug_log', ''), undefined),
+      runLogEnabled: parseBool(await readArg('et_run_log_enabled', ''), undefined),
+      bypassAuxRequests: parseBool(await readArg('et_bypass_aux_requests', ''), undefined),
+      stateApiEnabled: parseBool(await readArg('et_state_api_enabled', ''), undefined),
+      qualityRegexEnabled: parseBool(await readArg('et_quality_regex_enabled', ''), undefined),
+      embeddingEnabled: parseBool(await readArg('et_embedding_enabled', ''), undefined),
+      embeddingProviderId: cleanString(await readArg('et_embedding_provider_id', ''), ''),
+      embeddingBaseUrl: cleanString(await readArg('et_embedding_base_url', ''), ''),
+      embeddingApiKey: cleanString(await readArg('et_embedding_api_key', ''), ''),
+      embeddingModel: cleanString(await readArg('et_embedding_model', ''), ''),
+      parallelPreAgentsSameProvider: parseBool(await readArg('et_parallel_pre_agents_same_provider', ''), undefined),
+      autoMemoryEnabled: parseBool(await readArg('et_auto_memory_enabled', ''), undefined),
+      autoColdStartEnabled: parseBool(await readArg('et_auto_cold_start_enabled', ''), undefined),
       injectionBudget: injectionBudgetArg,
-      extraBodyJson: cleanString(await getArg('et_extra_body_json', ''), ''),
-      pipelineJson: cleanString(await getArg('et_pipeline_json', ''), ''),
-      promptPresetsJson: cleanString(await getArg('et_prompt_presets_json', ''), ''),
-      translationPromptModesJson: cleanString(await getArg('et_translation_prompt_modes_json', ''), ''),
-      goePromptModesJson: cleanString(await getArg('et_goe_prompt_modes_json', ''), ''),
-      imageApiProfilesJson: cleanString(await getArg('et_image_api_profiles_json', ''), ''),
-      imageApiPresetsJson: cleanString(await getArg('et_image_api_presets_json', ''), ''),
-      imageCharacterTagsJson: cleanString(await getArg('et_image_character_tags_json', ''), ''),
-      modelPresetsJson: cleanString(await getArg('et_model_presets_json', ''), ''),
-      providerKeysJson: cleanString(await getArg('et_provider_keys_json', ''), ''),
+      extraBodyJson: cleanString(await readArg('et_extra_body_json', ''), ''),
+      pipelineJson: cleanString(await readArg('et_pipeline_json', ''), ''),
+      promptPresetsJson: cleanString(await readArg('et_prompt_presets_json', ''), ''),
+      translationPromptModesJson: cleanString(await readArg('et_translation_prompt_modes_json', ''), ''),
+      goePromptModesJson: cleanString(await readArg('et_goe_prompt_modes_json', ''), ''),
+      imageApiProfilesJson: cleanString(await readArg('et_image_api_profiles_json', ''), ''),
+      imageApiPresetsJson: cleanString(await readArg('et_image_api_presets_json', ''), ''),
+      imageCharacterTagsJson: cleanString(await readArg('et_image_character_tags_json', ''), ''),
+      modelPresetsJson: cleanString(await readArg('et_model_presets_json', ''), ''),
+      providerKeysJson: cleanString(await readArg('et_provider_keys_json', ''), ''),
     };
 
     const merged = { ...DEFAULT_CONFIG, ...(stored || {}) };
@@ -2501,6 +2519,10 @@
     Runtime.debugLog = merged.debugLog === true;
     Runtime.compressedStorageEnabled = merged.compressedStorageEnabled !== false;
     return merged;
+  }
+
+  function getStoredConfig() {
+    return getConfig({ includeArgumentOverrides: false });
   }
 
   function normalizeProviderPreset(value, provider, baseUrl) {
@@ -8912,7 +8934,7 @@
     const character = actor?.character || null;
     const outputLanguage = normalizeGameplayOutputLanguage(state?.gameplay?.outputLanguage);
     const abilities = (character?.abilities || []).map(normalizeGameplayAbility).filter(Boolean)
-      .slice(0, GAMEPLAY_SPECIAL_ENTRY_MAX_PER_KIND).map(ability => {
+      .map(ability => {
         const displayReady = normalizeOptionalGameplayOutputLanguage(ability.displayLanguage) === outputLanguage;
         const label = firstNonEmpty(displayReady ? ability.displayName : '', ability.name);
         return ({
@@ -8928,7 +8950,7 @@
         });
       });
     const inventory = (character?.inventory || []).map(normalizeGameplayInventoryItem).filter(Boolean)
-      .slice(0, GAMEPLAY_SPECIAL_ENTRY_MAX_PER_KIND).map(item => {
+      .map(item => {
         const displayReady = normalizeOptionalGameplayOutputLanguage(item.displayLanguage) === outputLanguage;
         const label = firstNonEmpty(displayReady ? item.displayName : '', item.name);
         return ({
@@ -9129,7 +9151,7 @@
       action.availability = preparedAction?.availability || evaluateGameplayAction(actor, action, state);
       return { ...action, ...gameplayChoiceProbability(actor, action, preparedAction) };
     }) : [];
-    return choices.concat(specialActions).slice(0, 80);
+    return choices.concat(specialActions);
   }
 
   function gameplayChoiceSemanticSignature(value) {
@@ -15830,6 +15852,59 @@ function normalizeAdaptiveQualityState(value) {
 
   function diagnosticTimestamp() {
     return nowIso().replace(/[:.]/g, '-').replace(/T/, '_').replace(/Z$/, 'Z');
+  }
+
+  async function readDashboardHostValue(factory, fallback, label) {
+    try {
+      return await promiseWithTimeout(factory, 2500, `dashboard ${label}`);
+    } catch (err) {
+      log(`dashboard ${label} unavailable`, err?.message || err);
+      return fallback;
+    }
+  }
+
+  async function loadDashboardContextLite(conf) {
+    const character = await readDashboardHostValue(() => api.getCharacter(), null, 'character');
+    const charIndex = hostIndex(await readDashboardHostValue(() => api.getCurrentCharacterIndex(), null, 'character index'));
+    const chatIndex = hostIndex(await readDashboardHostValue(() => api.getCurrentChatIndex(), null, 'chat index'));
+    const currentChat = charIndex !== null && chatIndex !== null
+      ? await readDashboardHostValue(() => api.getChatFromIndex(charIndex, chatIndex), null, 'current chat')
+      : null;
+    const chatIdentity = await ensureErosTowerChatIdentity(currentChat, charIndex, chatIndex);
+    const characterId = firstNonEmpty(character?.chaId, character?.id, character?.name, charIndex !== null ? `char-${charIndex}` : 'unknown-character');
+    const chatId = firstNonEmpty(chatIdentity.key, currentChat?.id, currentChat?.name, chatIndex !== null ? `chat-${chatIndex}` : 'chat-unknown');
+    const mode = resolveMode(conf?.mode, character, [], null, currentChat, conf);
+    const noSession = !currentChat && !chatIdentity.key;
+    return {
+      scope: slug(`${characterId}:${chatId}`),
+      noSession,
+      characterId: slug(characterId),
+      chatId: slug(chatId),
+      chatIdentity,
+      character,
+      db: {},
+      currentChat,
+      canonicalSources: [],
+      runtimeLorebookEntries: null,
+      canonicalSourceReadComplete: false,
+      openingAuthority: null,
+      firstMessageInfo: null,
+      charIndex,
+      chatIndex,
+      messages: [],
+      activationMessages: [],
+      requestMessages: [],
+      settingBlocks: [],
+      userName: '',
+      username: '',
+      mode,
+      promptModeId: promptPresetIdFromModeValue(conf?.mode),
+      promptModeName: '',
+      promptModeDetectionEnabled: conf?.promptModeDetectionEnabled !== false,
+      promptLengthDetectionEnabled: conf?.promptLengthDetectionEnabled !== false,
+      dataContextInjectionEnabled: conf?.dataContextInjectionEnabled !== false,
+      dashboardLite: true,
+    };
   }
 
   async function loadScopeAndContext(requestMessages, conf) {
@@ -39074,13 +39149,21 @@ function normalizeAdaptiveQualityState(value) {
   function setupDashboardCloseHandler() {
     try {
       const button = document.getElementById?.('et-close');
-      if (!button || button.__erosTowerCloseBound) return;
-      button.__erosTowerCloseBound = true;
-      button.addEventListener('click', async () => {
-        Runtime.dashboardVisible = false;
-        Runtime.runProgressHiddenByUser = false;
-        await api.hideContainer?.();
-      });
+      if (button && !button.__erosTowerCloseBound) {
+        button.__erosTowerCloseBound = true;
+        button.addEventListener('click', async () => {
+          Runtime.dashboardVisible = false;
+          Runtime.runProgressHiddenByUser = false;
+          await api.hideContainer?.();
+        });
+      }
+      const retry = document.getElementById?.('et-dashboard-retry');
+      if (retry && !retry.__erosTowerRetryBound) {
+        retry.__erosTowerRetryBound = true;
+        retry.addEventListener('click', () => {
+          void openDashboard(Runtime.dashboardInitialView);
+        });
+      }
     } catch (_) {}
   }
 
@@ -39088,7 +39171,7 @@ function normalizeAdaptiveQualityState(value) {
     return buildDashboardShellHtml('에로스 타워를 여는 중', [
       '설정과 현재 채팅 정보를 확인하고 있습니다.',
       '첫 설치 직후에도 이 화면이 보이면 대시보드가 정상적으로 준비 중입니다.',
-      '[로딩이 안넘어 가는 경우 클릭(터치)를 해주세요.]',
+      '오래 멈춰 있으면 아래 버튼으로 현재 채팅 확인만 다시 시도할 수 있습니다.',
     ], 'loading');
   }
 
@@ -39115,6 +39198,7 @@ function normalizeAdaptiveQualityState(value) {
             <div class="et-shell-mark">${kind === 'error' ? '!' : '☸'}</div>
             <h2>${escHtml(title)}</h2>
             ${(Array.isArray(lines) ? lines : []).map(line => `<div class="et-note">${escHtml(line)}</div>`).join('')}
+            ${kind === 'loading' ? '<div class="et-actions"><button type="button" id="et-dashboard-retry">다시 확인</button></div>' : ''}
           </section>
         </main>
       </div>`;
@@ -39571,15 +39655,73 @@ function normalizeAdaptiveQualityState(value) {
     return result.cancelled;
   }
 
+  const DASHBOARD_VIEW_IDS = Object.freeze(['api', 'agents', 'prompts', 'references', 'artifacts', 'state', 'usage', 'runs']);
+
+  function dashboardLoadedViewSet(dashboardData = {}) {
+    return new Set(Array.isArray(dashboardData.loadedViews) ? dashboardData.loadedViews.filter(view => DASHBOARD_VIEW_IDS.includes(view)) : DASHBOARD_VIEW_IDS);
+  }
+
+  function renderDashboardDeferredPanel(view, kind = 'idle', message = '') {
+    const labels = {
+      api: 'API 설정',
+      agents: '에이전트 설정',
+      prompts: '프롬프트',
+      references: '참고 자료',
+      artifacts: '앨범',
+      state: '관리상태',
+      usage: '사용량',
+      runs: 'Run Log',
+    };
+    const loading = kind === 'loading';
+    const failed = kind === 'error';
+    const note = message || (loading
+      ? '이 탭에 필요한 데이터만 불러오고 있습니다.'
+      : failed
+        ? '불러오지 못했습니다. 메뉴에서 이 탭을 다시 선택하면 재시도합니다.'
+        : '이 탭을 선택할 때 필요한 데이터만 불러옵니다.');
+    return `
+      <section class="et-panel et-dashboard-deferred" data-kind="${escHtml(kind)}">
+        <h2>${escHtml(labels[view] || view)}</h2>
+        <div class="et-note">${escHtml(note)}</div>
+        ${loading ? '<div class="et-shell-mark" style="margin-top:14px">⏳</div>' : ''}
+      </section>`;
+  }
+
+  async function loadDashboardViewSnapshot(view, conf, context, state, dashboardData = {}) {
+    const loadedViews = dashboardLoadedViewSet(dashboardData);
+    let nextContext = context;
+    let nextState = state;
+    const nextData = { ...dashboardData };
+    if (view === 'references' && context?.dashboardLite) {
+      nextContext = await loadScopeAndContext([], conf);
+    }
+    if (view === 'state') {
+      nextState = nextContext.noSession
+        ? createDefaultState(nextContext.mode)
+        : await loadState(nextContext.scope, nextContext.mode, conf);
+      nextData.snapshots = nextContext.noSession ? [] : await loadStateSnapshots(nextContext.scope);
+      nextData.backup = nextContext.noSession ? null : await loadStateBackup(nextContext.scope, nextContext.mode);
+    } else if (view === 'usage') {
+      nextData.usageLedger = await loadUsageLedger();
+      nextData.quotaSnapshots = await loadQuotaSnapshots();
+    } else if (view === 'runs') {
+      nextData.runLogs = nextContext.noSession ? [] : await Storage.get(STORAGE.runLog(nextContext.scope), []);
+    }
+    loadedViews.add(view);
+    nextData.loadedViews = Array.from(loadedViews);
+    return { context: nextContext, state: nextState, dashboardData: nextData };
+  }
+
   async function paintDashboardView(conf, context, state, dashboardData = {}) {
     const runLogs = Array.isArray(dashboardData.runLogs) ? dashboardData.runLogs : [];
     const snapshots = Array.isArray(dashboardData.snapshots) ? dashboardData.snapshots : [];
     const backup = dashboardData.backup ?? null;
     const usageLedger = dashboardData.usageLedger ?? null;
     const quotaSnapshots = dashboardData.quotaSnapshots ?? null;
-    installDebugApi(conf, context, state, snapshots, backup);
-    await paintDashboardHtml(buildDashboardHtml(conf, context, state, runLogs, snapshots, backup, usageLedger, quotaSnapshots));
+    if (conf?.debugLog === true) installDebugApi(conf, context, state, snapshots, backup);
+    await paintDashboardHtml(buildDashboardHtml(conf, context, state, runLogs, snapshots, backup, usageLedger, quotaSnapshots, dashboardData));
     setupDashboardHandlers(conf, context, state, {
+      ...dashboardData,
       runLogs,
       snapshots,
       backup,
@@ -39589,79 +39731,49 @@ function normalizeAdaptiveQualityState(value) {
   }
 
   async function openDashboard(initialView = 'api') {
+    const openEpoch = Number(Runtime.dashboardOpenEpoch || 0) + 1;
+    Runtime.dashboardOpenEpoch = openEpoch;
     await closeRunProgressBeforeDashboard();
-    Runtime.dashboardInitialView = typeof initialView === 'string' && initialView ? initialView : 'api';
+    Runtime.dashboardInitialView = typeof initialView === 'string' && DASHBOARD_VIEW_IDS.includes(initialView) ? initialView : 'api';
     Runtime.dashboardVisible = true;
     try {
       resetDashboardDocumentSurface();
       await paintDashboardHtml(buildDashboardLoadingHtml());
       setupDashboardCloseHandler();
-      await api.showContainer('fullscreen');
+      await promiseWithTimeout(() => api.showContainer('fullscreen'), 4000, 'dashboard showContainer').catch(err => {
+        log('dashboard showContainer delayed', err?.message || err);
+      });
       await yieldRunProgressPaint();
-      const conf = await getConfig();
-      const context = await loadScopeAndContext([], conf);
-      await safeCall(() => reconcileChatOwnedImageArtifacts(context), null);
-      await safeCall(() => reconcileDeletedScopeStorage(context), null);
-      let state = context.noSession ? createDefaultState(context.mode) : await loadState(context.scope, context.mode, conf);
-      let sessionSync = context.noSession ? { changed: false, verdict: 'settings-only-no-session' } : syncSessionDiagnostics(state, context, conf);
-      const sessionRewindSync = context.noSession
-        ? { changed: false, skipped: true, reason: 'settings-only-no-session' }
-        : await maybeRewindStateAfterConfirmedDelete(context.scope, state, context.mode, sessionSync, conf);
-      if (!context.noSession && sessionRewindSync.changed && sessionRewindSync.state) {
-        state = sessionRewindSync.state;
-        sessionSync = { ...sessionSync, rewindApplied: true, rewind: { ...sessionRewindSync, state: undefined } };
+      const conf = await promiseWithTimeout(() => getStoredConfig(), 6000, 'dashboard stored config');
+      let context = await loadDashboardContextLite(conf);
+      let state = createDefaultState(context.mode);
+      let dashboardData = { loadedViews: [Runtime.dashboardInitialView] };
+      if (!['api', 'agents', 'prompts', 'artifacts'].includes(Runtime.dashboardInitialView)) {
+        const loaded = await loadDashboardViewSnapshot(Runtime.dashboardInitialView, conf, context, state, dashboardData);
+        context = loaded.context;
+        state = loaded.state;
+        dashboardData = loaded.dashboardData;
       }
-      let dashboardStateChanged = !context.noSession && Boolean(sessionSync.changed);
-      dashboardStateChanged = dashboardStateChanged || (!context.noSession && Boolean(sessionRewindSync.changed));
-      if (!context.noSession) {
-        if (!shouldBlockMemoryMutation(sessionSync)) {
-          const memoryRecoverySync = runMemoryGardenRecovery(state, context.messages, conf, sessionSync);
-          const longMemorySync = syncChatLongMemoryLedger(
-            state,
-            context.messages,
-            conf.contextWindow,
-            conf.coldStartChunkSize,
-            { reconcileSameEpoch: true }
-          );
-          dashboardStateChanged = dashboardStateChanged
-            || Boolean(memoryRecoverySync.changed)
-            || Boolean(longMemorySync.changed);
-        } else {
-          const memoryRecoverySync = runMemoryGardenRecovery(state, context.messages, conf, sessionSync);
-          dashboardStateChanged = dashboardStateChanged || Boolean(memoryRecoverySync.changed);
-        }
-        syncCbsDiagnostics(state, context, conf);
-      } else {
-        state.sessionDiagnostics = normalizeSessionDiagnostics({
-          ...state.sessionDiagnostics,
-          status: 'settings-only',
-          lastVerdict: 'no-chat-session',
-        });
-      }
-      if (dashboardStateChanged && !context.noSession) await saveState(context.scope, state, conf);
-      if (!context.noSession) await safeCall(() => migrateLegacyRecoveryRecords(context.scope, context.mode, 16), null);
-      const runLogs = context.noSession ? [] : await Storage.get(STORAGE.runLog(context.scope), []);
-      const snapshots = context.noSession ? [] : await loadStateSnapshots(context.scope);
-      const backup = context.noSession ? null : await loadStateBackup(context.scope, context.mode);
-      const usageLedger = await loadUsageLedger();
-      const quotaSnapshots = await loadQuotaSnapshots();
-      state._storageInventory = await safeCall(() => buildStorageInventory(context.noSession ? '' : context.scope), null);
-      await paintDashboardView(conf, context, state, { runLogs, snapshots, backup, usageLedger, quotaSnapshots });
+      if (openEpoch !== Number(Runtime.dashboardOpenEpoch || 0) || !Runtime.dashboardVisible) return;
+      await paintDashboardView(conf, context, state, dashboardData);
     } catch (err) {
+      if (openEpoch !== Number(Runtime.dashboardOpenEpoch || 0)) return;
       Runtime.lastError = err?.message || String(err || 'dashboard open failed');
       log('dashboard open failed', Runtime.lastError);
       resetDashboardDocumentSurface();
       await paintDashboardHtml(buildDashboardErrorHtml(err));
       setupDashboardCloseHandler();
-      await api.showContainer('fullscreen');
+      await promiseWithTimeout(() => api.showContainer('fullscreen'), 4000, 'dashboard error showContainer').catch(() => {});
     }
   }
 
-  function buildDashboardHtml(conf, context, state, runLogs, snapshots = [], backup = null, usageLedger = null, quotaSnapshots = null) {
+  function buildDashboardHtml(conf, context, state, runLogs, snapshots = [], backup = null, usageLedger = null, quotaSnapshots = null, dashboardData = {}) {
     const logs = Array.isArray(runLogs) ? runLogs : [];
-    const activeView = ['api', 'agents', 'prompts', 'references', 'artifacts', 'state', 'usage', 'runs'].includes(Runtime.dashboardInitialView)
+    const activeView = DASHBOARD_VIEW_IDS.includes(Runtime.dashboardInitialView)
       ? Runtime.dashboardInitialView
       : 'api';
+    const loadedViews = dashboardLoadedViewSet(dashboardData);
+    const renderView = (view, renderer) => loadedViews.has(view) ? renderer() : renderDashboardDeferredPanel(view);
     return `
       <style>${dashboardStyles()}</style>
       <div class="et-wrap">
@@ -39685,14 +39797,14 @@ function normalizeAdaptiveQualityState(value) {
         ${renderDashboardAlerts(conf, state, logs)}
 
         <main>
-          <section class="et-view" data-view="api" data-active="${activeView === 'api'}">${renderApiPanel(conf)}</section>
-          <section class="et-view" data-view="agents" data-active="${activeView === 'agents'}">${renderAgentPanel(conf)}</section>
-          <section class="et-view" data-view="prompts" data-active="${activeView === 'prompts'}">${renderPromptPresetPanel(conf)}</section>
-          <section class="et-view" data-view="references" data-active="${activeView === 'references'}">${renderReferencePanel(conf, context)}</section>
-          <section class="et-view" data-view="artifacts" data-active="${activeView === 'artifacts'}">${renderAlbumLauncherPanel()}</section>
-          <section class="et-view" data-view="state" data-active="${activeView === 'state'}">${renderStatePanel(conf, context, state, snapshots, backup)}</section>
-          <section class="et-view" data-view="usage" data-active="${activeView === 'usage'}">${renderUsagePanel(conf, usageLedger, quotaSnapshots)}</section>
-          <section class="et-view" data-view="runs" data-active="${activeView === 'runs'}">${renderRunLogPanel(logs)}</section>
+          <section class="et-view" data-view="api" data-active="${activeView === 'api'}">${renderView('api', () => renderApiPanel(conf))}</section>
+          <section class="et-view" data-view="agents" data-active="${activeView === 'agents'}">${renderView('agents', () => renderAgentPanel(conf))}</section>
+          <section class="et-view" data-view="prompts" data-active="${activeView === 'prompts'}">${renderView('prompts', () => renderPromptPresetPanel(conf))}</section>
+          <section class="et-view" data-view="references" data-active="${activeView === 'references'}">${renderView('references', () => renderReferencePanel(conf, context))}</section>
+          <section class="et-view" data-view="artifacts" data-active="${activeView === 'artifacts'}">${renderView('artifacts', () => renderAlbumLauncherPanel())}</section>
+          <section class="et-view" data-view="state" data-active="${activeView === 'state'}">${renderView('state', () => renderStatePanel(conf, context, state, snapshots, backup))}</section>
+          <section class="et-view" data-view="usage" data-active="${activeView === 'usage'}">${renderView('usage', () => renderUsagePanel(conf, usageLedger, quotaSnapshots))}</section>
+          <section class="et-view" data-view="runs" data-active="${activeView === 'runs'}">${renderView('runs', () => renderRunLogPanel(logs))}</section>
         </main>
       </div>`;
   }
@@ -41157,8 +41269,8 @@ function normalizeAdaptiveQualityState(value) {
     return `<details class="et-panel et-collapsible-panel" ${attrs}><summary>${escHtml(title)}</summary><div class="et-collapsible-body">${body}</div></details>`;
   }
 
-  function renderStorageInventory(inventory, migration = null) {
-    if (!inventory || typeof inventory !== 'object') return emptyState('저장소 사용량을 읽지 못했습니다.');
+  function renderStorageInventoryDetails(inventory, migration = null) {
+    if (!inventory || typeof inventory !== 'object') return emptyState('아직 저장소 사용량을 측정하지 않았습니다. 측정은 모든 에로스 타워 저장 키를 읽으므로 필요할 때만 실행하세요.');
     const labels = {
       state: '현재 상태·백업',
       snapshots: '스냅샷',
@@ -41192,6 +41304,14 @@ function normalizeAdaptiveQualityState(value) {
       ${migrationHtml}
       ${rows ? `<table class="et-table" style="margin-top:10px"><thead><tr><th>구분</th><th>키</th><th>실제 UTF-8</th></tr></thead><tbody>${rows}</tbody></table>` : ''}
       <div class="et-note" style="margin-top:8px">가장 큰 항목: ${escHtml(inventory.largest?.name || '-')}</div>`;
+  }
+
+  function renderStorageInventory(inventory, migration = null) {
+    return `
+      <div id="et-storage-inventory-result">${renderStorageInventoryDetails(inventory, migration)}</div>
+      <div class="et-actions">
+        <button type="button" id="et-measure-storage-inventory">저장소 사용량 측정</button>
+      </div>`;
   }
 
   function renderStatePanel(conf, context, state, snapshots = [], backup = null) {
@@ -42943,6 +43063,7 @@ function normalizeAdaptiveQualityState(value) {
 
     const activateDashboardView = (tab) => {
       const value = String(tab || 'api');
+      Runtime.dashboardInitialView = DASHBOARD_VIEW_IDS.includes(value) ? value : 'api';
       document.querySelectorAll('.et-view').forEach(x => x.setAttribute('data-active', String(x.getAttribute('data-view') === value)));
       document.querySelectorAll('[data-dashboard-menu-button]').forEach(button => {
         button.setAttribute('data-active', String(button.getAttribute('data-dashboard-menu-button') === value));
@@ -42959,18 +43080,39 @@ function normalizeAdaptiveQualityState(value) {
       const popover = $('et-dashboard-menu-popover');
       setDashboardMenuOpen(popover?.getAttribute('data-open') !== 'true');
     });
-    document.addEventListener?.('click', event => {
-      const target = event?.target;
-      if (target?.closest && target.closest('.et-menu-anchor')) return;
-      setDashboardMenuOpen(false);
-    });
-    document.addEventListener?.('keydown', event => {
-      if (event?.key === 'Escape') setDashboardMenuOpen(false);
-    });
+    if (!Runtime.dashboardMenuGlobalHandlersBound) {
+      Runtime.dashboardMenuGlobalHandlersBound = true;
+      document.addEventListener?.('click', event => {
+        const target = event?.target;
+        if (target?.closest && target.closest('.et-menu-anchor')) return;
+        setDashboardMenuOpen(false);
+      });
+      document.addEventListener?.('keydown', event => {
+        if (event?.key === 'Escape') setDashboardMenuOpen(false);
+      });
+    }
     document.querySelectorAll('[data-tab-target]').forEach(button => {
-      button.addEventListener('click', () => {
-        activateDashboardView(button.getAttribute('data-tab-target'));
+      button.addEventListener('click', async () => {
+        const targetView = button.getAttribute('data-tab-target') || 'api';
+        const loadedViews = dashboardLoadedViewSet(dashboardData);
+        activateDashboardView(targetView);
         if (button.hasAttribute?.('data-dashboard-menu-button')) setDashboardMenuOpen(false);
+        if (loadedViews.has(targetView)) return;
+        const target = document.querySelector(`.et-view[data-view="${targetView}"]`);
+        if (target) target.innerHTML = renderDashboardDeferredPanel(targetView, 'loading');
+        await yieldRunProgressPaint();
+        try {
+          let draftConf = conf;
+          try {
+            draftConf = readDashboardConfigFromUI({ ...conf, providerRegistry: conf.providerRegistry || [] });
+          } catch (_) {}
+          const loaded = await loadDashboardViewSnapshot(targetView, draftConf, context, state, dashboardData);
+          if (!Runtime.dashboardVisible || Runtime.dashboardInitialView !== targetView) return;
+          await paintDashboardView(draftConf, loaded.context, loaded.state, loaded.dashboardData);
+        } catch (err) {
+          Runtime.lastError = err?.message || String(err || 'dashboard view load failed');
+          if (target) target.innerHTML = renderDashboardDeferredPanel(targetView, 'error', Runtime.lastError);
+        }
       });
     });
     const artifactScopeFromContext = activeContext => cleanString(activeContext?.scope || context?.scope || Runtime.lastScope, '');
@@ -44325,6 +44467,19 @@ function normalizeAdaptiveQualityState(value) {
     wirePromptPresetHandlers(conf, setPromptStatus, saveCurrent);
     wireTranslationPromptHandlers(conf, setTranslationPromptStatus, saveCurrent);
     wireGoePromptHandlers(conf, setGoePromptStatus, saveCurrent);
+
+    $('et-measure-storage-inventory')?.addEventListener('click', async event => {
+      await withBusy(event.currentTarget, async () => {
+        const result = $('et-storage-inventory-result');
+        if (result) result.innerHTML = '<div class="et-note">저장소 키와 실제 UTF-8 바이트를 측정하는 중입니다.</div>';
+        const inventory = await buildStorageInventory(context.noSession ? '' : context.scope);
+        state._storageInventory = inventory;
+        if (result) result.innerHTML = renderStorageInventoryDetails(inventory, state.storageHealth?.lastMigration);
+      }, 'et-storage-inventory-result').catch(err => {
+        const result = $('et-storage-inventory-result');
+        if (result) result.innerHTML = `<div class="et-status" data-kind="error">저장소 측정 실패: ${escHtml(err?.message || err)}</div>`;
+      });
+    });
 
     $('et-cbs-toggle-scope')?.addEventListener('change', event => {
       const kind = event.currentTarget.value;
@@ -46308,6 +46463,8 @@ function normalizeAdaptiveQualityState(value) {
         testGameAgentComposerUiContract: async () => {
           const runtimeBefore = {
             tab: Runtime.gameplayComposerActiveTab,
+            inventoryPage: Runtime.gameplayComposerInventoryPage,
+            inventoryPageTab: Runtime.gameplayComposerInventoryPageTab,
             selected: Runtime.gameplayComposerSelectedActionId,
             picker: Runtime.gameplayComposerPicker,
             actorMatches: Runtime.gameplayComposerActorMatchIds,
@@ -46688,7 +46845,7 @@ function normalizeAdaptiveQualityState(value) {
               onlyPopulatedCategoriesRenderAsCompactIcons: view.tabs.length === 3
                 && view.tabs.every(tab => tab.total > 0 && tab.glyph)
                 && view.tabs.some(tab => tab.kind === 'context' && tab.total === GAMEPLAY_ADVISOR_SUGGESTION_MAX)
-                && view.tabs.some(tab => tab.kind === 'ability' && tab.label === '기계술' && tab.total === 2)
+                && view.tabs.some(tab => tab.kind === 'ability' && tab.id === 'ability' && tab.label === '스킬' && tab.total === 2)
                 && view.tabs.some(tab => tab.kind === 'item' && tab.id === 'item' && tab.label === '인벤토리' && tab.total === 1)
                 && (categoryNavHtml.match(/data-gameplay-category-icon(?:\s|>)/g) || []).length === view.tabs.length
                 && /data-gameplay-category-icon[^>]*width:26px[^>]*height:26px/.test(categoryNavHtml)
@@ -47147,6 +47304,8 @@ function normalizeAdaptiveQualityState(value) {
             };
           } finally {
             Runtime.gameplayComposerActiveTab = runtimeBefore.tab;
+            Runtime.gameplayComposerInventoryPage = runtimeBefore.inventoryPage;
+            Runtime.gameplayComposerInventoryPageTab = runtimeBefore.inventoryPageTab;
             Runtime.gameplayComposerSelectedActionId = runtimeBefore.selected;
             Runtime.gameplayComposerPicker = runtimeBefore.picker;
             Runtime.gameplayComposerActorMatchIds = runtimeBefore.actorMatches;
@@ -47500,6 +47659,33 @@ function normalizeAdaptiveQualityState(value) {
               && !/FINN_HIDDEN_MARKER|Wayfarer Union|Finn Secret Art|Finn Hidden Key/i.test(`${sceneText}\n${projectedCacheText}`),
           };
         },
+        testDashboardLazyLoadingContract: () => {
+          const openSource = String(openDashboard);
+          const liteContextSource = String(loadDashboardContextLite);
+          const viewLoaderSource = String(loadDashboardViewSnapshot);
+          const dashboardRendererSource = String(buildDashboardHtml);
+          const dashboardPaintSource = String(paintDashboardView);
+          const handlerSource = String(setupDashboardHandlers);
+          const startupSource = String(registerUi);
+          return {
+            dashboardStartsFromStoredConfig: openSource.includes('getStoredConfig()')
+              && String(getStoredConfig).includes('includeArgumentOverrides: false'),
+            dashboardStartsFromCurrentChatOnly: openSource.includes('loadDashboardContextLite(conf)')
+              && liteContextSource.includes('getChatFromIndex')
+              && !/getDatabase|getCurrentLorebook|loadScopeAndContext/.test(liteContextSource),
+            dashboardOpenSkipsStateMaintenance: !/loadState\(|saveState\(|syncSessionDiagnostics|syncMemoryGarden|migrateLegacyRecoveryRecords|reconcileChatOwnedImageArtifacts|reconcileDeletedScopeStorage|buildStorageInventory/.test(openSource),
+            heavyViewsLoadOnDemand: viewLoaderSource.includes("view === 'references'")
+              && viewLoaderSource.includes("view === 'state'")
+              && viewLoaderSource.includes("view === 'usage'")
+              && viewLoaderSource.includes("view === 'runs'"),
+            hiddenViewsRenderAsDeferredPanels: dashboardRendererSource.includes('renderDashboardDeferredPanel(view)'),
+            normalDashboardPaintSkipsDebugTestConstruction: dashboardPaintSource.includes('conf?.debugLog === true'),
+            storageInventoryRequiresExplicitClick: handlerSource.includes("$('et-measure-storage-inventory')")
+              && handlerSource.includes("buildStorageInventory(context.noSession ? '' : context.scope)"),
+            pluginStartupSkipsLegacyArgumentSweep: startupSource.includes('getStoredConfig()')
+              && !startupSource.includes('getConfig()'),
+          };
+        },
         testProductionLauncherActivationContract: () => {
           const freshPipeline = defaultPipeline();
           const freshConf = { ...DEFAULT_CONFIG, pipeline: freshPipeline };
@@ -47780,7 +47966,7 @@ function normalizeAdaptiveQualityState(value) {
               const unpreparedHtml = renderGameplayComposerPanel(buildGameplayComposerViewModel(conf, context, unprepared));
               const expectedActionLabels = [expected.abilityName, expected.itemName, expected.customAbilityName, expected.customItemName];
               const playerFacingSheetText = [expected.actorStatus, expected.statLabel, expected.condition];
-              const customCategoriesCorrect = view.tabs.some(tab => tab.label === expected.customAbilityCategory)
+              const customCategoriesCorrect = specialActions.some(action => action.kind === 'ability' && action.categoryLabel === expected.customAbilityCategory)
                 && specialActions.some(action => action.kind === 'item' && action.categoryLabel === expected.customItemCategory);
               const fallbackCommandsLocalized = specialActions.every(action => action.command === gameplayUiText(
                 expected.language,
@@ -47789,7 +47975,7 @@ function normalizeAdaptiveQualityState(value) {
               ));
               const canonicalTextHidden = expected.language === 'en' || !['Canonical spark description.', 'Canonical robe description.', 'Moon Thread', 'Moon Glass']
                 .some(text => preparedHtml.includes(text));
-              return [expected.language, view.outputLanguage === expected.language && state.gameplay.outputLanguage === expected.language && initialHtml.includes(expected.select) && unpreparedHtml.includes(expected.hint) && unpreparedHtml.includes('data-gameplay-non-persona-select-hint') && [expected.details, expected.status, expected.conditions].every(text => preparedHtml.includes(text)) && playerFacingSheetText.every(text => preparedHtml.includes(text)) && view.tabs.some(tab => tab.label === expected.magic) && view.tabs.some(tab => tab.kind === 'item' && tab.id === 'item' && tab.label === gameplayUiText(expected.language, 'inventory') && tab.total === 2) && specialActions.some(action => action.kind === 'item' && action.categoryLabel === expected.equipment) && customCategoriesCorrect && expectedActionLabels.every(label => specialActions.some(action => action.label === label)) && fallbackCommandsLocalized && canonicalTextHidden && gameplayUiText(expected.language, 'choicesFailed', { reason: 'test' }) === expected.failed];
+              return [expected.language, view.outputLanguage === expected.language && state.gameplay.outputLanguage === expected.language && initialHtml.includes(expected.select) && unpreparedHtml.includes(expected.hint) && unpreparedHtml.includes('data-gameplay-non-persona-select-hint') && [expected.details, expected.status, expected.conditions].every(text => preparedHtml.includes(text)) && playerFacingSheetText.every(text => preparedHtml.includes(text)) && view.tabs.some(tab => tab.kind === 'ability' && tab.id === 'ability' && tab.label === gameplayUiText(expected.language, 'skills') && tab.total === 2) && view.tabs.some(tab => tab.kind === 'item' && tab.id === 'item' && tab.label === gameplayUiText(expected.language, 'inventory') && tab.total === 2) && specialActions.some(action => action.kind === 'item' && action.categoryLabel === expected.equipment) && customCategoriesCorrect && expectedActionLabels.every(label => specialActions.some(action => action.label === label)) && fallbackCommandsLocalized && canonicalTextHidden && gameplayUiText(expected.language, 'choicesFailed', { reason: 'test' }) === expected.failed];
             });
             return Object.fromEntries(results);
           } finally {
@@ -47799,6 +47985,8 @@ function normalizeAdaptiveQualityState(value) {
         testGameAgentActorLookupAdaptiveTabsAndLanguage: () => {
           const runtimeBefore = {
             tab: Runtime.gameplayComposerActiveTab,
+            inventoryPage: Runtime.gameplayComposerInventoryPage,
+            inventoryPageTab: Runtime.gameplayComposerInventoryPageTab,
             selected: Runtime.gameplayComposerSelectedActionId,
             picker: Runtime.gameplayComposerPicker,
             actorMatches: Runtime.gameplayComposerActorMatchIds,
@@ -47867,12 +48055,9 @@ function normalizeAdaptiveQualityState(value) {
             const advisorContextMatches = gameplayAdvisorMatchesContext(target, fakeContext, selectedActor, target.gameplay.advisor);
             const view = buildGameplayComposerViewModel({ ...DEFAULT_CONFIG, enabled: true }, fakeContext, target);
             const html = renderGameplayComposerPanel(view);
-            const taijutsuCategory = view.tabs.find(tab => tab.kind === 'ability' && tab.label === '체술');
-            const ninjutsuCategory = view.tabs.find(tab => tab.kind === 'ability' && tab.label === '인술');
-            Runtime.gameplayComposerActiveTab = taijutsuCategory?.id || '';
-            const taijutsuView = buildGameplayComposerViewModel({ ...DEFAULT_CONFIG, enabled: true }, fakeContext, target);
-            Runtime.gameplayComposerActiveTab = ninjutsuCategory?.id || '';
-            const ninjutsuView = buildGameplayComposerViewModel({ ...DEFAULT_CONFIG, enabled: true }, fakeContext, target);
+            const skillCategory = view.tabs.find(tab => tab.kind === 'ability');
+            Runtime.gameplayComposerActiveTab = skillCategory?.id || '';
+            const skillView = buildGameplayComposerViewModel({ ...DEFAULT_CONFIG, enabled: true }, fakeContext, target);
             Runtime.gameplayComposerActiveTab = 'item';
             const emptyItemView = buildGameplayComposerViewModel({ ...DEFAULT_CONFIG, enabled: true }, fakeContext, target);
             const emptyItemHtml = renderGameplayComposerPanel(emptyItemView);
@@ -47908,6 +48093,11 @@ function normalizeAdaptiveQualityState(value) {
             const crowdedSpecialActions = buildGameplaySpecialActions(crowdedState, fakeContext, 'user:crowded');
             const crowdedActions = buildGameplayActions(crowdedState, fakeContext, 'user:crowded');
             const crowdedView = buildGameplayComposerViewModel({ ...DEFAULT_CONFIG, enabled: true }, fakeContext, crowdedState);
+            const crowdedHtml = renderGameplayComposerPanel(crowdedView);
+            Runtime.gameplayComposerInventoryPage = 2;
+            Runtime.gameplayComposerInventoryPageTab = crowdedView.activeTab;
+            const crowdedSecondPageView = buildGameplayComposerViewModel({ ...DEFAULT_CONFIG, enabled: true }, fakeContext, crowdedState);
+            const crowdedSecondPageHtml = renderGameplayComposerPanel(crowdedSecondPageView);
             const coldState = createDefaultState('rp');
             const coldView = buildGameplayComposerViewModel(
               { ...DEFAULT_CONFIG, enabled: true },
@@ -48022,19 +48212,15 @@ function normalizeAdaptiveQualityState(value) {
                 && psycheAliasActors.some(item => item.name === '사이키 인물 별칭')
                 && canonicalAliasRecords.some(item => item.name === '정식 인물 별칭')
                 && !psycheAliasActors.concat(canonicalAliasRecords, opaqueTargets).some(item => item.name?.includes(uuidV7)),
-              narutoKeepsChakraAndSeparateTaijutsuNinjutsuCategories: taijutsuCategory?.total === 1
-                && ninjutsuCategory?.total === 1
-                && taijutsuCategory.id !== ninjutsuCategory.id
-                && taijutsuView.actionRows.length === 1
-                && taijutsuView.actionRows[0]?.entryId === 'leaf-hurricane'
-                && ninjutsuView.actionRows.length === 1
-                && ninjutsuView.actionRows[0]?.entryId === 'shadow-clone'
+              narutoKeepsChakraAndUnifiesTaijutsuNinjutsuInOneSkillInventory: skillCategory?.id === 'ability'
+                && skillCategory?.label === '스킬'
+                && skillCategory?.total === 2
+                && skillView.actionRows.length === 2
+                && skillView.actionRows.some(row => row.entryId === 'leaf-hurricane' && row.composerCategoryLabel === '체술')
+                && skillView.actionRows.some(row => row.entryId === 'shadow-clone' && row.composerCategoryLabel === '인술')
                 && view.hud.resources.some(resource => resource.key === 'chakra' && resource.current === 35 && resource.max === 50)
                 && !view.hud.resources.some(resource => ['mp', 'mana'].includes(resource.key) || /^(?:MP|Mana|마나|마력)$/i.test(resource.label))
-                && html.includes('data-gameplay-category-icons')
-                && html.includes('체술')
-                && html.includes('인술')
-                && !html.includes('체술/인술'),
+                && html.includes('data-gameplay-category-icons'),
               emptyInventoryCreatesNoIconBoxOrZeroCounter: !view.tabs.some(tab => tab.kind === 'item')
                 && emptyItemView.activeTab === 'context'
                 && emptyItemView.tabs.every(tab => tab.total > 0)
@@ -48046,13 +48232,33 @@ function normalizeAdaptiveQualityState(value) {
                 && target.characters.naruto.abilities.find(action => action.id === 'leaf-hurricane')?.categoryLabel === '체술'
                 && target.characters.naruto.abilities.find(action => action.id === 'shadow-clone')?.kind === 'ninjutsu'
                 && target.characters.naruto.abilities.find(action => action.id === 'shadow-clone')?.categoryLabel === '인술',
-              largeAbilityCatalogCannotCrowdOutInventory: crowdedSpecialActions.filter(action => action.kind === 'ability').length === GAMEPLAY_SPECIAL_ENTRY_MAX_PER_KIND
+              largeAbilityCatalogIsCompleteAndCannotCrowdOutInventory: crowdedSpecialActions.filter(action => action.kind === 'ability').length === 90
                 && crowdedSpecialActions.filter(action => action.kind === 'item').length === 2
+                && crowdedActions.filter(action => action.kind === 'ability').length === 90
                 && crowdedActions.filter(action => action.kind === 'item').length === 2
-                && crowdedView.tabs.find(tab => tab.kind === 'ability' && tab.label === '기술')?.total === GAMEPLAY_SPECIAL_ENTRY_MAX_PER_KIND
+                && crowdedView.tabs.find(tab => tab.kind === 'ability' && tab.id === 'ability' && tab.label === '스킬')?.total === 90
                 && crowdedView.tabs.filter(tab => tab.kind === 'item').length === 1
                 && crowdedView.tabs.some(tab => tab.kind === 'item' && tab.id === 'item' && tab.label === '인벤토리' && tab.total === 2)
                 && crowdedView.tabs.every(tab => tab.total > 0),
+              largeCatalogUsesSixteenCellPagesWithoutDroppingEntries: crowdedView.actionRows.length === GAMEPLAY_INVENTORY_PAGE_SIZE
+                && crowdedView.inventoryPagination?.page === 1
+                && crowdedView.inventoryPagination?.pageCount === 6
+                && crowdedView.inventoryPagination?.pageSize === GAMEPLAY_INVENTORY_PAGE_SIZE
+                && crowdedView.inventoryPagination?.total === 90
+                && crowdedSecondPageView.actionRows.length === GAMEPLAY_INVENTORY_PAGE_SIZE
+                && crowdedSecondPageView.inventoryPagination?.page === 2
+                && crowdedSecondPageView.actionRows.every(row => !crowdedView.actionRows.some(firstPageRow => firstPageRow.id === row.id))
+                && gameplayInventoryPageSize() === GAMEPLAY_INVENTORY_PAGE_SIZE,
+              inventoryCellsShowOnlyEmojiAndEllipsizedNameBeforeDetails: crowdedHtml.includes('data-gameplay-inventory-cell')
+                && crowdedHtml.includes('data-gameplay-inventory-entry-icon')
+                && crowdedHtml.includes('data-gameplay-inventory-entry-name')
+                && crowdedHtml.includes('text-overflow:ellipsis;white-space:nowrap;text-align:center')
+                && crowdedHtml.includes('grid-template-columns:repeat(8,minmax(0,1fr))')
+                && crowdedHtml.includes('data-gameplay-inventory-pagination')
+                && crowdedSecondPageHtml.includes('data-gameplay-inventory-page="2" aria-current="page"')
+                && gameplayComposerCommandIsFast('inventory-page:2')
+                && String(handleGameplayComposerCommand).includes("value.startsWith('inventory-page:')")
+                && !crowdedHtml.includes('사용 가능'),
               advisorDeckRequiresCurrentActorAndContext: advisorContextMatches
                 && !gameplayAdvisorMatchesContext(target, fakeContext, { ...selectedActor, id: 'user:other' }, target.gameplay.advisor),
               allRequestedLanguagesAvailableWithKoreanDefault: gameplayOutputLanguageOptions().map(item => item.value).join(',') === 'ko,en,ja,zh'
@@ -48080,6 +48286,8 @@ function normalizeAdaptiveQualityState(value) {
             };
           } finally {
             Runtime.gameplayComposerActiveTab = runtimeBefore.tab;
+            Runtime.gameplayComposerInventoryPage = runtimeBefore.inventoryPage;
+            Runtime.gameplayComposerInventoryPageTab = runtimeBefore.inventoryPageTab;
             Runtime.gameplayComposerSelectedActionId = runtimeBefore.selected;
             Runtime.gameplayComposerPicker = runtimeBefore.picker;
             Runtime.gameplayComposerActorMatchIds = runtimeBefore.actorMatches;
@@ -48170,7 +48378,7 @@ function normalizeAdaptiveQualityState(value) {
           try {
             target.gameplay.pendingAction = null;
             const abilityGroupId = buildGameplayComposerViewModel({ ...DEFAULT_CONFIG, enabled: true }, fakeContext, target)
-              .tabs.find(tab => tab.kind === 'ability' && tab.label === '마법')?.id;
+              .tabs.find(tab => tab.kind === 'ability')?.id;
             Runtime.gameplayComposerActiveTab = abilityGroupId || '';
             Runtime.gameplayComposerSelectedActionId = 'ability:water-step';
             abilityView = buildGameplayComposerViewModel({ ...DEFAULT_CONFIG, enabled: true }, fakeContext, target);
@@ -48490,9 +48698,9 @@ function normalizeAdaptiveQualityState(value) {
           let instructionsHtml;
           try {
             target.gameplay.pendingAction = null;
-            const magicGroupId = buildGameplayComposerViewModel(conf, fakeContext, target)
-              .tabs.find(tab => tab.kind === 'ability' && tab.label === '마법')?.id;
-            Runtime.gameplayComposerActiveTab = magicGroupId || '';
+            const abilityGroupId = buildGameplayComposerViewModel(conf, fakeContext, target)
+              .tabs.find(tab => tab.kind === 'ability')?.id;
+            Runtime.gameplayComposerActiveTab = abilityGroupId || '';
             Runtime.gameplayComposerSelectedActionId = 'ability:fireball';
             abilityView = buildGameplayComposerViewModel(conf, fakeContext, target);
             abilityHtml = renderGameplayComposerPanel(abilityView);
@@ -48627,11 +48835,11 @@ function normalizeAdaptiveQualityState(value) {
               && abilityHtml.includes('조건 ·')
               && !abilityHtml.includes('사용 준비')
               && !abilityHtml.includes('이 스킬로 선택지 만들기'),
-            abilityAndItemIconsOpenDistinctPopulatedInventoryWindows: abilityView.tabs.some(tab => tab.kind === 'ability' && tab.label === '마법' && tab.total === 1)
+            abilityAndItemIconsOpenDistinctPopulatedInventoryWindows: abilityView.tabs.some(tab => tab.kind === 'ability' && tab.id === 'ability' && tab.label === '스킬' && tab.total === 1)
               && itemView.tabs.some(tab => tab.kind === 'item' && tab.id === 'item' && tab.label === '인벤토리' && tab.total === 1)
               && /data-gameplay-inventory-window[^>]*data-gameplay-inventory-kind="ability"/.test(abilityHtml)
               && /data-gameplay-inventory-window[^>]*data-gameplay-inventory-kind="item"/.test(itemHtml)
-              && abilityHtml.includes('>마법</strong>')
+              && abilityHtml.includes('>스킬</strong>')
               && itemHtml.includes('>인벤토리</strong>')
               && itemHtml.includes('>촉매</span>')
               && itemHtml.includes('잿빛 촉매병')
@@ -48642,7 +48850,9 @@ function normalizeAdaptiveQualityState(value) {
               && !itemHtml.includes('data-gameplay-choice-section')
               && !abilityHtml.includes('0개')
               && !itemHtml.includes('0개'),
-            dynamicCategoryComesFromCommittedActorSheetNotAdvisorPresentation: abilityView.tabs.some(tab => tab.kind === 'ability' && tab.label === '마법' && tab.total === 1)
+            dynamicCategoryComesFromCommittedActorSheetNotAdvisorPresentation: abilityView.tabs.some(tab => tab.kind === 'ability' && tab.label === '스킬' && tab.total === 1)
+              && abilityView.actionRows.some(row => row.id === 'ability:fireball' && row.composerCategoryLabel === '마법')
+              && abilityHtml.includes('>마법</span>')
               && typeof gameplayAbilityCategoryCode === 'undefined',
             naturalLanguageComposerUsesRealPromptWithoutUnsafeSafeDomEditing: abilityHtml.includes('data-gameplay-custom-action-composer')
               && abilityHtml.includes('data-gameplay-custom-action-submit')
@@ -48829,10 +49039,7 @@ function normalizeAdaptiveQualityState(value) {
           const arcaneResource = view.hud.resources.find(resource => resource.key === 'arcane');
           const ithrilionSource = context.canonicalSources[0]?.content || '';
           const ageFact = view.hud.facts.find(fact => fact.key === 'age');
-          const magicCategory = view.tabs.find(tab => tab.kind === 'ability' && tab.label === '마법');
-          const traitCategory = view.tabs.find(tab => tab.kind === 'ability' && tab.label === '특성');
-          const artifactCategory = view.tabs.find(tab => tab.kind === 'item' && tab.label === '유물');
-          const equipmentCategory = view.tabs.find(tab => tab.kind === 'item' && tab.label === '장비');
+          const skillCategory = view.tabs.find(tab => tab.kind === 'ability' && tab.id === 'ability' && tab.label === '스킬');
           const payload = buildGameplayAdvisorPayload(state, context, {
             evidenceContext: '에델가르드는 세계관 문서이고 얼어붙은 회랑이 현재 장면이다.',
           });
@@ -48907,12 +49114,13 @@ function normalizeAdaptiveQualityState(value) {
               && actor.character.inventory[1]?.categoryLabel === '장비',
             onlyPopulatedDynamicCategoriesRenderAsCompactIcons: {
               categoryCounts: {
-                exactlyFourWithOneUnifiedInventory: view.tabs.length === 4,
+                exactlyThreeWithUnifiedSkillsAndInventory: view.tabs.length === 3,
                 allPopulated: view.tabs.every(tab => tab.total > 0),
                 choices: view.tabs.some(tab => tab.kind === 'context' && tab.total === GAMEPLAY_ADVISOR_SUGGESTION_MAX),
-                magic: magicCategory?.total === 4,
-                trait: traitCategory?.total === 2,
+                skills: skillCategory?.total === 6,
                 inventory: view.tabs.find(tab => tab.kind === 'item' && tab.id === 'item' && tab.label === '인벤토리')?.total === 2,
+                abilityCategoriesRemainOnEntries: actor.character.abilities.filter(entry => entry.categoryLabel === '마법').length === 4
+                  && actor.character.abilities.filter(entry => entry.categoryLabel === '특성').length === 2,
                 itemKindsRemainOnEntries: actor.character.inventory.some(item => item.kind === 'artifact' && item.categoryLabel === '마도구')
                   && actor.character.inventory.some(item => item.kind === 'equipment' && item.categoryLabel === '장비'),
               },
@@ -49651,7 +49859,7 @@ function normalizeAdaptiveQualityState(value) {
             Runtime.gameplayComposerSelectedActionId = 'ability:old-action';
             const firstView = buildGameplayComposerViewModel({ ...DEFAULT_CONFIG, enabled: true }, context, state);
             const firstHtml = renderGameplayComposerPanel(firstView);
-            const firstCategory = firstView.tabs.find(tab => tab.kind === 'ability' && tab.label === '현장 기술');
+            const firstCategory = firstView.tabs.find(tab => tab.kind === 'ability' && tab.id === 'ability' && tab.label === '스킬');
             const oxygenResource = firstView.hud.resources.find(resource => resource.key === 'oxygen');
 
             state.gameplay.activeActorId = 'character:investigator';
@@ -49659,7 +49867,7 @@ function normalizeAdaptiveQualityState(value) {
             Runtime.gameplayComposerSelectedActionId = 'ability:field-repair';
             const switchedView = buildGameplayComposerViewModel({ ...DEFAULT_CONFIG, enabled: true }, context, state);
             const switchedHtml = renderGameplayComposerPanel(switchedView);
-            const switchedCategory = switchedView.tabs.find(tab => tab.kind === 'ability' && tab.label === '조사 기술');
+            const switchedCategory = switchedView.tabs.find(tab => tab.kind === 'ability' && tab.id === 'ability' && tab.label === '스킬');
 
             const identityOnlyState = createDefaultState('rp');
             identityOnlyState.characters.blank = normalizeCharacterState({
@@ -49711,16 +49919,15 @@ function normalizeAdaptiveQualityState(value) {
                 && firstView.hud.resources.some(resource => resource.key === 'oxygen')
                 && firstView.tabs.length === 1
                 && firstCategory?.total === 1
-                && firstView.actionRows.some(row => row.id === 'ability:field-repair')
+                && firstView.actionRows.some(row => row.id === 'ability:field-repair' && row.composerCategoryLabel === '현장 기술')
                 && !Object.keys(state.characters.surveyor.stats).some(key => /^(?:mp|mana|chakra|qi|spirit)$/i.test(key))
                 && !firstView.tabs.some(tab => /마법|인술|주문|magic|ninjutsu/i.test(tab.label)),
               staleCategoryAndSelectionResetWhenActorChanges: firstView.activeTab === firstCategory?.id
                 && Runtime.gameplayComposerSelectedActionId === ''
                 && switchedView.activeTab === switchedCategory?.id
-                && switchedCategory?.id !== firstCategory?.id
+                && switchedCategory?.id === firstCategory?.id
                 && switchedView.tabs.length === 1
-                && switchedView.actionRows.some(row => row.id === 'ability:trace-analysis')
-                && !switchedView.tabs.some(tab => tab.label === '현장 기술')
+                && switchedView.actionRows.some(row => row.id === 'ability:trace-analysis' && row.composerCategoryLabel === '조사 기술')
                 && !switchedView.actionRows.some(row => row.id === 'ability:field-repair')
                 && !switchedHtml.includes('Field Repair'),
               identityOnlyActorStillGetsTwoPercentageGaugesWithoutActions: identityOnlyView.tabs.length === 0
@@ -61903,8 +62110,11 @@ function normalizeAdaptiveQualityState(value) {
 
   function gameplayComposerTab(value) {
     const normalized = cleanString(value, '').slice(0, 80);
-    if (normalized === 'context' || normalized === 'item') return normalized;
-    return /^(?:ability|item):[a-z0-9]{1,16}$/.test(normalized) ? normalized : '';
+    return ['context', 'ability', 'item'].includes(normalized) ? normalized : '';
+  }
+
+  function gameplayInventoryPageSize() {
+    return GAMEPLAY_INVENTORY_PAGE_SIZE;
   }
 
   function gameplayAdvisorOutputLanguage(conf = null) {
@@ -61916,7 +62126,7 @@ function normalizeAdaptiveQualityState(value) {
       choice: '선택지', details: '상세 정보', maximum: '최대', unclassified: '미분류', close: '닫기',
       loadingChat: '현재 채팅 상태를 불러오는 중…', preparingStatus: '스테이터스 준비 중…', working: '작업 중…',
       syncStatus: '인물 스테이터스 동기화', syncStatusTitle: '현재 인물의 최신 Psyche 스테이터스를 다시 읽습니다.',
-      currentStatus: '현재 상태', conditions: '상태·조건', effects: '효과', matchingActors: '일치하는 플레이 인물', availableActors: '선택 가능한 플레이 인물', categoryNavigation: '행동 분류', inventory: '인벤토리', itemCount: '{count}개',
+      currentStatus: '현재 상태', conditions: '상태·조건', effects: '효과', matchingActors: '일치하는 플레이 인물', availableActors: '선택 가능한 플레이 인물', categoryNavigation: '행동 분류', skills: '스킬', inventory: '인벤토리', itemCount: '{count}개', previousPage: '이전 페이지', nextPage: '다음 페이지', pageNumber: '{page}페이지',
       hpRisk: 'HP 위험', overdraw: '대체 소모', available: '사용 가능', unavailable: '사용 불가', cannotUseNow: '현재 사용할 수 없습니다.',
       cooldownTurns: '재사용 대기 {count}턴', uses: '사용 횟수 {current}/{max}', owned: '보유 {count}', successChance: '성공 가능성 {chance}%',
       minimum: '{label} {value} 이상', prerequisite: '선행 {value}', requiredCondition: '필요 상태 {value}', excludedCondition: '불가 상태 {value}', requirements: '조건',
@@ -61940,7 +62150,7 @@ function normalizeAdaptiveQualityState(value) {
       choice: 'Choices', details: 'Details', maximum: 'Max', unclassified: 'Unclassified', close: 'Close',
       loadingChat: 'Loading the current chat state…', preparingStatus: 'Preparing character status…', working: 'Working…',
       syncStatus: 'Sync character status', syncStatusTitle: 'Reload this character’s latest Psyche status.',
-      currentStatus: 'Current status', conditions: 'Conditions', effects: 'Effects', matchingActors: 'Matching player characters', availableActors: 'Available player characters', categoryNavigation: 'Action categories', inventory: 'Inventory', itemCount: '{count} items',
+      currentStatus: 'Current status', conditions: 'Conditions', effects: 'Effects', matchingActors: 'Matching player characters', availableActors: 'Available player characters', categoryNavigation: 'Action categories', skills: 'Skills', inventory: 'Inventory', itemCount: '{count} items', previousPage: 'Previous page', nextPage: 'Next page', pageNumber: 'Page {page}',
       hpRisk: 'HP risk', overdraw: 'Alternate cost', available: 'Available', unavailable: 'Unavailable', cannotUseNow: 'Cannot be used right now.',
       cooldownTurns: 'Cooldown: {count} turns', uses: 'Uses {current}/{max}', owned: 'Owned {count}', successChance: 'Success chance {chance}%',
       minimum: '{label} {value} or higher', prerequisite: 'Prerequisite: {value}', requiredCondition: 'Required: {value}', excludedCondition: 'Blocked by: {value}', requirements: 'Requirements',
@@ -61964,7 +62174,7 @@ function normalizeAdaptiveQualityState(value) {
       choice: '選択肢', details: '詳細情報', maximum: '最大', unclassified: '未分類', close: '閉じる',
       loadingChat: '現在のチャット状態を読み込み中…', preparingStatus: 'ステータスを準備中…', working: '処理中…',
       syncStatus: 'キャラクターステータスを同期', syncStatusTitle: 'このキャラクターの最新Psycheステータスを再読込します。',
-      currentStatus: '現在の状態', conditions: '状態・条件', effects: '効果', matchingActors: '一致するプレイヤーキャラクター', availableActors: '選択可能なプレイヤーキャラクター', categoryNavigation: '行動カテゴリ', inventory: 'インベントリ', itemCount: '{count}件',
+      currentStatus: '現在の状態', conditions: '状態・条件', effects: '効果', matchingActors: '一致するプレイヤーキャラクター', availableActors: '選択可能なプレイヤーキャラクター', categoryNavigation: '行動カテゴリ', skills: 'スキル', inventory: 'インベントリ', itemCount: '{count}件', previousPage: '前のページ', nextPage: '次のページ', pageNumber: '{page}ページ',
       hpRisk: 'HP危険', overdraw: '代替消費', available: '使用可能', unavailable: '使用不可', cannotUseNow: '現在は使用できません。',
       cooldownTurns: '再使用まで{count}ターン', uses: '使用回数 {current}/{max}', owned: '所持 {count}', successChance: '成功可能性 {chance}%',
       minimum: '{label} {value}以上', prerequisite: '前提 {value}', requiredCondition: '必要状態 {value}', excludedCondition: '使用不可状態 {value}', requirements: '条件',
@@ -61989,7 +62199,7 @@ function normalizeAdaptiveQualityState(value) {
       choice: '选项', details: '详细信息', maximum: '最大', unclassified: '未分类', close: '关闭',
       loadingChat: '正在加载当前聊天状态…', preparingStatus: '正在准备角色状态…', working: '处理中…',
       syncStatus: '同步角色状态', syncStatusTitle: '重新读取该角色最新的Psyche状态。',
-      currentStatus: '当前状态', conditions: '状态与条件', effects: '效果', matchingActors: '匹配的玩家角色', availableActors: '可选的玩家角色', categoryNavigation: '行动分类', inventory: '物品栏', itemCount: '{count}项',
+      currentStatus: '当前状态', conditions: '状态与条件', effects: '效果', matchingActors: '匹配的玩家角色', availableActors: '可选的玩家角色', categoryNavigation: '行动分类', skills: '技能', inventory: '物品栏', itemCount: '{count}项', previousPage: '上一页', nextPage: '下一页', pageNumber: '第{page}页',
       hpRisk: 'HP危险', overdraw: '替代消耗', available: '可使用', unavailable: '不可使用', cannotUseNow: '目前无法使用。',
       cooldownTurns: '冷却 {count}回合', uses: '使用次数 {current}/{max}', owned: '持有 {count}', successChance: '成功可能性 {chance}%',
       minimum: '{label} {value}以上', prerequisite: '前置 {value}', requiredCondition: '需要状态 {value}', excludedCondition: '禁用状态 {value}', requirements: '条件',
@@ -62113,25 +62323,16 @@ function normalizeAdaptiveQualityState(value) {
         rows: contextRows,
       });
     }
-    ['ability'].forEach(kind => {
-      const byCategory = new Map();
-      allRows.filter(row => row.kind === kind).forEach(row => {
-        const label = gameplayActionCategoryLabel(row, outputLanguage);
-        const categoryKey = normalizeGameplayLookupKey(label) || 'unclassified';
-        if (!byCategory.has(categoryKey)) byCategory.set(categoryKey, { label, rows: [] });
-        byCategory.get(categoryKey).rows.push(row);
+    const abilityRows = allRows.filter(row => row.kind === 'ability');
+    if (abilityRows.length) {
+      groups.push({
+        id: 'ability',
+        kind: 'ability',
+        label: gameplayUiText(outputLanguage, 'skills'),
+        glyph: '✨',
+        rows: abilityRows,
       });
-      byCategory.forEach(category => {
-        if (!category.rows.length) return;
-        groups.push({
-          id: `${kind}:${hashString(`${kind}:${normalizeGameplayLookupKey(category.label)}`)}`,
-          kind,
-          label: category.label,
-          glyph: gameplayCategoryGlyph(category.label, kind),
-          rows: category.rows,
-        });
-      });
-    });
+    }
     const inventoryRows = allRows.filter(row => row.kind === 'item');
     if (inventoryRows.length) {
       groups.push({
@@ -62316,15 +62517,45 @@ function normalizeAdaptiveQualityState(value) {
       Runtime.gameplayComposerActiveTab = activeTab;
     }
     const activeGroup = actionGroups.find(group => group.id === activeTab) || null;
-    const actionRows = (activeGroup?.rows || [])
+    const inventoryMode = ['ability', 'item'].includes(activeGroup?.kind);
+    const orderedRows = (activeGroup?.rows || [])
       .slice()
       .sort((a, b) => activeGroup?.kind === 'context'
         ? a._order - b._order
-        : Number(Boolean(b.available)) - Number(Boolean(a.available)) || String(a.label || '').localeCompare(String(b.label || '')))
-      .slice(0, 30)
+        : Number(Boolean(b.available)) - Number(Boolean(a.available)) || String(a.label || '').localeCompare(String(b.label || '')));
+    let inventoryPagination = null;
+    let visibleRows = orderedRows;
+    if (inventoryMode) {
+      const pageSize = gameplayInventoryPageSize();
+      const pageCount = Math.max(1, Math.ceil(orderedRows.length / pageSize));
+      const sameInventoryTab = Runtime.gameplayComposerInventoryPageTab === activeTab;
+      const requestedPage = sameInventoryTab
+        ? Math.floor(Number(Runtime.gameplayComposerInventoryPage) || 1)
+        : 1;
+      const page = Math.max(1, Math.min(pageCount, requestedPage));
+      Runtime.gameplayComposerInventoryPage = page;
+      Runtime.gameplayComposerInventoryPageTab = activeTab;
+      const pageWindowSize = Math.min(5, pageCount);
+      const firstPage = Math.max(1, Math.min(pageCount - pageWindowSize + 1, page - Math.floor(pageWindowSize / 2)));
+      const pages = Array.from({ length: pageWindowSize }, (_, index) => firstPage + index);
+      visibleRows = orderedRows.slice((page - 1) * pageSize, page * pageSize);
+      inventoryPagination = {
+        page,
+        pageCount,
+        pageSize,
+        total: orderedRows.length,
+        pages,
+        hasPrevious: page > 1,
+        hasNext: page < pageCount,
+      };
+    } else {
+      Runtime.gameplayComposerInventoryPage = 1;
+      Runtime.gameplayComposerInventoryPageTab = '';
+    }
+    const actionRows = visibleRows
       .map(row => ({
         ...row,
-        composerCategoryLabel: activeGroup?.kind === 'item'
+        composerCategoryLabel: ['ability', 'item'].includes(activeGroup?.kind)
           ? gameplayActionCategoryLabel(row, outputLanguage)
           : activeGroup?.label || '',
       }));
@@ -62380,6 +62611,11 @@ function normalizeAdaptiveQualityState(value) {
       }] : []),
       ...(sheetVisible ? [{ slot: 'full-refresh', label: ui('syncStatus'), command: 'refresh', disabled: generationBusy || Boolean(pending) }] : []),
       ...(actionGroups.map(group => ({ slot: 'tab', value: group.id, label: group.label, command: `tab:${group.id}`, disabled: generationBusy }))),
+      ...(inventoryPagination && inventoryPagination.pageCount > 1 ? [
+        { slot: 'inventory-page-previous', value: inventoryPagination.page - 1, label: ui('previousPage'), command: `inventory-page:${inventoryPagination.page - 1}`, disabled: generationBusy || Boolean(pending) || !inventoryPagination.hasPrevious },
+        ...inventoryPagination.pages.map(page => ({ slot: 'inventory-page', value: page, label: String(page), command: `inventory-page:${page}`, disabled: generationBusy || Boolean(pending) })),
+        { slot: 'inventory-page-next', value: inventoryPagination.page + 1, label: ui('nextPage'), command: `inventory-page:${inventoryPagination.page + 1}`, disabled: generationBusy || Boolean(pending) || !inventoryPagination.hasNext },
+      ] : []),
       ...actionRows.map(row => ({
         slot: 'action-row',
         value: row.id,
@@ -62436,6 +62672,7 @@ function normalizeAdaptiveQualityState(value) {
       tabs,
       activeTab,
       actionRows,
+      inventoryPagination,
       selectedAction,
       pending,
       customAction,
@@ -62562,10 +62799,15 @@ function normalizeAdaptiveQualityState(value) {
         ? ''
         : uniqueStrings([row.statusText, row.costText]).filter(Boolean).join(' · ');
       const contextText = row.kind === 'context' ? cleanString(row.command, '') : '';
-      const html = `<span style="display:flex;align-items:flex-start;gap:${row.kind === 'context' ? '8px' : '5px'};min-width:0"><span style="flex:none;margin-top:${row.kind === 'context' ? '1px' : '0'};color:${row.available ? '#d5ad74' : '#83797d'}">${icon}</span><span style="min-width:0;flex:1;text-align:left"><strong style="display:block;font-size:${row.kind === 'context' ? '11px' : '10px'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(row.label)}</strong>${contextText ? `<small style="display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;max-height:24.3px;margin-top:2px;font-size:9px;line-height:1.35;color:#bdb0ab;white-space:normal;overflow:hidden;overflow-wrap:anywhere">${escHtml(contextText)}</small>` : specialMeta ? `<small style="display:block;margin-top:1px;font-size:8px;color:${row.available ? '#bdb0ab' : '#8e8387'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(specialMeta)}</small>` : ''}</span></span>`;
+      const entryGlyph = row.kind === 'context'
+        ? icon
+        : gameplayCategoryGlyph(firstNonEmpty(row.composerCategoryLabel, gameplayActionCategoryLabel(row, outputLanguage)), row.kind);
+      const html = inventoryMode
+        ? `<span data-gameplay-inventory-cell style="position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;width:100%;min-width:0"><span data-gameplay-inventory-entry-icon aria-hidden="true" style="position:relative;display:flex;align-items:center;justify-content:center;width:16px;height:16px;font-size:13px;line-height:1;filter:${row.available ? 'none' : 'grayscale(.75)'}">${escHtml(entryGlyph)}${row.available ? '' : '<small data-gameplay-inventory-lock style="position:absolute;right:-3px;bottom:-2px;display:flex;align-items:center;justify-content:center;width:8px;height:8px;border:1px solid #75666b;border-radius:50%;background:#272329;font-size:5px;line-height:1">🔒</small>'}</span><strong data-gameplay-inventory-entry-name style="display:block;width:100%;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;font-size:7px;line-height:8px;color:${row.available ? '#eee5df' : '#9b9094'}">${escHtml(row.label)}</strong></span>`
+        : `<span style="display:flex;align-items:flex-start;gap:8px;min-width:0"><span style="flex:none;margin-top:1px;color:${row.available ? '#d5ad74' : '#83797d'}">${icon}</span><span style="min-width:0;flex:1;text-align:left"><strong style="display:block;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(row.label)}</strong>${contextText ? `<small style="display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;max-height:24.3px;margin-top:2px;font-size:9px;line-height:1.35;color:#bdb0ab;white-space:normal;overflow:hidden;overflow-wrap:anywhere">${escHtml(contextText)}</small>` : specialMeta ? `<small style="display:block;margin-top:1px;font-size:8px;color:${row.available ? '#bdb0ab' : '#8e8387'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(specialMeta)}</small>` : ''}</span></span>`;
       return button(
         control,
-        `width:100%;min-height:${row.kind === 'context' ? '36px' : '32px'};padding:${row.kind === 'context' ? '5px 7px' : '4px 6px'};border-color:${border};background:${row.selected ? '#372e2a' : '#262228'};opacity:${row.available ? '1' : '.7'};`,
+        `width:100%;min-width:0;min-height:${inventoryMode ? '32px' : '36px'};padding:${inventoryMode ? '2px 1px' : '5px 7px'};border-radius:${inventoryMode ? '4px' : '7px'};border-color:${border};background:${row.selected ? '#372e2a' : '#262228'};opacity:${row.available ? '1' : '.76'};overflow:hidden;`,
         `${row.kind === 'context' ? 'data-gameplay-choice-entry' : 'data-gameplay-inventory-entry'} aria-pressed="${row.selected ? 'true' : 'false'}" title="${escHtml(row.description || row.label)}"`,
         html,
       );
@@ -62644,8 +62886,16 @@ function normalizeAdaptiveQualityState(value) {
     const inventoryInteraction = inventoryMode && (selectedDetail || customActionComposer)
       ? `<div data-gameplay-inventory-interaction style="box-sizing:border-box;margin-top:7px;padding-top:1px;border-top:1px solid #51463f">${selectedDetail}${customActionComposer}</div>`
       : '';
+    const inventoryPagination = viewModel?.inventoryPagination;
+    const inventoryPaginationHtml = inventoryMode && inventoryPagination?.pageCount > 1
+      ? `<nav data-gameplay-inventory-pagination aria-label="${escHtml(ui('pageNumber', { page: inventoryPagination.page }))}" style="display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:2px;margin-top:5px"><button id="${escHtml(one('inventory-page-previous')?.id || '')}" type="button" ${one('inventory-page-previous')?.disabled ? 'disabled' : ''} data-gameplay-inventory-page-previous aria-label="${escHtml(ui('previousPage'))}" title="${escHtml(ui('previousPage'))}" style="box-sizing:border-box;width:20px;min-width:20px;height:20px;min-height:20px;padding:0;border:1px solid #554b50;border-radius:5px;background:#2d282d;color:#d8cbc5;font:inherit;font-size:11px;font-weight:800;line-height:1;cursor:${one('inventory-page-previous')?.disabled ? 'not-allowed' : 'pointer'};opacity:${one('inventory-page-previous')?.disabled ? '.38' : '1'}">‹</button>${(inventoryPagination.pages || []).map(page => {
+        const control = bySlot('inventory-page').find(item => Number(item.value) === Number(page));
+        const current = Number(page) === Number(inventoryPagination.page);
+        return button(control, `width:20px;min-width:20px;height:20px;min-height:20px;padding:0;border-radius:5px;border-color:${current ? '#d5ad74' : '#554b50'};background:${current ? '#493727' : '#2d282d'};color:${current ? '#ffe0a6' : '#d8cbc5'};font-size:8px;line-height:1;`, `data-gameplay-inventory-page="${page}" ${current ? 'aria-current="page"' : ''} aria-label="${escHtml(ui('pageNumber', { page }))}"`, String(page));
+      }).join('')}<button id="${escHtml(one('inventory-page-next')?.id || '')}" type="button" ${one('inventory-page-next')?.disabled ? 'disabled' : ''} data-gameplay-inventory-page-next aria-label="${escHtml(ui('nextPage'))}" title="${escHtml(ui('nextPage'))}" style="box-sizing:border-box;width:20px;min-width:20px;height:20px;min-height:20px;padding:0;border:1px solid #554b50;border-radius:5px;background:#2d282d;color:#d8cbc5;font:inherit;font-size:11px;font-weight:800;line-height:1;cursor:${one('inventory-page-next')?.disabled ? 'not-allowed' : 'pointer'};opacity:${one('inventory-page-next')?.disabled ? '.38' : '1'}">›</button></nav>`
+      : '';
     const inventoryWindow = inventoryMode && rows && activeCategory
-      ? `<section data-gameplay-inventory-window data-gameplay-inventory-kind="${escHtml(activeCategory.kind)}" aria-label="${escHtml(activeCategory.label)}" style="box-sizing:border-box;width:100%;max-width:100%;min-width:0;margin-top:6px;padding:8px;border:1px solid #756047;border-radius:10px;background:linear-gradient(165deg,#29231f,#201d22);box-shadow:inset 0 1px 0 rgba(255,225,176,.06),0 6px 16px rgba(0,0,0,.2)"><header data-gameplay-inventory-window-header style="display:flex;align-items:center;gap:6px;min-width:0;margin:0 1px 7px;padding-bottom:6px;border-bottom:1px solid #564a42"><span aria-hidden="true" style="display:inline-flex;align-items:center;justify-content:center;flex:none;width:22px;height:22px;border:1px solid #665443;border-radius:6px;background:#342a24;color:#e2bc82;font-size:${Array.from(activeCategory.glyph || '').length > 1 ? '9px' : '13px'}">${escHtml(activeCategory.glyph || '•')}</span><strong data-gameplay-inventory-window-title style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#f0d3a4;font-size:11px">${escHtml(activeCategory.label)}</strong></header><div data-gameplay-inventory-grid style="display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:5px">${rows}</div>${inventoryInteraction}</section>`
+      ? `<section data-gameplay-inventory-window data-gameplay-inventory-kind="${escHtml(activeCategory.kind)}" data-gameplay-inventory-layout="compact" aria-label="${escHtml(activeCategory.label)}" style="box-sizing:border-box;width:100%;max-width:100%;min-width:0;margin-top:6px;padding:6px;border:1px solid #756047;border-radius:8px;background:linear-gradient(165deg,#29231f,#201d22);box-shadow:inset 0 1px 0 rgba(255,225,176,.06),0 6px 16px rgba(0,0,0,.2)"><header data-gameplay-inventory-window-header style="display:flex;align-items:center;gap:5px;min-width:0;margin:0 1px 5px;padding-bottom:4px;border-bottom:1px solid #564a42"><span aria-hidden="true" style="display:inline-flex;align-items:center;justify-content:center;flex:none;width:18px;height:18px;border:1px solid #665443;border-radius:5px;background:#342a24;color:#e2bc82;font-size:${Array.from(activeCategory.glyph || '').length > 1 ? '8px' : '11px'}">${escHtml(activeCategory.glyph || '•')}</span><strong data-gameplay-inventory-window-title style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#f0d3a4;font-size:9px">${escHtml(activeCategory.label)}</strong><small data-gameplay-inventory-total style="margin-left:auto;flex:none;color:#9f918b;font-size:7px">${escHtml(ui('itemCount', { count: activeCategory.total }))}</small></header><div data-gameplay-inventory-grid style="display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:3px">${rows}</div>${inventoryPaginationHtml}${inventoryInteraction}</section>`
       : '';
     const headerActorControl = compactButton(actorInput,'👤',`aria-label="${escHtml(ui('playerActorInput'))}" title="${escHtml(ui('playerActorTitle', { actor: actorInput?.label || ui('unselected') }))}"`,26);
     const headerColdStartControl = viewModel?.actor
@@ -62867,7 +63117,7 @@ function normalizeAdaptiveQualityState(value) {
 
   function gameplayComposerCommandIsFast(value) {
     const command = String(value || '');
-    return command.startsWith('tab:') || command.startsWith('select-action:');
+    return command.startsWith('tab:') || command.startsWith('inventory-page:') || command.startsWith('select-action:');
   }
 
   function queueGameplayComposerFastCommand(command, conf, options, panelSession) {
@@ -62919,8 +63169,14 @@ function normalizeAdaptiveQualityState(value) {
       try {
         if (value.startsWith('tab:')) {
           Runtime.gameplayComposerActiveTab = gameplayComposerTab(value.slice('tab:'.length));
+          Runtime.gameplayComposerInventoryPage = 1;
+          Runtime.gameplayComposerInventoryPageTab = '';
           Runtime.gameplayComposerSelectedActionId = '';
           Runtime.gameplayComposerPicker = '';
+          Runtime.gameplayFatalConfirm = null;
+        } else if (value.startsWith('inventory-page:')) {
+          Runtime.gameplayComposerInventoryPage = Math.max(1, Math.floor(Number(value.slice('inventory-page:'.length)) || 1));
+          Runtime.gameplayComposerSelectedActionId = '';
           Runtime.gameplayFatalConfirm = null;
         } else if (value.startsWith('select-action:')) {
           const actionId = cleanString(options?.controlValue || value.slice('select-action:'.length), '');
@@ -63076,8 +63332,14 @@ function normalizeAdaptiveQualityState(value) {
         await safeGameplayToast(ui('gameplayInstructions'), [ui('instructionsSaved')], 'success', 2800);
       } else if (value.startsWith('tab:')) {
         Runtime.gameplayComposerActiveTab = gameplayComposerTab(value.slice('tab:'.length));
+        Runtime.gameplayComposerInventoryPage = 1;
+        Runtime.gameplayComposerInventoryPageTab = '';
         Runtime.gameplayComposerSelectedActionId = '';
         Runtime.gameplayComposerPicker = '';
+        Runtime.gameplayFatalConfirm = null;
+      } else if (value.startsWith('inventory-page:')) {
+        Runtime.gameplayComposerInventoryPage = Math.max(1, Math.floor(Number(value.slice('inventory-page:'.length)) || 1));
+        Runtime.gameplayComposerSelectedActionId = '';
         Runtime.gameplayFatalConfirm = null;
       } else if (value.startsWith('select-action:')) {
         const actionId = cleanString(options?.controlValue || value.slice('select-action:'.length), '');
@@ -63623,6 +63885,8 @@ function normalizeAdaptiveQualityState(value) {
     Runtime.gameplayComposerSnapshot = null;
     Runtime.gameplayComposerMountedData = null;
     Runtime.gameplayComposerActiveTab = 'context';
+    Runtime.gameplayComposerInventoryPage = 1;
+    Runtime.gameplayComposerInventoryPageTab = '';
     Runtime.gameplayComposerSelectedActionId = '';
     Runtime.gameplayComposerPicker = '';
     Runtime.gameplayComposerActorMatchIds = [];
@@ -65034,7 +65298,7 @@ function normalizeAdaptiveQualityState(value) {
       nextRegistrations.push({ slot: 'hamburger', id: registeredUiId(hamburgerRegistration, UI_ID_HAMBURGER), location: 'hamburger' });
     }
     await rememberUiRegistrations(nextRegistrations);
-    const conf = await getConfig();
+    const conf = await getStoredConfig();
     await syncInChatToolsUi(conf).catch(err => {
       Runtime.lastError = `in-chat tool UI startup: ${err?.message || err}`;
     });
