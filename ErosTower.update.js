@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.2.9
+//@display-name ☸Eros Tower 1.3.0
 //@api 3.0
-//@version 4.0.37
+//@version 4.0.38
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -43,34 +43,33 @@
 //@arg et_image_character_tags_json string User-authored per-character illustration tag registry JSON
 
 /**
- * Eros Tower 1.2.9
+ * Eros Tower 1.3.0
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.2.9 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.3.0 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.2.9';
-  const PREFIX = 'eros_tower_v02:';
-  const LEGACY_STORAGE_PREFIXES = Object.freeze(['eros_tower_v01:']);
+  const VERSION = '1.3.0';
+  const PREFIX = 'eros_tower_game_agent_test_v01:';
   const MASKED_SECRET = '*****';
   const PROVIDER_CREDENTIAL_MAX_ENTRIES = 32;
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.2.9`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.3.0`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
-  const UI_ID_SETTINGS = 'eros-tower-v03-settings';
-  const UI_ID_CHAT = 'eros-tower-v03-chat';
-  const LEGACY_UI_ID_GAMEPLAY_CHAT = 'eros-tower-v03-gameplay-chat';
-  const UI_ID_HAMBURGER = 'eros-tower-v03-hamburger';
-  const UI_ID_IN_CHAT_PANEL = 'eros-tower-v03-panel';
-  const UI_ID_GAMEPLAY_LAUNCHER = 'eros-tower-v03-composer-launcher';
-  const UI_ID_COMMUNICATION_LAUNCHER = 'eros-tower-v03-communication-launcher';
+  const UI_ID_SETTINGS = 'eros-tower-game-agent-test-v01-settings';
+  const UI_ID_CHAT = 'eros-tower-game-agent-test-v01-chat';
+  const LEGACY_UI_ID_GAMEPLAY_CHAT = 'eros-tower-game-agent-test-v01-gameplay-chat';
+  const UI_ID_HAMBURGER = 'eros-tower-game-agent-test-v01-hamburger';
+  const UI_ID_IN_CHAT_PANEL = 'eros-tower-game-agent-test-v01-panel';
+  const UI_ID_GAMEPLAY_LAUNCHER = 'eros-tower-game-agent-test-v01-composer-launcher';
+  const UI_ID_COMMUNICATION_LAUNCHER = 'eros-tower-game-agent-test-v01-communication-launcher';
   const COMMUNICATION_LAUNCHER_CLASS = 'eros-tower-communication-fixed-launcher';
   const LEGACY_COMMUNICATION_SEND_LAUNCHER_CLASS = 'eros-tower-communication-send-launcher';
   const COMMUNICATION_LAUNCHER_FIXED_STYLE = 'pointer-events:none;position:fixed;top:72px;right:12px;z-index:40;display:flex;flex-direction:column;align-items:flex-end;gap:6px;overflow:visible;';
-  const LEGACY_UI_ID_ACTION = 'eros-tower-v02-action';
+  const LEGACY_UI_ID_ACTION = 'eros-tower-game-agent-test-v01-action';
   const UI_REGISTRATION_STORAGE = 'uiRegistrations';
-  const CHAT_SCOPE_ID_FIELD = 'erosTowerChatId';
+  const CHAT_SCOPE_ID_FIELD = 'erosTowerGameAgentTestChatId';
   const MAX_EVENT_LOG = 100;
   const MAX_RUN_LOGS = 6;
   const MAX_RUN_LOG_TEXT_CHARS = 8000;
@@ -153,19 +152,9 @@
   ]);
   const SYSTEM_PATCH_NOTES = Object.freeze([
     {
-      version: '1.2.9',
-      kind: 'main-dom-lifecycle-and-startup-bridge-hotfix',
-      summary: 'Acquires the Risu main-DOM capability once during plugin initialization so opt-in in-chat launchers mount immediately when enabled later, while startup configuration hydration uses persisted settings without reading the 40 legacy argument overrides.',
-    },
-    {
-      version: '1.2.8',
-      kind: 'agent-settings-persistence-and-nonblocking-startup-hotfix',
-      summary: 'Persists the global agent-settings save through pipelineJson, verifies reload authority, removes full configuration hydration from the blocking UI-registration path, batches argument reads, defers optional in-chat launcher startup, and skips launcher initialization when both resident agents are off.',
-    },
-    {
-      version: '1.2.7',
-      kind: 'gameplay-communication-and-lossless-storage-release',
-      summary: 'Promotes the tested in-chat gameplay advisor, private communication resident, model-aware reasoning and prompt-cache controls, character illustration recipes, guaranteed player gauges, later-turn scene authority, and checksummed shared state storage with multilingual lossless compression, safe migration, independent recovery, and exact byte diagnostics.',
+      version: '1.3.0',
+      kind: 'lossless-shared-state-storage-v3',
+      summary: 'Stores large state sections as checksummed content-addressed chunks shared by current state, backup, and snapshots; adds multilingual lossless compression, paged communication transcripts, safe migration and scope reset, and exact storage-byte diagnostics without deleting semantic memory.',
     },
     {
       version: '1.2.7-game-agent-test.47',
@@ -694,7 +683,9 @@
   let goePromptBuiltinCache = null;
   const DEFAULT_CONFIG = {
     configSchemaVersion: CONFIG_SCHEMA_VERSION,
-    enabled: true,
+    // The test build starts behind a deliberate safety lock so it cannot run
+    // its hooks beside an installed production build until the user opts in.
+    enabled: false,
     mode: 'auto',
     promptModeDetectionEnabled: true,
     promptLengthDetectionEnabled: true,
@@ -1190,7 +1181,7 @@
     quota: 'quota-snapshots',
     embeddingCache: (providerId, model) => `embedding-cache:${slug(providerId || 'provider')}:${hashString(model || 'model')}`,
   };
-  const SETTINGS_BACKUP_TYPE = 'eros-tower-settings';
+  const SETTINGS_BACKUP_TYPE = 'eros-tower-game-agent-test-settings';
   const SETTINGS_BACKUP_RUNTIME_KEYS = Object.freeze([
     'state',
     'backup',
@@ -1263,10 +1254,6 @@
     startupSavedAssistantRecoveryScheduled: false,
     startupSavedAssistantRecoveryAttempts: 0,
     startupSavedAssistantRecoveryCancelled: false,
-    startupInChatToolsUiSyncScheduled: false,
-    startupInChatToolsUiSyncCancelled: false,
-    startupInChatToolsUiSyncTimer: null,
-    inChatToolsRoot: null,
     activeRequestPhases: 0,
     settingsImportInProgress: false,
     activeSettingsMutations: 0,
@@ -1493,8 +1480,7 @@
   }
 
   function isErosTowerStorageKey(key) {
-    const value = String(key || '');
-    return value.startsWith(PREFIX) || LEGACY_STORAGE_PREFIXES.some(prefix => value.startsWith(prefix));
+    return String(key || '').startsWith(PREFIX);
   }
 
   function pluginStorageResetBusyReason() {
@@ -1620,7 +1606,7 @@
     Runtime.communicationJobs = new Map();
     Runtime.communicationNotices = new Map();
     Runtime.communicationBadges = new Map();
-    try { delete globalThis.__EROS_TOWER_DEBUG; } catch (_) {}
+    try { delete globalThis.__EROS_TOWER_GAME_AGENT_TEST_DEBUG; } catch (_) {}
     if (resumeConfig && typeof resumeConfig === 'object') {
       try {
         const inChatUi = await syncInChatToolsUi(resumeConfig);
@@ -2290,12 +2276,8 @@
     let authorityChanged = false;
     let migratedConfig = { ...authoritySource };
     if (needsResidentAuthorityMigration) {
-      const gameplayGate = hasLegacyGameplayFlag
-        ? parseBool(authoritySource.gameplayAgentEnabled, false) === true
-        : null;
-      const communicationGate = hasLegacyCommunicationFlag
-        ? parseBool(authoritySource.communicationAgentEnabled, false) === true
-        : null;
+      const gameplayGate = parseBool(authoritySource.gameplayAgentEnabled, true) !== false;
+      const communicationGate = parseBool(authoritySource.communicationAgentEnabled, false) === true;
       const pipeline = parsePipeline(authoritySource.pipelineJson);
       const residentFallbacks = defaultPipeline().agents.filter(agent => [GAMEPLAY_ADVISOR_AGENT_ID, COMMUNICATION_AGENT_ID].includes(agent.id));
       const fallbackById = new Map(residentFallbacks.map(agent => [agent.id, agent]));
@@ -2310,11 +2292,11 @@
           ? agent.enabled !== false
           : fallback ? fallback.enabled !== false : true;
         if (agent.id === GAMEPLAY_ADVISOR_AGENT_ID || agent.phase === 'gameplay-advisor') {
-          const enabled = gameplayGate === null ? cardEnabled : gameplayGate && cardEnabled;
+          const enabled = gameplayGate && cardEnabled;
           return { ...agent, enabled };
         }
         if (agent.id === COMMUNICATION_AGENT_ID || agent.phase === 'communication') {
-          const enabled = communicationGate === null ? cardEnabled : communicationGate && cardEnabled;
+          const enabled = communicationGate && cardEnabled;
           return { ...agent, enabled };
         }
         return agent;
@@ -2334,107 +2316,53 @@
     };
   }
 
-  const CONFIG_ARGUMENT_NAMES = Object.freeze([
-    'et_enabled',
-    'et_mode',
-    'et_prompt_mode_detection_enabled',
-    'et_prompt_length_detection_enabled',
-    'et_eros_agents_enabled',
-    'et_psyche_agents_enabled',
-    'et_data_context_injection_enabled',
-    'et_provider',
-    'et_base_url',
-    'et_api_key',
-    'et_model',
-    'et_temperature',
-    'et_max_tokens',
-    'et_context_window',
-    'et_timeout_s',
-    'et_timeout_ms',
-    'et_debug_log',
-    'et_run_log_enabled',
-    'et_bypass_aux_requests',
-    'et_state_api_enabled',
-    'et_quality_regex_enabled',
-    'et_embedding_enabled',
-    'et_embedding_provider_id',
-    'et_embedding_base_url',
-    'et_embedding_api_key',
-    'et_embedding_model',
-    'et_parallel_pre_agents_same_provider',
-    'et_auto_memory_enabled',
-    'et_auto_cold_start_enabled',
-    'et_injection_budget',
-    'et_extra_body_json',
-    'et_pipeline_json',
-    'et_prompt_presets_json',
-    'et_translation_prompt_modes_json',
-    'et_goe_prompt_modes_json',
-    'et_image_api_profiles_json',
-    'et_image_api_presets_json',
-    'et_image_character_tags_json',
-    'et_model_presets_json',
-    'et_provider_keys_json',
-  ]);
-
-  async function readConfigArgumentValues() {
-    const entries = await Promise.all(CONFIG_ARGUMENT_NAMES.map(async name => [name, await getArg(name, '')]));
-    return Object.fromEntries(entries);
-  }
-
-  async function getConfig(options = {}) {
-    const includeArgumentOverrides = options?.includeArgumentOverrides !== false;
-    const [storedConfig, argumentValues] = await Promise.all([
-      Storage.get(STORAGE.config, {}),
-      includeArgumentOverrides ? readConfigArgumentValues() : {},
-    ]);
-    const migration = migrateStoredConfig(storedConfig);
+  async function getConfig() {
+    const migration = migrateStoredConfig(await Storage.get(STORAGE.config, {}));
     const stored = migration.config;
     if (migration.changed) await Storage.set(STORAGE.config, stored);
-    const argument = name => argumentValues[name] ?? '';
-    const timeoutSecondsArg = cleanOverrideArg(argument('et_timeout_s'), '', { zeroIsUnset: true });
-    const legacyTimeoutMsArg = cleanOverrideArg(argument('et_timeout_ms'), '', { zeroIsUnset: true });
-    const injectionBudgetArg = cleanString(argument('et_injection_budget'), '');
+    const timeoutSecondsArg = cleanOverrideArg(await getArg('et_timeout_s', ''), '', { zeroIsUnset: true });
+    const legacyTimeoutMsArg = cleanOverrideArg(await getArg('et_timeout_ms', ''), '', { zeroIsUnset: true });
+    const injectionBudgetArg = cleanString(await getArg('et_injection_budget', ''), '');
     const args = {
-      enabled: parseBool(argument('et_enabled'), undefined),
-      mode: cleanString(argument('et_mode'), ''),
-      promptModeDetectionEnabled: parseBool(argument('et_prompt_mode_detection_enabled'), undefined),
-      promptLengthDetectionEnabled: parseBool(argument('et_prompt_length_detection_enabled'), undefined),
-      erosAgentsEnabled: parseBool(argument('et_eros_agents_enabled'), undefined),
-      psycheAgentsEnabled: parseBool(argument('et_psyche_agents_enabled'), undefined),
-      dataContextInjectionEnabled: parseBool(argument('et_data_context_injection_enabled'), undefined),
-      provider: cleanString(argument('et_provider'), ''),
-      baseUrl: cleanString(argument('et_base_url'), ''),
-      apiKey: cleanString(argument('et_api_key'), ''),
-      model: cleanString(argument('et_model'), ''),
-      temperature: cleanString(argument('et_temperature'), ''),
-      maxTokens: cleanOverrideArg(argument('et_max_tokens'), '', { zeroIsUnset: true }),
-      contextWindow: cleanOverrideArg(argument('et_context_window'), '', { zeroIsUnset: true }),
+      enabled: parseBool(await getArg('et_enabled', ''), undefined),
+      mode: cleanString(await getArg('et_mode', ''), ''),
+      promptModeDetectionEnabled: parseBool(await getArg('et_prompt_mode_detection_enabled', ''), undefined),
+      promptLengthDetectionEnabled: parseBool(await getArg('et_prompt_length_detection_enabled', ''), undefined),
+      erosAgentsEnabled: parseBool(await getArg('et_eros_agents_enabled', ''), undefined),
+      psycheAgentsEnabled: parseBool(await getArg('et_psyche_agents_enabled', ''), undefined),
+      dataContextInjectionEnabled: parseBool(await getArg('et_data_context_injection_enabled', ''), undefined),
+      provider: cleanString(await getArg('et_provider', ''), ''),
+      baseUrl: cleanString(await getArg('et_base_url', ''), ''),
+      apiKey: cleanString(await getArg('et_api_key', ''), ''),
+      model: cleanString(await getArg('et_model', ''), ''),
+      temperature: cleanString(await getArg('et_temperature', ''), ''),
+      maxTokens: cleanOverrideArg(await getArg('et_max_tokens', ''), '', { zeroIsUnset: true }),
+      contextWindow: cleanOverrideArg(await getArg('et_context_window', ''), '', { zeroIsUnset: true }),
       timeoutMs: timeoutSecondsArg ? timeoutSecondsToMs(timeoutSecondsArg) : legacyTimeoutMsArg,
-      debugLog: parseBool(argument('et_debug_log'), undefined),
-      runLogEnabled: parseBool(argument('et_run_log_enabled'), undefined),
-      bypassAuxRequests: parseBool(argument('et_bypass_aux_requests'), undefined),
-      stateApiEnabled: parseBool(argument('et_state_api_enabled'), undefined),
-      qualityRegexEnabled: parseBool(argument('et_quality_regex_enabled'), undefined),
-      embeddingEnabled: parseBool(argument('et_embedding_enabled'), undefined),
-      embeddingProviderId: cleanString(argument('et_embedding_provider_id'), ''),
-      embeddingBaseUrl: cleanString(argument('et_embedding_base_url'), ''),
-      embeddingApiKey: cleanString(argument('et_embedding_api_key'), ''),
-      embeddingModel: cleanString(argument('et_embedding_model'), ''),
-      parallelPreAgentsSameProvider: parseBool(argument('et_parallel_pre_agents_same_provider'), undefined),
-      autoMemoryEnabled: parseBool(argument('et_auto_memory_enabled'), undefined),
-      autoColdStartEnabled: parseBool(argument('et_auto_cold_start_enabled'), undefined),
+      debugLog: parseBool(await getArg('et_debug_log', ''), undefined),
+      runLogEnabled: parseBool(await getArg('et_run_log_enabled', ''), undefined),
+      bypassAuxRequests: parseBool(await getArg('et_bypass_aux_requests', ''), undefined),
+      stateApiEnabled: parseBool(await getArg('et_state_api_enabled', ''), undefined),
+      qualityRegexEnabled: parseBool(await getArg('et_quality_regex_enabled', ''), undefined),
+      embeddingEnabled: parseBool(await getArg('et_embedding_enabled', ''), undefined),
+      embeddingProviderId: cleanString(await getArg('et_embedding_provider_id', ''), ''),
+      embeddingBaseUrl: cleanString(await getArg('et_embedding_base_url', ''), ''),
+      embeddingApiKey: cleanString(await getArg('et_embedding_api_key', ''), ''),
+      embeddingModel: cleanString(await getArg('et_embedding_model', ''), ''),
+      parallelPreAgentsSameProvider: parseBool(await getArg('et_parallel_pre_agents_same_provider', ''), undefined),
+      autoMemoryEnabled: parseBool(await getArg('et_auto_memory_enabled', ''), undefined),
+      autoColdStartEnabled: parseBool(await getArg('et_auto_cold_start_enabled', ''), undefined),
       injectionBudget: injectionBudgetArg,
-      extraBodyJson: cleanString(argument('et_extra_body_json'), ''),
-      pipelineJson: cleanString(argument('et_pipeline_json'), ''),
-      promptPresetsJson: cleanString(argument('et_prompt_presets_json'), ''),
-      translationPromptModesJson: cleanString(argument('et_translation_prompt_modes_json'), ''),
-      goePromptModesJson: cleanString(argument('et_goe_prompt_modes_json'), ''),
-      imageApiProfilesJson: cleanString(argument('et_image_api_profiles_json'), ''),
-      imageApiPresetsJson: cleanString(argument('et_image_api_presets_json'), ''),
-      imageCharacterTagsJson: cleanString(argument('et_image_character_tags_json'), ''),
-      modelPresetsJson: cleanString(argument('et_model_presets_json'), ''),
-      providerKeysJson: cleanString(argument('et_provider_keys_json'), ''),
+      extraBodyJson: cleanString(await getArg('et_extra_body_json', ''), ''),
+      pipelineJson: cleanString(await getArg('et_pipeline_json', ''), ''),
+      promptPresetsJson: cleanString(await getArg('et_prompt_presets_json', ''), ''),
+      translationPromptModesJson: cleanString(await getArg('et_translation_prompt_modes_json', ''), ''),
+      goePromptModesJson: cleanString(await getArg('et_goe_prompt_modes_json', ''), ''),
+      imageApiProfilesJson: cleanString(await getArg('et_image_api_profiles_json', ''), ''),
+      imageApiPresetsJson: cleanString(await getArg('et_image_api_presets_json', ''), ''),
+      imageCharacterTagsJson: cleanString(await getArg('et_image_character_tags_json', ''), ''),
+      modelPresetsJson: cleanString(await getArg('et_model_presets_json', ''), ''),
+      providerKeysJson: cleanString(await getArg('et_provider_keys_json', ''), ''),
     };
 
     const merged = { ...DEFAULT_CONFIG, ...(stored || {}) };
@@ -3986,7 +3914,7 @@
         makeAgent('state-commit', 'Psyche Main / State Commit', 'psyche-main', STATE_COMMIT_PROMPT, true, 'ollama-kimi-k2-7-code-cloud', 'ollama-local', 'kimi-k2.7-code:cloud'),
         makeAgent('state-aux', 'Psyche Auxiliary / Cold-start', 'psyche-aux', STATE_COMMIT_PROMPT, false, 'ollama-kimi-k2-7-code-cloud', 'ollama-local', 'kimi-k2.7-code:cloud'),
         {
-          ...makeAgent(GAMEPLAY_ADVISOR_AGENT_ID, GAMEPLAY_ADVISOR_NAME, 'gameplay-advisor', GAMEPLAY_ADVISOR_PROMPT, false, 'ollama-kimi-k2-7-code-cloud', 'ollama-local', 'kimi-k2.7-code:cloud'),
+          ...makeAgent(GAMEPLAY_ADVISOR_AGENT_ID, GAMEPLAY_ADVISOR_NAME, 'gameplay-advisor', GAMEPLAY_ADVISOR_PROMPT, true, 'ollama-kimi-k2-7-code-cloud', 'ollama-local', 'kimi-k2.7-code:cloud'),
           outputLanguage: 'ko',
           customGameplayInstructions: '',
         },
@@ -40161,7 +40089,7 @@ function normalizeAdaptiveQualityState(value) {
           <div class="et-actions">
             <button id="et-import-settings-file-button">파일에서 설정 불러오기</button>
           </div>
-          ${textarea('설정 JSON 붙여넣기', 'et-import-settings-json', '', '다른 환경에서 내보낸 에로스 타워 설정 JSON을 붙여넣은 뒤 불러오세요.')}
+          ${textarea('설정 JSON 붙여넣기', 'et-import-settings-json', '', '다른 환경에서 내보낸 game-agent-test 설정 JSON을 붙여넣은 뒤 불러오세요.')}
           <div class="et-actions">
             <button id="et-import-settings">붙여넣은 설정 불러오기</button>
           </div>
@@ -40600,12 +40528,6 @@ function normalizeAdaptiveQualityState(value) {
     const psycheAgents = agents.filter(isPsycheAgent);
     const residentAgents = residentPanelAgents(agents);
     const postAgents = agents.filter(agent => agent.phase === 'post');
-    const globalSaveControls = `<div data-agent-global-save-options style="margin-bottom:12px;padding:10px;border:1px solid #d8c9c2;border-radius:10px;background:#fff">
-      <div class="et-actions" style="align-items:center;justify-content:flex-start;flex-wrap:wrap">
-        <button type="button" id="et-save-all-agents">💾 에이전트 설정 전체 저장</button>
-        <span id="et-agent-options-status" class="et-status"></span>
-      </div>
-    </div>`;
     const erosExecutionControls = `<div data-eros-execution-options style="margin-bottom:12px;padding:10px;border:1px solid #ead8cf;border-radius:10px;background:#fffaf6">
       <div class="et-agent-title" style="margin-bottom:7px">실행 옵션</div>
       <div class="et-actions" style="align-items:center;justify-content:flex-start;flex-wrap:wrap">
@@ -40613,7 +40535,6 @@ function normalizeAdaptiveQualityState(value) {
       </div>
     </div>`;
     return `
-      ${globalSaveControls}
       ${renderAgentSection('에로스 에이전트', '메인 응답 전에 세계, 인물, 행동 압력, 종합 지침을 정리하는 에이전트입니다.', erosAgents, conf, { topContent: erosExecutionControls })}
       ${renderAgentSection('사이키 에이전트', `관리 자료를 담당합니다. 메인 출력과 최종 응답을 canon 상태로 커밋하고, 보조 에이전트는 필요할 때 cold-start 성격의 추출 작업을 맡습니다.<br>추천 모델: ${PSYCHE_RECOMMENDED_MODELS.map(escHtml).join(' · ')}`, psycheAgents, conf, { topMargin: true })}
       ${renderAgentSection('입주민 에이전트', '선택적으로 켜서 메인 전후의 확장 작업을 맡길 수 있는 입주민 에이전트 영역입니다. 번역 에이전트는 여기에서 사용 여부와 프롬프트를 함께 선택합니다.', residentAgents, conf, { topMargin: true })}
@@ -42659,24 +42580,6 @@ function normalizeAdaptiveQualityState(value) {
     return clone;
   }
 
-  function buildAllAgentSettingsConfig(latest, agents, parallelValue) {
-    const source = latest && typeof latest === 'object' ? latest : {};
-    const pipeline = source.pipeline || defaultPipeline();
-    const pipelineJson = JSON.stringify({
-      version: VERSION,
-      agents: Array.isArray(agents) ? agents : (pipeline.agents || []),
-    }, null, 2);
-    const next = {
-      ...source,
-      parallelPreAgentsSameProvider: parallelValue === undefined
-        ? source.parallelPreAgentsSameProvider === true
-        : parallelValue === 'true',
-      pipelineJson,
-    };
-    next.pipeline = normalizePipeline(parsePipeline(pipelineJson), next);
-    return next;
-  }
-
   function isSettingsConfigLike(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
     return [
@@ -43013,7 +42916,6 @@ function normalizeAdaptiveQualityState(value) {
     const setTranslationPromptStatus = (text, kind = 'info') => setLocalStatus('et-translation-prompt-status', text, kind);
     const setGoePromptStatus = (text, kind = 'info') => setLocalStatus('et-goe-prompt-status', text, kind);
     const setRunDiagnosticStatus = (text, kind = 'info') => setLocalStatus('et-run-diagnostic-status', text, kind);
-    const setAgentOptionsStatus = (text, kind = 'info') => setLocalStatus('et-agent-options-status', text, kind);
     const setAgentStatus = (agentId, text, kind = 'info') => setLocalStatus(`et-agent-status-${agentId}`, text, kind);
 
     const saveCurrent = async (statusSetter = setMainStatus, message = '설정 저장 완료. 다음 요청부터 적용됩니다.') => {
@@ -43028,27 +42930,6 @@ function normalizeAdaptiveQualityState(value) {
           Runtime.lastError = `in-chat tool UI sync: ${err?.message || err}`;
         });
         if (typeof statusSetter === 'function' && message) statusSetter(message, 'success');
-        return next;
-      } finally {
-        Runtime.activeSettingsMutations = Math.max(0, Number(Runtime.activeSettingsMutations || 0) - 1);
-      }
-    };
-
-    const saveAllAgentSettings = async () => {
-      if (Runtime.storageResetInProgress) throw new Error('플러그인 저장소를 정리하는 중입니다. 완료된 뒤 다시 저장하세요.');
-      if (Runtime.settingsImportInProgress) throw new Error('설정 백업을 불러오는 중입니다. 완료된 뒤 다시 저장하세요.');
-      Runtime.activeSettingsMutations = Math.max(0, Number(Runtime.activeSettingsMutations || 0)) + 1;
-      try {
-        const latest = await getConfig();
-        const pipeline = latest.pipeline || defaultPipeline();
-        const agents = (pipeline.agents || []).map(agent => readAgentConfigFromUI(latest, agent.id));
-        const parallelValue = $('et-parallel-pre-agents-same-provider')?.value;
-        const next = buildAllAgentSettingsConfig(latest, agents, parallelValue);
-        await Storage.set(STORAGE.config, configForStorage(next));
-        await syncInChatToolsUi(next).catch(err => {
-          Runtime.lastError = `in-chat tool UI sync: ${err?.message || err}`;
-        });
-        setAgentOptionsStatus('모든 에이전트 설정을 저장했습니다. 다음 요청부터 적용됩니다.', 'success');
         return next;
       } finally {
         Runtime.activeSettingsMutations = Math.max(0, Number(Runtime.activeSettingsMutations || 0) - 1);
@@ -44256,7 +44137,7 @@ function normalizeAdaptiveQualityState(value) {
       await withBusy(event.currentTarget, async () => {
         setSettingsBackupStatus('현재 화면의 설정을 백업 JSON으로 만드는 중입니다.', 'info');
         const packageData = await buildCurrentSettingsBackupPackage();
-        await downloadTextFile(`eros-tower-settings-${diagnosticTimestamp()}.json`, JSON.stringify(packageData, null, 2), 'application/json;charset=utf-8');
+        await downloadTextFile(`eros-tower-game-agent-test-settings-${diagnosticTimestamp()}.json`, JSON.stringify(packageData, null, 2), 'application/json;charset=utf-8');
         setSettingsBackupStatus('설정 JSON을 다운로드했습니다. Provider API Key가 포함될 수 있으니 공유에 주의하세요.', 'success');
       }, 'et-settings-backup-status');
     });
@@ -44349,12 +44230,6 @@ function normalizeAdaptiveQualityState(value) {
         const next = await saveCurrent(setReferenceStatus, '참고 자료 저장 완료. 다음 요청부터 canon source와 관리상태에 반영됩니다.');
         setReferenceStatus(`참고 자료 저장 완료: ${formatReferenceConfigSummary(next)}`, 'success');
       }, 'et-reference-status');
-    });
-
-    $('et-save-all-agents')?.addEventListener('click', async event => {
-      await withBusy(event.currentTarget, async () => {
-        await saveAllAgentSettings();
-      }, 'et-agent-options-status');
     });
 
     document.querySelectorAll('[data-usage-quota-provider]').forEach(button => {
@@ -46151,7 +46026,7 @@ function normalizeAdaptiveQualityState(value) {
 
   function installDebugApi(conf = null, context = null, state = null, snapshots = [], backup = null) {
     try {
-      globalThis.__EROS_TOWER_DEBUG = {
+      globalThis.__EROS_TOWER_GAME_AGENT_TEST_DEBUG = {
         version: VERSION,
         scope: context?.scope || Runtime.lastScope || '',
         report: () => buildDiagnosticsReport(conf, context, state, snapshots, backup),
@@ -46792,14 +46667,7 @@ function normalizeAdaptiveQualityState(value) {
               api.sendChat = async () => true;
               const state = { gameplay: normalizeGameplayState({ pendingAction: pending }) };
               sentSaveFailureResult = await dispatchGameplayAction(
-                {
-                  ...DEFAULT_CONFIG,
-                  enabled: true,
-                  pipeline: {
-                    ...defaultPipeline(),
-                    agents: defaultPipeline().agents.map(agent => agent.id === GAMEPLAY_ADVISOR_AGENT_ID ? { ...agent, enabled: true } : agent),
-                  },
-                },
+                { ...DEFAULT_CONFIG, enabled: true, pipeline: defaultPipeline() },
                 { ...fakeContext, scope: 'dispatch-save-failure' },
                 state,
                 choice,
@@ -47140,14 +47008,7 @@ function normalizeAdaptiveQualityState(value) {
                 && !html.includes('🎮'),
               actorNameAppearsOnlyAsStatusHeading: !html.includes('>플레이<')
                 && !view.controls.some(control => control.command === 'actor-toggle'),
-              launcherFollowsAgentActivation: isGameplayAgentEnabled({
-                ...DEFAULT_CONFIG,
-                enabled: true,
-                pipeline: {
-                  ...defaultPipeline(),
-                  agents: defaultPipeline().agents.map(agent => agent.id === GAMEPLAY_ADVISOR_AGENT_ID ? { ...agent, enabled: true } : agent),
-                },
-              })
+              launcherFollowsAgentActivation: isGameplayAgentEnabled({ ...DEFAULT_CONFIG, enabled: true, pipeline: defaultPipeline() })
                 && !isGameplayAgentEnabled({ ...DEFAULT_CONFIG, enabled: false, pipeline: defaultPipeline() })
                 && !isGameplayAgentEnabled({
                   ...DEFAULT_CONFIG,
@@ -47277,7 +47138,7 @@ function normalizeAdaptiveQualityState(value) {
               namedAgentListedAsResident: residentPanelAgents(defaultPipeline().agents).some(agent => agent.id === GAMEPLAY_ADVISOR_AGENT_ID && agent.name === GAMEPLAY_ADVISOR_NAME),
               legacyDefaultNameMigratesWithoutOverwritingCustomName: migratedLegacyAdvisor.name === GAMEPLAY_ADVISOR_NAME
                 && preservedCustomAdvisor.name === '내가 붙인 사용자 이름',
-              productionUiNamespace: UI_ID_IN_CHAT_PANEL.startsWith('eros-tower-v03-'),
+              isolatedUiId: UI_ID_IN_CHAT_PANEL.includes('game-agent-test'),
             };
           } finally {
             Runtime.gameplayComposerActiveTab = runtimeBefore.tab;
@@ -47670,10 +47531,7 @@ function normalizeAdaptiveQualityState(value) {
           Runtime.gameplayLauncherComposerRow = null;
           Runtime.gameplayComposerPanelOpen = false;
           Runtime.inChatPanelOwner = 'none';
-          const enabledPipeline = defaultPipeline();
-          const enabledAgent = enabledPipeline.agents.find(agent => agent.id === GAMEPLAY_ADVISOR_AGENT_ID);
-          if (enabledAgent) enabledAgent.enabled = true;
-          const enabledConf = { ...DEFAULT_CONFIG, enabled: true, pipeline: enabledPipeline };
+          const enabledConf = { ...DEFAULT_CONFIG, enabled: true, pipeline: defaultPipeline() };
           const disabledConf = {
             ...enabledConf,
             pipeline: {
@@ -47862,7 +47720,7 @@ function normalizeAdaptiveQualityState(value) {
               { language: 'ja', select: 'プレイヤーキャラクターを選択', details: '詳細情報', status: '現在の状態', conditions: '状態・条件', actorStatus: '準備できている', statLabel: '生命力', condition: '集中している', magic: '魔法', equipment: '装備', abilityName: '火花', itemName: 'ローブ', customAbilityCategory: '月光術', customItemCategory: '月光触媒', customAbilityName: '月光の糸', customItemName: '月光ガラス', hint: 'ペルソナ以外の人物で進める場合は、右上の👤ボタンを押して名前または別名を入力してください。', failed: '選択肢を生成できませんでした：test' },
               { language: 'zh', select: '选择玩家角色', details: '详细信息', status: '当前状态', conditions: '状态与条件', actorStatus: '已准备', statLabel: '活力', condition: '专注', magic: '魔法', equipment: '装备', abilityName: '火花', itemName: '长袍', customAbilityCategory: '月光术', customItemCategory: '月光触媒', customAbilityName: '月光丝', customItemName: '月光玻璃', hint: '若要使用非人格角色推进，请按右上角的👤按钮并输入名称或别名。', failed: '无法生成选项：test' },
             ];
-            const makeConf = language => { const pipeline = defaultPipeline(); const agent = pipeline.agents.find(item => item.id === GAMEPLAY_ADVISOR_AGENT_ID); if (agent) { agent.enabled = true; agent.outputLanguage = language; } return { ...DEFAULT_CONFIG, enabled: true, pipeline }; };
+            const makeConf = language => { const pipeline = defaultPipeline(); const agent = pipeline.agents.find(item => item.id === GAMEPLAY_ADVISOR_AGENT_ID); if (agent) agent.outputLanguage = language; return { ...DEFAULT_CONFIG, enabled: true, pipeline }; };
             const makeState = language => {
               const localized = {
                 ko: { status: '준비됨', statLabel: '활력', condition: '집중', abilityName: '불꽃', abilityDescription: '작은 불꽃을 만든다.', itemName: '로브', itemDescription: '현재 착용한 로브.', customAbilityCategory: '월광술', customItemCategory: '월광촉매', customAbilityName: '달빛 실', customItemName: '월광 유리' },
@@ -48645,19 +48503,9 @@ function normalizeAdaptiveQualityState(value) {
               && handlerSource.includes("'gameplayInstructionsPrompt'")
               && String(promptGameplayText).includes('globalThis.prompt')
               && !/SCRIPTURE|성서|BibleCommand|Sutra/i.test(instructionsHtml),
-            globalSaveIsAboveAndOutsideTheErosAgentSection: agentPanelHtml.indexOf('data-agent-global-save-options') >= 0
-              && agentPanelHtml.indexOf('data-agent-global-save-options') < agentPanelHtml.indexOf('>에로스 에이전트<')
-              && /data-agent-global-save-options[\s\S]*?id="et-save-all-agents"[\s\S]*?<\/div>/.test(agentPanelHtml)
-              && !/data-eros-execution-options[^>]*>[\s\S]*?id="et-save-all-agents"[\s\S]*?<\/div>/.test(agentPanelHtml)
-              && agentPanelHtml.indexOf('data-eros-execution-options') > agentPanelHtml.indexOf('<div class="et-agent-section-body">')
-              && agentPanelHtml.indexOf('data-eros-execution-options') < agentPanelHtml.indexOf(`et-agent-enabled-${firstErosAgent.id}`)
-              && agentPanelHtml.includes('id="et-parallel-pre-agents-same-provider" type="hidden"')
-              && agentPanelHtml.includes('class="et-toggle"')
-              && agentPanelHtml.includes('id="et-save-all-agents"')
-              && !agentPanelHtml.includes('id="et-save-agent-options"')
-              && !agentPanelHtml.includes('Eros pre-agent 실행 옵션')
-              && String(setupDashboardHandlers).includes('const saveAllAgentSettings = async () =>')
-              && String(setupDashboardHandlers).includes('(pipeline.agents || []).map(agent => readAgentConfigFromUI(latest, agent.id))'),
+            globalAgentSaveFeatureIsRemoved: !agentPanelHtml.includes('data-agent-global-save-options')
+              && !agentPanelHtml.includes('id="et-save-all-agents"')
+              && !String(setupDashboardHandlers).includes('saveAllAgentSettings'),
             residentCardsAreTheOnlyGameplayAndCommunicationAuthority: !mainSettingsHtml.includes('et-gameplay-agent-enabled')
               && !mainSettingsHtml.includes('et-communication-agent-enabled')
               && !mainSettingsHtml.includes('게임 에이전트:')
@@ -49343,10 +49191,7 @@ function normalizeAdaptiveQualityState(value) {
           const deckErrorBefore = gameplayAdvisorDeckError(target, fakeContext, actor, target.gameplay.advisor);
           const pipeline = defaultPipeline();
           const gameplayAgent = pipeline.agents.find(agent => agent?.id === GAMEPLAY_ADVISOR_AGENT_ID);
-          if (gameplayAgent) {
-            gameplayAgent.enabled = true;
-            gameplayAgent.outputLanguage = 'ko';
-          }
+          if (gameplayAgent) gameplayAgent.outputLanguage = 'ko';
           const testConf = { ...DEFAULT_CONFIG, enabled: true, pipeline };
           const original = {
             getConfig,
@@ -49456,8 +49301,6 @@ function normalizeAdaptiveQualityState(value) {
           };
           const state = createDefaultState('rp');
           const pipeline = defaultPipeline();
-          const gameplayAgent = pipeline.agents.find(agent => agent.id === GAMEPLAY_ADVISOR_AGENT_ID);
-          if (gameplayAgent) gameplayAgent.enabled = true;
           const conf = { ...DEFAULT_CONFIG, enabled: true, psycheAgentsEnabled: true, pipeline };
           const initialActor = resolveGameplayActor(state, context);
           const initialView = buildGameplayComposerViewModel(conf, context, state);
@@ -49574,15 +49417,7 @@ function normalizeAdaptiveQualityState(value) {
           };
           const state = createDefaultState('rp');
           const selectedCandidate = gameplayPersonaRecords(context).find(actor => actor.selected) || null;
-          const conf = {
-            ...DEFAULT_CONFIG,
-            enabled: true,
-            psycheAgentsEnabled: true,
-            pipeline: {
-              ...defaultPipeline(),
-              agents: defaultPipeline().agents.map(agent => agent.id === GAMEPLAY_ADVISOR_AGENT_ID ? { ...agent, enabled: true } : agent),
-            },
-          };
+          const conf = { ...DEFAULT_CONFIG, enabled: true, psycheAgentsEnabled: true, pipeline: defaultPipeline() };
           const original = {
             getConfig,
             readGameplayComposerChatAnchor,
@@ -49911,17 +49746,7 @@ function normalizeAdaptiveQualityState(value) {
           };
           const state = createDefaultState('rp');
           state.characters.unbound = normalizeCharacterState({ id: 'unbound', name: 'Unbound Psyche Person' });
-          const conf = {
-            ...DEFAULT_CONFIG,
-            enabled: true,
-            psycheAgentsEnabled: true,
-            pipeline: {
-              ...defaultPipeline(),
-              agents: defaultPipeline().agents.map(agent => (
-                agent.id === GAMEPLAY_ADVISOR_AGENT_ID ? { ...agent, enabled: true } : agent
-              )),
-            },
-          };
+          const conf = { ...DEFAULT_CONFIG, enabled: true, psycheAgentsEnabled: true, pipeline: defaultPipeline() };
           const original = {
             getConfig,
             readGameplayComposerChatAnchor,
@@ -50005,17 +49830,7 @@ function normalizeAdaptiveQualityState(value) {
             noSession: false,
           };
           const state = createDefaultState('rp');
-          const conf = {
-            ...DEFAULT_CONFIG,
-            enabled: true,
-            psycheAgentsEnabled: true,
-            pipeline: {
-              ...defaultPipeline(),
-              agents: defaultPipeline().agents.map(agent => (
-                agent.id === GAMEPLAY_ADVISOR_AGENT_ID ? { ...agent, enabled: true } : agent
-              )),
-            },
-          };
+          const conf = { ...DEFAULT_CONFIG, enabled: true, psycheAgentsEnabled: true, pipeline: defaultPipeline() };
           const original = {
             getConfig,
             readGameplayComposerChatAnchor,
@@ -51719,12 +51534,7 @@ function normalizeAdaptiveQualityState(value) {
               canonicalSources: [], canonicalSourceReadComplete: true, noSession: false,
             };
             let lateMounts = 0;
-            getConfig = async () => {
-              const pipeline = defaultPipeline();
-              const gameplayAgent = pipeline.agents.find(agent => agent.id === GAMEPLAY_ADVISOR_AGENT_ID);
-              if (gameplayAgent) gameplayAgent.enabled = true;
-              return { ...DEFAULT_CONFIG, enabled: true, pipeline };
-            };
+            getConfig = async () => ({ ...DEFAULT_CONFIG, enabled: true, pipeline: defaultPipeline() });
             loadScopeAndContext = async () => lateContext;
             loadState = async () => createDefaultState('rp');
             mountGameplayComposerPanel = async () => { lateMounts += 1; return { interactive: true }; };
@@ -55336,89 +55146,6 @@ function normalizeAdaptiveQualityState(value) {
               && String(callOllamaNativeChat).includes("'ollama-native'"),
           };
         },
-        testProductionOptInFeatureDefaults: () => {
-          const pipeline = defaultPipeline();
-          const gameplay = pipeline.agents.find(agent => agent.id === GAMEPLAY_ADVISOR_AGENT_ID);
-          const communication = pipeline.agents.find(agent => agent.id === COMMUNICATION_AGENT_ID);
-          const explicitPipelineJson = JSON.stringify({ version: VERSION, agents: [
-            { ...gameplay, enabled: true },
-            { ...communication, enabled: true },
-          ] });
-          const migrated = migrateStoredConfig({
-            configSchemaVersion: CONFIG_SCHEMA_VERSION,
-            promptCacheEnabled: true,
-            pipelineJson: explicitPipelineJson,
-          });
-          const explicitAgents = JSON.parse(migrated.config.pipelineJson).agents;
-          return {
-            mainPluginDefaultsOn: DEFAULT_CONFIG.enabled === true,
-            managedPromptCacheDefaultsOff: DEFAULT_CONFIG.promptCacheEnabled === false,
-            gameplayAdvisorDefaultsOff: gameplay?.enabled === false,
-            communicationResidentDefaultsOff: communication?.enabled === false,
-            explicitUserOptInsRemainEnabled: migrated.config.promptCacheEnabled === true
-              && explicitAgents.find(agent => agent.id === GAMEPLAY_ADVISOR_AGENT_ID)?.enabled === true
-              && explicitAgents.find(agent => agent.id === COMMUNICATION_AGENT_ID)?.enabled === true,
-          };
-        },
-        testAllAgentSettingsPersistenceContract: () => {
-          const pipeline = defaultPipeline();
-          const changedAgents = pipeline.agents.map(agent => {
-            if (agent.id === 'world') return { ...agent, model: 'saved-world-model', maxTokens: 5432 };
-            if (agent.id === GAMEPLAY_ADVISOR_AGENT_ID) return { ...agent, enabled: true, model: 'saved-gameplay-model' };
-            if (agent.id === COMMUNICATION_AGENT_ID) return { ...agent, enabled: false, model: 'saved-communication-model' };
-            return agent;
-          });
-          const latest = {
-            ...DEFAULT_CONFIG,
-            parallelPreAgentsSameProvider: false,
-            pipeline,
-            pipelineJson: JSON.stringify({ version: VERSION, agents: pipeline.agents }, null, 2),
-          };
-          const next = buildAllAgentSettingsConfig(latest, changedAgents, 'true');
-          const stored = configForStorage(next);
-          const reloaded = { ...DEFAULT_CONFIG, ...stored };
-          reloaded.pipeline = normalizePipeline(parsePipeline(reloaded.pipelineJson), reloaded);
-          const reloadedWorld = reloaded.pipeline.agents.find(agent => agent.id === 'world');
-          const reloadedGameplay = reloaded.pipeline.agents.find(agent => agent.id === GAMEPLAY_ADVISOR_AGENT_ID);
-          const reloadedCommunication = reloaded.pipeline.agents.find(agent => agent.id === COMMUNICATION_AGENT_ID);
-          return {
-            globalSaveSerializesPipelineJson: next.pipelineJson !== latest.pipelineJson
-              && JSON.parse(next.pipelineJson).version === VERSION,
-            storageKeepsSerializedPipelineAuthority: stored.pipelineJson === next.pipelineJson,
-            storageDropsOnlyRuntimePipelineProjection: !Object.prototype.hasOwnProperty.call(stored, 'pipeline'),
-            reloadPreservesEditedWorldSettings: reloadedWorld?.model === 'saved-world-model'
-              && reloadedWorld?.maxTokens === 5432,
-            reloadPreservesResidentOnOffAndModels: reloadedGameplay?.enabled === true
-              && reloadedGameplay?.model === 'saved-gameplay-model'
-              && reloadedCommunication?.enabled === false
-              && reloadedCommunication?.model === 'saved-communication-model',
-            globalExecutionOptionPersists: stored.parallelPreAgentsSameProvider === true,
-            globalSaveHandlerUsesSerializedAuthority: String(setupDashboardHandlers).includes('buildAllAgentSettingsConfig(latest, agents, parallelValue)'),
-          };
-        },
-        testNonBlockingStartupConfigurationContract: () => {
-          const registrationSource = String(registerUi);
-          const schedulerSource = String(scheduleStartupInChatToolsUiSync);
-          const argumentReaderSource = String(readConfigArgumentValues);
-          const configSource = String(getConfig);
-          const rootInitializerSource = String(initializeInChatToolsRoot);
-          const offGuard = schedulerSource.indexOf('!isGameplayAgentEnabled(conf) && !isCommunicationAgentEnabled(conf)');
-          const launcherSync = schedulerSource.indexOf('await syncInChatToolsUi(conf)');
-          return {
-            uiRegistrationDoesNotAwaitFullConfig: !registrationSource.includes('getConfig')
-              && !registrationSource.includes('syncInChatToolsUi'),
-            optionalLauncherSyncIsDeferred: schedulerSource.includes("setTimeout(() => { run().catch(() => {}); }, 0)"),
-            bothResidentsOffSkipLauncherInitialization: offGuard >= 0 && launcherSync > offGuard,
-            startupSkipsLegacyArgumentBridge: schedulerSource.includes('getConfig({ includeArgumentOverrides: false })'),
-            argumentBridgeReadsAreBatched: argumentReaderSource.includes('Promise.all')
-              && argumentReaderSource.includes('CONFIG_ARGUMENT_NAMES.map'),
-            storageAndArgumentsHydrateTogether: configSource.includes('const [storedConfig, argumentValues] = await Promise.all'),
-            mainDomCapabilityIsCachedOnceForBothLaunchers: rootInitializerSource.includes('if (Runtime.inChatToolsRoot) return Runtime.inChatToolsRoot')
-              && String(installGameplayComposerLauncher).includes('initializeInChatToolsRoot()')
-              && String(installCommunicationLauncher).includes('initializeInChatToolsRoot()'),
-            eagerSavedAssistantRecoveryRemainsOff: STARTUP_SAVED_ASSISTANT_RECOVERY_ENABLED === false,
-          };
-        },
         testProviderPromptCacheContracts: () => {
           const longSystem = `STATIC_CACHE_PREFIX\n${'Stable instructions and reference context. '.repeat(900)}`;
           const sourceMessages = [
@@ -56168,10 +55895,6 @@ function normalizeAdaptiveQualityState(value) {
               { id: COMMUNICATION_AGENT_ID, phase: 'communication', enabled: true },
             ] }),
           });
-          const noFlagsMissingResidents = migrate({
-            configSchemaVersion: 11,
-            pipelineJson: JSON.stringify({ agents: [{ id: 'custom-resident', phase: 'resident', enabled: true }] }),
-          });
           const second = migrateStoredConfig(truth.result.config);
           const schemaTwelveLegacy = migrate({
             ...truth.result.config,
@@ -56191,14 +55914,12 @@ function normalizeAdaptiveQualityState(value) {
             stringFlagsMigrateAndCustomFieldsSurvive: truth.gameplay?.model === 'custom-game'
               && truth.communication?.model === 'custom-communication'
               && truth.result.config.retainedSetting === 'keep-me',
-            omittedEnabledInheritsResidentFallback: omittedCommunicationEnabled.gameplay?.enabled === false
+            omittedEnabledInheritsResidentFallback: omittedCommunicationEnabled.gameplay?.enabled === true
               && omittedCommunicationEnabled.communication?.enabled === false,
             missingResidentsReceiveGatedFallbacks: missingResidents.gameplay?.enabled === false
               && missingResidents.communication?.enabled === false,
-            explicitResidentCardsSurviveFlaglessMigration: defaultGates.gameplay?.enabled === true
-              && defaultGates.communication?.enabled === true,
-            newlyAddedResidentsDefaultOff: noFlagsMissingResidents.gameplay?.enabled === false
-              && noFlagsMissingResidents.communication?.enabled === false,
+            absentLegacyFlagsUseOldDefaults: defaultGates.gameplay?.enabled === true
+              && defaultGates.communication?.enabled === false,
             legacyKeysRemovedAndSchemaAdvanced: truth.result.config.configSchemaVersion === CONFIG_SCHEMA_VERSION
               && !Object.prototype.hasOwnProperty.call(truth.result.config, 'gameplayAgentEnabled')
               && !Object.prototype.hasOwnProperty.call(truth.result.config, 'communicationAgentEnabled'),
@@ -62185,7 +61906,7 @@ function normalizeAdaptiveQualityState(value) {
       generatingChoices: '선택지 생성 중', directAction: '원하는 행동 직접 입력', syncingStatus: '인물 스테이터스 준비 중', reprepareActorStatus: '인물 스테이터스 다시 준비', pendingCancel: '대기 행동 취소',
       actorInputUnavailable: '이 환경에서는 인물 이름 입력창을 열 수 없습니다.', textInputUnavailable: '이 환경에서는 글 입력창을 열 수 없습니다.', actorInputPrompt: '플레이 캐릭터의 정확한 이름 또는 별칭을 입력하세요.',
       worldActionUnavailable: '현재 세계관과 장면에서 사용할 근거가 없습니다.', selectActorFirst: '먼저 플레이 캐릭터를 선택하세요.', alreadyPrepared: '이 인물의 스테이터스는 이미 Psyche에 준비되어 있습니다.', openingActorRestriction: '현재 페르소나 또는 직접 선택한 플레이 인물만 준비할 수 있습니다.', chatActorRestriction: '진행 중인 채팅에서는 헤더의 인물 버튼으로 직접 선택한 인물만 준비할 수 있습니다.', waitForResponse: '현재 응답이 끝난 뒤 인물 스테이터스를 준비할 수 있습니다.', loreReadIncomplete: '디스크립션·로어북 전체 조회가 끝나지 않았습니다. 로어북 조회 상태를 확인한 뒤 다시 여세요.', identityMissing: '선택한 인물의 이름 또는 식별 근거를 찾을 수 없습니다.', enablePsyche: 'Psyche 에이전트를 먼저 켜세요.', enableStateStorage: '에로스 타워 메인에서 상태 저장을 켜고 설정 저장을 눌러야 스테이터스·기술·아이템을 저장할 수 있습니다.', enablePreparationPsyche: '인물 스테이터스 준비에 사용할 Psyche 에이전트를 켜세요.', configurePsyche: 'Psyche 에이전트의 모델과 인증 정보를 먼저 설정하세요.', checkPsycheConfig: 'Psyche 에이전트 설정을 확인하세요.', pendingBlocksChoices: '대기 중인 행동이 끝난 뒤 선택지를 바꿀 수 있습니다.', generatingSpecialChoices: '특수 행동에 맞는 장면 선택지를 만드는 중…', generatingCustomChoices: '입력한 자유 행동으로 장면 선택지를 만드는 중…', generatingSceneChoices: '현재 장면 선택지를 만드는 중…', generatedSpecialChoices: '특수 행동을 반영한 선택지를 만들었습니다.', generatedCustomChoices: '입력한 자유 행동을 반영한 선택지를 만들었습니다.', clearedCustomChoices: '자유 행동 적용을 해제하고 장면 선택지를 만들었습니다.', regeneratedSceneChoices: '현재 장면 선택지를 새로 만들었습니다.', choicesFailed: '선택지를 만들지 못했습니다: {reason}', choicesFailedTitle: '선택지 생성 실패', error: '오류', actorNotFound: '선택한 플레이 인물을 찾을 수 없습니다.', preparingActor: 'Psyche가 선택한 인물의 스테이터스·스킬·아이템을 준비하는 중…', preparationIncomplete: 'Psyche 인물 스테이터스 준비를 완료하지 못했습니다.', preparedNative: '준비된 선택지를 확인했습니다. Risu 기본 전송 버튼(➤)을 한 번 누르세요.', stalePendingCleared: '전송되지 않은 오래된 대기 행동을 정리했습니다.', chatStateUnavailable: '현재 채팅 상태를 불러올 수 없습니다.', stateReloaded: '최신 Psyche 상태를 다시 불러왔습니다.', pendingCancelledAndRemoved: '대기 행동을 취소하고 채팅에서 제거했습니다.', pendingCancelled: '대기 행동을 취소했습니다.', gameAgent: '게임 에이전트', selectedEntryNotFound: '현재 상태에서 선택한 항목을 찾을 수 없습니다.', confirmMatchingActor: '일치하는 인물을 확인하고 선택하세요.', multipleMatchingActors: '같거나 비슷한 이름이 여러 명입니다. 아래에서 인물을 선택하세요.', enterActorName: '선택할 인물 이름이나 별칭을 입력하세요.', enterActionBeforeChoices: '원하는 행동을 입력한 뒤 선택지를 생성하세요.', selectActorForCustom: '자유 행동을 시도할 플레이 인물을 먼저 선택하세요.', prepareActorFirst: '먼저 이 인물의 인물 스테이터스를 준비하세요.', specialUnavailable: '현재 사용할 수 없는 능력 또는 아이템입니다.', sceneChoiceNotFound: '진행할 장면 선택지를 찾을 수 없습니다.', sceneChoiceUnavailable: '현재 진행할 수 없는 선택지입니다.', fatalConfirmNotice: '이 선택지는 HP가 0 이하가 될 수 있습니다. 비용을 확인하고 8초 안에 다시 누르세요.', fatalConfirmTitle: '치명적 선택지 재확인', fatalConfirmToast: 'HP가 0 이하가 될 수 있습니다. 8초 안에 하단 버튼을 다시 누르세요.', operationFailed: '게임플레이 작업을 완료하지 못했습니다.', advisorTruncated: '게임플레이 추천이 출력 한도에서 잘렸습니다. 에이전트 설정을 확인한 뒤 다시 시도하세요.', advisorInvalidJson: '게임플레이 추천 응답을 읽지 못했습니다. 다시 시도하세요.',
-      enablePluginAndAgent: '에로스 타워와 게임 에이전트를 먼저 켜세요.', actionSending: '이미 선택한 행동을 준비하고 있습니다.', choiceStaged: '선택지 문장을 채팅에 준비했습니다. Risu 전송 버튼(➤)을 눌러 진행하세요.', responseBusyRetry: '현재 응답이 끝난 뒤 게임 행동을 다시 실행하세요.', nativeActionPrepared: '선택지 문장을 채팅에 보존했습니다. 아래의 Risu 전송 버튼(➤)을 한 번 누르면 이어서 진행됩니다.', nativeReadyTitle: '선택지 준비 완료', nativeReadyHelp: '선택지 문장은 그대로 보존되어 있습니다. 입력하거나 붙여넣지 말고 Risu 기본 전송 버튼(➤)만 한 번 누르세요.', sendUnconfirmed: 'Risu가 채팅 전송 시작을 확인하지 않았습니다. 선택지는 채팅에 보존했습니다.', actionSent: '행동을 전송했습니다. 결과를 기다리는 중입니다.', stagingUncertain: '채팅 준비 상태를 확인하지 못해 행동을 보존했습니다. 현재 채팅을 바꾸지 말고 다시 읽기를 누르세요.',
+      enablePluginAndAgent: '테스트 플러그인과 게임 에이전트를 먼저 켜세요.', actionSending: '이미 선택한 행동을 준비하고 있습니다.', choiceStaged: '선택지 문장을 채팅에 준비했습니다. Risu 전송 버튼(➤)을 눌러 진행하세요.', responseBusyRetry: '현재 응답이 끝난 뒤 게임 행동을 다시 실행하세요.', nativeActionPrepared: '선택지 문장을 채팅에 보존했습니다. 아래의 Risu 전송 버튼(➤)을 한 번 누르면 이어서 진행됩니다.', nativeReadyTitle: '선택지 준비 완료', nativeReadyHelp: '선택지 문장은 그대로 보존되어 있습니다. 입력하거나 붙여넣지 말고 Risu 기본 전송 버튼(➤)만 한 번 누르세요.', sendUnconfirmed: 'Risu가 채팅 전송 시작을 확인하지 않았습니다. 선택지는 채팅에 보존했습니다.', actionSent: '행동을 전송했습니다. 결과를 기다리는 중입니다.', stagingUncertain: '채팅 준비 상태를 확인하지 못해 행동을 보존했습니다. 현재 채팅을 바꾸지 말고 다시 읽기를 누르세요.',
       enableTowerAndAgent: '에로스 타워와 게임 에이전트를 먼저 켜세요.', loadStateFailed: '게임플레이 상태를 불러오지 못했습니다.',
       gamePanel: '게임 선택 패널',
     }),
@@ -62209,7 +61930,7 @@ function normalizeAdaptiveQualityState(value) {
       generatingChoices: 'Generating choices', directAction: 'Enter a custom action', syncingStatus: 'Preparing character status', reprepareActorStatus: 'Prepare character status again', pendingCancel: 'Cancel pending action',
       actorInputUnavailable: 'Character name input is unavailable in this environment.', textInputUnavailable: 'Text input is unavailable in this environment.', actorInputPrompt: 'Enter the exact name or alias of the player character.',
       worldActionUnavailable: 'There is no basis for using this in the current world and scene.', selectActorFirst: 'Select a player character first.', alreadyPrepared: 'This character’s status is already prepared in Psyche.', openingActorRestriction: 'Only the current persona or a directly selected player character can be prepared.', chatActorRestriction: 'During an active chat, use the character button in the header to select the player character directly.', waitForResponse: 'Character status can be prepared after the current response finishes.', loreReadIncomplete: 'The full description and lorebook scan is incomplete. Check lorebook loading and reopen the panel.', identityMissing: 'No name or identity evidence was found for the selected character.', enablePsyche: 'Enable the Psyche agent first.', enableStateStorage: 'Enable state storage on the Eros Tower main screen and save settings before storing status, skills, and items.', enablePreparationPsyche: 'Enable the Psyche agent used to prepare character status.', configurePsyche: 'Configure the Psyche agent model and authentication first.', checkPsycheConfig: 'Check the Psyche agent settings.', pendingBlocksChoices: 'Choices can be changed after the pending action finishes.', generatingSpecialChoices: 'Generating scene choices for the special action…', generatingCustomChoices: 'Generating scene choices from the custom action…', generatingSceneChoices: 'Generating choices for the current scene…', generatedSpecialChoices: 'Generated choices that reflect the special action.', generatedCustomChoices: 'Generated choices that reflect the custom action.', clearedCustomChoices: 'Cleared the custom action and generated scene choices.', regeneratedSceneChoices: 'Generated new choices for the current scene.', choicesFailed: 'Could not generate choices: {reason}', choicesFailedTitle: 'Choice generation failed', error: 'Error', actorNotFound: 'The selected player character could not be found.', preparingActor: 'Psyche is preparing the selected character’s status, skills, and items…', preparationIncomplete: 'Psyche did not complete character status preparation.', preparedNative: 'The prepared choice was found. Press the Risu send button (➤) once.', stalePendingCleared: 'Cleared an old unsent pending action.', chatStateUnavailable: 'The current chat state could not be loaded.', stateReloaded: 'Reloaded the latest Psyche state.', pendingCancelledAndRemoved: 'Cancelled the pending action and removed it from chat.', pendingCancelled: 'Cancelled the pending action.', gameAgent: 'Game agent', selectedEntryNotFound: 'The selected entry is not available in the current state.', confirmMatchingActor: 'Confirm and select the matching character.', multipleMatchingActors: 'Several names are identical or similar. Select a character below.', enterActorName: 'Enter the name or alias of the character to select.', enterActionBeforeChoices: 'Enter an action before generating choices.', selectActorForCustom: 'Select the player character who will attempt the custom action.', prepareActorFirst: 'Prepare this character’s status first.', specialUnavailable: 'This skill or item is currently unavailable.', sceneChoiceNotFound: 'The scene choice to continue with could not be found.', sceneChoiceUnavailable: 'This choice is currently unavailable.', fatalConfirmNotice: 'This choice may reduce HP to 0 or below. Check the cost and press it again within 8 seconds.', fatalConfirmTitle: 'Confirm lethal choice', fatalConfirmToast: 'HP may fall to 0 or below. Press the bottom button again within 8 seconds.', operationFailed: 'The gameplay operation could not be completed.', advisorTruncated: 'The gameplay recommendation was cut off by the output limit. Check the agent settings and try again.', advisorInvalidJson: 'The gameplay recommendation response could not be read. Try again.',
-      enablePluginAndAgent: 'Enable Eros Tower and the game agent first.', actionSending: 'The selected action is already being prepared.', choiceStaged: 'Prepared the choice in chat. Press the Risu send button (➤) to continue.', responseBusyRetry: 'Run the game action again after the current response finishes.', nativeActionPrepared: 'The choice text is preserved in chat. Press the Risu send button (➤) once to continue.', nativeReadyTitle: 'Choice ready', nativeReadyHelp: 'The choice text is preserved. Do not type or paste it again; press the Risu send button (➤) once.', sendUnconfirmed: 'Risu did not confirm sending. The choice remains preserved in chat.', actionSent: 'Action sent. Waiting for the result.', stagingUncertain: 'The prepared chat state could not be verified, so the action was preserved. Keep this chat open and reload it.',
+      enablePluginAndAgent: 'Enable the test plugin and game agent first.', actionSending: 'The selected action is already being prepared.', choiceStaged: 'Prepared the choice in chat. Press the Risu send button (➤) to continue.', responseBusyRetry: 'Run the game action again after the current response finishes.', nativeActionPrepared: 'The choice text is preserved in chat. Press the Risu send button (➤) once to continue.', nativeReadyTitle: 'Choice ready', nativeReadyHelp: 'The choice text is preserved. Do not type or paste it again; press the Risu send button (➤) once.', sendUnconfirmed: 'Risu did not confirm sending. The choice remains preserved in chat.', actionSent: 'Action sent. Waiting for the result.', stagingUncertain: 'The prepared chat state could not be verified, so the action was preserved. Keep this chat open and reload it.',
       enableTowerAndAgent: 'Enable Eros Tower and the game agent first.', loadStateFailed: 'Could not load gameplay state.',
       gamePanel: 'Game choices panel',
     }),
@@ -62234,7 +61955,7 @@ function normalizeAdaptiveQualityState(value) {
       generatingChoices: '選択肢を生成中', directAction: '希望する行動を直接入力', syncingStatus: 'キャラクターステータスを準備中', reprepareActorStatus: 'キャラクターステータスを再準備', pendingCancel: '待機中の行動をキャンセル',
       actorInputUnavailable: 'この環境ではキャラクター名の入力欄を開けません。', textInputUnavailable: 'この環境では文字入力欄を開けません。', actorInputPrompt: 'プレイヤーキャラクターの正確な名前または別名を入力してください。',
       worldActionUnavailable: '現在の世界観と場面では使用根拠がありません。', selectActorFirst: '先にプレイヤーキャラクターを選択してください。', alreadyPrepared: 'このキャラクターのステータスはすでにPsycheに準備されています。', openingActorRestriction: '現在のペルソナ、または直接選択したプレイヤーキャラクターのみ準備できます。', chatActorRestriction: '進行中のチャットでは、ヘッダーのキャラクターボタンから直接選択したキャラクターのみ準備できます。', waitForResponse: '現在の応答が終わった後にキャラクターステータスを準備できます。', loreReadIncomplete: '説明・ロアブックの全体読込が完了していません。読込状態を確認してパネルを開き直してください。', identityMissing: '選択したキャラクターの名前または識別根拠が見つかりません。', enablePsyche: '先にPsycheエージェントを有効にしてください。', enableStateStorage: 'エロスタワーのメイン画面で状態保存を有効にして設定を保存すると、ステータス・技能・アイテムを保存できます。', enablePreparationPsyche: 'キャラクターステータスの準備に使うPsycheエージェントを有効にしてください。', configurePsyche: 'Psycheエージェントのモデルと認証情報を先に設定してください。', checkPsycheConfig: 'Psycheエージェントの設定を確認してください。', pendingBlocksChoices: '待機中の行動が終わった後に選択肢を変更できます。', generatingSpecialChoices: '特殊行動に合う場面選択肢を生成中…', generatingCustomChoices: '入力した自由行動から場面選択肢を生成中…', generatingSceneChoices: '現在の場面の選択肢を生成中…', generatedSpecialChoices: '特殊行動を反映した選択肢を生成しました。', generatedCustomChoices: '入力した自由行動を反映した選択肢を生成しました。', clearedCustomChoices: '自由行動の適用を解除し、場面選択肢を生成しました。', regeneratedSceneChoices: '現在の場面の選択肢を再生成しました。', choicesFailed: '選択肢を生成できませんでした：{reason}', choicesFailedTitle: '選択肢の生成に失敗', error: 'エラー', actorNotFound: '選択したプレイヤーキャラクターが見つかりません。', preparingActor: 'Psycheが選択したキャラクターのステータス・技能・アイテムを準備中…', preparationIncomplete: 'Psycheによるキャラクターステータスの準備が完了しませんでした。', preparedNative: '準備済みの選択肢を確認しました。Risuの送信ボタン（➤）を一度押してください。', stalePendingCleared: '未送信の古い待機行動を整理しました。', chatStateUnavailable: '現在のチャット状態を読み込めません。', stateReloaded: '最新のPsyche状態を再読込しました。', pendingCancelledAndRemoved: '待機行動をキャンセルし、チャットから削除しました。', pendingCancelled: '待機行動をキャンセルしました。', gameAgent: 'ゲームエージェント', selectedEntryNotFound: '現在の状態で選択した項目が見つかりません。', confirmMatchingActor: '一致するキャラクターを確認して選択してください。', multipleMatchingActors: '同じ、または似た名前が複数あります。下から選択してください。', enterActorName: '選択するキャラクターの名前または別名を入力してください。', enterActionBeforeChoices: '希望する行動を入力してから選択肢を生成してください。', selectActorForCustom: '自由行動を試すプレイヤーキャラクターを先に選択してください。', prepareActorFirst: '先にこのキャラクターのステータスを準備してください。', specialUnavailable: 'この技能またはアイテムは現在使用できません。', sceneChoiceNotFound: '進行する場面選択肢が見つかりません。', sceneChoiceUnavailable: 'この選択肢は現在実行できません。', fatalConfirmNotice: 'この選択肢によりHPが0以下になる可能性があります。コストを確認し、8秒以内にもう一度押してください。', fatalConfirmTitle: '致命的な選択肢を再確認', fatalConfirmToast: 'HPが0以下になる可能性があります。8秒以内に下のボタンをもう一度押してください。', operationFailed: 'ゲームプレイ処理を完了できませんでした。', advisorTruncated: 'ゲームプレイ推薦が出力上限で途切れました。エージェント設定を確認して再試行してください。', advisorInvalidJson: 'ゲームプレイ推薦の応答を読み取れませんでした。再試行してください。',
-      enablePluginAndAgent: '先にエロスタワーとゲームエージェントを有効にしてください。', actionSending: '選択した行動を準備しています。', choiceStaged: '選択肢をチャットに準備しました。Risuの送信ボタン（➤）を押してください。', responseBusyRetry: '現在の応答が終わった後にゲーム行動を再実行してください。', nativeActionPrepared: '選択肢の文はチャットに保持されています。Risuの送信ボタン（➤）を一度押すと続行します。', nativeReadyTitle: '選択肢の準備完了', nativeReadyHelp: '選択肢の文は保持されています。再入力や貼り付けはせず、Risuの送信ボタン（➤）を一度だけ押してください。', sendUnconfirmed: 'Risuが送信開始を確認できませんでした。選択肢はチャットに保持されています。', actionSent: '行動を送信しました。結果を待っています。', stagingUncertain: 'チャットの準備状態を確認できなかったため、行動を保持しました。チャットを切り替えず再読込してください。',
+      enablePluginAndAgent: '先にテストプラグインとゲームエージェントを有効にしてください。', actionSending: '選択した行動を準備しています。', choiceStaged: '選択肢をチャットに準備しました。Risuの送信ボタン（➤）を押してください。', responseBusyRetry: '現在の応答が終わった後にゲーム行動を再実行してください。', nativeActionPrepared: '選択肢の文はチャットに保持されています。Risuの送信ボタン（➤）を一度押すと続行します。', nativeReadyTitle: '選択肢の準備完了', nativeReadyHelp: '選択肢の文は保持されています。再入力や貼り付けはせず、Risuの送信ボタン（➤）を一度だけ押してください。', sendUnconfirmed: 'Risuが送信開始を確認できませんでした。選択肢はチャットに保持されています。', actionSent: '行動を送信しました。結果を待っています。', stagingUncertain: 'チャットの準備状態を確認できなかったため、行動を保持しました。チャットを切り替えず再読込してください。',
       enableTowerAndAgent: '先にエロスタワーとゲームエージェントを有効にしてください。', loadStateFailed: 'ゲームプレイ状態を読み込めませんでした。',
       gamePanel: 'ゲーム選択パネル',
     }),
@@ -62259,7 +61980,7 @@ function normalizeAdaptiveQualityState(value) {
       generatingChoices: '正在生成选项', directAction: '直接输入想执行的行动', syncingStatus: '正在准备角色状态', reprepareActorStatus: '重新准备角色状态', pendingCancel: '取消等待中的行动',
       actorInputUnavailable: '当前环境无法打开角色名称输入框。', textInputUnavailable: '当前环境无法打开文字输入框。', actorInputPrompt: '请输入玩家角色的准确名称或别名。',
       worldActionUnavailable: '当前世界观和场景没有可使用该能力的依据。', selectActorFirst: '请先选择玩家角色。', alreadyPrepared: '该角色的状态已在Psyche中准备完成。', openingActorRestriction: '只能准备当前人格或直接选择的玩家角色。', chatActorRestriction: '聊天进行中时，只能准备通过顶部角色按钮直接选择的玩家角色。', waitForResponse: '当前回复结束后才能准备角色状态。', loreReadIncomplete: '描述与世界书尚未完整读取。请检查世界书读取状态并重新打开面板。', identityMissing: '找不到所选角色的名称或身份依据。', enablePsyche: '请先启用Psyche代理。', enableStateStorage: '请在Eros Tower主界面启用状态保存并保存设置，之后才能存储状态、技能和物品。', enablePreparationPsyche: '请启用用于准备角色状态的Psyche代理。', configurePsyche: '请先配置Psyche代理的模型和认证信息。', checkPsycheConfig: '请检查Psyche代理设置。', pendingBlocksChoices: '等待中的行动结束后才能更改选项。', generatingSpecialChoices: '正在生成符合特殊行动的场景选项…', generatingCustomChoices: '正在根据输入的自定义行动生成场景选项…', generatingSceneChoices: '正在生成当前场景选项…', generatedSpecialChoices: '已生成反映特殊行动的选项。', generatedCustomChoices: '已生成反映自定义行动的选项。', clearedCustomChoices: '已清除自定义行动并生成场景选项。', regeneratedSceneChoices: '已重新生成当前场景选项。', choicesFailed: '无法生成选项：{reason}', choicesFailedTitle: '生成选项失败', error: '错误', actorNotFound: '找不到所选玩家角色。', preparingActor: 'Psyche正在准备所选角色的状态、技能和物品…', preparationIncomplete: 'Psyche未能完成角色状态准备。', preparedNative: '已找到准备好的选项。请按一次Risu发送按钮（➤）。', stalePendingCleared: '已清理未发送的旧等待行动。', chatStateUnavailable: '无法加载当前聊天状态。', stateReloaded: '已重新加载最新Psyche状态。', pendingCancelledAndRemoved: '已取消等待中的行动并从聊天中移除。', pendingCancelled: '已取消等待中的行动。', gameAgent: '游戏代理', selectedEntryNotFound: '当前状态下找不到所选条目。', confirmMatchingActor: '请确认并选择匹配的角色。', multipleMatchingActors: '存在多个相同或相似的名称。请从下方选择角色。', enterActorName: '请输入要选择的角色名称或别名。', enterActionBeforeChoices: '请输入想执行的行动后再生成选项。', selectActorForCustom: '请先选择要尝试自定义行动的玩家角色。', prepareActorFirst: '请先准备该角色的状态。', specialUnavailable: '当前无法使用该技能或物品。', sceneChoiceNotFound: '找不到要继续的场景选项。', sceneChoiceUnavailable: '当前无法执行该选项。', fatalConfirmNotice: '此选项可能使HP降至0或以下。请确认消耗，并在8秒内再次点击。', fatalConfirmTitle: '再次确认致命选项', fatalConfirmToast: 'HP可能降至0或以下。请在8秒内再次点击下方按钮。', operationFailed: '无法完成游戏操作。', advisorTruncated: '游戏推荐因输出上限被截断。请检查代理设置后重试。', advisorInvalidJson: '无法读取游戏推荐响应。请重试。',
-      enablePluginAndAgent: '请先启用Eros Tower和游戏代理。', actionSending: '正在准备所选行动。', choiceStaged: '已在聊天中准备选项。请按Risu发送按钮（➤）。', responseBusyRetry: '请在当前回复结束后重新执行游戏行动。', nativeActionPrepared: '选项文字已保存在聊天中。按一次Risu发送按钮（➤）即可继续。', nativeReadyTitle: '选项准备完成', nativeReadyHelp: '选项文字已保留。无需再次输入或粘贴，只需按一次Risu发送按钮（➤）。', sendUnconfirmed: 'Risu未确认开始发送。选项仍保存在聊天中。', actionSent: '行动已发送，正在等待结果。', stagingUncertain: '无法确认聊天准备状态，因此已保留该行动。请勿切换当前聊天，并重新读取。',
+      enablePluginAndAgent: '请先启用测试插件和游戏代理。', actionSending: '正在准备所选行动。', choiceStaged: '已在聊天中准备选项。请按Risu发送按钮（➤）。', responseBusyRetry: '请在当前回复结束后重新执行游戏行动。', nativeActionPrepared: '选项文字已保存在聊天中。按一次Risu发送按钮（➤）即可继续。', nativeReadyTitle: '选项准备完成', nativeReadyHelp: '选项文字已保留。无需再次输入或粘贴，只需按一次Risu发送按钮（➤）。', sendUnconfirmed: 'Risu未确认开始发送。选项仍保存在聊天中。', actionSent: '行动已发送，正在等待结果。', stagingUncertain: '无法确认聊天准备状态，因此已保留该行动。请勿切换当前聊天，并重新读取。',
       enableTowerAndAgent: '请先启用Eros Tower和游戏代理。', loadStateFailed: '无法加载游戏状态。',
       gamePanel: '游戏选项面板',
     }),
@@ -64870,25 +64591,13 @@ function normalizeAdaptiveQualityState(value) {
     if (keyId && active()) Runtime.gameplayLauncherListenerIds.push({ type: 'keydown', id: keyId });
   }
 
-  async function initializeInChatToolsRoot() {
-    if (Runtime.inChatToolsRoot) return Runtime.inChatToolsRoot;
-    if (typeof api.getRootDocument !== 'function') return null;
-    try {
-      const root = await api.getRootDocument();
-      if (root) Runtime.inChatToolsRoot = root;
-      return root || null;
-    } catch (err) {
-      Runtime.lastError = `main DOM initialization: ${err?.message || err}`;
-      return null;
-    }
-  }
-
   async function installGameplayComposerLauncher(conf, epoch = Runtime.gameplayLauncherEpoch) {
     if (!isGameplayAgentEnabled(conf) || !gameplayLauncherLifecycleIsCurrent(epoch)) return { supported: false, disabled: true };
     try {
       let root = Runtime.gameplayLauncherRoot;
       if (!root) {
-        root = await initializeInChatToolsRoot();
+        if (typeof api.getRootDocument !== 'function') return { supported: false, reason: 'main-dom-api-unavailable' };
+        root = await api.getRootDocument();
         if (!gameplayLauncherLifecycleIsCurrent(epoch)) return { supported: false, stale: true };
         if (!root) return { supported: false, reason: 'main-dom-permission-denied' };
         Runtime.gameplayLauncherRoot = root;
@@ -65173,7 +64882,8 @@ function normalizeAdaptiveQualityState(value) {
     try {
       let root = Runtime.communicationLauncherRoot;
       if (!root) {
-        root = await initializeInChatToolsRoot();
+        if (typeof api.getRootDocument !== 'function') return { supported: false, reason: 'main-dom-api-unavailable' };
+        root = await api.getRootDocument();
         if (!communicationLauncherLifecycleIsCurrent(epoch)) return { supported: false, stale: true };
         if (!root) return { supported: false, reason: 'main-dom-permission-denied' };
         Runtime.communicationLauncherRoot = root;
@@ -65274,31 +64984,6 @@ function normalizeAdaptiveQualityState(value) {
     }
   }
 
-  function scheduleStartupInChatToolsUiSync() {
-    if (Runtime.startupInChatToolsUiSyncCancelled || Runtime.startupInChatToolsUiSyncScheduled) return false;
-    Runtime.startupInChatToolsUiSyncScheduled = true;
-    const run = async () => {
-      Runtime.startupInChatToolsUiSyncTimer = null;
-      try {
-        if (Runtime.startupInChatToolsUiSyncCancelled) return;
-        const conf = await getConfig({ includeArgumentOverrides: false });
-        if (Runtime.startupInChatToolsUiSyncCancelled) return;
-        if (!isGameplayAgentEnabled(conf) && !isCommunicationAgentEnabled(conf)) return;
-        await syncInChatToolsUi(conf);
-      } catch (err) {
-        Runtime.lastError = `in-chat tool UI startup: ${err?.message || err}`;
-      } finally {
-        Runtime.startupInChatToolsUiSyncScheduled = false;
-      }
-    };
-    if (typeof setTimeout === 'function') {
-      Runtime.startupInChatToolsUiSyncTimer = setTimeout(() => { run().catch(() => {}); }, 0);
-    } else {
-      Promise.resolve().then(run).catch(() => {});
-    }
-    return true;
-  }
-
   async function registerUi() {
     await unregisterStoredUiParts();
     const nextRegistrations = [];
@@ -65323,18 +65008,15 @@ function normalizeAdaptiveQualityState(value) {
       nextRegistrations.push({ slot: 'hamburger', id: registeredUiId(hamburgerRegistration, UI_ID_HAMBURGER), location: 'hamburger' });
     }
     await rememberUiRegistrations(nextRegistrations);
+    const conf = await getConfig();
+    await syncInChatToolsUi(conf).catch(err => {
+      Runtime.lastError = `in-chat tool UI startup: ${err?.message || err}`;
+    });
   }
 
   await registerUi();
-  await initializeInChatToolsRoot();
   if (typeof api.onUnload === 'function') {
     await api.onUnload(async () => {
-      Runtime.startupInChatToolsUiSyncCancelled = true;
-      if (Runtime.startupInChatToolsUiSyncTimer && typeof clearTimeout === 'function') {
-        clearTimeout(Runtime.startupInChatToolsUiSyncTimer);
-      }
-      Runtime.startupInChatToolsUiSyncTimer = null;
-      Runtime.startupInChatToolsUiSyncScheduled = false;
       const noneSession = claimInChatPanelOwner('none');
       await unmountGameplayComposerPanel({ reconcileLauncher: false }).catch(() => {});
       await unmountCommunicationPanel({ reconcileLauncher: false }).catch(() => {});
@@ -65353,7 +65035,6 @@ function normalizeAdaptiveQualityState(value) {
       Runtime.communicationJobs = new Map();
       await clearGameplayComposerLauncher().catch(() => {});
       await clearCommunicationLauncher().catch(() => {});
-      Runtime.inChatToolsRoot = null;
     });
   }
   await api.addRisuReplacer('beforeRequest', async (messages, type) => {
@@ -65386,7 +65067,6 @@ function normalizeAdaptiveQualityState(value) {
       Runtime.activeRequestPhases = Math.max(0, Number(Runtime.activeRequestPhases || 0) - 1);
     }
   });
-  scheduleStartupInChatToolsUiSync();
   scheduleStartupSavedAssistantRecovery();
 
   console.log(`${PLUGIN_SHORT_LABEL} v${VERSION} loaded.`);
