@@ -65,7 +65,17 @@
 
 ## 배포 검증
 
-- 정식 배포 후 릴리스 커밋, 검증 시각, 실제 `main` raw URL의 버전과 SHA-256을 기록한다.
+- 릴리스 PR: `#1` (`Release Eros Tower 1.2.7`)
+- 릴리스 커밋: `ae9405159a14d1263ac0f0b58b3c202ab2276ca4`
+- 검증 시각: `2026-07-20 19:43 KST`
+- 로컬과 GitHub API의 `main`이 릴리스 커밋을 가리키는 것을 확인했다.
+- 커밋 고정 raw와 실제 `main` 업데이트 URL의 세 배포 파일이 모두 HTTP 200을 반환했다.
+- 실제 `main` 업데이트 URL의 버전 헤더·표시 버전·SHA-256을 Git 릴리스본과 대조했다.
+- `ErosTower.v1.update.js`의 기존 CDN 캐시가 `Source-Age: 295` 이후 만료되고 `X-Cache: MISS`, `Source-Age: 0`으로 1.2.7을 반환하는 것까지 확인했다.
+- SHA-256:
+  - `ErosTower.v1.update.js`: `87D74B4F01593B51358BF79B080C9C1DA30719360DC64029B8C2BA3ECD0D5664`
+  - `ErosTower.update.js`: `74990876F7E0F1126C7087BF2B194032AE80C742CB3CB9A084E41F257DAE316C`
+  - `☸에로스 타워.js`: `87D74B4F01593B51358BF79B080C9C1DA30719360DC64029B8C2BA3ECD0D5664`
 
 ## 남은 위험
 
