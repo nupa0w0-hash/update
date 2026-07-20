@@ -53,4 +53,13 @@
 
 ## 배포 확인
 
-- 릴리스 PR, 커밋, raw URL 헤더와 SHA-256은 배포 후 기록한다.
+- 릴리스 PR: `#5` (`Release Eros Tower 1.2.9`)
+- 릴리스 커밋: `1b042d39209e49153d27acbe69c8b6c93cbae4a3`
+- 검증 시각: `2026-07-20 20:52 KST`
+- 로컬과 GitHub API의 `main`이 릴리스 커밋을 가리키는 것을 확인했다.
+- 실제 `main` 업데이트 URL 두 개가 모두 HTTP 200과 `X-Cache: MISS`를 반환했다.
+- 일반 채널은 `//@version 1.2.9`, 호환 채널은 `//@version 4.0.37`을 반환했다.
+- SHA-256:
+  - `ErosTower.v1.update.js`: `2DAEECBB2B47CB8DB9EB7C338D3A9099E7BAE9BC67C4C15F50424549A8F4C039`
+  - `ErosTower.update.js`: `7A2963BF1963CA570D0C4D28A618D92337A18D3636183645015408AADC3FEB34`
+  - `☸에로스 타워.js`: `2DAEECBB2B47CB8DB9EB7C338D3A9099E7BAE9BC67C4C15F50424549A8F4C039`
