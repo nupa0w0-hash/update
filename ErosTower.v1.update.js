@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.2.7
+//@display-name ☸Eros Tower 1.2.8
 //@api 3.0
-//@version 1.2.7
+//@version 1.2.8
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -43,20 +43,20 @@
 //@arg et_image_character_tags_json string User-authored per-character illustration tag registry JSON
 
 /**
- * Eros Tower 1.2.7
+ * Eros Tower 1.2.8
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.2.7 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.2.8 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.2.7';
+  const VERSION = '1.2.8';
   const PREFIX = 'eros_tower_v02:';
   const LEGACY_STORAGE_PREFIXES = Object.freeze(['eros_tower_v01:']);
   const MASKED_SECRET = '*****';
   const PROVIDER_CREDENTIAL_MAX_ENTRIES = 32;
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.2.7`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.2.8`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -152,6 +152,11 @@
     { index: 7, label: '초장편', englishLabel: 'very long-form', instruction: 'Write at least 9000 words.', scale: 'Very long-form: prepare dense continuity, layered character movement, multiple world threads, and long-range setup while preserving knowledge boundaries.' },
   ]);
   const SYSTEM_PATCH_NOTES = Object.freeze([
+    {
+      version: '1.2.8',
+      kind: 'agent-settings-persistence-and-nonblocking-startup-hotfix',
+      summary: 'Persists the global agent-settings save through pipelineJson, verifies reload authority, removes full configuration hydration from the blocking UI-registration path, batches argument reads, defers optional in-chat launcher startup, and skips launcher initialization when both resident agents are off.',
+    },
     {
       version: '1.2.7',
       kind: 'gameplay-communication-and-lossless-storage-release',
@@ -1253,6 +1258,9 @@
     startupSavedAssistantRecoveryScheduled: false,
     startupSavedAssistantRecoveryAttempts: 0,
     startupSavedAssistantRecoveryCancelled: false,
+    startupInChatToolsUiSyncScheduled: false,
+    startupInChatToolsUiSyncCancelled: false,
+    startupInChatToolsUiSyncTimer: null,
     activeRequestPhases: 0,
     settingsImportInProgress: false,
     activeSettingsMutations: 0,
@@ -2320,53 +2328,106 @@
     };
   }
 
+  const CONFIG_ARGUMENT_NAMES = Object.freeze([
+    'et_enabled',
+    'et_mode',
+    'et_prompt_mode_detection_enabled',
+    'et_prompt_length_detection_enabled',
+    'et_eros_agents_enabled',
+    'et_psyche_agents_enabled',
+    'et_data_context_injection_enabled',
+    'et_provider',
+    'et_base_url',
+    'et_api_key',
+    'et_model',
+    'et_temperature',
+    'et_max_tokens',
+    'et_context_window',
+    'et_timeout_s',
+    'et_timeout_ms',
+    'et_debug_log',
+    'et_run_log_enabled',
+    'et_bypass_aux_requests',
+    'et_state_api_enabled',
+    'et_quality_regex_enabled',
+    'et_embedding_enabled',
+    'et_embedding_provider_id',
+    'et_embedding_base_url',
+    'et_embedding_api_key',
+    'et_embedding_model',
+    'et_parallel_pre_agents_same_provider',
+    'et_auto_memory_enabled',
+    'et_auto_cold_start_enabled',
+    'et_injection_budget',
+    'et_extra_body_json',
+    'et_pipeline_json',
+    'et_prompt_presets_json',
+    'et_translation_prompt_modes_json',
+    'et_goe_prompt_modes_json',
+    'et_image_api_profiles_json',
+    'et_image_api_presets_json',
+    'et_image_character_tags_json',
+    'et_model_presets_json',
+    'et_provider_keys_json',
+  ]);
+
+  async function readConfigArgumentValues() {
+    const entries = await Promise.all(CONFIG_ARGUMENT_NAMES.map(async name => [name, await getArg(name, '')]));
+    return Object.fromEntries(entries);
+  }
+
   async function getConfig() {
-    const migration = migrateStoredConfig(await Storage.get(STORAGE.config, {}));
+    const [storedConfig, argumentValues] = await Promise.all([
+      Storage.get(STORAGE.config, {}),
+      readConfigArgumentValues(),
+    ]);
+    const migration = migrateStoredConfig(storedConfig);
     const stored = migration.config;
     if (migration.changed) await Storage.set(STORAGE.config, stored);
-    const timeoutSecondsArg = cleanOverrideArg(await getArg('et_timeout_s', ''), '', { zeroIsUnset: true });
-    const legacyTimeoutMsArg = cleanOverrideArg(await getArg('et_timeout_ms', ''), '', { zeroIsUnset: true });
-    const injectionBudgetArg = cleanString(await getArg('et_injection_budget', ''), '');
+    const argument = name => argumentValues[name] ?? '';
+    const timeoutSecondsArg = cleanOverrideArg(argument('et_timeout_s'), '', { zeroIsUnset: true });
+    const legacyTimeoutMsArg = cleanOverrideArg(argument('et_timeout_ms'), '', { zeroIsUnset: true });
+    const injectionBudgetArg = cleanString(argument('et_injection_budget'), '');
     const args = {
-      enabled: parseBool(await getArg('et_enabled', ''), undefined),
-      mode: cleanString(await getArg('et_mode', ''), ''),
-      promptModeDetectionEnabled: parseBool(await getArg('et_prompt_mode_detection_enabled', ''), undefined),
-      promptLengthDetectionEnabled: parseBool(await getArg('et_prompt_length_detection_enabled', ''), undefined),
-      erosAgentsEnabled: parseBool(await getArg('et_eros_agents_enabled', ''), undefined),
-      psycheAgentsEnabled: parseBool(await getArg('et_psyche_agents_enabled', ''), undefined),
-      dataContextInjectionEnabled: parseBool(await getArg('et_data_context_injection_enabled', ''), undefined),
-      provider: cleanString(await getArg('et_provider', ''), ''),
-      baseUrl: cleanString(await getArg('et_base_url', ''), ''),
-      apiKey: cleanString(await getArg('et_api_key', ''), ''),
-      model: cleanString(await getArg('et_model', ''), ''),
-      temperature: cleanString(await getArg('et_temperature', ''), ''),
-      maxTokens: cleanOverrideArg(await getArg('et_max_tokens', ''), '', { zeroIsUnset: true }),
-      contextWindow: cleanOverrideArg(await getArg('et_context_window', ''), '', { zeroIsUnset: true }),
+      enabled: parseBool(argument('et_enabled'), undefined),
+      mode: cleanString(argument('et_mode'), ''),
+      promptModeDetectionEnabled: parseBool(argument('et_prompt_mode_detection_enabled'), undefined),
+      promptLengthDetectionEnabled: parseBool(argument('et_prompt_length_detection_enabled'), undefined),
+      erosAgentsEnabled: parseBool(argument('et_eros_agents_enabled'), undefined),
+      psycheAgentsEnabled: parseBool(argument('et_psyche_agents_enabled'), undefined),
+      dataContextInjectionEnabled: parseBool(argument('et_data_context_injection_enabled'), undefined),
+      provider: cleanString(argument('et_provider'), ''),
+      baseUrl: cleanString(argument('et_base_url'), ''),
+      apiKey: cleanString(argument('et_api_key'), ''),
+      model: cleanString(argument('et_model'), ''),
+      temperature: cleanString(argument('et_temperature'), ''),
+      maxTokens: cleanOverrideArg(argument('et_max_tokens'), '', { zeroIsUnset: true }),
+      contextWindow: cleanOverrideArg(argument('et_context_window'), '', { zeroIsUnset: true }),
       timeoutMs: timeoutSecondsArg ? timeoutSecondsToMs(timeoutSecondsArg) : legacyTimeoutMsArg,
-      debugLog: parseBool(await getArg('et_debug_log', ''), undefined),
-      runLogEnabled: parseBool(await getArg('et_run_log_enabled', ''), undefined),
-      bypassAuxRequests: parseBool(await getArg('et_bypass_aux_requests', ''), undefined),
-      stateApiEnabled: parseBool(await getArg('et_state_api_enabled', ''), undefined),
-      qualityRegexEnabled: parseBool(await getArg('et_quality_regex_enabled', ''), undefined),
-      embeddingEnabled: parseBool(await getArg('et_embedding_enabled', ''), undefined),
-      embeddingProviderId: cleanString(await getArg('et_embedding_provider_id', ''), ''),
-      embeddingBaseUrl: cleanString(await getArg('et_embedding_base_url', ''), ''),
-      embeddingApiKey: cleanString(await getArg('et_embedding_api_key', ''), ''),
-      embeddingModel: cleanString(await getArg('et_embedding_model', ''), ''),
-      parallelPreAgentsSameProvider: parseBool(await getArg('et_parallel_pre_agents_same_provider', ''), undefined),
-      autoMemoryEnabled: parseBool(await getArg('et_auto_memory_enabled', ''), undefined),
-      autoColdStartEnabled: parseBool(await getArg('et_auto_cold_start_enabled', ''), undefined),
+      debugLog: parseBool(argument('et_debug_log'), undefined),
+      runLogEnabled: parseBool(argument('et_run_log_enabled'), undefined),
+      bypassAuxRequests: parseBool(argument('et_bypass_aux_requests'), undefined),
+      stateApiEnabled: parseBool(argument('et_state_api_enabled'), undefined),
+      qualityRegexEnabled: parseBool(argument('et_quality_regex_enabled'), undefined),
+      embeddingEnabled: parseBool(argument('et_embedding_enabled'), undefined),
+      embeddingProviderId: cleanString(argument('et_embedding_provider_id'), ''),
+      embeddingBaseUrl: cleanString(argument('et_embedding_base_url'), ''),
+      embeddingApiKey: cleanString(argument('et_embedding_api_key'), ''),
+      embeddingModel: cleanString(argument('et_embedding_model'), ''),
+      parallelPreAgentsSameProvider: parseBool(argument('et_parallel_pre_agents_same_provider'), undefined),
+      autoMemoryEnabled: parseBool(argument('et_auto_memory_enabled'), undefined),
+      autoColdStartEnabled: parseBool(argument('et_auto_cold_start_enabled'), undefined),
       injectionBudget: injectionBudgetArg,
-      extraBodyJson: cleanString(await getArg('et_extra_body_json', ''), ''),
-      pipelineJson: cleanString(await getArg('et_pipeline_json', ''), ''),
-      promptPresetsJson: cleanString(await getArg('et_prompt_presets_json', ''), ''),
-      translationPromptModesJson: cleanString(await getArg('et_translation_prompt_modes_json', ''), ''),
-      goePromptModesJson: cleanString(await getArg('et_goe_prompt_modes_json', ''), ''),
-      imageApiProfilesJson: cleanString(await getArg('et_image_api_profiles_json', ''), ''),
-      imageApiPresetsJson: cleanString(await getArg('et_image_api_presets_json', ''), ''),
-      imageCharacterTagsJson: cleanString(await getArg('et_image_character_tags_json', ''), ''),
-      modelPresetsJson: cleanString(await getArg('et_model_presets_json', ''), ''),
-      providerKeysJson: cleanString(await getArg('et_provider_keys_json', ''), ''),
+      extraBodyJson: cleanString(argument('et_extra_body_json'), ''),
+      pipelineJson: cleanString(argument('et_pipeline_json'), ''),
+      promptPresetsJson: cleanString(argument('et_prompt_presets_json'), ''),
+      translationPromptModesJson: cleanString(argument('et_translation_prompt_modes_json'), ''),
+      goePromptModesJson: cleanString(argument('et_goe_prompt_modes_json'), ''),
+      imageApiProfilesJson: cleanString(argument('et_image_api_profiles_json'), ''),
+      imageApiPresetsJson: cleanString(argument('et_image_api_presets_json'), ''),
+      imageCharacterTagsJson: cleanString(argument('et_image_character_tags_json'), ''),
+      modelPresetsJson: cleanString(argument('et_model_presets_json'), ''),
+      providerKeysJson: cleanString(argument('et_provider_keys_json'), ''),
     };
 
     const merged = { ...DEFAULT_CONFIG, ...(stored || {}) };
@@ -42591,6 +42652,24 @@ function normalizeAdaptiveQualityState(value) {
     return clone;
   }
 
+  function buildAllAgentSettingsConfig(latest, agents, parallelValue) {
+    const source = latest && typeof latest === 'object' ? latest : {};
+    const pipeline = source.pipeline || defaultPipeline();
+    const pipelineJson = JSON.stringify({
+      version: VERSION,
+      agents: Array.isArray(agents) ? agents : (pipeline.agents || []),
+    }, null, 2);
+    const next = {
+      ...source,
+      parallelPreAgentsSameProvider: parallelValue === undefined
+        ? source.parallelPreAgentsSameProvider === true
+        : parallelValue === 'true',
+      pipelineJson,
+    };
+    next.pipeline = normalizePipeline(parsePipeline(pipelineJson), next);
+    return next;
+  }
+
   function isSettingsConfigLike(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
     return [
@@ -42957,13 +43036,7 @@ function normalizeAdaptiveQualityState(value) {
         const pipeline = latest.pipeline || defaultPipeline();
         const agents = (pipeline.agents || []).map(agent => readAgentConfigFromUI(latest, agent.id));
         const parallelValue = $('et-parallel-pre-agents-same-provider')?.value;
-        const next = {
-          ...latest,
-          parallelPreAgentsSameProvider: parallelValue === undefined
-            ? latest.parallelPreAgentsSameProvider === true
-            : parallelValue === 'true',
-          pipeline: { ...pipeline, agents },
-        };
+        const next = buildAllAgentSettingsConfig(latest, agents, parallelValue);
         await Storage.set(STORAGE.config, configForStorage(next));
         await syncInChatToolsUi(next).catch(err => {
           Runtime.lastError = `in-chat tool UI sync: ${err?.message || err}`;
@@ -55280,6 +55353,60 @@ function normalizeAdaptiveQualityState(value) {
               && explicitAgents.find(agent => agent.id === COMMUNICATION_AGENT_ID)?.enabled === true,
           };
         },
+        testAllAgentSettingsPersistenceContract: () => {
+          const pipeline = defaultPipeline();
+          const changedAgents = pipeline.agents.map(agent => {
+            if (agent.id === 'world') return { ...agent, model: 'saved-world-model', maxTokens: 5432 };
+            if (agent.id === GAMEPLAY_ADVISOR_AGENT_ID) return { ...agent, enabled: true, model: 'saved-gameplay-model' };
+            if (agent.id === COMMUNICATION_AGENT_ID) return { ...agent, enabled: false, model: 'saved-communication-model' };
+            return agent;
+          });
+          const latest = {
+            ...DEFAULT_CONFIG,
+            parallelPreAgentsSameProvider: false,
+            pipeline,
+            pipelineJson: JSON.stringify({ version: VERSION, agents: pipeline.agents }, null, 2),
+          };
+          const next = buildAllAgentSettingsConfig(latest, changedAgents, 'true');
+          const stored = configForStorage(next);
+          const reloaded = { ...DEFAULT_CONFIG, ...stored };
+          reloaded.pipeline = normalizePipeline(parsePipeline(reloaded.pipelineJson), reloaded);
+          const reloadedWorld = reloaded.pipeline.agents.find(agent => agent.id === 'world');
+          const reloadedGameplay = reloaded.pipeline.agents.find(agent => agent.id === GAMEPLAY_ADVISOR_AGENT_ID);
+          const reloadedCommunication = reloaded.pipeline.agents.find(agent => agent.id === COMMUNICATION_AGENT_ID);
+          return {
+            globalSaveSerializesPipelineJson: next.pipelineJson !== latest.pipelineJson
+              && JSON.parse(next.pipelineJson).version === VERSION,
+            storageKeepsSerializedPipelineAuthority: stored.pipelineJson === next.pipelineJson,
+            storageDropsOnlyRuntimePipelineProjection: !Object.prototype.hasOwnProperty.call(stored, 'pipeline'),
+            reloadPreservesEditedWorldSettings: reloadedWorld?.model === 'saved-world-model'
+              && reloadedWorld?.maxTokens === 5432,
+            reloadPreservesResidentOnOffAndModels: reloadedGameplay?.enabled === true
+              && reloadedGameplay?.model === 'saved-gameplay-model'
+              && reloadedCommunication?.enabled === false
+              && reloadedCommunication?.model === 'saved-communication-model',
+            globalExecutionOptionPersists: stored.parallelPreAgentsSameProvider === true,
+            globalSaveHandlerUsesSerializedAuthority: String(setupDashboardHandlers).includes('buildAllAgentSettingsConfig(latest, agents, parallelValue)'),
+          };
+        },
+        testNonBlockingStartupConfigurationContract: () => {
+          const registrationSource = String(registerUi);
+          const schedulerSource = String(scheduleStartupInChatToolsUiSync);
+          const argumentReaderSource = String(readConfigArgumentValues);
+          const configSource = String(getConfig);
+          const offGuard = schedulerSource.indexOf('!isGameplayAgentEnabled(conf) && !isCommunicationAgentEnabled(conf)');
+          const launcherSync = schedulerSource.indexOf('await syncInChatToolsUi(conf)');
+          return {
+            uiRegistrationDoesNotAwaitFullConfig: !registrationSource.includes('getConfig')
+              && !registrationSource.includes('syncInChatToolsUi'),
+            optionalLauncherSyncIsDeferred: schedulerSource.includes("setTimeout(() => { run().catch(() => {}); }, 0)"),
+            bothResidentsOffSkipLauncherInitialization: offGuard >= 0 && launcherSync > offGuard,
+            argumentBridgeReadsAreBatched: argumentReaderSource.includes('Promise.all')
+              && argumentReaderSource.includes('CONFIG_ARGUMENT_NAMES.map'),
+            storageAndArgumentsHydrateTogether: configSource.includes('const [storedConfig, argumentValues] = await Promise.all'),
+            eagerSavedAssistantRecoveryRemainsOff: STARTUP_SAVED_ASSISTANT_RECOVERY_ENABLED === false,
+          };
+        },
         testProviderPromptCacheContracts: () => {
           const longSystem = `STATIC_CACHE_PREFIX\n${'Stable instructions and reference context. '.repeat(900)}`;
           const sourceMessages = [
@@ -65124,6 +65251,31 @@ function normalizeAdaptiveQualityState(value) {
     }
   }
 
+  function scheduleStartupInChatToolsUiSync() {
+    if (Runtime.startupInChatToolsUiSyncCancelled || Runtime.startupInChatToolsUiSyncScheduled) return false;
+    Runtime.startupInChatToolsUiSyncScheduled = true;
+    const run = async () => {
+      Runtime.startupInChatToolsUiSyncTimer = null;
+      try {
+        if (Runtime.startupInChatToolsUiSyncCancelled) return;
+        const conf = await getConfig();
+        if (Runtime.startupInChatToolsUiSyncCancelled) return;
+        if (!isGameplayAgentEnabled(conf) && !isCommunicationAgentEnabled(conf)) return;
+        await syncInChatToolsUi(conf);
+      } catch (err) {
+        Runtime.lastError = `in-chat tool UI startup: ${err?.message || err}`;
+      } finally {
+        Runtime.startupInChatToolsUiSyncScheduled = false;
+      }
+    };
+    if (typeof setTimeout === 'function') {
+      Runtime.startupInChatToolsUiSyncTimer = setTimeout(() => { run().catch(() => {}); }, 0);
+    } else {
+      Promise.resolve().then(run).catch(() => {});
+    }
+    return true;
+  }
+
   async function registerUi() {
     await unregisterStoredUiParts();
     const nextRegistrations = [];
@@ -65148,15 +65300,17 @@ function normalizeAdaptiveQualityState(value) {
       nextRegistrations.push({ slot: 'hamburger', id: registeredUiId(hamburgerRegistration, UI_ID_HAMBURGER), location: 'hamburger' });
     }
     await rememberUiRegistrations(nextRegistrations);
-    const conf = await getConfig();
-    await syncInChatToolsUi(conf).catch(err => {
-      Runtime.lastError = `in-chat tool UI startup: ${err?.message || err}`;
-    });
   }
 
   await registerUi();
   if (typeof api.onUnload === 'function') {
     await api.onUnload(async () => {
+      Runtime.startupInChatToolsUiSyncCancelled = true;
+      if (Runtime.startupInChatToolsUiSyncTimer && typeof clearTimeout === 'function') {
+        clearTimeout(Runtime.startupInChatToolsUiSyncTimer);
+      }
+      Runtime.startupInChatToolsUiSyncTimer = null;
+      Runtime.startupInChatToolsUiSyncScheduled = false;
       const noneSession = claimInChatPanelOwner('none');
       await unmountGameplayComposerPanel({ reconcileLauncher: false }).catch(() => {});
       await unmountCommunicationPanel({ reconcileLauncher: false }).catch(() => {});
@@ -65207,6 +65361,7 @@ function normalizeAdaptiveQualityState(value) {
       Runtime.activeRequestPhases = Math.max(0, Number(Runtime.activeRequestPhases || 0) - 1);
     }
   });
+  scheduleStartupInChatToolsUiSync();
   scheduleStartupSavedAssistantRecovery();
 
   console.log(`${PLUGIN_SHORT_LABEL} v${VERSION} loaded.`);
