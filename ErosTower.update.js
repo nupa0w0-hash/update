@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.3.6
+//@display-name ☸Eros Tower 1.3.9
 //@api 3.0
-//@version 4.0.43
+//@version 4.0.46
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -43,20 +43,20 @@
 //@arg et_image_character_tags_json string User-authored per-character illustration tag registry JSON
 
 /**
- * Eros Tower 1.3.6
+ * Eros Tower 1.3.9
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.3.6 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.3.9 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.3.6';
+  const VERSION = '1.3.9';
   const PREFIX = 'eros_tower_v02:';
   const LEGACY_STORAGE_PREFIXES = Object.freeze(['eros_tower_v01:', 'eros_tower_game_agent_test_v01:']);
   const MASKED_SECRET = '*****';
   const PROVIDER_CREDENTIAL_MAX_ENTRIES = 32;
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.3.6`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.3.9`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -91,6 +91,9 @@
   const STATE_BLOB_OBJECT_CHUNK_SIZE = 8;
   const STATE_BLOB_MIN_CHARS = 1200;
   const STATE_BLOB_READ_CONCURRENCY = 2;
+  const CANONICAL_BLOB_CHUNK_MIN_UNITS = 4;
+  const CANONICAL_BLOB_CHUNK_MAX_UNITS = 12;
+  const CANONICAL_BLOB_CHUNK_ANCHOR_MODULUS = 8;
   const COMMUNICATION_PAGE_MESSAGE_MAX = 100;
   const CONFIG_SCHEMA_VERSION = 12;
   const IMAGE_API_CONNECTION_FORMAT_SCHEMA_VERSION = 4;
@@ -153,6 +156,21 @@
     { index: 7, label: '초장편', englishLabel: 'very long-form', instruction: 'Write at least 9000 words.', scale: 'Very long-form: prepare dense continuity, layered character movement, multiple world threads, and long-range setup while preserving knowledge boundaries.' },
   ]);
   const SYSTEM_PATCH_NOTES = Object.freeze([
+    {
+      version: '1.3.9',
+      kind: 'canonical-blob-generation-stability',
+      summary: 'Keeps unchanged canonical units byte-stable, uses content-defined chunk boundaries, serializes canonical reference swaps with garbage collection, and reclaims orphaned blob generations once per loaded scope.',
+    },
+    {
+      version: '1.3.8',
+      kind: 'psyche-display-language-repair',
+      summary: 'Separates compact selected-field display-language repair from full actor bootstrap, localizes known lifecycle statuses deterministically, and preserves the existing sheet while applying partial Psyche corrections.',
+    },
+    {
+      version: '1.3.7',
+      kind: 'psyche-state-json-recovery',
+      summary: 'Recovers a complete state commit after malformed, wrapped, prefaced, reasoning-only, or output-truncated Psyche responses through safer JSON candidate scanning and one compact low-reasoning retry without synthesizing local character data.',
+    },
     {
       version: '1.3.6',
       kind: 'stable-long-memory-state-blobs',
@@ -1306,6 +1324,8 @@
     providerCredentialCooldownUntil: new Map(),
     backgroundRunLogSaves: new Set(),
     usageLedgerQueue: null,
+    canonicalStorageQueue: null,
+    canonicalGcScopes: new Set(),
     backgroundCanonicalAnnotation: {},
     canonicalAnnotationProgress: null,
     lastCanonicalAnnotationProgress: null,
@@ -1576,6 +1596,7 @@
     if (Number(Runtime.activeSettingsMutations || 0) > 0) return '설정 저장';
     if (Number(Runtime.activeRequestPhases || 0) > 0) return '에로스 타워 요청 처리';
     if (Runtime.usageLedgerQueue && typeof Runtime.usageLedgerQueue.then === 'function') return '사용량 저장';
+    if (Runtime.canonicalStorageQueue && typeof Runtime.canonicalStorageQueue.then === 'function') return '로어 캐시 저장';
     if (Storage.queues instanceof Map && Storage.queues.size > 0) return '저장 작업';
     if (Runtime.backgroundRunLogSaves instanceof Set && Runtime.backgroundRunLogSaves.size > 0) return 'Run Log 저장';
     if (activeRuntimePromise(Runtime.backgroundStateCommit)) return '관리상태 커밋';
@@ -1660,6 +1681,8 @@
     Runtime.providerCredentialCooldownUntil = new Map();
     Runtime.backgroundRunLogSaves = new Set();
     Runtime.usageLedgerQueue = null;
+    Runtime.canonicalStorageQueue = null;
+    Runtime.canonicalGcScopes = new Set();
     Runtime.backgroundStateCommit = {};
     Runtime.backgroundCanonicalAnnotation = {};
     Runtime.stateCommitProgress = null;
@@ -3992,6 +4015,26 @@
     'Commit the selected actor sheet from the grounded Selected Source/State/Memory supplied above. Include the required profile facts and world-appropriate gauges, plus every grounded actor-owned ability, trait, and item. Do not require a current user action or final assistant output, and do not create a story event.',
   ].join('\n');
 
+  const GAMEPLAY_ACTOR_LANGUAGE_REPAIR_PROMPT = [
+    '[Gameplay Actor Display-Language Repair]',
+    'This is a localization-only patch for one already prepared gameplay actor. The compact user payload is the complete authority.',
+    'Return exactly one complete JSON object and nothing else. Do not emit analysis, markdown, comments, schema examples, or text outside the object.',
+    'Return one characters entry with the exact selectedActor.characterId as id and the exact selectedActor.name as name. Include only fields named by issues; never reproduce the whole character sheet.',
+    'Translate player-facing text into outputLanguage without changing facts. Keep machine ids, canonical names, canonical descriptions, stat keys, kinds, numeric values, quantities, costs, requirements, and effects unchanged unless that exact player-facing subfield is listed in issues.',
+    'For status, return only id, name, and status. For a stat issue, return stats with only that exact stat key and listed label or depletionEffect.',
+    'For an ability or inventory issue, repeat only the affected entry with its exact id and canonical name plus only the listed displayName, displayDescription, categoryLabel, or requirements.note. Existing unreturned fields and entries are preserved by the merge layer.',
+    'If any condition issue is listed, return the complete conditions array from the payload in the same order, preserving every canonical field and correcting only its player-facing displayName or displayDescription.',
+    'Do not add a summary, gameplay.genreProfile, scene, relationship, memory, event, plot, choice, or story consequence.',
+  ].join('\n');
+
+  const GAMEPLAY_ACTOR_LANGUAGE_REPAIR_USER_TEMPLATE = [
+    '<payload label="Gameplay Actor Display-Language Repair">',
+    '{{state_commit_context}}',
+    '</payload>',
+    '[Localization Request]',
+    'Repair exactly the listed issues and return the compact state-delta JSON now.',
+  ].join('\n');
+
   const COMMUNICATION_AGENT_PROMPT = [
     'You are the Eros Tower one-to-one communication resident named 저기요 이봐요 모시모씨.',
     'Return exactly one valid JSON object and nothing else. Keep replies fast and short.',
@@ -5160,6 +5203,45 @@
     return hasLatin && !hasHangul && !hasKana && !hasHan;
   }
 
+  const GAMEPLAY_SYSTEM_STATUS_TRANSLATIONS = Object.freeze({
+    active: Object.freeze({ ko: '활성', en: 'active', ja: '活動中', zh: '活跃' }),
+    background: Object.freeze({ ko: '배경', en: 'background', ja: '背景', zh: '背景' }),
+    normal: Object.freeze({ ko: '정상', en: 'normal', ja: '正常', zh: '正常' }),
+    none: Object.freeze({ ko: '없음', en: 'none', ja: 'なし', zh: '无' }),
+    unknown: Object.freeze({ ko: '미상', en: 'unknown', ja: '不明', zh: '未知' }),
+    ready: Object.freeze({ ko: '준비', en: 'ready', ja: '準備完了', zh: '就绪' }),
+    alert: Object.freeze({ ko: '경계', en: 'alert', ja: '警戒中', zh: '警戒' }),
+    unconscious: Object.freeze({ ko: '의식불명', en: 'unconscious', ja: '意識不明', zh: '昏迷' }),
+    incapacitated: Object.freeze({ ko: '행동불능', en: 'incapacitated', ja: '行動不能', zh: '无法行动' }),
+    defeated: Object.freeze({ ko: '패배', en: 'defeated', ja: '敗北', zh: '战败' }),
+    dead: Object.freeze({ ko: '사망', en: 'dead', ja: '死亡', zh: '死亡' }),
+  });
+
+  function localizedGameplaySystemStatus(value, language) {
+    const status = cleanString(value, '');
+    if (!status) return '';
+    const lookup = status.toLocaleLowerCase();
+    const semantic = Object.entries(GAMEPLAY_SYSTEM_STATUS_TRANSLATIONS).find(([key, translations]) => (
+      key === lookup || Object.values(translations).some(candidate => String(candidate || '').toLocaleLowerCase() === lookup)
+    ));
+    return semantic ? semantic[1][normalizeGameplayOutputLanguage(language)] : status;
+  }
+
+  function localizeGameplayActorSystemStatus(state, context, actorId, language) {
+    const actor = resolveGameplayActor(state, context, actorId);
+    if (!actor?.character) return false;
+    const entry = Object.entries(state?.characters || {}).find(([, character]) => (
+      cleanString(character?.gameplayActorId, '') === cleanString(actor.id, '')
+      || cleanString(character?.id, '') === cleanString(actor.character?.id, '')
+    ));
+    if (!entry) return false;
+    const [key, character] = entry;
+    const localized = localizedGameplaySystemStatus(character?.status, language);
+    if (!localized || localized === character?.status) return false;
+    state.characters[key] = normalizeCharacterState({ ...character, status: localized });
+    return true;
+  }
+
   function gameplayAdvisorOutputLanguageIssues(parsed, language, properNames = []) {
     const issues = [];
     const check = (path, value, kind = 'sentence') => {
@@ -5858,29 +5940,82 @@
       && Array.isArray(value.refs));
   }
 
-  async function saveCanonicalCache(scope, store) {
-    const normalized = normalizeCanonicalStore(store, null);
-    const refs = [];
-    for (let index = 0; index < normalized.units.length; index += 8) {
-      const units = normalized.units.slice(index, index + 8);
-      const body = { version: STATE_REFERENCE_VERSION, kind: 'canonical-units', units };
-      const json = stableStorageJson(body);
-      const hash = storageContentHash(json);
-      const key = STORAGE.canonicalBlob(hash);
-      const existing = await Storage.get(key, null);
-      if (!existing || stableStorageJson(existing) !== json) await Storage.set(key, body);
-      refs.push({ key, hash, checksum: hashString(json), count: units.length, rawLength: json.length });
+  function canonicalBlobChunkAnchor(unit) {
+    const identity = firstNonEmpty(unit?.id, unit?.baseId, unit?.sourceId, unit?.contentHash, unit?.content);
+    return parseInt(hashString(identity), 36) || 0;
+  }
+
+  function chunkCanonicalUnitsForStorage(units) {
+    const chunks = [];
+    let current = [];
+    for (const unit of Array.isArray(units) ? units : []) {
+      current.push(unit);
+      const anchored = current.length >= CANONICAL_BLOB_CHUNK_MIN_UNITS
+        && canonicalBlobChunkAnchor(unit) % CANONICAL_BLOB_CHUNK_ANCHOR_MODULUS === 0;
+      if (anchored || current.length >= CANONICAL_BLOB_CHUNK_MAX_UNITS) {
+        chunks.push(current);
+        current = [];
+      }
     }
-    const reference = {
-      __erosTowerCanonicalReference: STATE_REFERENCE_VERSION,
-      storageSchemaVersion: STORAGE_SCHEMA_VERSION,
-      updatedAt: normalized.updatedAt || nowIso(),
-      count: normalized.units.length,
-      checksum: hashString(stableStorageJson(normalized.units)),
-      refs,
-    };
-    await Storage.set(STORAGE.canonicalCache(scope), reference);
-    return reference;
+    if (current.length) chunks.push(current);
+    return chunks;
+  }
+
+  function enqueueCanonicalStorageWork(worker) {
+    const previous = Runtime.canonicalStorageQueue && typeof Runtime.canonicalStorageQueue.then === 'function'
+      ? Runtime.canonicalStorageQueue
+      : Promise.resolve();
+    const current = previous.catch(() => {}).then(worker);
+    Runtime.canonicalStorageQueue = current;
+    return current.finally(() => {
+      if (Runtime.canonicalStorageQueue === current) Runtime.canonicalStorageQueue = null;
+    });
+  }
+
+  async function saveCanonicalCache(scope, store) {
+    return await enqueueCanonicalStorageWork(async () => {
+      const normalized = normalizeCanonicalStore(store, null);
+      const refs = [];
+      const chunks = chunkCanonicalUnitsForStorage(normalized.units);
+      for (const units of chunks) {
+        const body = { version: STATE_REFERENCE_VERSION, kind: 'canonical-units', units };
+        const json = stableStorageJson(body);
+        const hash = storageContentHash(json);
+        const key = STORAGE.canonicalBlob(hash);
+        const existing = await Storage.get(key, null);
+        if (!existing || stableStorageJson(existing) !== json) await Storage.set(key, body);
+        refs.push({ key, hash, checksum: hashString(json), count: units.length, rawLength: json.length });
+      }
+      const reference = {
+        __erosTowerCanonicalReference: STATE_REFERENCE_VERSION,
+        storageSchemaVersion: STORAGE_SCHEMA_VERSION,
+        updatedAt: normalized.updatedAt || nowIso(),
+        count: normalized.units.length,
+        checksum: hashString(stableStorageJson(normalized.units)),
+        refs,
+      };
+      await Storage.set(STORAGE.canonicalCache(scope), reference);
+      const garbage = await collectCanonicalBlobGarbageUnlocked();
+      if (garbage.skipped) log('canonical blob post-save garbage collection skipped', garbage.reason || 'unknown');
+      else {
+        if (!(Runtime.canonicalGcScopes instanceof Set)) Runtime.canonicalGcScopes = new Set();
+        Runtime.canonicalGcScopes.add(scope);
+      }
+      return reference;
+    });
+  }
+
+  async function removeCanonicalCache(scope) {
+    return await enqueueCanonicalStorageWork(async () => {
+      await Storage.remove(STORAGE.canonicalCache(scope));
+      const garbage = await collectCanonicalBlobGarbageUnlocked();
+      if (garbage.skipped) log('canonical blob post-remove garbage collection skipped', garbage.reason || 'unknown');
+      else {
+        if (!(Runtime.canonicalGcScopes instanceof Set)) Runtime.canonicalGcScopes = new Set();
+        Runtime.canonicalGcScopes.add(scope);
+      }
+      return garbage;
+    });
   }
 
   async function loadCanonicalCache(scope) {
@@ -5924,6 +6059,22 @@
       next._canonicalCacheDirty = true;
     } else {
       next._canonicalCacheDirty = false;
+    }
+    if (scope) {
+      if (!(Runtime.canonicalGcScopes instanceof Set)) Runtime.canonicalGcScopes = new Set();
+      if (!Runtime.canonicalGcScopes.has(scope)) {
+        Runtime.canonicalGcScopes.add(scope);
+        try {
+          const garbage = await collectCanonicalBlobGarbage();
+          if (garbage.skipped) {
+            Runtime.canonicalGcScopes.delete(scope);
+            log('canonical blob startup garbage collection deferred', garbage.reason || 'unknown');
+          }
+        } catch (err) {
+          Runtime.canonicalGcScopes.delete(scope);
+          log('canonical blob startup garbage collection failed', err?.message || err);
+        }
+      }
     }
     return next;
   }
@@ -6273,7 +6424,7 @@
     return { removed, retained: retained.size };
   }
 
-  async function collectCanonicalBlobGarbage() {
+  async function collectCanonicalBlobGarbageUnlocked() {
     const retained = new Set();
     const keys = (await listPluginStorageKeys()).filter(isErosTowerStorageKey);
     try {
@@ -6296,6 +6447,10 @@
       removed += 1;
     }
     return { removed, retained: retained.size };
+  }
+
+  async function collectCanonicalBlobGarbage() {
+    return await enqueueCanonicalStorageWork(collectCanonicalBlobGarbageUnlocked);
   }
 
   async function removeScopeStorage(scope) {
@@ -11695,6 +11850,76 @@
     return '';
   }
 
+  function buildGameplayActorLanguageRepairPayload(state, context, issues, language) {
+    const actor = resolveGameplayActor(state, context, context?._gameplayActorFocus?.actorId);
+    const character = actor?.character || {};
+    const normalizedIssues = uniqueStrings(normalizeStringArray(issues)).slice(0, 16);
+    const targets = [];
+    if (normalizedIssues.includes('status')) {
+      targets.push({ path: 'status', current: cleanString(character.status, '') });
+    }
+    const conditionIssue = normalizedIssues.some(path => /^conditions\[\d+\]/.test(path));
+    if (conditionIssue) {
+      const values = Array.isArray(character.conditions)
+        ? character.conditions
+        : Object.values(character.conditions || {});
+      targets.push({
+        path: 'conditions',
+        current: values.map((condition, index) => {
+          if (typeof condition === 'string') return condition;
+          const normalized = normalizeGameplayCondition(condition, index);
+          return normalized || condition;
+        }),
+      });
+    }
+    gameplayStatEntries(character).forEach(entry => {
+      ['label', 'depletionEffect'].forEach(field => {
+        const path = `stats.${entry.key}.${field}`;
+        if (!normalizedIssues.includes(path)) return;
+        targets.push({
+          path,
+          statKey: entry.key,
+          current: cleanString(entry?.value?.[field], ''),
+        });
+      });
+    });
+    const addEntryTargets = (kind, values, normalizer) => {
+      const entries = (Array.isArray(values) ? values : Object.values(values || {})).map(normalizer).filter(Boolean);
+      normalizedIssues.forEach(path => {
+        const match = path.match(new RegExp(`^${kind}\\[(\\d+)\\]\\.(displayName|displayDescription|categoryLabel|requirements\\.note)$`));
+        if (!match) return;
+        const index = Number(match[1]);
+        const entry = entries[index];
+        if (!entry) return;
+        targets.push({
+          path,
+          entry: {
+            id: entry.id,
+            name: entry.name,
+            description: cleanString(entry.description, '').slice(0, 1200),
+            displayName: cleanString(entry.displayName, ''),
+            displayDescription: cleanString(entry.displayDescription, '').slice(0, 1200),
+            categoryLabel: cleanString(entry.categoryLabel, ''),
+            requirements: entry.requirements?.note ? { note: cleanString(entry.requirements.note, '').slice(0, 600) } : {},
+          },
+        });
+      });
+    };
+    addEntryTargets('abilities', character.abilities, normalizeGameplayAbility);
+    addEntryTargets('inventory', character.inventory, normalizeGameplayInventoryItem);
+    return {
+      selectedActor: {
+        actorId: cleanString(actor?.id, ''),
+        characterId: cleanString(character.id, ''),
+        name: firstNonEmpty(character.name, actor?.name),
+      },
+      outputLanguage: normalizeGameplayOutputLanguage(language),
+      outputLanguageName: gameplayOutputLanguageName(language),
+      issues: normalizedIssues,
+      targets,
+    };
+  }
+
   function gameplayBootstrapDisplayLanguageIssues(actor, language) {
     const character = actor?.character || actor;
     if (!character || typeof character !== 'object') return ['character'];
@@ -11717,7 +11942,7 @@
         ? Object.values(character.conditions)
         : [];
     conditionSource.forEach((condition, index) => {
-      check(`conditions[${index}]`, typeof condition === 'string' ? condition : firstNonEmpty(condition?.name, condition?.status, condition?.id), 'sentence');
+      check(`conditions[${index}]`, typeof condition === 'string' ? condition : firstNonEmpty(condition?.displayName, condition?.name, condition?.status, condition?.id), 'sentence');
     });
     gameplayStatEntries(character).forEach(entry => {
       check(`stats.${entry.key}.label`, entry?.value?.label, 'label');
@@ -11864,7 +12089,7 @@
     return {
       ...agentConf,
       temperature: Math.min(0.1, Number(agentConf?.temperature || 0.1)),
-      maxTokens: Math.min(4096, Math.max(2048, configuredMaxTokens)),
+      maxTokens: Math.min(8192, Math.max(2048, configuredMaxTokens)),
       enforceOutputTokenLimit: true,
       reasoningLevel,
     };
@@ -12535,18 +12760,15 @@
       // visible to the user instead of accepting two synthetic bars alone.
       const preFallbackAssessment = gameplayActorCommittedSheetAssessment(preparedActor, sheetExpectations);
       ensureGameplayActorBaselineGauges(latest, focusedContext, preparedActor, outputLanguage);
+      localizeGameplayActorSystemStatus(latest, focusedContext, latestActor.id, outputLanguage);
       preparedActor = resolveGameplayActor(latest, focusedContext, latestActor.id) || preparedActor;
       let sheetAssessment = gameplayActorCommittedSheetAssessment(preparedActor, sheetExpectations);
       let displayLanguageIssues = gameplayBootstrapDisplayLanguageIssues(preparedActor, outputLanguage);
       let sheetRepairError = initialCommitError;
+      let languageRepairError = '';
       if (initialCommitError && !preFallbackAssessment.usable) throw new Error(initialCommitError);
-      if ((!sheetAssessment.complete || displayLanguageIssues.length) && !initialCommitError) {
-        const repairReason = [
-          !sheetAssessment.complete ? gameplayActorCommittedSheetFailureMessage(preparedActor, sheetAssessment) : '',
-          displayLanguageIssues.length
-            ? `Player-facing ${gameplayOutputLanguageName(outputLanguage)} repair required for: ${displayLanguageIssues.slice(0, 16).join(', ')}. Repeat affected entries with the same id and exact canonical name, and correct only their display fields or other player-facing labels.`
-            : '',
-        ].filter(Boolean).join('\n');
+      if (!sheetAssessment.complete && !initialCommitError) {
+        const repairReason = gameplayActorCommittedSheetFailureMessage(preparedActor, sheetAssessment);
         turnEvidence = refreshTurnEvidenceAfterCanonicalAnnotations(turnEvidence, latest, focusedContext);
         try {
           commitResult = await runStateCommit(
@@ -12572,23 +12794,53 @@
         }
         preparedActor = ensureGameplayActorCharacterBinding(latest, focusedContext, latestActor);
         ensureGameplayActorBaselineGauges(latest, focusedContext, preparedActor, outputLanguage);
+        localizeGameplayActorSystemStatus(latest, focusedContext, latestActor.id, outputLanguage);
         preparedActor = resolveGameplayActor(latest, focusedContext, latestActor.id) || preparedActor;
         sheetAssessment = gameplayActorCommittedSheetAssessment(preparedActor, sheetExpectations);
         displayLanguageIssues = gameplayBootstrapDisplayLanguageIssues(preparedActor, outputLanguage);
-        if (!sheetAssessment.usable) {
-          if (sheetRepairError) throw new Error(sheetRepairError);
-          throw new Error(gameplayActorCommittedSheetFailureMessage(preparedActor, sheetAssessment));
+      }
+      if (!sheetAssessment.usable) {
+        if (sheetRepairError) throw new Error(sheetRepairError);
+        throw new Error(gameplayActorCommittedSheetFailureMessage(preparedActor, sheetAssessment));
+      }
+      if (displayLanguageIssues.length) {
+        try {
+          commitResult = await runStateCommit(
+            focused.conf,
+            focusedContext,
+            latest,
+            '',
+            {
+              mode: 'gameplay-bootstrap',
+              bootstrapLanguageRepairIssues: displayLanguageIssues,
+            },
+          );
+          if (!commitResult?.changed && commitResult?.reason !== 'empty-commit') {
+            languageRepairError = 'Psyche 인물 표시 언어 보정 실패: ' + firstNonEmpty(
+              commitResult?.failedCommitReason,
+              commitResult?.reason,
+              '문제가 있는 표시 필드를 보정하지 못했습니다.',
+            );
+          }
+        } catch (err) {
+          languageRepairError = firstNonEmpty(err?.message, String(err || ''), 'Psyche 인물 표시 언어 보정 실패');
         }
+        preparedActor = ensureGameplayActorCharacterBinding(latest, focusedContext, latestActor);
+        localizeGameplayActorSystemStatus(latest, focusedContext, latestActor.id, outputLanguage);
+        preparedActor = resolveGameplayActor(latest, focusedContext, latestActor.id) || preparedActor;
+        sheetAssessment = gameplayActorCommittedSheetAssessment(preparedActor, sheetExpectations);
+        displayLanguageIssues = gameplayBootstrapDisplayLanguageIssues(preparedActor, outputLanguage);
       }
       if (displayLanguageIssues.length) {
         throw new Error(firstNonEmpty(
+          languageRepairError,
           sheetRepairError,
-          `Psyche 인물 스테이터스의 이름·설명을 ${gameplayOutputLanguageName(outputLanguage)}로 준비하지 못했습니다: ${displayLanguageIssues.slice(0, 8).join(', ')}`,
+          `Psyche 인물 스테이터스의 이름·설명을 ${gameplayOutputLanguageOptions().find(option => option.value === outputLanguage)?.label || gameplayOutputLanguageName(outputLanguage)}로 준비하지 못했습니다: ${displayLanguageIssues.slice(0, 8).join(', ')}`,
         ));
       }
       stampGameplayActorDisplayLanguage(latest, focusedContext, preparedActor.id, outputLanguage);
       preparedActor = resolveGameplayActor(latest, focusedContext, latestActor.id) || preparedActor;
-      recordGameplayActorSheetCoverage(latest, preparedActor, sheetExpectations, sheetAssessment, sheetRepairError, outputLanguage);
+      recordGameplayActorSheetCoverage(latest, preparedActor, sheetExpectations, sheetAssessment, firstNonEmpty(languageRepairError, sheetRepairError), outputLanguage);
       preparedActor = resolveGameplayActor(latest, focusedContext, latestActor.id) || preparedActor;
       const currentHostChat = await readCapturedHostChat(context);
       if (currentHostChat) {
@@ -14264,7 +14516,7 @@ function normalizeAdaptiveQualityState(value) {
     const canonicalStore = normalizeCanonicalStore(state.canonicalStore, state);
     if (state._canonicalCacheDirty !== false) {
       if (canonicalStore.units.length) await saveCanonicalCache(scope, canonicalStore);
-      else await Storage.remove(STORAGE.canonicalCache(scope));
+      else await removeCanonicalCache(scope);
       state._canonicalCacheDirty = false;
     }
     if (state._canonicalAnnotationsDirty === true) {
@@ -19451,17 +19703,19 @@ function normalizeAdaptiveQualityState(value) {
         };
       }
       const changed = canonicalStoreUnitSignature(previous) !== canonicalStoreUnitSignature(unit);
-      const next = {
+      if (!changed) {
+        unchanged += 1;
+        return previous;
+      }
+      revised += 1;
+      return {
         ...previous,
         ...unit,
         firstSeenTurn: previous.firstSeenTurn || turn,
         lastSeenTurn: turn,
         status: 'active',
-        updatedAt: changed ? now : previous.updatedAt,
+        updatedAt: now,
       };
-      if (changed) revised += 1;
-      else unchanged += 1;
-      return next;
     });
     const nextIds = new Set(nextUnits.map(unit => unit.id));
     missing = store.units.filter(unit => !nextIds.has(unit.id)).length;
@@ -31886,9 +32140,66 @@ function normalizeAdaptiveQualityState(value) {
     return /failed to fetch|fetch failed|networkerror|network error|econnreset|econnrefused|etimedout|socket|\b408\b|\b425\b|\b500\b|\b502\b|\b503\b|\b504\b|\b524\b/.test(text);
   }
 
+  function stateCommitJsonRetryAgentConf(agentConf) {
+    const configuredMaxTokens = Math.max(128, Number(agentConf?.maxTokens || 4096));
+    return {
+      ...agentConf,
+      temperature: Math.min(0.05, Number(agentConf?.temperature || 0.05)),
+      maxTokens: Math.min(8192, Math.max(4096, configuredMaxTokens)),
+      enforceOutputTokenLimit: true,
+      reasoningLevel: gameplayAdvisorRetryReasoningLevel(agentConf),
+    };
+  }
+
+  function shouldRetryStateCommitJson(meta = null) {
+    const response = safeAgentResponseMetadata(meta);
+    return !['refusal-only', 'tool-call-only'].includes(response?.responseKind || '');
+  }
+
+  function stateCommitJsonRetryInstruction(meta = null, gameplayBootstrap = false, gameplayLanguageRepair = false) {
+    const response = safeAgentResponseMetadata(meta);
+    const failure = /^(?:length|max_tokens|max_output_tokens)$/i.test(response?.finishReason || '')
+      ? 'The previous response was cut off by the output limit before its JSON object closed.'
+      : response?.responseKind === 'reasoning-only'
+        ? 'The previous response contained reasoning but no complete public JSON object.'
+        : 'The previous response was not one complete parseable JSON object.';
+    return [
+      '[State Commit JSON Recovery]',
+      failure,
+      'Return the replacement now as exactly one complete JSON object beginning with { and ending with }.',
+      'Do not emit analysis, markdown fences, comments, schema examples, or text before or after the object.',
+      gameplayLanguageRepair
+        ? 'Return only the exact selected-actor fields listed in the compact repair payload. Do not repeat the full character sheet, unrelated entries, summary, or gameplay.genreProfile.'
+        : 'Keep every grounded fact and machine id required by the original request, but make descriptions, effects, evidence, and summary concise enough to close the JSON within the output limit.',
+      gameplayLanguageRepair
+        ? 'Preserve exact character and entry ids and emit the smallest valid characters delta that fixes those listed fields.'
+        : gameplayBootstrap
+          ? 'Return only the selected gameplay actor delta and any grounded gameplay.genreProfile delta allowed by the original bootstrap contract.'
+        : 'Return only the state delta supported by the original state-commit evidence.',
+    ].join('\n');
+  }
+
+  function stateCommitJsonFailureMessage(meta = null, retried = false) {
+    const response = safeAgentResponseMetadata(meta);
+    const retryText = retried ? ' 간결 JSON으로 한 번 자동 재시도했지만 복구하지 못했습니다.' : '';
+    if (/^(?:length|max_tokens|max_output_tokens)$/i.test(response?.finishReason || '')) {
+      return `Psyche 응답이 출력 한도에서 잘려 JSON이 완성되지 않았습니다.${retryText}`;
+    }
+    if (response?.responseKind === 'reasoning-only') {
+      return `Psyche 모델이 공개 JSON 대신 추론만 반환했습니다.${retryText}`;
+    }
+    if (response?.responseKind === 'refusal-only') return 'Psyche 모델이 인물 상태 준비 요청을 거부했습니다.';
+    if (response?.responseKind === 'tool-call-only') return 'Psyche 모델이 상태 JSON 대신 도구 호출만 반환했습니다.';
+    return `Psyche 응답에서 완결된 상태 JSON을 읽지 못했습니다.${retryText}`;
+  }
+
   async function runStateCommit(conf, context, state, finalOutput, options = {}) {
     const gameplayBootstrap = options.mode === 'gameplay-bootstrap'
       && context?._gameplayActorFocus?.actorId;
+    const bootstrapLanguageRepairIssues = gameplayBootstrap
+      ? uniqueStrings(normalizeStringArray(options.bootstrapLanguageRepairIssues)).slice(0, 16)
+      : [];
+    const gameplayLanguageRepair = bootstrapLanguageRepairIssues.length > 0;
     const gameplayOutputLanguage = gameplayConfiguredOutputLanguage(conf, state);
     const matchingGameplayPending = gameplayPendingMatchesContext(state, context)
       ? normalizeGameplayPendingAction(state?.gameplay?.pendingAction)
@@ -31911,11 +32222,14 @@ function normalizeAdaptiveQualityState(value) {
     const agent = gameplayBootstrap ? getColdStartPsycheAgent(conf) : getPsycheMainAgent(conf);
     if (!agent) return { changed: false, reason: 'no-psyche-main' };
     const resolvedAgentConf = resolveAgentConf(agent, conf);
-    const agentConf = gameplayBootstrap ? gameplayBootstrapAgentConf(resolvedAgentConf) : resolvedAgentConf;
+    const bootstrapAgentConf = gameplayBootstrap ? gameplayBootstrapAgentConf(resolvedAgentConf) : resolvedAgentConf;
+    const agentConf = gameplayLanguageRepair ? stateCommitJsonRetryAgentConf(bootstrapAgentConf) : bootstrapAgentConf;
     if (!canCallProvider(agentConf)) return { changed: false, reason: 'provider-not-ready' };
     const contextBuildStartedAt = Date.now();
     const turnEvidence = options.turnEvidence?.cache ? options.turnEvidence : null;
-    const contextSource = turnEvidence ? 'main-turn-evidence' : 'deterministic-fallback';
+    const contextSource = gameplayLanguageRepair
+      ? 'gameplay-language-repair'
+      : turnEvidence ? 'main-turn-evidence' : 'deterministic-fallback';
     if (typeof options.progress === 'function') {
       await options.progress({
         phase: 'state-commit-context-start',
@@ -31925,30 +32239,35 @@ function normalizeAdaptiveQualityState(value) {
         elapsedMs: 0,
       });
     }
-    const commitContext = await buildAgentContextPackMaybeEmbedded(
-      'state-commit',
-      state,
-      context,
-      [],
-      10000,
-      turnEvidence ? conf : { ...conf, embeddingEnabled: false },
-      {
-        turnEvidence,
-        progress: options.progress,
-      }
-    );
+    const commitContext = gameplayLanguageRepair
+      ? ''
+      : await buildAgentContextPackMaybeEmbedded(
+        'state-commit',
+        state,
+        context,
+        [],
+        10000,
+        turnEvidence ? conf : { ...conf, embeddingEnabled: false },
+        {
+          turnEvidence,
+          progress: options.progress,
+        }
+      );
     const contextBuildMs = Date.now() - contextBuildStartedAt;
-    const stateSnapshotJson = buildStateCommitSnapshotJson(state, context);
+    const stateSnapshotJson = gameplayLanguageRepair ? '' : buildStateCommitSnapshotJson(state, context);
     const focusedCommitContext = joinBriefingBlocks([
       gameplayBootstrap ? buildGameplayActorBootstrapBrief(context) : '',
       gameplayLanguageBrief,
       commitContext,
     ], 15000);
-    const stateCommitContext = buildStateCommitContext(focusedCommitContext, stateSnapshotJson, 19000, {
-      mode: gameplayBootstrap ? 'gameplay-bootstrap' : 'default',
-    });
-    const userTemplate = gameplayBootstrap
-      ? GAMEPLAY_ACTOR_BOOTSTRAP_USER_TEMPLATE
+    const stateCommitContext = gameplayLanguageRepair
+      ? JSON.stringify(buildGameplayActorLanguageRepairPayload(state, context, bootstrapLanguageRepairIssues, gameplayOutputLanguage))
+      : buildStateCommitContext(focusedCommitContext, stateSnapshotJson, 19000, {
+        mode: gameplayBootstrap ? 'gameplay-bootstrap' : 'default',
+      });
+    const userTemplate = gameplayLanguageRepair
+      ? GAMEPLAY_ACTOR_LANGUAGE_REPAIR_USER_TEMPLATE
+      : gameplayBootstrap ? GAMEPLAY_ACTOR_BOOTSTRAP_USER_TEMPLATE
       : normalizeStateCommitUserTemplate(agent.userTemplate || defaultUserTemplate(agent.phase || 'psyche-main', agent.id || 'psyche-main', agent.outputInstruction || ''));
     const values = {
       state_commit_context: stateCommitContext,
@@ -31968,7 +32287,9 @@ function normalizeAdaptiveQualityState(value) {
     const messages = [
       {
         role: 'system',
-        content: gameplayBootstrap
+        content: gameplayLanguageRepair
+          ? [GAMEPLAY_ACTOR_LANGUAGE_REPAIR_PROMPT, gameplayLanguageBrief].join('\n\n')
+          : gameplayBootstrap
           ? [
             GAMEPLAY_ACTOR_BOOTSTRAP_PROMPT,
             gameplayLanguageBrief,
@@ -32042,9 +32363,12 @@ function normalizeAdaptiveQualityState(value) {
         if (typeof setTimeout === 'function') await new Promise(resolve => setTimeout(resolve, 650));
       }
     }
+    const responseAttempts = [];
     const transport = {
       attempts,
       retries,
+      jsonRetries: 0,
+      responseAttempts,
       elapsedMs: Date.now() - transportStartedAt,
       error: transportError,
       provider: agentConf.provider,
@@ -32066,8 +32390,84 @@ function normalizeAdaptiveQualityState(value) {
         turnSync,
       };
     }
-    const commit = extractStateCommitJsonObject(raw);
-    if (!commit) return { changed: false, reason: 'json-parse-failed', raw: clipRunLogText(raw), prompt: promptTrace, agent: stateCommitAgentInfo(agent, agentConf), transport, turnSync };
+    let responseMeta = readAgentResponseMetadata(agentConf);
+    if (responseMeta) responseAttempts.push(responseMeta);
+    let commit = extractStateCommitJsonObject(raw);
+    if (!commit && shouldRetryStateCommitJson(responseMeta)) {
+      const retryConf = stateCommitJsonRetryAgentConf(agentConf);
+      const retryInstruction = stateCommitJsonRetryInstruction(responseMeta, Boolean(gameplayBootstrap), gameplayLanguageRepair);
+      const retryMessages = messages.concat({ role: 'user', content: retryInstruction });
+      const retryPromptChars = retryMessages.reduce((sum, message) => sum + String(message.content || '').length, 0);
+      const attemptStartedAt = Date.now();
+      attempts += 1;
+      retries += 1;
+      transport.jsonRetries = 1;
+      transport.retryPromptChars = retryPromptChars;
+      try {
+        if (typeof options.progress === 'function') {
+          await options.progress({
+            phase: 'state-commit-json-retry',
+            contextSource,
+            contextBuildMs,
+            agent,
+            agentIndex: 0,
+            totalAgents: 1,
+            elapsedMs: Date.now() - transportStartedAt,
+            promptChars: retryPromptChars,
+            attempt: attempts,
+            response: responseMeta,
+          });
+        }
+        raw = await callAgentWithRequestHeartbeat(
+          retryConf,
+          retryMessages,
+          options.progress,
+          agent,
+          0,
+          1,
+          {
+            startedAt: attemptStartedAt,
+            intervalMs: STATE_COMMIT_HEARTBEAT_MS,
+            promptChars: retryPromptChars,
+            noteCount: 0,
+          }
+        );
+        transportError = '';
+        responseMeta = readAgentResponseMetadata(retryConf);
+        if (responseMeta) responseAttempts.push(responseMeta);
+        commit = extractStateCommitJsonObject(raw);
+      } catch (err) {
+        transportError = err?.message || String(err || 'unknown JSON recovery transport error');
+      }
+      transport.attempts = attempts;
+      transport.retries = retries;
+      transport.elapsedMs = Date.now() - transportStartedAt;
+      transport.error = transportError;
+      if (transportError) {
+        return {
+          changed: false,
+          reason: 'json-repair-transport-failed',
+          failedCommitReason: `Psyche JSON 복구 재요청 실패: ${transportError}`,
+          raw: clipRunLogText(raw),
+          prompt: promptTrace,
+          agent: stateCommitAgentInfo(agent, agentConf),
+          transport,
+          turnSync,
+        };
+      }
+    }
+    if (!commit) {
+      return {
+        changed: false,
+        reason: 'json-parse-failed',
+        failedCommitReason: stateCommitJsonFailureMessage(responseMeta, transport.jsonRetries > 0),
+        raw: clipRunLogText(raw),
+        prompt: promptTrace,
+        agent: stateCommitAgentInfo(agent, agentConf),
+        transport,
+        turnSync,
+      };
+    }
     const commitTurn = gameplayBootstrap
       ? Math.max(Number(state.turn || 0), observedTurnFromContext(context), 0)
       : Math.max(Number(state.turn || 0), observedTurnFromContext(context), 1);
@@ -32333,43 +32733,33 @@ function normalizeAdaptiveQualityState(value) {
     return null;
   }
 
+  function unwrapStateCommitJsonObject(value, allowEmpty = false) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    const candidates = [
+      value,
+      value.commit,
+      value.stateCommit,
+      value.state_commit,
+      value.delta,
+      value.result,
+    ];
+    const commitKeys = [
+      'summary', 'scene', 'characters', 'gameplay', 'relationships', 'socialGraph',
+      'worldFronts', 'memoryLedger', 'secretLedger', 'loreLedger', 'eventLog',
+      'continuityRisks', 'plotThreads', 'knowledge', 'ops', '_evidenceConflicts', '_governorLog',
+    ];
+    return candidates.find(candidate => {
+      if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return false;
+      if (commitKeys.some(key => Object.prototype.hasOwnProperty.call(candidate, key))) return true;
+      return allowEmpty && Object.keys(candidate).length === 0;
+    }) || null;
+  }
+
   function extractStateCommitJsonObject(text) {
-    const raw = stripThoughtBlocks(String(text || '')).trim();
-    const fenced = [...raw.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)];
-    for (const block of fenced) {
-      try {
-        const parsed = JSON.parse(String(block[1] || '').trim());
-        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
-      } catch (_) {}
-    }
-    const start = raw.indexOf('{');
-    if (start < 0) return null;
-    let depth = 0;
-    let inString = false;
-    let escaped = false;
-    for (let i = start; i < raw.length; i += 1) {
-      const ch = raw[i];
-      if (inString) {
-        if (escaped) escaped = false;
-        else if (ch === '\\') escaped = true;
-        else if (ch === '"') inString = false;
-      } else {
-        if (ch === '"') inString = true;
-        else if (ch === '{') depth += 1;
-        else if (ch === '}') {
-          depth -= 1;
-          if (depth === 0) {
-            try {
-              const parsed = JSON.parse(raw.slice(start, i + 1));
-              return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
-            } catch (_) {
-              return null;
-            }
-          }
-        }
-      }
-    }
-    return null;
+    const parsed = extractJsonObject(text, value => Boolean(unwrapStateCommitJsonObject(value)));
+    if (parsed) return unwrapStateCommitJsonObject(parsed);
+    const empty = extractJsonObject(text, value => Boolean(unwrapStateCommitJsonObject(value, true)));
+    return unwrapStateCommitJsonObject(empty, true);
   }
 
   function applyStateCommit(state, commit, meta = {}) {
@@ -32941,9 +33331,18 @@ function normalizeAdaptiveQualityState(value) {
       const subject = resolveCanonicalIdentitySubject(identity?.subjects, character);
       const id = subject ? preferredCanonicalCharacterStateId(state, subject) : slug(firstNonEmpty(character?.id, character?.name));
       if (!id) return;
+      const previous = byId.get(id);
+      const deltaSources = [previous, character].filter(Boolean);
       const normalized = subject
-        ? mergeCanonicalCharacterRecords(byId.get(id), character, subject, id)
-        : normalizeCharacterState({ ...(byId.get(id) || {}), ...character, id });
+        ? mergeCanonicalCharacterRecords(previous, character, subject, id)
+        : normalizeCharacterState({ ...(previous || {}), ...character, id });
+      // normalizeCharacterState fills omitted collections with empty defaults.
+      // A commit is a sparse delta, so those synthetic empties must not erase
+      // the stored character when this delta only changes status or one label.
+      ['aliases', 'stats', 'access', 'desires', 'fears', 'incentives', 'resources', 'knowledgeLimits', 'conditions', 'abilities', 'inventory', 'evidence']
+        .forEach(key => {
+          if (!deltaSources.some(source => source?.[key] !== undefined)) delete normalized[key];
+        });
       byId.set(id, normalized);
     });
     return Array.from(byId.values());
@@ -52183,7 +52582,7 @@ function normalizeAdaptiveQualityState(value) {
             noWholeInventoryColdStartPayloadExists: !runnerSource.includes('canonicalSources.map')
               && !runnerSource.includes('sourceEnvelope')
               && !runnerSource.includes('payloadChars'),
-            boundedOrdinaryStateCommitAndOneCoverageRepairReplaceMapReduce: (runnerSource.match(/runStateCommit/g) || []).length === 2
+            boundedOrdinaryStateCommitAndTargetedRepairsReplaceMapReduce: (runnerSource.match(/runStateCommit/g) || []).length === 3
               && !runnerSource.includes('callAgent(')
               && !runnerSource.includes('buildBatches')
               && !runnerSource.includes('partialPatches')
@@ -55785,6 +56184,127 @@ function normalizeAdaptiveQualityState(value) {
           } finally {
             await Storage.remove(STORAGE.canonicalCache(scopeA));
             await Storage.remove(STORAGE.canonicalCache(scopeB));
+            await collectCanonicalBlobGarbage();
+          }
+        },
+        testCanonicalCacheLongSessionChurn: async () => {
+          const scope = `debug-canonical-long-session-${Date.now().toString(36)}`;
+          const makeUnits = revisedIndex => Array.from({ length: 1360 }, (_, index) => ({
+            id: `long-session-canonical-${String(index).padStart(4, '0')}`,
+            baseId: `long-session-source-${Math.floor(index / 4)}`,
+            sourceId: `long-session-source-${Math.floor(index / 4)}`,
+            content: `장기 세션 canonical unit ${index}${index === revisedIndex ? ' 수정됨' : ''}`,
+            kind: 'globalLore',
+            label: `장기 설정 ${index}`,
+            priority: 7,
+            part: { index: (index % 4) + 1, total: 4, baseId: `long-session-source-${Math.floor(index / 4)}` },
+          }));
+          const state = createDefaultState('rp');
+          state.turn = 90;
+          const firstContext = { scope, canonicalUnits: makeUnits(-1), canonicalSourceReadComplete: true };
+          const firstSync = syncCanonicalUnitStore(state, firstContext, DEFAULT_CONFIG);
+          let firstReference = null;
+          let secondReference = null;
+          try {
+            firstReference = await saveCanonicalCache(scope, state.canonicalStore);
+            state._canonicalCacheDirty = false;
+            state.turn = 91;
+            const secondContext = { scope, canonicalUnits: makeUnits(777), canonicalSourceReadComplete: true };
+            const secondSync = syncCanonicalUnitStore(state, secondContext, DEFAULT_CONFIG);
+            secondReference = await saveCanonicalCache(scope, state.canonicalStore);
+            const firstKeys = new Set(firstReference.refs.map(ref => ref.key));
+            const secondKeys = new Set(secondReference.refs.map(ref => ref.key));
+            const sharedKeys = Array.from(secondKeys).filter(key => firstKeys.has(key));
+            const obsoleteKeys = Array.from(firstKeys).filter(key => !secondKeys.has(key));
+            const insertedUnits = state.canonicalStore.units.slice();
+            insertedUnits.splice(210, 0, normalizeStoredCanonicalUnit({
+              id: 'long-session-canonical-inserted',
+              baseId: 'long-session-source-inserted',
+              sourceId: 'long-session-source-inserted',
+              content: '장기 세션에 새로 삽입된 canonical unit',
+              kind: 'globalLore',
+              label: '삽입 설정',
+              priority: 7,
+              part: { index: 1, total: 1, baseId: 'long-session-source-inserted' },
+              firstSeenTurn: 92,
+              lastSeenTurn: 92,
+              updatedAt: nowIso(),
+            }, 92));
+            const insertedKeys = new Set(chunkCanonicalUnitsForStorage(insertedUnits).map(units => {
+              const body = { version: STATE_REFERENCE_VERSION, kind: 'canonical-units', units };
+              return STORAGE.canonicalBlob(storageContentHash(stableStorageJson(body)));
+            }));
+            const insertionSharedKeys = Array.from(secondKeys).filter(key => insertedKeys.has(key));
+            const storedKeys = new Set((await listPluginStorageKeys())
+              .filter(key => key.startsWith(`${PREFIX}canonical-blob:`))
+              .map(key => key.slice(PREFIX.length)));
+            const unchanged = state.canonicalStore.units.find(unit => unit.id === 'long-session-canonical-0000');
+            const revised = state.canonicalStore.units.find(unit => unit.id === 'long-session-canonical-0777');
+            state._canonicalCacheDirty = false;
+            state.turn = 92;
+            const thirdSync = syncCanonicalUnitStore(
+              state,
+              { scope, canonicalUnits: makeUnits(777), canonicalSourceReadComplete: true },
+              DEFAULT_CONFIG,
+            );
+            const unchangedNextTurnDoesNotDirty = thirdSync.revised === 0
+              && thirdSync.added === 0
+              && thirdSync.missing === 0
+              && state._canonicalCacheDirty === false;
+            let repeatedDirtySavesRemainBounded = true;
+            let repeatedDirtySavePeak = storedKeys.size;
+            for (let replay = 0; replay < 8; replay += 1) {
+              state.turn = 93 + replay;
+              syncCanonicalUnitStore(
+                state,
+                { scope, canonicalUnits: makeUnits(800 + replay), canonicalSourceReadComplete: true },
+                DEFAULT_CONFIG,
+              );
+              const replayReference = await saveCanonicalCache(scope, state.canonicalStore);
+              const physicalCount = (await listPluginStorageKeys())
+                .filter(key => key.startsWith(`${PREFIX}canonical-blob:`)).length;
+              repeatedDirtySavePeak = Math.max(repeatedDirtySavePeak, physicalCount);
+              repeatedDirtySavesRemainBounded = repeatedDirtySavesRemainBounded
+                && physicalCount <= replayReference.refs.length + 1;
+            }
+            const orphanKey = STORAGE.canonicalBlob(`debug-orphan-${Date.now().toString(36)}`);
+            await Storage.set(orphanKey, {
+              version: STATE_REFERENCE_VERSION,
+              kind: 'canonical-units',
+              units: [{ id: 'unreferenced-prior-generation', content: 'obsolete' }],
+            });
+            if (!(Runtime.canonicalGcScopes instanceof Set)) Runtime.canonicalGcScopes = new Set();
+            Runtime.canonicalGcScopes.delete(scope);
+            await attachCanonicalCache(scope, createDefaultState('rp'));
+            const orphanAfterAttach = await Storage.get(orphanKey, null);
+            return {
+              fixtureMatchesReportedBlobScale: firstReference.refs.length >= 150 && firstReference.refs.length <= 190,
+              oneRealRevisionDetected: firstSync.added === 1360
+                && secondSync.added === 0
+                && secondSync.revised === 1
+                && secondSync.unchanged === 1359,
+              unchangedUnitTurnMetadataStaysStable: unchanged?.lastSeenTurn === 90,
+              revisedUnitReceivesCurrentTurnMetadata: revised?.lastSeenTurn === 91,
+              oneRevisionReusesNearlyEveryBlob: sharedKeys.length >= firstReference.refs.length - 2,
+              oneInsertionDoesNotRehashTheRemainingTail: insertionSharedKeys.length >= secondReference.refs.length - 3,
+              obsoleteGenerationIsCollectedAfterReferenceSwap: obsoleteKeys.length >= 1
+                && obsoleteKeys.every(key => !storedKeys.has(key)),
+              physicalBlobCountRemainsBounded: storedKeys.size <= secondReference.refs.length + 1,
+              unchangedNextTurnDoesNotDirtyCanonicalCache: unchangedNextTurnDoesNotDirty,
+              tenConsecutiveDirtySavesRemainBounded: repeatedDirtySavesRemainBounded,
+              existingOrphanGenerationIsCollectedOnScopeAttach: orphanAfterAttach === null,
+              metrics: {
+                canonicalUnits: state.canonicalStore.units.length,
+                firstBlobCount: firstReference.refs.length,
+                secondBlobCount: secondReference.refs.length,
+                sharedAfterOneRevision: sharedKeys.length,
+                physicalAfterOneRevision: storedKeys.size,
+                sharedAfterOneInsertion: insertionSharedKeys.length,
+                repeatedDirtySavePeak,
+              },
+            };
+          } finally {
+            await Storage.remove(STORAGE.canonicalCache(scope));
             await collectCanonicalBlobGarbage();
           }
         },
@@ -63212,6 +63732,268 @@ function normalizeAdaptiveQualityState(value) {
               contextSource: result.transport?.contextSource || '',
               contextBuildMs: result.transport?.contextBuildMs || 0,
               progressPhases,
+            };
+          } finally {
+            globalThis.fetch = originalFetch;
+          }
+        },
+        testStateCommitJsonRecovery: async () => {
+          const validCommit = {
+            eventLog: [{ source: 'final_output', turn: 1, quoteOrSummary: '주인공은 문을 열었다.', certainty: 'established' }],
+          };
+          const validJson = JSON.stringify(validCommit);
+          const leadingBraceRecovered = extractStateCommitJsonObject(`Use {id, name} as an example.\n${validJson}`);
+          const wrappedRecovered = extractStateCommitJsonObject(JSON.stringify({ commit: validCommit }));
+          const privateReasoningRejected = extractStateCommitJsonObject(`<analysis>private\n${validJson}`) === null;
+          const pipeline = defaultPipeline();
+          pipeline.agents = pipeline.agents.map(agent => agent.id === 'state-commit'
+            ? { ...agent, enabled: true, providerId: 'debug-state-json-provider', model: 'debug-state-json-model', maxTokens: 4096 }
+            : agent);
+          const targetConf = {
+            ...DEFAULT_CONFIG,
+            enabled: true,
+            psycheAgentsEnabled: true,
+            stateApiEnabled: true,
+            dataContextInjectionEnabled: true,
+            embeddingEnabled: false,
+            activeProviderId: 'debug-state-json-provider',
+            modelPresets: [],
+            providerRegistry: [{
+              id: 'debug-state-json-provider',
+              name: 'Debug state JSON provider',
+              provider: 'custom',
+              baseUrl: 'https://debug-state-json.invalid/v1',
+              apiKey: 'debug-key',
+              defaultModel: 'debug-state-json-model',
+              chatPath: '/chat/completions',
+            }],
+            pipeline,
+          };
+          const targetState = createDefaultState('novel');
+          const targetContext = {
+            scope: 'debug-state-json-scope',
+            mode: 'novel',
+            messages: [{ role: 'user', content: '문을 연다.' }, { role: 'assistant', content: '주인공은 문을 열었다.' }],
+            currentChat: { id: 'debug-state-json-chat', message: [] },
+            character: { id: 'debug-state-json-character', name: 'Debug Character' },
+            canonicalSources: [],
+          };
+          const turnEvidence = await buildTurnEvidence(targetState, targetContext, targetConf);
+          const originalFetch = globalThis.fetch;
+          const requestBodies = [];
+          const progressPhases = [];
+          let calls = 0;
+          globalThis.fetch = async (_url, init = {}) => {
+            calls += 1;
+            requestBodies.push(JSON.parse(String(init.body || '{}')));
+            const content = calls === 1
+              ? 'Planning marker {id, name}\n{"eventLog":[{"source":"final_output"'
+              : validJson;
+            return new Response(JSON.stringify({
+              choices: [{ finish_reason: calls === 1 ? 'length' : 'stop', message: { content } }],
+              usage: { prompt_tokens: 1, completion_tokens: calls === 1 ? 4096 : 120, total_tokens: calls === 1 ? 4097 : 121 },
+            }), { status: 200, headers: { 'content-type': 'application/json' } });
+          };
+          try {
+            const result = await runStateCommit(targetConf, targetContext, targetState, '주인공은 문을 열었다.', {
+              turnEvidence,
+              progress: async info => progressPhases.push(info?.phase || ''),
+            });
+            const retryBody = requestBodies[1] || {};
+            const retryMessages = Array.isArray(retryBody.messages) ? retryBody.messages : [];
+            const retryMaxTokens = Number(retryBody.max_tokens || retryBody.max_completion_tokens || 0);
+            return {
+              parserScansPastLeadingNonJsonBraces: leadingBraceRecovered?.eventLog?.[0]?.quoteOrSummary === '주인공은 문을 열었다.',
+              parserUnwrapsExplicitCommitEnvelope: wrappedRecovered?.eventLog?.[0]?.source === 'final_output',
+              privateReasoningIsNeverImportedAsState: privateReasoningRejected,
+              configuredBootstrapOutputBudgetUpTo8192IsHonored: gameplayBootstrapAgentConf({ maxTokens: 8192 }).maxTokens === 8192,
+              malformedLengthResponseRetriesExactlyOnce: calls === 2
+                && result.transport?.attempts === 2
+                && result.transport?.retries === 1
+                && result.transport?.jsonRetries === 1,
+              retryCarriesExplicitCompactJsonContract: retryMessages.some(message => message.role === 'user'
+                && String(message.content || '').includes('[State Commit JSON Recovery]')
+                && String(message.content || '').includes('exactly one complete JSON object')),
+              retryUsesLowTemperatureAndAdequateOutputBudget: Number(retryBody.temperature) <= 0.05
+                && retryMaxTokens >= 4096,
+              responseMetadataPreservesLengthThenStop: result.transport?.responseAttempts?.[0]?.finishReason === 'length'
+                && result.transport?.responseAttempts?.[1]?.finishReason === 'stop',
+              recoveredCommitIsApplied: result.changed === true
+                && targetState.eventLog.some(event => event.quoteOrSummary === '주인공은 문을 열었다.'),
+              progressReportsJsonRetry: progressPhases.includes('state-commit-json-retry'),
+            };
+          } finally {
+            globalThis.fetch = originalFetch;
+          }
+        },
+        testGameplayActorLanguageRepairCompaction: async () => {
+          const pipeline = defaultPipeline();
+          pipeline.agents = pipeline.agents.map(agent => {
+            if (agent.id === 'state-aux') {
+              return {
+                ...agent,
+                enabled: true,
+                providerId: 'debug-language-repair-provider',
+                model: 'debug-language-repair-model',
+                maxTokens: 8192,
+              };
+            }
+            if (agent.id === GAMEPLAY_ADVISOR_AGENT_ID) return { ...agent, outputLanguage: 'ko' };
+            return agent;
+          });
+          const targetConf = {
+            ...DEFAULT_CONFIG,
+            enabled: true,
+            psycheAgentsEnabled: true,
+            stateApiEnabled: true,
+            dataContextInjectionEnabled: true,
+            embeddingEnabled: false,
+            activeProviderId: 'debug-language-repair-provider',
+            modelPresets: [],
+            providerRegistry: [{
+              id: 'debug-language-repair-provider',
+              name: 'Debug language repair provider',
+              provider: 'custom',
+              baseUrl: 'https://debug-language-repair.invalid/v1',
+              apiKey: 'debug-key',
+              defaultModel: 'debug-language-repair-model',
+              chatPath: '/chat/completions',
+            }],
+            pipeline,
+          };
+          const abilityName = index => `Ability ${hashString(`language-repair-ability-${index}`).slice(0, 16)}`;
+          const itemName = index => `Item ${hashString(`language-repair-item-${index}`).slice(0, 16)}`;
+          const abilities = Array.from({ length: 96 }, (_, index) => ({
+            id: `ability-${index}`,
+            name: abilityName(index),
+            displayName: `기술 ${index}`,
+            displayLanguage: 'ko',
+            kind: 'technique',
+            categoryLabel: '기술',
+            status: 'learned',
+            description: `Canonical ability ${index} ` + 'x'.repeat(240),
+            displayDescription: `기술 ${index} 설명`,
+            costs: [{ resource: 'mp', amount: index + 1 }],
+          }));
+          const inventory = Array.from({ length: 96 }, (_, index) => ({
+            id: `item-${index}`,
+            name: itemName(index),
+            displayName: `아이템 ${index}`,
+            displayLanguage: 'ko',
+            kind: 'tool',
+            categoryLabel: '도구',
+            quantity: index + 1,
+            description: `Canonical item ${index} ` + 'y'.repeat(240),
+            displayDescription: `아이템 ${index} 설명`,
+          }));
+          const targetState = createDefaultState('rp');
+          targetState.characters.hero = normalizeCharacterState({
+            id: 'hero',
+            name: 'Huge Hero',
+            gameplayActorId: 'character:hero',
+            commitGrounding: { kind: 'gameplay-actor-focus', turn: 0 },
+            species: 'Human',
+            role: 'Watcher',
+            status: 'Watchful',
+            conditions: [
+              { id: 'focused', name: 'Focused', displayName: '집중', kind: 'buff', description: 'Maintains concentration.', displayDescription: '집중을 유지한다.' },
+              { id: 'scarred', name: 'Scarred', displayName: '흉터', kind: 'injury', description: 'An old scar remains.', displayDescription: '오래된 흉터가 남아 있다.' },
+            ],
+            stats: {
+              hp: { label: '체력', kind: 'vital', current: 100, min: 0, max: 100 },
+              mp: { label: '마력', kind: 'resource', current: 80, min: 0, max: 100 },
+            },
+            abilities,
+            inventory,
+          });
+          targetState.gameplay.activeActorId = 'character:hero';
+          const targetContext = {
+            scope: 'debug-language-repair-scope',
+            mode: 'rp',
+            messages: Array.from({ length: 20 }, (_, index) => ({ role: index % 2 ? 'assistant' : 'user', content: `HISTORY_MARKER_${index} ` + 'z'.repeat(1000) })),
+            currentChat: { id: 'debug-language-repair-chat', message: [] },
+            character: { id: 'debug-language-repair-character', name: 'Debug Character' },
+            canonicalSources: [],
+            db: { personas: [] },
+            _gameplayActorFocus: {
+              actorId: 'character:hero',
+              characterId: 'hero',
+              name: 'Huge Hero',
+              outputLanguage: 'ko',
+              outputLanguageName: 'Korean',
+            },
+          };
+          const knownState = JSON.parse(JSON.stringify(targetState));
+          knownState.characters.hero.status = 'active';
+          const knownLocalized = localizeGameplayActorSystemStatus(knownState, targetContext, 'character:hero', 'ko');
+          const entryRepairPayload = buildGameplayActorLanguageRepairPayload(
+            targetState,
+            targetContext,
+            ['abilities[95].displayName'],
+            'ko',
+          );
+          const languageIssuesBeforeRepair = gameplayBootstrapDisplayLanguageIssues(
+            resolveGameplayActor(targetState, targetContext, 'character:hero'),
+            'ko',
+          );
+          const originalFetch = globalThis.fetch;
+          const requestBodies = [];
+          let calls = 0;
+          globalThis.fetch = async (_url, init = {}) => {
+            calls += 1;
+            requestBodies.push(JSON.parse(String(init.body || '{}')));
+            const content = calls === 1
+              ? '{"characters":[{"id":"hero","name":"Huge Hero","status":"경'
+              : '{"characters":[{"id":"hero","name":"Huge Hero","status":"경계 중"}]}';
+            return new Response(JSON.stringify({
+              choices: [{ finish_reason: calls === 1 ? 'length' : 'stop', message: { content } }],
+              usage: { prompt_tokens: 1, completion_tokens: calls === 1 ? 8192 : 40, total_tokens: calls === 1 ? 8193 : 41 },
+            }), { status: 200, headers: { 'content-type': 'application/json' } });
+          };
+          try {
+            const result = await runStateCommit(targetConf, targetContext, targetState, '', {
+              mode: 'gameplay-bootstrap',
+              bootstrapLanguageRepairIssues: ['status'],
+            });
+            const firstBody = requestBodies[0] || {};
+            const firstMessages = Array.isArray(firstBody.messages) ? firstBody.messages : [];
+            const systemText = String(firstMessages.find(message => message.role === 'system')?.content || '');
+            const userText = String(firstMessages.find(message => message.role === 'user')?.content || '');
+            const retryMessages = Array.isArray(requestBodies[1]?.messages) ? requestBodies[1].messages : [];
+            return {
+              knownLifecycleStatusLocalizesWithoutModel: knownLocalized === true
+                && knownState.characters.hero.status === '활성'
+                && !gameplayBootstrapDisplayLanguageIssues(resolveGameplayActor(knownState, targetContext, 'character:hero'), 'ko').includes('status'),
+              arbitraryNarrativeStatusStillRequiresModel: localizedGameplaySystemStatus('Watchful', 'ko') === 'Watchful',
+              conditionValidatorUsesLocalizedDisplayName: !languageIssuesBeforeRepair.includes('conditions[0]')
+                && !languageIssuesBeforeRepair.includes('conditions[1]'),
+              entryRepairProjectionIncludesOnlyAffectedEntry: entryRepairPayload.targets.length === 1
+                && entryRepairPayload.targets[0]?.path === 'abilities[95].displayName'
+                && entryRepairPayload.targets[0]?.entry?.id === 'ability-95'
+                && JSON.stringify(entryRepairPayload).length < 4000,
+              repairUsesDedicatedPromptWithoutFullBootstrapContract: systemText.includes('[Gameplay Actor Display-Language Repair]')
+                && !systemText.includes('This is the first gameplay snapshot'),
+              repairPayloadContainsOnlyRequestedActorField: userText.includes('"issues":["status"]')
+                && userText.includes('"path":"status"')
+                && !userText.includes(abilityName(95))
+                && !userText.includes(itemName(95))
+                && !userText.includes('HISTORY_MARKER_19')
+                && userText.length < 4000,
+              wholeRepairRequestStaysCompact: result.transport?.promptChars < 6000,
+              truncatedCompactRepairRetriesExactlyOnce: calls === 2
+                && result.transport?.jsonRetries === 1
+                && result.transport?.contextSource === 'gameplay-language-repair',
+              retryCannotExpandBackToWholeSheet: retryMessages.some(message => message.role === 'user'
+                && String(message.content || '').includes('Do not repeat the full character sheet')),
+              compactStatusDeltaApplied: result.changed === true && targetState.characters.hero.status === '경계 중',
+              partialRepairPreservesAllAbilitiesAndInventory: targetState.characters.hero.abilities.length === 96
+                && targetState.characters.hero.inventory.length === 96
+                && targetState.characters.hero.abilities[95]?.name === abilityName(95)
+                && targetState.characters.hero.abilities[95]?.costs?.[0]?.amount === 96
+                && targetState.characters.hero.inventory[95]?.name === itemName(95)
+                && targetState.characters.hero.inventory[95]?.quantity === 96,
+              partialRepairPreservesConditionCount: targetState.characters.hero.conditions.length === 2,
+              partialRepairPreservesConditionDisplayName: targetState.characters.hero.conditions[1]?.displayName === '흉터',
             };
           } finally {
             globalThis.fetch = originalFetch;
