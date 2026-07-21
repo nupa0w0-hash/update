@@ -1,7 +1,7 @@
 //@name ☸에로스 타워
-//@display-name ☸Eros Tower 1.3.4
+//@display-name ☸Eros Tower 1.3.6
 //@api 3.0
-//@version 1.3.4
+//@version 1.3.6
 //@update-url https://raw.githubusercontent.com/nupa0w0-hash/update/main/ErosTower.v1.update.js
 //@arg et_enabled string Enable Eros Tower. true/false
 //@arg et_mode string rp, novel, or auto
@@ -43,20 +43,20 @@
 //@arg et_image_character_tags_json string User-authored per-character illustration tag registry JSON
 
 /**
- * Eros Tower 1.3.4
+ * Eros Tower 1.3.6
  * RisuAI API v3 plugin for Eros Tower state, recall, and agent orchestration.
  */
 (async () => {
   const api = globalThis.Risuai || globalThis.risuai;
-  if (!api) throw new Error('Eros Tower 1.3.4 requires the RisuAI API v3 global.');
+  if (!api) throw new Error('Eros Tower 1.3.6 requires the RisuAI API v3 global.');
 
-  const VERSION = '1.3.4';
+  const VERSION = '1.3.6';
   const PREFIX = 'eros_tower_v02:';
   const LEGACY_STORAGE_PREFIXES = Object.freeze(['eros_tower_v01:', 'eros_tower_game_agent_test_v01:']);
   const MASKED_SECRET = '*****';
   const PROVIDER_CREDENTIAL_MAX_ENTRIES = 32;
   const PLUGIN_ICON = '☸';
-  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.3.4`;
+  const PLUGIN_LABEL = `${PLUGIN_ICON}에로스 타워 1.3.6`;
   const PLUGIN_SHORT_LABEL = `${PLUGIN_ICON}에로스 타워`;
   const UI_ID_SETTINGS = 'eros-tower-v03-settings';
   const UI_ID_CHAT = 'eros-tower-v03-chat';
@@ -90,6 +90,7 @@
   const STATE_BLOB_ARRAY_CHUNK_SIZE = 12;
   const STATE_BLOB_OBJECT_CHUNK_SIZE = 8;
   const STATE_BLOB_MIN_CHARS = 1200;
+  const STATE_BLOB_READ_CONCURRENCY = 2;
   const COMMUNICATION_PAGE_MESSAGE_MAX = 100;
   const CONFIG_SCHEMA_VERSION = 12;
   const IMAGE_API_CONNECTION_FORMAT_SCHEMA_VERSION = 4;
@@ -111,7 +112,7 @@
   const GAMEPLAY_ADVISOR_ICON_DATA_URI = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAVjklEQVR42u2bXaxmZ3Xff2s9e7/ve+ac8Ywd29iYBGOBANtDgsGmtAoVUkhRGoQLbUmgjdI2SJHa9KLqTZKq7U0lS71o1F5QNYEWiSQCgaIEUkpIoihUNjbGGENM7dSu47ExNv48M3PO++79PGv14vnY+z3jGZsovar3xcx5v/bez3rW+q//+q+14ZXjleP/60N+kC//9R96tx+eeR7cURFAEMAsIRJwPJ9QAC9/CBgJRREHEwMUB4ILJkbwgAOO4RhKhwKRiEjIp3MDBMNQ8rUQxx1EhIDQac94zLj72a+97HV1P4gBDl84S0oHqAeSgplhgKriPpR1O4Lg7ohkOwiCIRgpf0a+aXPB3EiieUGAIiQGrLzTETBP+ft4ftelnMdRFcSFBKw54Bh7f7UecGp5g5MSICysZ90fsJIlQ8o3qSoIeQEKmDtezirFC1QFk/w5nhci5MUHyQtshxf3EVjpksO0BoGejtEjnXYMKbLQjoTRSQAXRh/BoU8LBokECSyk4+7xPvlLG+BNuzd6OIz0HjAMUeHnf+H9WDKQ7O6iirsXly9rILvm7I3tK4ow/4IUV3HPgeDJENXyu2wM9+xJqoJ5tq5qDo+UEuCICp/6xJdwErhj4iz6JXdv7pUfOARu1rf5cHBIxFge7xnMWXULUkwt9h3BkiNl1wUFtxr6uHleyOzyXhdVVqUqBSuKV5ijQXnPq69hM46slj1/8NgTmI+86zXXYKbEruNrjz1GJ/DOq65iHCKqwv988il8Z0MQBRPsULAh8qOL6/2bw/3ysg3wlnCDn/OzLAmowgc/+LdQVeIYWW8GxKUBEMWda4xqiU1KrKpK2dm8eC/GygsHccElG8StgKsnrj9xEhFIqnz+4b9ABW669Ap0jJh2/On6IUiJH7vuBHJCYRz58iOn+fDffx9dF1gsFvz6xz6LuGNj4m3d9f71eL4RXtQA6kLnwod/7qdZrRZs4oBZhiApnutWF08BpvyBSV1ENoRZhUEBrJ3fU3Vtn8WJYJ4yoliETuHMGk8JCT3iEe+1GLf8plOwCNGywVIGzIODDf/oox8gjQOf/K9fQJK+/BBIbvQe6BaBIQ1sNkNZdE07nnfcaqaTthipu+wOotn7PSe4miO3DDkDinpOF+W2b3wLcLqux1HGGPl3X7uXTkPeDM8YcNs93yClRAjZMHF0LBmqCgvFxOkJjMSXb4AeZdANyScAcjMcUFHGODZAqvgnBbzNy98AHiecLV9yt4kmkL3Fi5G8eIiRjdiFwDgMmFtLrQaMMSECMXleuGWu4ThBMiibWQ41hLVsWHj30lnghp03eVjDP/+XP88Lzz7L4bkBxEhuqAaCCPfc+yBpdNbrTbmxfBqRjOa+he7Za/D6mU2XlJzJq8G84IgweZlXPjE3mVdP8ZZMgioisNpb8dfecSOb9San5RCQZBw7ueLSSy/hP9z2m+hSuOdwwoItswxE9liSLCIqIIa5oxKwZIwpNgAPqohJ3kHPjo17Y27ZTbPHuDtuTtCAlQWA465kLPRCprwxSPe87F47zK15SY6xfG+d9oyW8vXc6EQ5WK8RJ6dIz2kaMlGaUu0FQmBBj7kVmltByVAzvvXtR0geUeBjX7gN9UMuf80VCKlBYWVAlQ22uGjuVvJ9AYC6s+41ExbCVLLMVjgx4Z5CIVOO03N2/5DDgw2/9L5/zTe/+RCdCm99yxtJaaQPHeqCmqAIpnZhAyRJZfHZZWPMrzfjQEqRTpTRR3ZPBHa6PbCIa59jXRQXR0oirGHhnv83K1xBpsjzigvQsKBtcDmPFA+rPxApFBgtOxo5fsmC41f8UGaWnr3h3ME5dnZWpJSwHFO50jjiAVu5wUt6qby8C4Fv3PfnPPC/TqPinD3Y53P3/Cf2dgO6XIAG8IS4Ync/kolQjRF8YnYIIjrzijkCyTZ2yOxeiuHquWq41Ht0sWIQkM0LfObr/5Hv7T+NOzzw4GnuufcBJISyEaWSmNPu8wxQLKWiDbFVlWgjQZSFLBBRnC6nLXcg4f0Kvv0E2Hqb3jZHt2IYb6l0igzf8orZu82L6vn8xc5dwBcJCMaxnV3MrWCNYpmwZBzCyyZdIAQqJxcRKoM1Mzrp+I0v/Qpdd6wFohDw08/gV59E/Bz6c7dgv/V1+Nm3EbqAWd5swTNpkgn8JsPUXZ6yRl6UNyrt5XUFCpl5wbz2zvgp/Pd7PwYkPvyOX2G0TSFkuUgTzgdBPS8nSs3J1BVgZqh2M5cu+3nfd5FNRW1gcEQXLUWJU+Jv5mFHsq+V6k8aMOa1mlnb6eln3u7Nxafk6NlbtBqQwJjGfA4FUSGolt9dhAhFT3Qecgp0cIsEEVDn2GWXNcNriXV/6mwuhcUQ6UjDhs4OQbtslFLgZGCTtuya7RzOc3+vBpNJU5hrLFO1XGoIn1SIhrKi26Fljqf0ouXvEQ+QzMakuJpsV7ItFiWbgYMR/5MHywYkwj+5BdcuKz41t3lldgWExJsb14zj7d/m1/mzGWZOFYXMAHsKKaGGmRbPqh/lMr4Lfck4LxEC0qo52Q4Np1hWcvmLw2oBpMzr3dF+Wc4qDU+mSJJGdJyM6O7bsV/L4rm8YFb5Q/29b0tvRwxVbgYt15RCqEQFN3vpWkAKTmq5qDCL43Zjpcj5hXeCpXZ1n4L9PKLteItpaRxgqxDcotA0NSlXni62JbXR/pYZRaZVodUqVTO0plPohT2gOVnZ8hA0c/nZ7tR4a7YsVBOmGG9OWgwhIrPURQPYSRzxXAL5+SXKnCVmbiBNb1XVWTrUfF8zbiE4EoqCVL3b7SIhIE4izeLIm4uBNXfSrZQm20RqKyqn3amYMN+1ltnrjsp0hpbuMhqXcJ+lUZ9yOzNNQnzCF2l1Sk2pfh6mbRnAvAibxWRBNZ+UqY6vOXXaIZuQu/lB3XGZvVcXpDODbFG/hiVVMJ0xn0y65vF/pL6YAMfK76dtsFT0AwrJu3AITAKHz2I/mW0tbKrmvISaTrlNaMpPJjAtSW2lPRVBtNYL3hxGZ7S4xbLD9Ve+l5te+74WXuI++ZhM4VtLpMoJGhcQ2fLSF2eCBfiSe+PgtSbwhrCyRZTEp/e90t4ar3VnSn6WI4A4x4h5GhapOZ32+rrrrmb/7As8eN93WR+e4epXX8kVr7k0Z6ZynYlrSGOUKhOOmTtcrByueToERYMWylPTx1TuSnOjslNmaOhIYUkcIqFfMK7PsbPIqOsZxkuKm8sb27J5JTbe9DLJOoE5v//V3+Ds4cC7r/wIAKtrha/82ecKDtC8Ujx3j6o3IFmZ9oIrLnJhA9gWx56StIjMpPwsS1X3y8RmgcV9fuzkTxE8AMZGN3xn/w8K6mreSQStdT40ni4zz5oXPV7AK/M6ZXcZuOvM70I6hG5VKrsZ1hTQ0xnh8ZastGkJF8QARXHJO96IS63iqm00u73M+KxIx1tP/EwODTeSGStbcWr3b7Mej+FiLaXVlJQ10+nc1FZaRXaZiikT54lHn+bRh57g6ce/iynT4ove4POaoSKFZWYorbHCEQh9MVG0xImZ5fTDUY1vAqeGyKEvKC6FsOTskOlSnDS9WTKQFg7T+1ZeKzJjiYJF412n/gGXpB0SkTue+hzLlSEaGquqmDKJpyWVFvaX+y+KH1GHz8sC2X2kuU0tZuaMbarRi0VT3EpPUhaQ2WSciM8MEN1nXHjG+qjXlwyuh2vh7Sc/wG5aEsu53vWqD/GTN/3sBLQzFQvZpvVSgLqygIumwcymintPJL0BSKOcW0IFsFiws1wySERFERGSRLwzRHZzyqod3WpNmVJfK8HnzNAp2BGKFpkN1xGyh/qsHqhy2RbbqD1KZ844jiSBox6QY9iqrl5JzkQQWkvLZrWpr5/jjmc+za4u6b0jkQjace9zv8uyewEXWvur1X8+3zFp5e+WSuSGELNYO6sYByLLsGxKsRSvtIJZW7JL2SktS5WLpcHkKV/MvOn5mR1qq8itNDzFbeLzEhA3vr7/OZweIeKEGuyFiiakdHMbzZlaS7OQssL78/eWy8RdL/w2b77sVvZsBRh3PfkZljvHMuGSruzqrCiqukLjGRlw/aU6Q4pO/TqZYYJbS2etRqX05KTLxvCEaQee6kqmJgeCS89Nx9/PmAZ6XfCG15/k09/4OGDc+KqfYPfwMp6PZzmx2uXOZz7bYhcU6Xa4/5nfgcWl2PAUXX8S0gHIolSjXTFG0fzK2qWwzVp1ZBlDLhwCeVghWzBoQIMesVotZBT79a+A9OAj8Y++hX38TqT1FArpQUt3x4jrfQZGOumIPvLUs4eM6wPisKGzPdY2cEx3ONA1KU3G9qLoar+D2gFdOIZ94nbSf76j5lLsE3eQPnPfJKWTxVypKb3QexPfHsY4aoDRR4IEQteVvJovUNXibI2Ukd0SfOeRnIqOH4cxh0KTkRprdE4/8jy3XPERFh7Y6JrVnvPMc/u84/J/yE2XfohuI+xeIgw+0B123HLi7yFBS/jINnpJgIMNslhlDhAHJBry3BkmrJ8KtUyFZ5IiL+kBViZ6JpALoYM0zCY7FD15Cf7Hj4JHumsvhUXXZK8qqdV02C1X4IY6yNK563u/x6v3dukEjumSG9/wRm7/7uc5oXtERiIjLHZbPB9RbHMCSQAb/FyXb7NbtB13s4ZfyVJWg3zepr9YMTRbuIZQev3O048/A+OGy1/3IzmOPnQqp00XuHIP/ejNpejQxu5qZ2ccIqD82qd+mR+/9WacwBef+DTqldEFcLh9/9N85Cf+KX/21cfwzdlGbSvXz9RbkH/2NxoAciKiH70FJ+TFxwQGg0c6FPdczc6Gll4iC0if467M3kgZTUvDAf3OiTwK5alIS9Vk4Qgbo90sDq99/aXca38K8Ry2OUS16AI4aFcKmFzi/tbtnwQ6fL0ufcdJYvep3px1oXRGWRQJC2x4BpU8usUM0Dm/DDtKhaWlFFFFNHDq1HUEUf7VL36CzeaQ//L5f8tybxcJkzRF6biUorOEf2GDWWHBD57Nu6dhpuRMAqtKltf84FxOhaqzWJ50wtwi0zKOs61DOon33/xLXHXpZbzz7TdkAqWK2FSAHSVC3VEaPBEiSJayIOIOkuOqCwHpVkDMoysyzcTVOl+aUJIvrIWulqJ0xl59riA2L6oeNZekfa4jYLNcXzagWyLSsVwGhrRmtJi/UybOZBZKFwkBw0WLhJQXLGX44M1veh1xjPz7f/Hf+MV/837ixrj8umvLgKSW4kfblEfdNpk3XaXMCc1k8rr71qiqz1xVshJvpXiSufpbKXNi/6lnCb3wa7/6Wd7+ozfkIs5qMVTOGXyrHrsACJYBplnrunrD5nCg6zpUnE/e9oeMMYI5QXPOSDEhZW4ns8XpYvM5wCaP1YuEbLwqAbpIA94qzTVc0Tz4MDVdjCSwWIQ2rWKWMqZUDVAlp1Ryl9jEL24AEUiFBqvORlEoKUWUIa4RhCQpExH3zInMcfWmD6ZafYmUsVprVGVqUxciH2Y6ROn4xhJiQg5DFcGIpcmRFyMiDONIMkODtHmmeUcJBwnSRJcLGqCjyzet06yflo6Ku3C43hBjFjxUhZ2dFYOPxNGIMTbXPn58Z6YyRc4dbNAGrNIMZJYySra2fNm5WoYL25Wc5s9jdGIc2FmsGFIe2FouelKKhJB5gbnnMR4yYKZkJS1fpD1OmbqOKW03K+dzfMkICp4cLSWspTRpcTPJW8vOA0RLLIJmL7LaEQ4M44YuLFCBzTiy0y+JyRBxQghl8rRo/CWe1+sNcUj8n4cfIZSuj4hw7bVXs1oKoVNCqNkm45mlfP/hYvMBgw8sfMm9d93POAy84fU/Uup2YX//ABF472t/GE+Grnq++NCjiDjvufZ1LCwxYnz54cc48/w5jl+yi2smVS+cOaAT4Ut/dBf7vs/P3Ppexhj50u/fSbSBW//Ou1nHkS/+3h1EH/i7H/hJVjs7fOo3v8AHb30P/TILo3kIEh49/T0w46fe/EbimTOEhfLnz53hL04/yXXXvoYhDuyslqgI+/trHnr4MVaLJSAMR2qBLQMsWZDECCiDwyYOLJaLCaIt8ePXvhbxhJvzPx56hJScv3nNVa2B9IePPt4k9WQ55kMIxBg5sEP25BjjONIFZfTIjuTBrCy9Z+BL7hyuDwmeM5Cl1DhFVuqcTpUPv/3GjFtB+fhXvsojZ86RPJWOcGYJeaYRlosew+gJFzbA/YcPZOi4PTgk9vZ2AePKq0621rSklMmX5iGqNiWqINHKUJRO7ewaBub00jGwRlXahPehrUtcOuZGT4elCIQ81dVSmpTBiYhqVp4ZIiwUUmWEQrKIijCOG06f/j59CHz1zm+DGffxgLDmJTpDQC8dnXdsNmuGYUAltCInuZNiwqzEOI71PWmIxDExxtRytbaphtykrDJXLVrUYSF9meTKiz9gjTv0oZuUpzYckmcNtaSy2AtpPRBVCGVWeNUvMKwIOs7BcEhwoZPu5Y/KOk4SazNCj5/+PlGyXParX7mjkCRntVoiQfjlL/9xnQxEHHZ3j7Veo7uxt7sD7iSJ9OSc3fU9nQSiD6gK4ziAOL13dL1ikkgSWS4WJNtkscMyUP/wNVfw/P4B//i3P9+YYqfK3vFdnnzy2TakrVKfSMmzzy/7gYmbw1v9wA9Z0hGJ3HzzKTRkdz5+fAfVPOG5s7PCcQ4Px0lBQtjbW+WOTjHnwcEGdyeVmwp9yGMrlrlGpcXjYKxWeQdTzLqihoBLbLMKADEaL+yf4fnnzzJaog+BmBLHj+/WcRSiJb551//GSZhF1iS+4w/Ky35i5C3heu9McDWuvuZyeulJwKuvuYLlsmMZetZxyESnqN1uKefwMhJrhZCMMSJoi/1Os+AyxoGu71iEvi1aVdtDE1YYYtd1eMrtOZM8EG1mxJToOqXvOkYzNuuB7z/+HINlb3r8sadZSEfwwJ324k+NXPSRmXceP+WbgyxeumQp+uZ3nNpqfLRuEaXuLhQ6NyJtNhhdXlaNsbbfi2QmIucNW9eB6gxuRd0hy26evMwz1wl0wQN8+86H2bBuQu7lr7qELz9xu/ylH5p6a3e99x44wwE7dox+L2t6nXaFaVUiQiMr1PZZrdwkZNwwb+1r2tiiNOapRd9Wyu4z7x7XSbA6NZppenIryB/otCPtG4cc4DgLDdwd75e/sucGb9m9xdcHLxBaLvW2eN96HkCasKRMj7jNa/ipkySzAe3Sn5w/dCWUZ5Km6TG3WTsNb+zOxdlZ7HHH+u7/N88NpiV0vpr17jIdrhquSCmA2gKkDTy4Z6SmNSlnD1CqI6Zz5XJqY5WiqmPq+Fp76NLpJT8VYsnoRJATS47m+leOV45Xjgse/xf9RK6bExT2NAAAAABJRU5ErkJggg==';
   const GAMEPLAY_ADVISOR_LEGACY_NAMES = Object.freeze(['겜충겜충 혼노모 시키상']);
   const COMMUNICATION_STATE_VERSION = 2;
-  const COMMUNICATION_INDEX_VERSION = 2;
+  const COMMUNICATION_INDEX_VERSION = 4;
   const COMMUNICATION_AGENT_ID = 'communication-resident';
   const COMMUNICATION_AGENT_NAME = '저기요 이봐요 모시모씨';
   const COMMUNICATION_EVENT_MAX = 24;
@@ -152,6 +153,26 @@
     { index: 7, label: '초장편', englishLabel: 'very long-form', instruction: 'Write at least 9000 words.', scale: 'Very long-form: prepare dense continuity, layered character movement, multiple world threads, and long-range setup while preserving knowledge boundaries.' },
   ]);
   const SYSTEM_PATCH_NOTES = Object.freeze([
+    {
+      version: '1.3.6',
+      kind: 'stable-long-memory-state-blobs',
+      summary: 'Keeps unchanged long-memory sync bookkeeping stable so content-addressed state blobs remain reusable across turns, and bounds blob hydration concurrency to avoid overlapping whole-database storage snapshots.',
+    },
+    {
+      version: '1.3.5',
+      kind: 'chatbot-lore-and-original-work-contact-roster',
+      summary: 'Builds communication contacts from the current chatbot rather than the Risu persona/card catalog, indexes person-shaped lore regardless of keyword activation, and offers an explicit cached Mosi-model check for a confidently recognized original work and its public canonical cast.',
+    },
+    {
+      version: '1.3.5',
+      kind: 'identity-aware-universal-private-messenger',
+      summary: 'Makes the current Risu persona the visible default private-communication identity, allows an explicit persona, card, Psyche character, lore identity, or directly named identity to be selected without changing the host persona, and uses that same identity for contact discovery, relationship evidence, private transcripts, and every communication-agent request.',
+    },
+    {
+      version: '1.3.5',
+      kind: 'instant-stable-messenger-surface',
+      summary: 'Rebuilds the communication resident as a compact dark messenger with a visible My Info card, automatic world-sensitive presentation, no technical skin disclaimer, cached controls, one-surface repainting, scoped fast navigation, and stale-session guards modeled after the gameplay panel.',
+    },
     {
       version: '1.3.4',
       kind: 'coarse-genre-aware-gameplay-categories',
@@ -1360,7 +1381,18 @@
     communicationPanelOpen: false,
     communicationPanelSession: null,
     communicationPanelBusy: false,
+    communicationPanelActivity: null,
+    communicationPanelDrafts: new Map(),
     communicationPanelThreadId: '',
+    communicationPanelScope: '',
+    communicationPanelSelfPicker: false,
+    communicationPanelContactPicker: false,
+    communicationPanelMountedData: null,
+    communicationPanelWarmSnapshots: new Map(),
+    communicationPanelLiveBinding: null,
+    communicationPanelRenderEpoch: 0,
+    communicationPanelPerformanceTrace: [],
+    communicationIdentityInputOpen: false,
     communicationPanelRoot: null,
     communicationPanelListenerIds: [],
     communicationPanelListenerSession: null,
@@ -1660,6 +1692,15 @@
     Runtime.gameplayComposerPanelSession = null;
     Runtime.communicationPanelSession = null;
     Runtime.communicationPanelOpen = false;
+    Runtime.communicationPanelScope = '';
+    Runtime.communicationPanelSelfPicker = false;
+    Runtime.communicationPanelContactPicker = false;
+    Runtime.communicationPanelMountedData = null;
+    Runtime.communicationPanelWarmSnapshots = new Map();
+    Runtime.communicationPanelLiveBinding = null;
+    Runtime.communicationPanelRenderEpoch = Math.max(0, Number(Runtime.communicationPanelRenderEpoch || 0)) + 1;
+    Runtime.communicationPanelPerformanceTrace = [];
+    Runtime.communicationIdentityInputOpen = false;
     Runtime.communicationUiScope = '';
     Runtime.communicationCurrentScope = '';
     Runtime.communicationStorageQueues = new Map();
@@ -3954,18 +3995,21 @@
   const COMMUNICATION_AGENT_PROMPT = [
     'You are the Eros Tower one-to-one communication resident named 저기요 이봐요 모시모씨.',
     'Return exactly one valid JSON object and nothing else. Keep replies fast and short.',
-    'You simulate only private text messages and live text calls between the user persona and one supplied known contact. There is no feed, group chat, media upload, profile system, or social-network feature.',
+    'You simulate only private text messages and live text calls between the supplied userIdentity and one supplied known contact. userIdentity is the sole local speaker identity for this request; it may be the current Risu persona or an identity explicitly selected inside the communication panel. Never silently substitute the host persona, card, narrator, or another actor.',
+    'There is no feed, group chat, media upload, public profile system, or social-network feature.',
     'The request mode is one of user-text, outgoing-call, call-turn, or proactive-turn. Follow the exact response shape for that mode.',
     'This private communication is your domain. Eros Tower supplies the bones: character information and description, canonical sources and lorebook, managed state, relationships, long memory, recent main-chat events, offscreen pressure, and the private transcript. Read them together and make the contact feel like the same person from the main chat.',
-    'Act as the supplied contact, with their voice, habits, willingness, current pressures, relationship, memories, and point of view. The user does not control whether the contact answers, reads, ignores, declines, misses, delays, ends, or cannot be reached.',
+    'Act as the supplied contact, with their voice, habits, willingness, current pressures, relationship with userIdentity, memories, and point of view. The user does not control whether the contact answers, reads, ignores, declines, misses, delays, ends, or cannot be reached.',
     'Do not reward persistence with a guaranteed reply. A contact may keep ignoring, become annoyed, follow up later, or answer for their own reasons.',
     'The supplied material is a foundation, not a script that forbids ordinary inference. Preserve established facts and continuity, then fill small conversational gaps with plausible reactions, remembered details, rumors, mundane actions, and world-fitting connective detail when that makes the exchange natural. Do not answer like a database or repeatedly say that information is missing.',
     'Use Recent Main Conversation and Memory Context actively. If it is plausible that this contact witnessed, was told, inferred, or heard about an earlier event, they may refer to it naturally, including details such as where the user went or what happened, without waiting for the user to restate it.',
     'Do not leak a truly reader-only future fact or another person\'s sealed private fact without a plausible in-world route. This is a point-of-view judgment you make from the supplied person, relationship, sources, and memories; it is not a blanket rule that every omitted detail is unknown.',
     'Dialogue may introduce the contact\'s belief, lie, guess, threat, promise, report, or a small new detail consistent with the world. Keep attribution clear so Eros/Psyche can absorb the exchange on the next turn without mistaking every claim for objective truth.',
-    'Choose a communication manner that fits the supplied world, genre profile, sources, and relationship. If the exact device or channel is unnamed, use a modest plausible form rather than forcing a modern phone or declaring the contact unreachable solely because the medium was not pre-recorded. Never contradict an established communication limit.',
+    'Choose a communication manner that fits the supplied world, genre profile, sources, relationship, and communicationChannel. If the exact device or channel is unnamed, use a modest plausible form rather than forcing a modern phone or declaring the contact unreachable solely because the medium was not pre-recorded. Never contradict an established communication limit.',
+    'A displayed channel is presentation guidance, not proof that userIdentity knows the contact, owns the needed technique, has permission, or can reach them. Judge access from the supplied pair relationship, abilities, knowledge, world rules, and memories. An unexpected link may make the contact demand how the connection was made, suspect interception or a trap, sever the link, refuse, ignore it, or answer cautiously. Vary the reaction instead of guaranteeing contact.',
+    'Use the world\'s own vocabulary and etiquette: for example shinobi communication techniques, wuxia sound transmission, xianxia spiritual-sense transmission, magical sending, telepathy, radio, or ordinary messaging only when each is plausible. Do not import smartphone language into a non-modern setting. Emoji, seals, sigils, reaction marks, and punctuation are optional character voice; use them sparingly and only when that person and channel would naturally use them.',
     'For text and call dialogue, write in outputLanguage. Keep each call turn to one or two short quoted utterances worth of content, but return the JSON string without adding quote marks solely for display.',
-    'Allowed user-text JSON: {"mode":"user-text","action":"reply|ignore|delay|unreachable","delivery":"delivered|failed|unknown","read":"read|unread|unknown","reply":"","dueTurns":0}. reply requires non-empty reply. ignore has no reply and read=read. delay has no immediate reply and dueTurns 1..12. unreachable uses delivery failed or unknown.',
+    'Allowed user-text JSON: {"mode":"user-text","action":"reply|ignore|no-response|delay|refuse|unreachable","delivery":"delivered|failed|unknown","read":"read|unread|unknown","reply":"","dueTurns":0}. reply requires non-empty reply. ignore means the contact read it and deliberately did not answer. no-response means no answer without confirmed deliberate ignoring. delay has no immediate reply and dueTurns 1..12. refuse means the contact rejects the communication without speaking. unreachable uses delivery failed or unknown. Never fabricate a reply for ignore, no-response, delay, refuse, or unreachable.',
     'Allowed outgoing-call JSON: {"mode":"outgoing-call","action":"answer|decline|miss|unreachable","opening":"","reasonCode":""}. answer requires a short opening; every other action has an empty opening.',
     'Allowed call-turn JSON: {"mode":"call-turn","action":"continue|end|drop","reply":"","reasonCode":""}. continue/end normally include one short reply. drop may be empty.',
     'Allowed proactive-turn JSON: {"mode":"proactive-turn","action":"none|text|call","contactId":"","body":""}. Consider the full Allowed Contacts roster and choose at most one exact contactId. text/call require body; none requires empty contactId/body.',
@@ -5391,6 +5435,27 @@
     return COMMUNICATION_SKINS.includes(key) ? key : fallback;
   }
 
+  function normalizeCommunicationSelfIdentity(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    const id = cleanString(value.id, '').slice(0, 160);
+    const name = gameplayPlayerFacingActorName(value.name, value.displayName).slice(0, 120);
+    if (!id || !name || isGenericCharacterStateToken(name)) return null;
+    const source = ['persona', 'card', 'canonical', 'psyche', 'user'].includes(String(value.source || '').toLowerCase())
+      ? String(value.source).toLowerCase() : 'user';
+    return {
+      id,
+      name,
+      source,
+      personaId: cleanString(value.personaId, '').slice(0, 160),
+      cardRef: cleanString(value.cardRef, '').slice(0, 160),
+      canonicalIdentityId: cleanString(value.canonicalIdentityId, '').slice(0, 180),
+      characterId: cleanString(value.characterId || value.character?.id, '').slice(0, 160),
+      aliases: uniqueStrings(normalizeStringArray(value.aliases)
+        .concat(normalizeStringArray(value.character?.aliases))).slice(0, 24),
+      profile: cleanString(value.profile, '').slice(0, 2400),
+    };
+  }
+
   function normalizeCommunicationBridgeEvent(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
     const seq = parseNumber(value.seq, 0, 1, 999999999);
@@ -5456,6 +5521,11 @@
       name,
       characterId: cleanString(value.characterId || id, '').slice(0, 120),
       aliases: uniqueStrings(normalizeStringArray(value.aliases)).slice(0, 20),
+      selfIdentityId: cleanString(value.selfIdentityId, '').slice(0, 160),
+      source: ['chatbot', 'original', 'persona', 'card', 'canonical', 'psyche', 'user'].includes(String(value.source || '').toLowerCase())
+        ? String(value.source).toLowerCase() : '',
+      profile: cleanString(value.profile, '').slice(0, 2400),
+      addedByUser: value.addedByUser === true,
       lastActivityAt: cleanString(value.lastActivityAt, ''),
       mediumHint: cleanString(value.mediumHint, '').slice(0, 120),
       reachable: value.reachable === true ? true : value.reachable === false ? false : null,
@@ -5473,6 +5543,38 @@
     return { reachability, medium, constraints, evidence };
   }
 
+  function normalizeCommunicationOriginalRosterCharacter(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    const name = gameplayPlayerFacingActorName(value.name, value.displayName).slice(0, 120);
+    if (!name) return null;
+    return {
+      id: cleanString(value.id, `original:${slug(name)}`).slice(0, 160),
+      name,
+      source: 'original',
+      aliases: uniqueStrings(normalizeStringArray(value.aliases)).slice(0, 24),
+      role: cleanString(value.role, '').slice(0, 240),
+      profile: cleanString(firstNonEmpty(value.profile, value.description, value.evidence), '').slice(0, 2400),
+    };
+  }
+
+  function normalizeCommunicationOriginalRoster(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    const characters = Array.from(new Map((Array.isArray(value.characters) ? value.characters : [])
+      .map(normalizeCommunicationOriginalRosterCharacter).filter(Boolean)
+      .map(character => [normalizeGameplayLookupKey(character.name), character])).values())
+      .slice(0, COMMUNICATION_CONTACT_MAX);
+    const workTitle = cleanString(value.workTitle, '').slice(0, 180);
+    const recognized = parseBool(value.recognized, false) === true && Boolean(workTitle) && characters.length > 0;
+    if (!recognized) return null;
+    return {
+      fingerprint: cleanString(value.fingerprint, '').slice(0, 160),
+      workTitle,
+      recognized: true,
+      characters,
+      discoveredAt: cleanString(value.discoveredAt, nowIso()),
+    };
+  }
+
   function mergeCommunicationContactRecords(previous, next) {
     const prior = normalizeCommunicationContact(previous);
     const incoming = normalizeCommunicationContact(next);
@@ -5484,6 +5586,10 @@
       aliases: uniqueStrings([].concat(prior.aliases || [], incoming.aliases || [])).slice(0, 20),
       mediumHint: incoming.mediumHint || prior.mediumHint,
       reachable: incoming.reachable === null ? prior.reachable : incoming.reachable,
+      selfIdentityId: incoming.selfIdentityId || prior.selfIdentityId,
+      source: incoming.source || prior.source,
+      profile: incoming.profile || prior.profile,
+      addedByUser: incoming.addedByUser || prior.addedByUser,
       lastActivityAt: incoming.lastActivityAt || prior.lastActivityAt,
     });
   }
@@ -5524,6 +5630,8 @@
       version: COMMUNICATION_INDEX_VERSION,
       scope: cleanString(scope, ''),
       skinMode: 'auto',
+      selfIdentity: null,
+      originalRoster: null,
       contacts: [],
       threads: [],
       pending: [],
@@ -5567,6 +5675,8 @@
       version: COMMUNICATION_INDEX_VERSION,
       scope: cleanString(scope || raw.scope, ''),
       skinMode: normalizeCommunicationSkin(raw.skinMode),
+      selfIdentity: normalizeCommunicationSelfIdentity(raw.selfIdentity),
+      originalRoster: normalizeCommunicationOriginalRoster(raw.originalRoster),
       contacts: Array.from(contactsById.values()).slice(-COMMUNICATION_CONTACT_MAX),
       threads: Array.from(threadsById.values()).slice(-COMMUNICATION_CONTACT_MAX),
       pending: (Array.isArray(raw.pending) ? raw.pending : []).map(normalizeCommunicationPending).filter(Boolean).slice(-80),
@@ -5591,6 +5701,7 @@
       operationId: cleanString(value.operationId, '').slice(0, 160),
       callId: cleanString(value.callId, '').slice(0, 160),
       at: cleanString(value.at, nowIso()),
+      displayTime: cleanString(value.displayTime, '').slice(0, 120),
     };
   }
 
@@ -5947,6 +6058,22 @@
     return body.value;
   }
 
+  async function readStateBlobsBounded(references) {
+    const refs = Array.isArray(references) ? references : [];
+    if (!refs.length) return [];
+    const chunks = new Array(refs.length);
+    let cursor = 0;
+    const workerCount = Math.min(STATE_BLOB_READ_CONCURRENCY, refs.length);
+    await Promise.all(Array.from({ length: workerCount }, async () => {
+      while (cursor < refs.length) {
+        const index = cursor;
+        cursor += 1;
+        chunks[index] = await readStateBlob(refs[index]);
+      }
+    }));
+    return chunks;
+  }
+
   async function buildStateReference(scope, state) {
     const canonical = stateStorageCanonicalValue(state);
     const shell = { ...canonical };
@@ -5993,7 +6120,7 @@
     if (!isStateReference(reference)) return reference;
     const hydrated = deepCloneJson(reference.shell);
     for (const section of reference.sections) {
-      const chunks = await Promise.all((Array.isArray(section.refs) ? section.refs : []).map(readStateBlob));
+      const chunks = await readStateBlobsBounded(section.refs);
       if (section.kind === 'array') hydrated[section.field] = chunks.flat();
       else if (section.kind === 'object') hydrated[section.field] = Object.fromEntries(chunks.flat());
       else throw new Error(`unsupported state section kind: ${section.kind}`);
@@ -6503,10 +6630,14 @@
   }
 
   function communicationBadgeFromIndex(index) {
-    return (Array.isArray(index?.threads) ? index.threads : []).reduce((badge, thread) => ({
+    const currentContactIds = new Set((Array.isArray(index?.contacts) ? index.contacts : [])
+      .map(contact => cleanString(contact?.id, '')).filter(Boolean));
+    return (Array.isArray(index?.threads) ? index.threads : [])
+      .filter(thread => currentContactIds.has(cleanString(thread?.contactId, '')))
+      .reduce((badge, thread) => ({
       unread: badge.unread + parseNumber(thread?.unread, 0, 0, 9999),
       missed: badge.missed + parseNumber(thread?.missed, 0, 0, 9999),
-    }), { unread: 0, missed: 0 });
+      }), { unread: 0, missed: 0 });
   }
 
   function communicationBadgeMap() {
@@ -6549,6 +6680,461 @@
     }
   }
 
+  function communicationSelfIdentityCandidates(state, context) {
+    const cached = context?._communicationSelfIdentityCandidates;
+    if (cached?.state === state && Array.isArray(cached.candidates)) return cached.candidates;
+    const candidates = collectGameplaySelectableActors(state, context);
+    if (context && typeof context === 'object') {
+      context._communicationSelfIdentityCandidates = { state, candidates };
+    }
+    return candidates;
+  }
+
+  function communicationSelfIdentity(state, context, index = null) {
+    const stored = normalizeCommunicationSelfIdentity(index?.selfIdentity);
+    const candidates = communicationSelfIdentityCandidates(state, context);
+    let actor = null;
+    if (stored) {
+      const storedKeys = identityLookupKeys([
+        stored.id, stored.name, stored.personaId, stored.cardRef,
+        stored.canonicalIdentityId, stored.characterId,
+      ].concat(stored.aliases));
+      const matches = candidates.filter(candidate => gameplayActorSearchKeys(candidate)
+        .some(key => storedKeys.has(key)));
+      actor = matches.length === 1 ? matches[0] : null;
+    } else {
+      actor = candidates.find(candidate => candidate.source === 'persona' && candidate.selected === true)
+        || resolveGameplayActor(state, context)
+        || null;
+    }
+    const persona = getEffectiveSelectedPersona(context?.db, context?.currentChat);
+    const fallbackName = gameplayPlayerFacingActorName(
+      persona?.name, context?.userName, context?.username,
+      context?.db?.userName, context?.db?.username,
+    );
+    const fallbackId = firstNonEmpty(persona?.id, fallbackName ? `user:${slug(fallbackName)}` : 'user:current');
+    const normalized = normalizeCommunicationSelfIdentity(actor || stored || {
+      id: `persona:${slug(fallbackId)}`,
+      personaId: firstNonEmpty(persona?.id, fallbackId),
+      name: fallbackName || '나',
+      source: persona ? 'persona' : 'user',
+      profile: formatEffectivePersonaBlock(persona),
+    });
+    if (!normalized) return {
+      id: 'user:current', name: fallbackName || '나', source: 'user', aliases: [], automatic: !stored,
+    };
+    const character = actor?.character
+      || (normalized.characterId ? state?.characters?.[normalized.characterId] : null)
+      || Object.values(state?.characters || {}).find(item => (
+        Array.from(characterIdentityKeys(item)).some(key => identityLookupKeys([
+          normalized.id, normalized.name, normalized.characterId,
+        ].concat(normalized.aliases)).has(key))
+      ))
+      || null;
+    return {
+      ...normalized,
+      character,
+      automatic: !stored,
+      selectedHostPersona: actor?.source === 'persona' && actor?.selected === true,
+    };
+  }
+
+  function communicationSelfIdentityLabel(identity) {
+    if (identity?.automatic && identity?.source === 'persona') return '현재 Risu 페르소나';
+    const labels = {
+      persona: '선택한 페르소나', card: '선택한 캐릭터 카드',
+      canonical: '선택한 세계관 인물', psyche: '선택한 Psyche 인물', user: '직접 지정',
+    };
+    return labels[identity?.source] || '직접 지정';
+  }
+
+  function communicationSelfIdentityProfile(identity, context = null) {
+    const character = identity?.character || {};
+    const persona = identity?.personaId
+      ? findPersonaByReference(gameplayPersonaSourceList(context), identity.personaId)
+      : null;
+    const description = firstNonEmpty(
+      character.status,
+      [character.role, character.class, character.rank].filter(Boolean).join(' · '),
+      identity?.profile,
+      formatEffectivePersonaBlock(persona),
+    );
+    return {
+      id: cleanString(identity?.id, ''),
+      name: cleanString(identity?.name, '나'),
+      source: cleanString(identity?.source, 'user'),
+      label: communicationSelfIdentityLabel(identity),
+      aliases: normalizeStringArray(identity?.aliases).slice(0, 12),
+      role: cleanString(firstNonEmpty(character.role, character.class), '').slice(0, 160),
+      status: cleanString(character.status, '').slice(0, 240),
+      description: cleanString(description, '').replace(/\s+/g, ' ').slice(0, 320),
+    };
+  }
+
+  function communicationRecordIdentityKeys(value) {
+    const character = value?.character || {};
+    const keys = identityLookupKeys([
+      value?.name, value?.displayName, value?.alias,
+      character?.name, character?.displayName, character?.alias,
+    ].concat(
+      normalizeStringArray(value?.aliases),
+      normalizeStringArray(character?.aliases),
+    ));
+    [
+      value?.id, value?.personaId, value?.cardRef, value?.canonicalIdentityId,
+      value?.characterId, character?.id, character?.canonicalIdentityRef,
+    ].forEach(identifier => {
+      const key = normalizeIdentityLookupKey(identifier);
+      if (key.length >= 2 && !isGenericCharacterStateToken(key) && !isForbiddenIdentityAlias(key)) keys.add(key);
+    });
+    return keys;
+  }
+
+  function communicationContactForSelf(value, selfIdentity, manuallySelected = false) {
+    const contact = normalizeCommunicationContact(value);
+    if (!contact) return null;
+    if (!manuallySelected) return normalizeCommunicationContact({ ...contact, selfIdentityId: '' });
+    const selfIdentityId = cleanString(selfIdentity?.id, '').slice(0, 160);
+    if (!selfIdentityId) return null;
+    return normalizeCommunicationContact({
+      ...contact,
+      id: `self-${slug(selfIdentityId)}--${contact.id}`.slice(0, 120),
+      selfIdentityId,
+    });
+  }
+
+  function communicationContactFromActor(actor, selfIdentity, manuallySelected = false, options = {}) {
+    if (!actor?.id || !gameplayPlayerFacingActorName(actor?.name)
+      || ['persona', 'card'].includes(actor.source)) return null;
+    const character = actor.character || {};
+    const baseId = `character:${slug(firstNonEmpty(
+      actor.characterId, character.id, actor.cardRef,
+      actor.canonicalIdentityId, actor.id, actor.name,
+    ))}`;
+    return communicationContactForSelf({
+      id: baseId,
+      characterId: cleanString(firstNonEmpty(actor.characterId, character.id, actor.id), '').slice(0, 120),
+      name: gameplayPlayerFacingActorName(actor.name, character.name, character.displayName),
+      aliases: uniqueStrings(normalizeStringArray(actor.aliases)
+        .concat(normalizeStringArray(character.aliases))).slice(0, 20),
+      source: ['chatbot', 'original', 'canonical', 'psyche'].includes(actor.source) ? actor.source : 'user',
+      profile: cleanString(firstNonEmpty(
+        actor.profile,
+        character.description,
+        character.personality,
+        actor.canonicalSubject ? safeJsonStringify(actor.canonicalSubject) : '',
+      ), '').slice(0, 2400),
+      addedByUser: options.addedByUser === true,
+    }, selfIdentity, manuallySelected);
+  }
+
+  function communicationContactSourceLabel(contact) {
+    const labels = {
+      chatbot: '현재 채팅봇', original: '원작 인물', persona: '페르소나', card: '캐릭터 카드',
+      canonical: '세계관 인물', psyche: 'Psyche 등장인물', user: '이름으로 추가',
+    };
+    return labels[contact?.source] || '알려진 인물';
+  }
+
+  function communicationCanonicalInventorySources(state, context) {
+    const byId = new Map();
+    const add = source => {
+      if (!source || typeof source !== 'object') return;
+      const key = cleanString(firstNonEmpty(
+        source.id, source.sourceId, source.path, source.baseId,
+        source.hash, source.sourceHash,
+      ), `source:${byId.size}`);
+      if (!byId.has(key)) byId.set(key, source);
+    };
+    (Array.isArray(context?.canonicalSources) ? context.canonicalSources : []).forEach(add);
+    normalizeCanonicalStore(state?.canonicalStore, state).units
+      .filter(unit => !['missing', 'superseded', 'archived'].includes(unit.status))
+      .forEach(add);
+    return Array.from(byId.values());
+  }
+
+  function communicationLorePersonLabel(value) {
+    const label = cleanString(value, '')
+      .replace(/^(?:character|person|npc|cast|profile|인물|캐릭터|등장인물|人物|角色|キャラクター)\s*[:：|/\-]\s*/i, '')
+      .replace(/\s*(?:profile|character profile|인물 설정|캐릭터 설정|人物設定|角色设定|プロフィール)\s*$/i, '')
+      .trim();
+    if (!label || isGenericCharacterStateToken(label) || isForbiddenIdentityAlias(label)) return '';
+    return gameplayPlayerFacingActorName(label).slice(0, 120);
+  }
+
+  function communicationLoreActorCandidates(state, context) {
+    const actors = [];
+    canonicalReferenceSourceGroups(communicationCanonicalInventorySources(state, context)).forEach(group => {
+      const eligible = group.filter(source => source?.meta?.enabled !== false
+        && source?.meta?.injectionEligible !== false
+        && source?.meta?.hiddenSource !== true
+        && source?.meta?.futureSource !== true
+        && source?.hiddenSource !== true
+        && source?.futureSource !== true);
+      if (!eligible.length) return;
+      const ordered = eligible.slice().sort((a, b) => Number(a?.part?.index || 1) - Number(b?.part?.index || 1));
+      const content = ordered.map(source => cleanString(source?.content, '')).filter(Boolean).join('\n');
+      if (!content) return;
+      const lead = ordered[0];
+      const label = communicationLorePersonLabel(firstNonEmpty(lead?.label, lead?.name));
+      const heading = communicationLorePersonLabel(extractIdentityHeadingText(content));
+      const explicitName = gameplayPlayerFacingActorName(extractIdentityName(content, '')).slice(0, 120);
+      const activationKeys = uniqueStrings(ordered.flatMap(source => normalizeStringArray(
+        source?.activationKeys || source?.keys,
+      ))).filter(key => !isGenericCharacterStateToken(key) && !isForbiddenIdentityAlias(key));
+      const keyConfirmsLabel = Boolean(label && activationKeys.some(key => (
+        gameplayAdvisorNamesEquivalent(label, key)
+        || normalizeGameplayLookupKey(label) === normalizeGameplayLookupKey(key)
+      )));
+      const profileEvidence = eligible.some(source => isPinnedIdentityLoreSource(source)
+        || isExplicitLoreCharacterSource(source)
+        || looksLikeCharacterProfileUnit(source));
+      const name = firstNonEmpty(
+        explicitName,
+        profileEvidence ? heading : '',
+        profileEvidence || keyConfirmsLabel ? label : '',
+      );
+      if (!name) return;
+      const sourceRef = firstNonEmpty(lead?.baseId, lead?.sourceId, lead?.path, lead?.id, name);
+      actors.push({
+        id: `canonical:lore-${slug(sourceRef)}`,
+        canonicalIdentityId: cleanString(sourceRef, '').slice(0, 180),
+        name,
+        source: 'canonical',
+        aliases: uniqueStrings(extractIdentityAliases(content, label, name)
+          .concat(activationKeys.filter(key => String(key).length <= 80)))
+          .filter(alias => !gameplayAdvisorNamesEquivalent(alias, name))
+          .slice(0, 24),
+        identityIds: uniqueStrings(ordered.flatMap(source => [
+          source?.id, source?.sourceId, source?.path, source?.baseId,
+        ].filter(Boolean))).slice(0, 48),
+        profile: content.slice(0, 2400),
+      });
+    });
+    return actors;
+  }
+
+  function communicationOriginalWorkHints(state, context) {
+    const character = context?.character || {};
+    const direct = [
+      character?.originalWork, character?.sourceWork, character?.series, character?.franchise, character?.fandom,
+      character?.data?.originalWork, character?.data?.sourceWork, character?.data?.series,
+      character?.data?.franchise, character?.data?.fandom,
+    ];
+    const texts = [
+      character?.description, character?.desc, character?.scenario,
+      character?.data?.description, character?.data?.desc, character?.data?.scenario,
+    ].concat(communicationCanonicalInventorySources(state, context).slice(0, 80).map(source => source?.content));
+    texts.forEach(text => {
+      const source = String(text || '');
+      const match = source.match(/(?:^|\n)\s*(?:원작(?:명|\s*작품)?|작품명|source\s*work|original\s*work|series|franchise|fandom|原作|作品名)\s*[：:]\s*([^\n\r|]{1,180})/i);
+      if (match?.[1]) direct.push(match[1]);
+    });
+    return uniqueStrings(direct.map(value => cleanString(value, '').replace(/^[-*]\s*/, '').trim())
+      .filter(value => value && value.length <= 180 && !isGenericCharacterStateToken(value)))
+      .slice(0, 12);
+  }
+
+  function communicationOriginalRosterFingerprint(state, context) {
+    const sources = communicationCanonicalInventorySources(state, context);
+    return hashString(safeJsonStringify({
+      characterId: firstNonEmpty(context?.characterId, referenceCharacterId(context?.character)),
+      hints: communicationOriginalWorkHints(state, context),
+      sources: sources.map(source => firstNonEmpty(source?.rawHash, source?.sourceHash, source?.hash, source?.id)).slice(0, 160),
+    }));
+  }
+
+  function communicationOriginalRosterForContext(state, context, index) {
+    const roster = normalizeCommunicationOriginalRoster(index?.originalRoster);
+    if (!roster) return null;
+    const fingerprint = communicationOriginalRosterFingerprint(state, context);
+    return roster.fingerprint && roster.fingerprint !== fingerprint ? null : roster;
+  }
+
+  function communicationOriginalRosterEvidence(state, context) {
+    const sources = communicationCanonicalInventorySources(state, context)
+      .filter(source => source?.meta?.hiddenSource !== true && source?.hiddenSource !== true)
+      .slice(0, 48)
+      .map(source => ({
+        label: cleanString(firstNonEmpty(source?.label, source?.name, source?.path), '').slice(0, 160),
+        activationKeys: normalizeStringArray(source?.activationKeys || source?.keys).slice(0, 16),
+        content: cleanString(source?.content, '').slice(0, 900),
+      }));
+    return {
+      originalWorkHints: communicationOriginalWorkHints(state, context),
+      currentChatbot: {
+        name: gameplayPlayerFacingActorName(context?.character?.name, context?.character?.data?.name),
+        description: cleanString(firstNonEmpty(
+          context?.character?.description, context?.character?.data?.description,
+          context?.character?.scenario, context?.character?.data?.scenario,
+        ), '').slice(0, 3600),
+      },
+      locallyKnownPeople: communicationChatbotActorCandidates(state, context, null)
+        .map(actor => actor.name).slice(0, 80),
+      canonicalInventory: sources,
+    };
+  }
+
+  async function runCommunicationOriginalRosterDiscovery(conf, context, state) {
+    const agent = getCommunicationAgent(conf);
+    if (!agent) throw new Error(`${COMMUNICATION_AGENT_NAME}가 꺼져 있습니다.`);
+    const runtime = resolveAgentConf(agent, conf);
+    if (!canCallProvider(runtime)) throw new Error('원작 인물을 확인할 모시모씨 모델과 인증 정보를 먼저 설정하세요.');
+    const evidence = communicationOriginalRosterEvidence(state, context);
+    const prompt = [
+      'You identify the original source work and its public named cast for a private messenger contact picker.',
+      'Return exactly one JSON object: {"recognized":boolean,"workTitle":"","characters":[{"name":"","aliases":[],"role":"","evidence":""}]}.',
+      'Use the supplied current-chatbot material first. You may use well-established knowledge of a clearly identified published work, but never invent a work, OC, alternate-universe-only person, user persona, or unrelated franchise character.',
+      'If the work is uncertain, return recognized:false with an empty characters array. Include at most 40 canonical, publicly identifiable named characters. Do not reveal spoiler-only secret identities in names or evidence.',
+      'Names must be canonical display names. Keep evidence to one short reason and do not narrate.',
+    ].join('\n');
+    const raw = await callAgent({
+      ...runtime,
+      temperature: 0.2,
+      maxTokens: Math.min(1800, Math.max(900, Number(runtime.maxTokens || 1200))),
+      contextWindow: Math.min(4, Math.max(2, Number(runtime.contextWindow || 3))),
+    }, [
+      { role: 'system', content: prompt },
+      { role: 'user', content: JSON.stringify(evidence) },
+    ]);
+    const parsed = extractJsonObject(raw);
+    return normalizeCommunicationOriginalRoster({
+      ...parsed,
+      fingerprint: communicationOriginalRosterFingerprint(state, context),
+      discoveredAt: nowIso(),
+    });
+  }
+
+  function communicationChatbotActorCandidates(state, context, index = null) {
+    const actors = [];
+    const add = value => {
+      if (!value?.id || !gameplayPlayerFacingActorName(value?.name)) return;
+      const actor = {
+        ...value,
+        name: gameplayPlayerFacingActorName(value.name).slice(0, 120),
+        aliases: uniqueStrings(normalizeStringArray(value.aliases)
+          .concat(normalizeStringArray(value.character?.aliases))).slice(0, 32),
+        identityIds: uniqueStrings(normalizeStringArray(value.identityIds)
+          .concat([value.id, value.cardRef, value.canonicalIdentityId, value.characterId].filter(Boolean))),
+      };
+      const keys = communicationRecordIdentityKeys(actor);
+      const existingIndex = actors.findIndex(existing => Array.from(communicationRecordIdentityKeys(existing))
+        .some(key => keys.has(key)));
+      if (existingIndex < 0) {
+        actors.push(actor);
+        return;
+      }
+      const existing = actors[existingIndex];
+      actors[existingIndex] = {
+        ...actor,
+        ...existing,
+        aliases: uniqueStrings([].concat(existing.aliases || [], actor.aliases || [])).slice(0, 32),
+        identityIds: uniqueStrings([].concat(existing.identityIds || [], actor.identityIds || [])).slice(0, 48),
+        cardRef: firstNonEmpty(existing.cardRef, actor.cardRef),
+        canonicalIdentityId: firstNonEmpty(existing.canonicalIdentityId, actor.canonicalIdentityId),
+        characterId: firstNonEmpty(existing.characterId, actor.characterId),
+        character: existing.character || actor.character,
+        canonicalSubject: existing.canonicalSubject || actor.canonicalSubject,
+        profile: firstNonEmpty(existing.profile, actor.profile),
+      };
+    };
+    const currentCard = gameplayCharacterCardRecord(context?.character, 0);
+    if (currentCard) add({
+      ...currentCard,
+      source: 'chatbot',
+      profile: cleanString(firstNonEmpty(
+        context?.character?.description, context?.character?.data?.description,
+        context?.character?.personality, context?.character?.data?.personality,
+      ), '').slice(0, 2400),
+    });
+    Object.entries(state?.characters || {}).forEach(([stateId, value]) => {
+      const character = normalizeCharacterState({ id: stateId, ...(value || {}) });
+      const name = gameplayPlayerFacingActorName(character.name, character.displayName, ...normalizeStringArray(character.aliases));
+      if (!name) return;
+      add({
+        id: `psyche:${slug(firstNonEmpty(character.id, stateId, name))}`,
+        name,
+        source: 'psyche',
+        aliases: normalizeStringArray(character.aliases),
+        canonicalIdentityId: cleanString(character.canonicalIdentityRef, ''),
+        characterId: firstNonEmpty(character.id, stateId),
+        character,
+        profile: cleanString(firstNonEmpty(
+          character.description, character.personality, character.status, character.role,
+        ), '').slice(0, 2400),
+      });
+    });
+    uniqueStrings(normalizeStringArray(state?.scene?.presentCast)
+      .concat(normalizeStringArray(state?.activePerspective?.presentCast)))
+      .forEach(name => add({ id: `psyche:scene-${slug(name)}`, name, source: 'psyche' }));
+    (Array.isArray(state?.relationships) ? state.relationships : []).forEach(relationship => {
+      ['a', 'b'].map(side => normalizeRelationshipEndpoint(relationship, side)).filter(Boolean)
+        .forEach(name => add({ id: `psyche:relationship-${slug(name)}`, name, source: 'psyche' }));
+    });
+    communicationLoreActorCandidates(state, context).forEach(add);
+    gameplayCanonicalActorRecords(state, context).forEach(add);
+    gameplayCanonicalProfileActorsForLookup(context).forEach(add);
+    const originalRoster = communicationOriginalRosterForContext(state, context, index);
+    (originalRoster?.characters || []).forEach(character => add({
+      ...character,
+      canonicalIdentityId: character.id,
+      source: 'original',
+    }));
+    const currentKeys = communicationRecordIdentityKeys(currentCard);
+    const excludedDatabaseKeys = new Set();
+    gameplayPersonaRecords(context).forEach(actor => {
+      communicationRecordIdentityKeys(actor).forEach(key => excludedDatabaseKeys.add(key));
+    });
+    gameplayCharacterCardRecords(context).forEach(actor => {
+      const keys = communicationRecordIdentityKeys(actor);
+      if (Array.from(keys).some(key => currentKeys.has(key))) return;
+      keys.forEach(key => excludedDatabaseKeys.add(key));
+    });
+    return actors.filter(actor => {
+      if (['chatbot', 'original'].includes(actor.source)) return true;
+      if (['persona', 'card'].includes(actor.source)) return false;
+      return !Array.from(communicationRecordIdentityKeys(actor)).some(key => excludedDatabaseKeys.has(key));
+    });
+  }
+
+  function resolveCommunicationContactActorQuery(state, context, index, query = '') {
+    const raw = cleanString(query, '').slice(0, 120);
+    const key = normalizeGameplayLookupKey(raw);
+    const actors = communicationChatbotActorCandidates(state, context, index);
+    if (!key || !/[\p{L}\p{N}\p{S}]/u.test(raw)) return { actor: null, matches: [] };
+    const exact = actors.filter(actor => gameplayActorSearchKeys(actor).includes(key)
+      || [actor?.name].concat(normalizeStringArray(actor?.aliases))
+        .some(name => gameplayAdvisorNamesEquivalent(raw, name)));
+    if (exact.length === 1) return { actor: exact[0], matches: [] };
+    if (exact.length > 1) return { actor: null, matches: exact.slice(0, 12) };
+    const partial = key.length >= 2
+      ? actors.filter(actor => gameplayActorSearchKeys(actor).some(candidate => candidate.includes(key)))
+      : [];
+    if (partial.length === 1) return { actor: partial[0], matches: [] };
+    return { actor: null, matches: partial.slice(0, 12) };
+  }
+
+  function communicationContactCandidates(state, context, index) {
+    const normalizedIndex = normalizeCommunicationIndex(index, context?.scope || '');
+    const selfIdentity = communicationSelfIdentity(state, context, normalizedIndex);
+    const manuallySelected = Boolean(normalizeCommunicationSelfIdentity(normalizedIndex.selfIdentity));
+    const selfKeys = communicationRecordIdentityKeys(selfIdentity);
+    const existingKeys = new Set();
+    normalizedIndex.contacts.forEach(contact => {
+      communicationRecordIdentityKeys(contact).forEach(key => existingKeys.add(key));
+    });
+    const byId = new Map();
+    communicationChatbotActorCandidates(state, context, normalizedIndex).forEach(actor => {
+      const actorKeys = communicationRecordIdentityKeys(actor);
+      if (Array.from(actorKeys).some(key => selfKeys.has(key) || existingKeys.has(key))) return;
+      const contact = communicationContactFromActor(actor, selfIdentity, manuallySelected);
+      if (contact) byId.set(contact.id, contact);
+    });
+    return Array.from(byId.values())
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .slice(0, COMMUNICATION_CONTACT_MAX);
+  }
+
   function communicationContextCardContact(context) {
     const raw = context?.character;
     if (!characterCardDeclaresPersonIdentity(raw)) return null;
@@ -6561,22 +7147,41 @@
       characterId: id,
       name,
       aliases: normalizeStringArray(raw?.aliases || raw?.data?.aliases),
+      source: 'chatbot',
+      profile: cleanString(firstNonEmpty(
+        raw?.description, raw?.data?.description,
+        raw?.personality, raw?.data?.personality,
+      ), '').slice(0, 2400),
       mediumHint: communication?.medium || '',
       reachable: communication?.reachability === 'reachable'
         ? true : communication?.reachability === 'unreachable' ? false : null,
     });
   }
 
-  function discoverCommunicationContacts(state, context, existing = []) {
+  function discoverCommunicationContacts(state, context, existing = [], index = null) {
+    const selfIdentity = communicationSelfIdentity(state, context, index);
+    const manuallySelected = Boolean(normalizeCommunicationSelfIdentity(index?.selfIdentity));
+    const selfIdentityId = manuallySelected ? cleanString(selfIdentity.id, '') : '';
+    const baseCurrentCard = communicationContextCardContact(context);
+    const currentChatbotKeys = communicationRecordIdentityKeys(baseCurrentCard);
     const byId = new Map((Array.isArray(existing) ? existing : [])
-      .map(normalizeCommunicationContact).filter(Boolean).map(contact => [contact.id, contact]));
-    const persona = getEffectiveSelectedPersona(context?.db, context?.currentChat);
-    const personaKeys = identityLookupKeys([persona?.id, persona?.name, context?.userName, context?.username]);
-    const currentCard = communicationContextCardContact(context);
-    if (currentCard && !Array.from(characterIdentityKeys(currentCard)).some(key => personaKeys.has(key))) {
+      .map(normalizeCommunicationContact).filter(Boolean)
+      .filter(contact => cleanString(contact.selfIdentityId, '') === selfIdentityId)
+      .filter(contact => {
+        if (contact.addedByUser !== true) return true;
+        if (contact.source === 'persona') return false;
+        if (contact.source !== 'card') return true;
+        return Array.from(communicationRecordIdentityKeys(contact)).some(key => currentChatbotKeys.has(key));
+      })
+      .map(contact => [contact.id, contact]));
+    const selfKeys = communicationRecordIdentityKeys(selfIdentity);
+    const currentCard = communicationContactForSelf(baseCurrentCard, selfIdentity, manuallySelected);
+    if (currentCard && !Array.from(communicationRecordIdentityKeys(currentCard)).some(key => selfKeys.has(key))) {
       byId.set(currentCard.id, mergeCommunicationContactRecords(byId.get(currentCard.id), currentCard));
     }
     const relatedKeys = new Set();
+    const presentKeys = identityLookupKeys(normalizeStringArray(state?.scene?.presentCast)
+      .concat(normalizeStringArray(state?.activePerspective?.presentCast)));
     const relationshipCommunicationByKey = new Map();
     (Array.isArray(state?.relationships) ? state.relationships : []).forEach(relationship => {
       const a = normalizeRelationshipEndpoint(relationship, 'a');
@@ -6584,8 +7189,8 @@
       if (!a || !b) return;
       const aKeys = identityLookupKeys([a]);
       const bKeys = identityLookupKeys([b]);
-      const aIsPersona = Array.from(aKeys).some(key => personaKeys.has(key));
-      const bIsPersona = Array.from(bKeys).some(key => personaKeys.has(key));
+      const aIsPersona = Array.from(aKeys).some(key => selfKeys.has(key));
+      const bIsPersona = Array.from(bKeys).some(key => selfKeys.has(key));
       const communication = normalizeCommunicationRelationshipEvidence(relationship?.communication);
       if (aIsPersona) bKeys.forEach(key => {
         relatedKeys.add(key);
@@ -6598,25 +7203,32 @@
     });
     Object.entries(state?.characters || {}).forEach(([stateId, character]) => {
       const normalized = normalizeCharacterState({ id: stateId, ...(character || {}) });
-      const identityKeys = characterIdentityKeys(normalized);
-      if (Array.from(identityKeys).some(key => personaKeys.has(key))) return;
-      // Only an Eros-committed relationship with the selected user persona can
-      // promote a managed character into the contact catalog. Scene presence,
-      // raw prose, and keyword matches are not acquaintance evidence.
-      if (!Array.from(identityKeys).some(key => relatedKeys.has(key))) return;
+      const identityKeys = communicationRecordIdentityKeys(normalized);
+      if (Array.from(identityKeys).some(key => selfKeys.has(key))) return;
+      // A committed relationship or actual current-scene presence is enough
+      // to expose the known character in the address book. This does not
+      // assert that a channel works; 모시모씨 still decides reachability.
+      const related = Array.from(identityKeys).some(key => relatedKeys.has(key));
+      const present = Array.from(identityKeys).some(key => presentKeys.has(key));
+      if (!related && !present) return;
       const communication = Array.from(identityKeys)
         .map(key => relationshipCommunicationByKey.get(key)).find(Boolean) || null;
       const id = `character:${slug(firstNonEmpty(normalized.id, normalized.name))}`;
-      const contact = normalizeCommunicationContact({
+      const contact = communicationContactForSelf({
         id,
         characterId: firstNonEmpty(normalized.id, stateId),
         name: firstNonEmpty(normalized.name, normalized.displayName),
         aliases: normalized.aliases,
+        source: 'psyche',
+        profile: cleanString(firstNonEmpty(
+          normalized.description, normalized.personality,
+          normalized.status, normalized.role,
+        ), '').slice(0, 2400),
         mediumHint: communication?.medium || '',
         reachable: communication?.reachability === 'reachable'
           ? true : communication?.reachability === 'unreachable' ? false : null,
-      });
-      if (contact) byId.set(id, mergeCommunicationContactRecords(byId.get(id), contact));
+      }, selfIdentity, manuallySelected);
+      if (contact) byId.set(contact.id, mergeCommunicationContactRecords(byId.get(contact.id), contact));
     });
     return Array.from(byId.values())
       .sort((a, b) => communicationEpoch(b.lastActivityAt) - communicationEpoch(a.lastActivityAt) || a.name.localeCompare(b.name))
@@ -6629,19 +7241,50 @@
     return skin === 'auto' ? 'neutral' : skin;
   }
 
-  function communicationPresentation(index, state) {
-    const skin = index?.skinMode && index.skinMode !== 'auto'
-      ? normalizeCommunicationSkin(index.skinMode)
-      : communicationAutoSkin(state);
+  function communicationPresentation(index, state, context = null, contact = null) {
+    // Presentation follows established world state automatically. The user
+    // identity and communication reachability remain separate authorities.
+    const skin = communicationAutoSkin(state);
     const labels = {
-      neutral: { device: '연락구', message: '메시지', call: '실시간 연락' },
-      modern: { device: '휴대 통신기', message: '문자', call: '전화' },
-      fantasy: { device: '연락구', message: '전언', call: '실시간 교신' },
-      wuxia: { device: '전언구', message: '전언', call: '실시간 연락' },
-      historical: { device: '연락첩', message: '서신', call: '실시간 연락' },
-      scifi: { device: '통신 단말', message: '메시지', call: '음성 채널' },
+      neutral: { channel: 'contact', channelLabel: '개인 연락', channelIcon: '⌁', device: '연락구', message: '메시지', call: '실시간 연락', connecting: '연결 중' },
+      modern: { channel: 'messenger', channelLabel: '메신저', channelIcon: '💬', device: '휴대 통신기', message: '문자', call: '전화', connecting: '메신저 연결 중' },
+      fantasy: { channel: 'magic', channelLabel: '마법 전언', channelIcon: '🔮', device: '전언구', message: '전언', call: '마력 교신', connecting: '마력 연결 중' },
+      wuxia: { channel: 'sound-transmission', channelLabel: '전음', channelIcon: '〰', device: '전음망', message: '전언', call: '전음 교신', connecting: '전음 연결 중' },
+      historical: { channel: 'letter', channelLabel: '서신', channelIcon: '✉', device: '연락첩', message: '서신', call: '원격 교신', connecting: '연락 경로 확인 중' },
+      scifi: { channel: 'commlink', channelLabel: '보안 통신', channelIcon: '⌁', device: '통신 단말', message: '메시지', call: '음성 채널', connecting: '채널 연결 중' },
     };
-    return { skin, ...(labels[skin] || labels.neutral) };
+    const genre = normalizeGameplayGenreProfile(state?.gameplay?.genreProfile);
+    const originalWork = communicationOriginalWorkHints(state, context);
+    const evidence = [
+      contact?.mediumHint,
+      genre.label,
+      genre.techLevel,
+      genre.communicationSkin,
+      ...normalizeStringArray(genre.constraints),
+      ...normalizeStringArray(genre.evidence),
+      ...originalWork,
+      index?.originalRoster?.workTitle,
+      context?.character?.name,
+      context?.character?.data?.name,
+      context?.character?.description,
+      context?.character?.data?.description,
+      contact?.name,
+      contact?.profile,
+    ].filter(Boolean).join('\n').slice(0, 12000);
+    let channel = '';
+    if (/\b(?:naruto|shinobi|ninja|ninjutsu|chakra)\b|나루토|닌자|시노비|인술|차크라|忍者|忍術/i.test(evidence)) channel = 'ninjutsu';
+    else if (/\b(?:xianxia|cultivat(?:or|ion)|immortal\s+cultivation|spiritual\s+sense)\b|선협|수선|선인|신식|영력|신식\s*전음|修仙|神識|神识/i.test(evidence)) channel = 'spiritual-sense';
+    else if (/\b(?:wuxia|murim|jianghu|inner\s+power|sound\s+transmission)\b|무협|무림|강호|내공|전음|武俠|武侠|江湖/i.test(evidence)) channel = 'sound-transmission';
+    else if (/\b(?:telepathy|telepathic|mind\s*link|psychic)\b|텔레파시|정신\s*감응|정신\s*연결|초능력/i.test(evidence)) channel = 'telepathy';
+    else if (/\b(?:magic|magical|mana|wizard|mage|sorcery|spell)\b|마법|마력|마나|마도|주술|전언술/i.test(evidence)) channel = 'magic';
+    const variants = {
+      ninjutsu: { channel: 'ninjutsu', channelLabel: '통신술', channelIcon: '🌀', device: '닌자 통신망', message: '전언', call: '통신술 교신', connecting: '통신술 연결 중' },
+      'spiritual-sense': { channel: 'spiritual-sense', channelLabel: '신식 전음', channelIcon: '☯', device: '신식 연결', message: '전언', call: '신식 교신', connecting: '신식 연결 중' },
+      'sound-transmission': labels.wuxia,
+      telepathy: { channel: 'telepathy', channelLabel: '텔레파시', channelIcon: '◌', device: '정신 연결', message: '염화', call: '정신 교신', connecting: '정신파 연결 중' },
+      magic: labels.fantasy,
+    };
+    return { skin, ...(variants[channel] || labels[skin] || labels.neutral) };
   }
 
   function appendCommunicationBridgeEvent(state, value) {
@@ -6737,7 +7380,7 @@
 
   async function syncCommunicationContactIndex(scope, state, context, index = null) {
     const current = normalizeCommunicationIndex(index || await loadCommunicationIndex(scope), scope);
-    const contacts = discoverCommunicationContacts(state, context, current.contacts);
+    const contacts = discoverCommunicationContacts(state, context, current.contacts, current);
     const changed = safeJsonStringify(contacts) !== safeJsonStringify(current.contacts);
     current.contacts = contacts;
     const saved = changed ? await saveCommunicationIndex(scope, current) : current;
@@ -6763,8 +7406,12 @@
       ...state,
       activePerspective: normalizeActivePerspective({ presentCast: [], protectedNames: [contact.name] }),
     };
+    const selfIdentity = communicationSelfIdentity(state, context, request.index);
     const focus = [
       '[Private Contact Focus]',
+      `userIdentityId: ${selfIdentity.id}`,
+      `userIdentityName: ${selfIdentity.name}`,
+      `userIdentitySource: ${communicationSelfIdentityLabel(selfIdentity)}`,
       `contactId: ${contact.id}`,
       `contactName: ${contact.name}`,
       `known aliases: ${normalizeStringArray(contact.aliases).join(', ') || '(none)'}`,
@@ -6803,7 +7450,7 @@
       id: contact?.id || '',
       name: contact?.name || merged.name || '',
       aliases: uniqueStrings([].concat(contact?.aliases || [], merged.aliases || [])).slice(0, 12),
-      description: cleanString(firstNonEmpty(merged.description, merged.data?.description), '').slice(0, 2400),
+      description: cleanString(firstNonEmpty(merged.description, merged.data?.description, contact?.profile), '').slice(0, 2400),
       personality: cleanString(firstNonEmpty(merged.personality, merged.data?.personality), '').slice(0, 1800),
       scenario: cleanString(firstNonEmpty(merged.scenario, merged.data?.scenario), '').slice(0, 1200),
       role: cleanString(merged.role, '').slice(0, 240),
@@ -6846,9 +7493,13 @@
     };
   }
 
-  function communicationRelationshipContext(state, context, contact) {
-    const persona = getEffectiveSelectedPersona(context?.db, context?.currentChat);
-    const personaKeys = identityLookupKeys([persona?.id, persona?.name, context?.userName, context?.username]);
+  function communicationRelationshipContext(state, context, contact, index = null) {
+    const selfIdentity = communicationSelfIdentity(state, context, index);
+    const personaKeys = identityLookupKeys([
+      selfIdentity.id, selfIdentity.name, selfIdentity.personaId,
+      selfIdentity.cardRef, selfIdentity.canonicalIdentityId,
+      selfIdentity.characterId,
+    ].concat(selfIdentity.aliases, selfIdentity.character?.aliases || []));
     const contactKeys = characterIdentityKeys({
       id: contact?.characterId || contact?.id,
       name: contact?.name,
@@ -6879,8 +7530,12 @@
 
   function communicationProactiveFocusedContext(context, state, contacts, request = {}) {
     const safeContacts = (Array.isArray(contacts) ? contacts : []).filter(Boolean);
+    const selfIdentity = communicationSelfIdentity(state, context, request.index);
     const focus = [
       '[Private Communication Roster Focus]',
+      `userIdentityId: ${selfIdentity.id}`,
+      `userIdentityName: ${selfIdentity.name}`,
+      `userIdentitySource: ${communicationSelfIdentityLabel(selfIdentity)}`,
       `Allowed contacts: ${safeContacts.map(contact => `${contact.id}=${contact.name}`).join(', ') || '(none)'}`,
       'Choose who, if anyone, would naturally initiate a private contact now. Use each person\'s own point of view and never blend one contact\'s private thread or sealed knowledge into another person\'s voice.',
       Array.isArray(request.due) && request.due.length
@@ -6912,7 +7567,7 @@
     const resultMode = cleanString(value.mode, mode);
     if (resultMode !== mode) throw new Error('통신 응답 모드가 요청과 다릅니다.');
     if (mode === 'user-text') {
-      const action = ['reply', 'ignore', 'delay', 'unreachable'].includes(value.action) ? value.action : '';
+      const action = ['reply', 'ignore', 'no-response', 'delay', 'refuse', 'unreachable'].includes(value.action) ? value.action : '';
       const reply = cleanString(value.reply, '').slice(0, 1200);
       if (!action || (action === 'reply' && !reply) || (action !== 'reply' && reply)) throw new Error('문자 응답 형식이 올바르지 않습니다.');
       return {
@@ -6964,7 +7619,9 @@
       Number(AGENT_RETRIEVAL_PROFILE[COMMUNICATION_AGENT_ID]?.budget || 9200),
       { ...conf, embeddingEnabled: false },
     );
-    const presentation = communicationPresentation(request.index, state);
+    const presentation = communicationPresentation(request.index, state, context, contact);
+    const selfIdentity = communicationSelfIdentity(state, context, request.index);
+    const selfProfile = communicationSelfIdentityProfile(selfIdentity, context);
     const allowedContacts = proactiveContacts.map(candidate => {
       const candidateThread = proactiveThreads.get(candidate.id);
       return {
@@ -6974,7 +7631,7 @@
         reachability: candidate.reachable === true ? 'reachable' : candidate.reachable === false ? 'unreachable' : 'not-established',
         mediumEvidence: candidate.mediumHint || 'not-established',
         profile: communicationProactiveContactProfile(state, candidate, context),
-        relationship: communicationRelationshipContext(state, context, candidate),
+        relationship: communicationRelationshipContext(state, context, candidate, request.index),
         pendingFollowUps: (Array.isArray(request.due) ? request.due : [])
           .filter(item => item.contactId === candidate.id).slice(0, 4),
         recentPrivateTranscript: (Array.isArray(candidateThread?.messages) ? candidateThread.messages : []).slice(-10).map(message => ({
@@ -6989,6 +7646,7 @@
     const payload = {
       mode: request.mode,
       outputLanguage: cleanString(agent.outputLanguage, 'ko'),
+      userIdentity: selfProfile,
       contact: contact ? {
         id: contact.id,
         name: contact.name,
@@ -6996,9 +7654,16 @@
         reachability: contact.reachable === true ? 'reachable' : contact.reachable === false ? 'unreachable' : 'not-established',
         mediumEvidence: contact.mediumHint || 'not-established',
         profile: communicationContactProfile(state, contact, context),
-        relationship: communicationRelationshipContext(state, context, contact),
+        relationship: communicationRelationshipContext(state, context, contact, request.index),
       } : undefined,
       presentationSkin: presentation.skin,
+      communicationChannel: {
+        id: presentation.channel,
+        label: presentation.channelLabel,
+        device: presentation.device,
+        messageTerm: presentation.message,
+        liveTerm: presentation.call,
+      },
       request: {
         content: cleanString(request.content, '').slice(0, 1600),
         sourceTurn: parseNumber(state?.turn, 0, 0, 999999),
@@ -7069,6 +7734,28 @@
     scheduleCommunicationLauncherReconcile(20);
   }
 
+  function communicationWorldTimeLabel(state = null, context = null) {
+    const sceneTime = cleanString(state?.scene?.time, '').replace(/\s+/g, ' ').trim();
+    if (sceneTime && !/^(?:unknown|unspecified|none|null|n\/?a|미상|불명|미정|시간 미확정)$/i.test(sceneTime)) {
+      return sceneTime.slice(0, 120);
+    }
+    const messages = (Array.isArray(context?.messages) ? context.messages : [])
+      .filter(message => message?.role !== 'system')
+      .slice(-2)
+      .reverse();
+    for (const message of messages) {
+      const text = String(messageText(message) || '');
+      const bracket = text.match(/\[((?=[^\]\r\n]{0,120}(?:날짜|시간|date|time))[^\]\r\n]{1,120})\]/i);
+      if (bracket?.[1]) return bracket[1].replace(/\s+/g, ' ').trim().slice(0, 120);
+      const labels = Array.from(text.matchAll(/(?:^|[|\n])\s*((?:날짜|시간|date|time)\s*[:：]\s*[^|\r\n]{1,48})/gi))
+        .map(match => cleanString(match?.[1], ''))
+        .filter(Boolean)
+        .slice(0, 2);
+      if (labels.length) return labels.join(' · ').slice(0, 120);
+    }
+    return '';
+  }
+
   function communicationMessageEntry(direction, content, options = {}) {
     const at = cleanString(options.at, nowIso());
     const operationId = cleanString(options.operationId, '');
@@ -7081,6 +7768,7 @@
       operationId,
       callId: cleanString(options.callId, ''),
       at,
+      displayTime: cleanString(options.displayTime, ''),
     });
   }
 
@@ -7276,7 +7964,7 @@
   }
 
   async function sendCommunicationText(contactId, content, options = {}) {
-    const text = cleanString(content, '').slice(0, 1600);
+    const text = normalizeCommunicationUserText(content, 1600);
     if (!text) throw new Error('보낼 메시지를 입력하세요.');
     const session = options.session || await loadCommunicationSession([], options.conf);
     const { conf, context, state } = session;
@@ -7297,6 +7985,7 @@
       };
       const message = existing || communicationMessageEntry('outgoing', text, {
         id: `${operationId}:outgoing`, operationId, status: 'sending', scope,
+        displayTime: communicationWorldTimeLabel(state, context),
       });
       if (!existing) thread.messages.push(message);
       upsertCommunicationThreadSummary(index, thread, {
@@ -7317,6 +8006,15 @@
       await flushCommunicationThreadOutbox(scope, conf, context, begun.thread.id, begun.contact.id);
       return { duplicate: true, ...begun };
     }
+    const panelSession = Runtime.communicationPanelSession;
+    if (communicationPanelHasThreadOpen(begun.thread.id, scope)) {
+      Runtime.communicationPanelActivity = {
+        kind: 'connecting', threadId: begun.thread.id, contactId: begun.contact.id, operationId,
+      };
+      await mountCommunicationPanel(
+        conf, { ...session, index: begun.index }, begun.index, begun.thread, panelSession,
+      ).catch(() => {});
+    }
     let result;
     try {
       result = await runCommunicationAgent(conf, context, state, begun.thread, begun.contact, {
@@ -7328,12 +8026,22 @@
         updateCommunicationMessage(thread, begun.message.id, { status: 'send-failed' });
         await saveCommunicationThread(scope, thread);
       });
+      if (Runtime.communicationPanelActivity?.operationId === operationId) Runtime.communicationPanelActivity = null;
       throw err;
+    }
+    if (result.action === 'reply' && communicationPanelHasThreadOpen(begun.thread.id, scope)) {
+      Runtime.communicationPanelActivity = {
+        kind: 'typing', threadId: begun.thread.id, contactId: begun.contact.id, operationId,
+      };
+      await mountCommunicationPanel(
+        conf, { ...session, index: begun.index }, begun.index, begun.thread, panelSession,
+      ).catch(() => {});
+      if (typeof setTimeout === 'function') await new Promise(resolve => setTimeout(resolve, 480));
     }
     const events = [communicationBridgeRow(begun.contact, begun.thread, {
       id: `${operationId}:sent-event`,
       channel: 'message', direction: 'outgoing', outcome: result.action,
-      summary: `사용자가 ${begun.contact.name}에게 “${text}” 메시지를 보냈다. 결과: ${result.action}/${result.delivery}/${result.read}.`,
+      summary: `${communicationSelfIdentity(state, context, begun.index).name}이(가) ${begun.contact.name}에게 “${text}” 메시지를 보냈다. 결과: ${result.action}/${result.delivery}/${result.read}.`,
       sourceTurn: state.turn,
     })];
     if (result.action === 'reply') events.push(communicationBridgeRow(begun.contact, begun.thread, {
@@ -7347,7 +8055,9 @@
       const thread = await loadCommunicationThread(scope, begun.thread.id, begun.contact.id);
       const status = result.action === 'reply' ? 'read'
         : result.action === 'ignore' ? 'ignored'
-        : result.action === 'delay' ? (result.read === 'read' ? 'read' : 'delivered')
+        : result.action === 'no-response' ? 'no-response'
+        : result.action === 'delay' ? 'delayed'
+        : result.action === 'refuse' ? 'refused'
         : 'unreachable';
       updateCommunicationMessage(thread, begun.message.id, {
         status,
@@ -7356,6 +8066,7 @@
       if (result.action === 'reply') {
         incoming = communicationMessageEntry('incoming', result.reply, {
           id: `${operationId}:reply`, operationId, status: communicationPanelHasThreadOpen(thread.id, scope) ? 'read' : 'delivered', scope,
+          displayTime: communicationWorldTimeLabel(state, context),
         });
         if (!thread.messages.some(message => message.id === incoming.id)) thread.messages.push(incoming);
       }
@@ -7382,6 +8093,7 @@
       return { index: savedIndex, thread: savedThread, incoming };
     });
     await flushCommunicationThreadOutbox(scope, conf, context, finalized.thread.id, begun.contact.id);
+    if (Runtime.communicationPanelActivity?.operationId === operationId) Runtime.communicationPanelActivity = null;
     scheduleNextCommunicationPendingEvaluation(conf, context, finalized.index);
     return { operationId, result, ...finalized, events };
   }
@@ -7434,6 +8146,15 @@
       return { duplicate: true, ...begun };
     }
     scheduleOutgoingCommunicationRecovery(scope, begun.call.expiresAt);
+    const panelSession = Runtime.communicationPanelSession;
+    if (communicationPanelHasThreadOpen(begun.thread.id, scope)) {
+      Runtime.communicationPanelActivity = {
+        kind: 'dialing', threadId: begun.thread.id, contactId: begun.contact.id, operationId,
+      };
+      await mountCommunicationPanel(
+        conf, { ...session, index: begun.index }, begun.index, begun.thread, panelSession,
+      ).catch(() => {});
+    }
     let result;
     try {
       result = await runCommunicationAgent(conf, context, state, begun.thread, begun.contact, {
@@ -7456,6 +8177,7 @@
         return { thread, call };
       });
       clearOutgoingCommunicationRecovery(scope);
+      if (Runtime.communicationPanelActivity?.operationId === operationId) Runtime.communicationPanelActivity = null;
       throw err;
     }
     const finalized = await enqueueCommunicationStorageWork(scope, async () => {
@@ -7479,6 +8201,7 @@
       if (result.action === 'answer') {
         opening = communicationMessageEntry('incoming', result.opening, {
           id: `${operationId}:opening`, operationId, kind: 'call-line', callId: call.id, status: 'heard', scope,
+          displayTime: communicationWorldTimeLabel(state, context),
         });
         if (!thread.messages.some(message => message.id === opening.id)) thread.messages.push(opening);
         index.activeCall = call;
@@ -7489,7 +8212,7 @@
       });
       const events = [communicationBridgeRow(begun.contact, thread, {
         id: `${operationId}:call-event`, channel: 'call', direction: 'outgoing', outcome: result.action,
-        summary: `사용자가 ${begun.contact.name}에게 실시간 연락을 걸었다. 결과: ${result.action}${result.opening ? `; ${begun.contact.name}: “${result.opening}”` : ''}`,
+        summary: `${communicationSelfIdentity(state, context, begun.index).name}이(가) ${begun.contact.name}에게 실시간 연락을 걸었다. 결과: ${result.action}${result.opening ? `; ${begun.contact.name}: “${result.opening}”` : ''}`,
         sourceTurn: state.turn,
       })];
       queueCommunicationThreadOutbox(thread, operationId, events);
@@ -7498,13 +8221,14 @@
       return { index: savedIndex, thread: savedThread, call, opening, events };
     });
     clearOutgoingCommunicationRecovery(scope);
+    if (Runtime.communicationPanelActivity?.operationId === operationId) Runtime.communicationPanelActivity = null;
     if (finalized.stale) return { operationId, result, ...finalized };
     await flushCommunicationThreadOutbox(scope, conf, context, finalized.thread.id, begun.contact.id);
     return { operationId, result, ...finalized };
   }
 
   async function continueCommunicationCall(content, options = {}) {
-    const text = cleanString(content, '').slice(0, 1200);
+    const text = normalizeCommunicationUserText(content, 1200);
     if (!text) throw new Error('통화로 전할 말을 입력하세요.');
     const session = options.session || await loadCommunicationSession([], options.conf);
     const { conf, context, state } = session;
@@ -7532,6 +8256,7 @@
       }
       const message = existing || communicationMessageEntry('outgoing', text, {
         id: `${operationId}:outgoing`, operationId, kind: 'call-line', callId: active.id, status: 'spoken', scope,
+        displayTime: communicationWorldTimeLabel(state, context),
       });
       if (!existing) thread.messages.push(message);
       await saveCommunicationThread(scope, thread);
@@ -7551,12 +8276,36 @@
       await flushCommunicationThreadOutbox(scope, conf, context, begun.thread.id, begun.contact.id);
       return { duplicate: true, ...begun };
     }
-    const result = await runCommunicationAgent(conf, context, state, begun.thread, begun.contact, {
-      mode: 'call-turn', content: text, index: begun.index,
-    });
+    const panelSession = Runtime.communicationPanelSession;
+    if (communicationPanelHasThreadOpen(begun.thread.id, scope)) {
+      Runtime.communicationPanelActivity = {
+        kind: 'connecting', threadId: begun.thread.id, contactId: begun.contact.id, operationId,
+      };
+      await mountCommunicationPanel(
+        conf, { ...session, index: begun.index }, begun.index, begun.thread, panelSession,
+      ).catch(() => {});
+    }
+    let result;
+    try {
+      result = await runCommunicationAgent(conf, context, state, begun.thread, begun.contact, {
+        mode: 'call-turn', content: text, index: begun.index,
+      });
+    } catch (err) {
+      if (Runtime.communicationPanelActivity?.operationId === operationId) Runtime.communicationPanelActivity = null;
+      throw err;
+    }
+    if (result.reply && communicationPanelHasThreadOpen(begun.thread.id, scope)) {
+      Runtime.communicationPanelActivity = {
+        kind: 'typing', threadId: begun.thread.id, contactId: begun.contact.id, operationId,
+      };
+      await mountCommunicationPanel(
+        conf, { ...session, index: begun.index }, begun.index, begun.thread, panelSession,
+      ).catch(() => {});
+      if (typeof setTimeout === 'function') await new Promise(resolve => setTimeout(resolve, 480));
+    }
     const events = [communicationBridgeRow(begun.contact, begun.thread, {
       id: `${operationId}:turn-event`, channel: 'call', direction: 'outgoing', outcome: result.action,
-      summary: `통화 중 사용자: “${text}”${result.reply ? ` / ${begun.contact.name}: “${result.reply}”` : ''}${result.action !== 'continue' ? ` / ${result.action}` : ''}`,
+      summary: `통화 중 ${communicationSelfIdentity(state, context, begun.index).name}: “${text}”${result.reply ? ` / ${begun.contact.name}: “${result.reply}”` : ''}${result.action !== 'continue' ? ` / ${result.action}` : ''}`,
       sourceTurn: state.turn,
     })];
     const finalized = await enqueueCommunicationStorageWork(scope, async () => {
@@ -7570,6 +8319,7 @@
       if (result.reply) {
         incoming = communicationMessageEntry('incoming', result.reply, {
           id: `${operationId}:reply`, operationId, kind: 'call-line', callId: begun.call.id, status: 'heard', scope,
+          displayTime: communicationWorldTimeLabel(state, context),
         });
         if (!thread.messages.some(message => message.id === incoming.id)) thread.messages.push(incoming);
       }
@@ -7592,6 +8342,7 @@
       const savedIndex = await saveCommunicationIndex(scope, index);
       return { index: savedIndex, thread: savedThread, call, incoming };
     });
+    if (Runtime.communicationPanelActivity?.operationId === operationId) Runtime.communicationPanelActivity = null;
     if (finalized.stale) return { operationId, result, ...finalized, events: [] };
     await flushCommunicationThreadOutbox(scope, conf, context, finalized.thread.id, begun.contact.id);
     return { operationId, result, ...finalized, events };
@@ -7661,6 +8412,7 @@
       if (pending?.openingLine) {
         opening = communicationMessageEntry('incoming', pending.openingLine, {
           id: `${call.id}:opening`, operationId: call.id, kind: 'call-line', callId: call.id, status: 'heard', scope,
+          displayTime: communicationWorldTimeLabel(state, context),
         });
         if (!thread.messages.some(message => message.id === opening.id)) thread.messages.push(opening);
       }
@@ -7671,7 +8423,7 @@
       });
       const event = communicationBridgeRow(contact, thread, {
         id: `${call.id}:answered`, channel: 'call', direction: 'incoming', outcome: 'answered',
-        summary: `사용자가 ${contact.name}의 수신 연락을 받았다.${opening ? ` ${contact.name}: “${opening.content}”` : ''}`,
+        summary: `${communicationSelfIdentity(state, context, session.index).name}이(가) ${contact.name}의 수신 연락을 받았다.${opening ? ` ${contact.name}: “${opening.content}”` : ''}`,
         sourceTurn: state.turn,
       });
       queueCommunicationThreadOutbox(thread, `${call.id}:answered`, [event]);
@@ -7707,7 +8459,7 @@
       upsertCommunicationThreadSummary(index, thread, { lastPreview: '수신 연락 거절' });
       const event = communicationBridgeRow(contact, thread, {
         id: `${call.id}:declined`, channel: 'call', direction: 'incoming', outcome: 'declined',
-        summary: `사용자가 ${contact.name}의 수신 연락을 거절했다.`, sourceTurn: state.turn,
+        summary: `${communicationSelfIdentity(state, context, session.index).name}이(가) ${contact.name}의 수신 연락을 거절했다.`, sourceTurn: state.turn,
       });
       queueCommunicationThreadOutbox(thread, `${call.id}:declined`, [event]);
       const savedThread = await saveCommunicationThread(scope, thread);
@@ -7805,7 +8557,9 @@
     const prepared = await enqueueCommunicationStorageWork(scope, async () => {
       const index = await syncCommunicationContactIndex(scope, state, context, await loadCommunicationIndex(scope));
       const turn = parseNumber(state.turn, 0, 0, 999999);
+      const currentContactIds = new Set(index.contacts.map(contact => contact.id));
       const due = index.pending.filter(item => item.kind === 'message'
+        && currentContactIds.has(item.contactId)
         && (item.sourceTurn <= turn || communicationDue(item.dueAt)));
       if (index.lastProactiveTurn >= turn && !due.length) return { skipped: true, reason: 'already-evaluated', index };
       index.lastProactiveTurn = turn;
@@ -7870,7 +8624,7 @@
         message = communicationMessageEntry('incoming', result.body, {
           id: `${eventId}:message`, operationId: eventId,
           status: communicationPanelHasThreadOpen(thread.id, scope) ? 'read' : 'delivered',
-          scope,
+          scope, displayTime: communicationWorldTimeLabel(state, context),
         });
         thread.messages.push(message);
         upsertCommunicationThreadSummary(index, thread, {
@@ -7961,8 +8715,11 @@
 
   function scheduleNextCommunicationPendingEvaluation(conf, context, index) {
     if (!isCommunicationAgentEnabled(conf) || !context?.scope || context.noSession) return;
-    const nextDue = normalizeCommunicationIndex(index, context.scope).pending
+    const normalized = normalizeCommunicationIndex(index, context.scope);
+    const currentContactIds = new Set(normalized.contacts.map(contact => contact.id));
+    const nextDue = normalized.pending
       .filter(item => item.kind === 'message' && communicationEpoch(item.dueAt) > 0)
+      .filter(item => currentContactIds.has(item.contactId))
       .sort((a, b) => communicationEpoch(a.dueAt) - communicationEpoch(b.dueAt))[0];
     if (!nextDue) return;
     const delay = Math.max(20, Math.min(2147483000, communicationEpoch(nextDue.dueAt) - Date.now()));
@@ -20433,10 +21190,16 @@ function normalizeAdaptiveQualityState(value) {
         const merged = mergeObject(prev, {
           ...entry,
           createdTurn: prev.createdTurn ?? entry.createdTurn,
+          evidence: sameHash && Array.isArray(prev?.evidence) && prev.evidence.length
+            ? prev.evidence
+            : entry.evidence,
         });
         merged.chunk = {
           ...(prev.chunk || {}),
           ...(entry.chunk || {}),
+          syncedAtTurn: sameHash
+            ? (prev?.chunk?.syncedAtTurn ?? entry.chunk.syncedAtTurn)
+            : entry.chunk.syncedAtTurn,
           extracted: sameHash ? Boolean(prev?.chunk?.extracted) : false,
           extractionError: sameHash ? String(prev?.chunk?.extractionError || '') : '',
         };
@@ -46492,6 +47255,7 @@ function normalizeAdaptiveQualityState(value) {
         scope: context?.scope || Runtime.lastScope || '',
         report: () => buildDiagnosticsReport(conf, context, state, snapshots, backup),
         gameplayComposerPerformance: () => deepCloneJson(Runtime.gameplayComposerPerformanceTrace || []),
+        communicationPanelPerformance: () => deepCloneJson(Runtime.communicationPanelPerformanceTrace || []),
         snapshotsCount: () => Array.isArray(snapshots) ? snapshots.length : 0,
         stateSize: () => {
           try { return JSON.stringify(state || {}).length; } catch (_) { return 0; }
@@ -51765,6 +52529,13 @@ function normalizeAdaptiveQualityState(value) {
           const persisted = discoverCommunicationContacts(target, context, [{
             id: 'character:old-friend', characterId: 'old-friend', name: 'Old Friend',
           }]);
+          const cleanedLegacyCards = discoverCommunicationContacts(target, context, [{
+            id: 'character:old-persona', characterId: 'persona:other', name: 'Other Persona',
+            source: 'persona', addedByUser: true,
+          }, {
+            id: 'character:foreign-card', characterId: 'foreign-card', name: 'Foreign Card',
+            source: 'card', addedByUser: true,
+          }]);
           const worldDocument = communicationContextCardContact({
             characterId: 'arcana-world-bible',
             character: {
@@ -51781,16 +52552,176 @@ function normalizeAdaptiveQualityState(value) {
               && contact.mediumHint === '전언구' && contact.reachable === true),
             rediscoveryPreservesPrivateContactHistory: rediscovered.some(contact => contact.name === 'Mira'
               && contact.lastActivityAt === activityAt && contact.aliases.includes('미라')),
-            scenePresenceAloneIsNotAcquaintance: !discovered.some(contact => contact.name === 'Scene Stranger'),
+            currentSceneCharacterCanBeTriedImmediately: discovered.some(contact => contact.name === 'Scene Stranger'),
             worldDocumentCardIsNotAContact: worldDocument === null,
             hiddenStateCharacterNotLeaked: !discovered.some(contact => contact.name === 'Hidden Future Person'),
             userPersonaNotListedAsRemoteContact: !discovered.some(contact => contact.name === 'User Persona'),
+            legacyPersonaAndForeignCardContactsAreHidden: !cleanedLegacyCards.some(contact => (
+              contact.name === 'Other Persona' || contact.name === 'Foreign Card'
+            )),
             pastKnownContactPersistsOffscreen: persisted.some(contact => contact.name === 'Old Friend'),
-            discoveryUsesErosRelationshipAuthorityOnly: source.includes('state?.relationships')
-              && !source.includes('state?.scene?.presentCast')
+            discoveryUsesRelationshipOrCurrentSceneAuthority: source.includes('state?.relationships')
+              && source.includes('state?.scene?.presentCast')
               && !source.includes('context?.messages')
               && !source.includes('currentChat?.message')
               && !source.includes('canonicalReferenceTermAppears'),
+          };
+        },
+        testCommunicationIdentityAndFastMessengerContract: () => {
+          const state = createDefaultState('rp');
+          state.characters.mira = normalizeCharacterState({ id: 'mira', name: 'Mira', role: 'Royal courier' });
+          state.characters.nara = normalizeCharacterState({ id: 'nara', name: 'Nara', role: 'Fencer' });
+          state.relationships = [
+            { id: 'user-mira', a: 'User Persona', b: 'Mira', tie: 'acquaintance' },
+            { id: 'nara-mira', a: 'Nara', b: 'Mira', tie: 'old friends' },
+          ];
+          state.canonicalIdentity.subjects = [{
+            id: 'oracle', name: 'Oracle', aliases: ['The Oracle'], confidence: 1,
+          }];
+          const context = {
+            scope: 'communication-identity-test', mode: 'rp',
+            character: {
+              id: 'host', name: 'Host Character',
+              additionalAssets: [['Mira.default', 'assets/mira-profile.png', 'png']],
+            }, characterId: 'host',
+            db: {
+              personas: [
+                { id: 'user', name: 'User Persona', personaPrompt: 'The currently bound observer.' },
+                { id: 'nara', name: 'Nara', personaPrompt: 'Nara is a trained fencer.' },
+              ],
+              characters: [
+                { id: 'host', name: 'Host Character' },
+                { id: 'foreign-card', name: 'Foreign Card' },
+              ],
+              selectedPersona: 'user',
+            },
+            currentChat: { bindedPersona: 'user', message: [] },
+            userName: 'User Persona', messages: [],
+            canonicalSources: [{
+              id: 'inactive-dormant-scholar', sourceId: 'inactive-dormant-scholar',
+              kind: 'globalLore', label: 'Dormant Scholar',
+              content: 'Dormant Scholar serves as the royal archivist and speaks in a restrained, formal manner.',
+              activationKeys: ['Dormant Scholar'],
+              meta: { enabled: true, injectionEligible: true, alwaysActive: false },
+            }],
+          };
+          const automaticIndex = normalizeCommunicationIndex({}, context.scope);
+          const automaticSelf = communicationSelfIdentity(state, context, automaticIndex);
+          const automaticContacts = discoverCommunicationContacts(state, context, [], automaticIndex);
+          const manualIndex = normalizeCommunicationIndex({
+            selfIdentity: { id: 'persona:nara', personaId: 'nara', name: 'Nara', source: 'persona' },
+          }, context.scope);
+          const manualSelf = communicationSelfIdentity(state, context, manualIndex);
+          manualIndex.contacts = discoverCommunicationContacts(state, context, [], manualIndex);
+          manualIndex.originalRoster = normalizeCommunicationOriginalRoster({
+            fingerprint: communicationOriginalRosterFingerprint(state, context),
+            workTitle: 'Verified Original Work', recognized: true,
+            characters: [{ name: 'Canon Hero', role: 'Protagonist', evidence: 'Canonical public cast.' }],
+          });
+          const manualMira = manualIndex.contacts.find(contact => contact.name === 'Mira');
+          const view = buildCommunicationPanelViewModel({ state, context }, manualIndex, null);
+          const html = renderCommunicationPanel(view);
+          const chatbotActors = communicationChatbotActorCandidates(state, context, manualIndex);
+          const contactCandidates = communicationContactCandidates(state, context, manualIndex);
+          const scopedOracleSearch = resolveCommunicationContactActorQuery(state, context, manualIndex, 'Orac');
+          const contactPickerHtml = renderCommunicationPanel({
+            ...view,
+            contactPicker: true,
+            contactCandidates,
+          });
+          const ninjaPresentation = communicationPresentation(manualIndex, state, {
+            ...context,
+            character: { ...context.character, originalWork: 'Naruto' },
+          }, manualMira);
+          const xianxiaState = createDefaultState('rp');
+          xianxiaState.gameplay.genreProfile = normalizeGameplayGenreProfile({
+            label: '선협 수선 세계', communicationSkin: 'fantasy', supernatural: 'open', evidence: ['신식과 영력'],
+          });
+          const xianxiaPresentation = communicationPresentation(manualIndex, xianxiaState, context, manualMira);
+          const panelSource = String(patchCommunicationPanelSurface);
+          const bindSource = String(bindCommunicationPanel);
+          const commandSource = String(handleCommunicationPanelCommand);
+          const toggleSource = String(toggleCommunicationPanel);
+          const resetSource = String(resetCommunicationPanelState);
+          return {
+            currentRisuPersonaIsVisibleDefaultIdentity: automaticSelf.name === 'User Persona'
+              && automaticSelf.automatic === true
+              && communicationSelfIdentityLabel(automaticSelf) === '현재 Risu 페르소나',
+            explicitIdentityDoesNotMutateHostPersona: manualSelf.name === 'Nara'
+              && manualSelf.automatic === false
+              && context.currentChat.bindedPersona === 'user'
+              && context.db.selectedPersona === 'user',
+            contactAuthorityFollowsSelectedIdentity: automaticContacts.some(contact => contact.name === 'Mira' && !contact.selfIdentityId)
+              && manualMira?.selfIdentityId === 'persona:nara'
+              && manualMira.id !== automaticContacts.find(contact => contact.name === 'Mira')?.id,
+            manuallySelectedIdentityNamespacesItsPrivateThread: communicationThreadIdForContact(manualMira?.id)
+              !== communicationThreadIdForContact(automaticContacts.find(contact => contact.name === 'Mira')?.id),
+            messengerShowsCompactRealIdentity: !html.includes('MY INFO')
+              && html.includes('Nara')
+              && html.includes('내 정보 직접 선택·입력')
+              && html.includes('연락처 추가'),
+            matchingCharacterAssetFeedsFaceCroppedAvatar: view.contactAvatarAssets.has(manualMira.id)
+              && html.includes('communication-avatar')
+              && String(communicationContactAvatarHtml).includes('object-position:center 22%'),
+            addressBookAlwaysExposesAddContactControl: html.includes('연락처 추가'),
+            contactCatalogUsesOnlyCurrentChatbotPeople: chatbotActors.some(actor => actor.name === 'Host Character')
+              && chatbotActors.some(actor => actor.name === 'Mira')
+              && chatbotActors.some(actor => actor.name === 'Oracle')
+              && chatbotActors.some(actor => actor.name === 'Dormant Scholar')
+              && chatbotActors.some(actor => actor.name === 'Canon Hero' && actor.source === 'original')
+              && !chatbotActors.some(actor => actor.name === 'User Persona')
+              && !chatbotActors.some(actor => actor.name === 'Foreign Card')
+              && chatbotActors.every(actor => !['persona', 'card'].includes(actor.source)),
+            contactPickerOffersChatbotActors: contactCandidates.some(contact => contact.name === 'Oracle')
+              && contactCandidates.some(contact => contactPickerHtml.includes(escHtml(contact.name))),
+            contactPickerOffersScopedNameSearch: contactPickerHtml.includes('이 채팅봇 인물을 이름·별칭으로 찾기')
+              && contactPickerHtml.includes('추가하면 바로 메시지 창이 열립니다.')
+              && scopedOracleSearch.actor?.name === 'Oracle',
+            contactPickerHasCompactBackAndSearchControls: contactPickerHtml.includes('대화 목록으로')
+              && contactPickerHtml.includes('width:auto;min-width:0;min-height:27px;height:27px'),
+            keywordInactiveLoreStillFeedsContactPicker: contactCandidates.some(contact => contact.name === 'Dormant Scholar')
+              && String(communicationLoreActorCandidates).includes('communicationCanonicalInventorySources')
+              && !String(communicationLoreActorCandidates).includes('canonicalLoreUnitIsActive'),
+            originalWorkRosterIsScopedCachedAndVisible: contactCandidates.some(contact => (
+              contact.name === 'Canon Hero' && contact.source === 'original'
+            )) && contactPickerHtml.includes('원작 인물 다시 확인')
+              && contactPickerHtml.includes('Verified Original Work'),
+            technicalSkinCopyIsGone: !html.includes('외형 ·')
+              && !html.includes('세계관 외형')
+              && !html.includes('도달 가능성'),
+            automaticWorldPresentationRemainsInternal: String(communicationPresentation).includes('communicationAutoSkin')
+              && !html.includes(`외형 · ${view.presentation.skin}`),
+            establishedWorldSelectsDistinctCommunicationLanguage: ninjaPresentation.channel === 'ninjutsu'
+              && ninjaPresentation.channelLabel === '통신술'
+              && ninjaPresentation.connecting === '통신술 연결 중'
+              && xianxiaPresentation.channel === 'spiritual-sense'
+              && xianxiaPresentation.channelLabel === '신식 전음',
+            panelRepaintsOneMountedSurface: panelSource.includes('binding.surfaceElement.setInnerHTML(innerHtml)')
+              && String(mountCommunicationPanel).includes('patchCommunicationPanelSurface')
+              && String(paintMountedCommunicationPanel).includes('communicationPanelMountedData')
+              && String(toggleCommunicationPanel).includes('mountCommunicationLoadingPanel'),
+            fixedControlsUseCacheWhileScrollableRowsRemeasure: bindSource.includes('!item?.entry?.clipId')
+              && bindSource.includes('binding.controlElements = await gameplayComposerControlElements'),
+            fastNavigationSkipsFullSessionReload: commandSource.indexOf("command === 'open-thread'") >= 0
+              && commandSource.indexOf("command === 'open-thread'") < commandSource.indexOf('Runtime.communicationPanelBusy = true')
+              && commandSource.indexOf("command === 'home'") < commandSource.indexOf('Runtime.communicationPanelBusy = true'),
+            warmReopenPaintsLastScreenBeforeFreshSync: toggleSource.indexOf('if (warmSnapshot)') >= 0
+              && toggleSource.indexOf('if (warmSnapshot)') < toggleSource.indexOf('const conf = await getConfig()')
+              && toggleSource.includes('warmSnapshot.thread'),
+            normalReopeningSkipsDuplicateRefreshSession: toggleSource.includes('let session = await loadCommunicationSession([], conf)')
+              && !toggleSource.includes('return await refreshCommunicationPanel(panelSession)')
+              && toggleSource.includes('return await mountCommunicationPanel(conf, session, session.index, null, panelSession)'),
+            closingRetainsWarmSnapshot: resetSource.includes('rememberCommunicationPanelWarmSnapshot()'),
+            contactSelectionPersistsAndOpensThread: commandSource.includes("command === 'add-contact'")
+              && commandSource.includes('resolveCommunicationContactActorQuery(session.state, session.context, index, query)')
+              && commandSource.includes('await saveCommunicationIndex(session.context.scope, index)')
+              && commandSource.includes('Runtime.communicationPanelThreadId = communicationThreadIdForContact(added.id)'),
+            originalRosterDiscoveryUsesMosiAndPersists: commandSource.includes("command === 'discover-original-roster'")
+              && commandSource.includes('runCommunicationOriginalRosterDiscovery(conf, session.context, session.state)')
+              && String(runCommunicationOriginalRosterDiscovery).includes('getCommunicationAgent(conf)'),
+            agentReceivesOneExplicitUserIdentity: COMMUNICATION_AGENT_PROMPT.includes('userIdentity is the sole local speaker identity')
+              && String(runCommunicationAgent).includes('userIdentity: selfProfile')
+              && String(communicationFocusedContext).includes('userIdentityName'),
           };
         },
         testCommunicationRoleBoundaryContract: () => {
@@ -51837,6 +52768,12 @@ function normalizeAdaptiveQualityState(value) {
           const delayed = normalizeCommunicationAgentResult('user-text', {
             mode: 'user-text', action: 'delay', delivery: 'delivered', read: 'unread', reply: '', dueTurns: 4,
           });
+          const noResponse = normalizeCommunicationAgentResult('user-text', {
+            mode: 'user-text', action: 'no-response', delivery: 'delivered', read: 'unknown', reply: '', dueTurns: 0,
+          });
+          const refused = normalizeCommunicationAgentResult('user-text', {
+            mode: 'user-text', action: 'refuse', delivery: 'delivered', read: 'read', reply: '', dueTurns: 0,
+          });
           const unreachable = normalizeCommunicationAgentResult('outgoing-call', {
             mode: 'outgoing-call', action: 'unreachable', opening: '', reasonCode: 'no-route',
           });
@@ -51850,6 +52787,10 @@ function normalizeAdaptiveQualityState(value) {
             immediateReplySupported: reply.action === 'reply' && reply.reply === '알았어.',
             readIgnoreIsNormalOutcome: ignored.action === 'ignore' && ignored.reply === '',
             delayedReplyIsScheduledByTurn: delayed.action === 'delay' && delayed.dueTurns === 4,
+            silentOutcomesRemainExplicitWithoutFakeReply: noResponse.reply === ''
+              && refused.reply === ''
+              && communicationMessageStatusLabel('no-response') === '무응답'
+              && communicationMessageStatusLabel('refused') === '응답 거부',
             unreachableCallIsNormalOutcome: unreachable.action === 'unreachable' && unreachable.opening === '',
             malformedSemanticCombinationRejectedAtContract: malformedRejected,
           };
@@ -51866,14 +52807,15 @@ function normalizeAdaptiveQualityState(value) {
           const thread = normalizeCommunicationThread({
             id: 'contact-character-mira', contactId: 'character:mira',
             messages: [
-              { id: 'line-1', direction: 'incoming', kind: 'call-line', content: '여보세요?', status: 'heard' },
-              { id: 'line-2', direction: 'outgoing', kind: 'call-line', content: '응, 나야.', status: 'spoken' },
+              { id: 'line-1', direction: 'incoming', kind: 'call-line', content: '여보세요?', status: 'heard', at: '2026-07-21T12:34:00.000Z' },
+              { id: 'line-2', direction: 'outgoing', kind: 'call-line', content: '응, 나야.', status: 'spoken', displayTime: '왕국력 7월 15일 · 밤' },
             ],
             calls: [index.activeCall],
           }, 'contact-character-mira', 'character:mira');
           const runtimeBefore = {
             threadId: Runtime.communicationPanelThreadId,
             busy: Runtime.communicationPanelBusy,
+            activity: Runtime.communicationPanelActivity,
           };
           Runtime.communicationPanelThreadId = thread.id;
           Runtime.communicationPanelBusy = false;
@@ -51883,13 +52825,65 @@ function normalizeAdaptiveQualityState(value) {
             thread,
           );
           const html = renderCommunicationPanel(view);
+          Runtime.communicationPanelActivity = {
+            kind: 'typing', threadId: thread.id, contactId: thread.contactId, operationId: 'typing-test',
+          };
+          const typingHtml = renderCommunicationPanel(buildCommunicationPanelViewModel(
+            { state: createDefaultState('rp'), context: { scope: 'scope', mode: 'rp' } },
+            index,
+            thread,
+          ));
+          Runtime.communicationPanelActivity = null;
+          const terminalIndex = normalizeCommunicationIndex({
+            contacts: [{ id: 'character:mira', characterId: 'mira', name: 'Mira' }],
+            threads: [{ id: thread.id, contactId: 'character:mira' }],
+          }, 'scope');
+          const terminalThread = normalizeCommunicationThread({
+            id: thread.id, contactId: thread.contactId,
+            calls: [{ ...index.activeCall, id: 'call-declined', status: 'declined', endedAt: nowIso() }],
+          }, thread.id, thread.contactId);
+          const terminalView = buildCommunicationPanelViewModel(
+            { state: createDefaultState('rp'), context: { scope: 'scope', mode: 'rp' } },
+            terminalIndex,
+            terminalThread,
+          );
+          const terminalHtml = renderCommunicationPanel(terminalView);
+          const pendingIndex = normalizeCommunicationIndex({
+            contacts: [{ id: 'character:mira', characterId: 'mira', name: 'Mira' }],
+            threads: [{ id: thread.id, contactId: 'character:mira' }],
+            activeCall: { ...index.activeCall, status: 'ringing-in', direction: 'incoming' },
+          }, 'scope');
+          const pendingThread = normalizeCommunicationThread({
+            id: thread.id, contactId: thread.contactId, calls: [pendingIndex.activeCall],
+          }, thread.id, thread.contactId);
+          const pendingView = buildCommunicationPanelViewModel(
+            { state: createDefaultState('rp'), context: { scope: 'scope', mode: 'rp' } },
+            pendingIndex,
+            pendingThread,
+          );
+          renderCommunicationPanel(pendingView);
           Runtime.communicationPanelThreadId = runtimeBefore.threadId;
           Runtime.communicationPanelBusy = runtimeBefore.busy;
+          Runtime.communicationPanelActivity = runtimeBefore.activity;
           return {
             oneActiveCallStored: index.activeCall?.status === 'active' && thread.calls.length === 1,
             callTurnsRenderAsQuotedDialogue: html.includes('“여보세요?”') && html.includes('“응, 나야.”'),
             freeTalkAndEndControlsPresent: view.controls.some(control => control.command === 'call-turn')
               && view.controls.some(control => control.command === 'end-call'),
+            inlineComposerUsesSmallSendControl: view.controls.some(control => control.command === 'edit-call-draft' && !control.disabled)
+              && html.includes('width:30px;min-width:30px')
+              && !html.includes('메시지 보내기</span>'),
+            terminalAndIncomingCallDoNotLockMessageWriting: terminalView.controls.some(control => control.command === 'edit-message-draft' && !control.disabled)
+              && terminalView.controls.some(control => control.command === 'compose' && !control.disabled)
+              && pendingView.controls.some(control => control.command === 'edit-message-draft' && !control.disabled)
+              && pendingView.controls.some(control => control.command === 'compose' && !control.disabled),
+            typingMotionIsVisibleDuringReply: typingHtml.includes('et-comm-typing')
+              && typingHtml.includes('답장 수신 중')
+              && !typingHtml.includes('입력 중'),
+            realClockIsHiddenUnlessStoryTimeExists: !html.includes('2026-07-21T12:34:00.000Z')
+              && html.includes('왕국력 7월 15일 · 밤'),
+            terminalCallOutcomeIsExplained: terminalHtml.includes('거절됨')
+              && terminalHtml.includes('연결을 거부했어요'),
             noSuggestedReplies: !html.includes('추천 답장') && !html.includes('suggestion'),
             terminalStatusesSupported: ['declined', 'missed', 'unreachable', 'ended', 'dropped', 'transport-error', 'aborted'].every(status => Boolean(normalizeCommunicationCall({
               id: `call-${status}`, threadId: thread.id, contactId: thread.contactId, status,
@@ -52050,9 +53044,9 @@ function normalizeAdaptiveQualityState(value) {
                 && reconcileSource.includes('COMMUNICATION_LAUNCHER_CLASS'),
               noSharedCompactDockRemains: !gameMarkup.includes('eros-tower-composer-tool-dock')
                 && !communicationMarkup.includes('eros-tower-composer-tool-dock'),
-              communicationIconClearsRisuHeaderAtTopRight: communicationMarkup.includes('width:36px')
-                && communicationMarkup.includes('height:36px')
-                && communicationMarkup.includes('width="28" height="28"')
+              communicationIconClearsRisuHeaderAtTopRight: communicationMarkup.includes('width:44px')
+                && communicationMarkup.includes('height:44px')
+                && communicationMarkup.includes('width="32" height="32"')
                 && COMMUNICATION_LAUNCHER_FIXED_STYLE.includes('position:fixed')
                 && COMMUNICATION_LAUNCHER_FIXED_STYLE.includes('top:72px')
                 && COMMUNICATION_LAUNCHER_FIXED_STYLE.includes('right:12px')
@@ -52099,10 +53093,22 @@ function normalizeAdaptiveQualityState(value) {
                 && String(toggleGameplayComposerPanel).includes('reconcileCommunicationLauncherForPanelState')
                 && String(toggleCommunicationPanel).includes('previousGameplayWasOpen')
                 && String(toggleCommunicationPanel).includes('reconcileGameplayLauncherForPanelState'),
-              allPanelPrimaryControlsRemainTouchSized: panel.includes('min-height:44px'),
+              panelControlsUseRefinedCompactSizing: panel.includes('min-height:28px')
+                && !panel.includes('min-height:44px'),
               exactlyOneInternalScrollRegion: (panel.match(/overflow-y:auto/g) || []).length === 1,
-              noUnsafeInlineTextInputDependency: !panel.includes('<textarea') && !panel.includes('contenteditable'),
-              nativeFreeInputHasNoSuggestions: String(promptCommunicationText).includes('prompt(') && !panel.includes('추천'),
+              scopedInlineComposerIsEventBound: !String(renderCommunicationPanel).includes('contenteditable=')
+                && !String(bindCommunicationPanel).includes("addEventListener('input'")
+                && !String(readCommunicationPanelDraft).includes('innerText')
+                && !String(readCommunicationPanelDraft).includes('.value')
+                && String(promptCommunicationDraft).includes('promptCommunicationText')
+                && String(handleCommunicationPanelCommand).includes("command === 'edit-message-draft'")
+                && normalizeCommunicationUserText("(...args) => sendRequest('CALL_INSTANCE', { id: val.id })") === ''
+                && String(handleCommunicationPanelCommand).indexOf('await readCommunicationPanelDraft') >= 0
+                && String(handleCommunicationPanelCommand).indexOf('await readCommunicationPanelDraft')
+                  < String(handleCommunicationPanelCommand).indexOf('Runtime.communicationPanelBusy = true'),
+              nativeFreeInputHasNoSuggestions: String(renderCommunicationPanel).includes("'edit-message-draft'")
+                && String(promptCommunicationDraft).includes('promptCommunicationText')
+                && !String(renderCommunicationPanel).includes('추천'),
               ownerBrokerRejectsStaleWrites: String(inChatPanelSessionIsCurrent).includes('inChatPanelOwnerIsCurrent')
                 && broker.includes('inChatPanelSessionIsCurrent')
                 && broker.includes('Runtime.inChatPanelOwner !== owner'),
@@ -52121,7 +53127,7 @@ function normalizeAdaptiveQualityState(value) {
               gameplayAsyncUiCarriesSessionAndScope: String(dispatchGameplayAction).includes('panelUiIsCurrent')
                 && String(handleGameplayComposerCommand).includes('panelScope: context.scope'),
               disabledCommunicationControlsCannotDispatch: String(bindCommunicationPanel).includes('!control.disabled')
-                && String(bindCommunicationPanel).includes('!entries[index].disabled'),
+                && String(bindCommunicationPanel).includes('!binding.entries[index].disabled'),
               knownContactCanOpenItsFirstEmptyThread: communicationMountSource.includes('communicationThreadIdForContact(contact.id)')
                 && communicationMountSource.includes('if (contactId) resolvedThread = await loadCommunicationThread'),
               pointerActivationIsPrimaryAndIdentityBound: gameplayComposerPointerStayedTap(
@@ -54623,6 +55629,60 @@ function normalizeAdaptiveQualityState(value) {
               actualBytes,
               reductionPercent: Number((reduction * 100).toFixed(2)),
               blobCount,
+            };
+          } finally {
+            await removeScopeStorage(scope);
+          }
+        },
+        testStateReferenceUnchangedLongMemoryDeduplication: async () => {
+          const scope = `debug-storage-unchanged-long-memory-${Date.now().toString(36)}`;
+          const messages = Array.from({ length: 3604 }, (_, index) => ({
+            id: `storage-message-${index}`,
+            role: index % 2 ? 'assistant' : 'user',
+            content: `historical message ${index} ${'continuity evidence '.repeat(4)}`,
+          }));
+          const targetState = createDefaultState('novel');
+          const baseTurn = messages.filter(message => message.role === 'assistant').length;
+          const snapshotConfig = { ...DEFAULT_CONFIG, snapshotRingMax: 16 };
+          let firstMemoryHashes = null;
+          let currentMemoryHashes = null;
+          let unchangedTurnsStable = true;
+          let initialChunkCount = 0;
+          try {
+            for (let index = 0; index < 10; index += 1) {
+              targetState.turn = baseTurn + index;
+              const sync = syncChatLongMemoryLedger(targetState, messages, 4, 4, { reconcileSameEpoch: true });
+              if (index === 0) initialChunkCount = sync.total;
+              else if (sync.changed || sync.unchanged !== 900) unchangedTurnsStable = false;
+              await pushStateSnapshot(scope, targetState, snapshotConfig, `debug-unchanged-${index}`);
+              await saveStoredStateValue(scope, targetState);
+              await collectStateBlobGarbage(scope);
+              const reference = await Storage.get(STORAGE.state(scope), null);
+              const memorySection = reference?.sections?.find(section => section?.field === 'memoryLedger');
+              currentMemoryHashes = (memorySection?.refs || []).map(ref => ref.hash);
+              if (!firstMemoryHashes) firstMemoryHashes = currentMemoryHashes.slice();
+              else if (stableStorageJson(currentMemoryHashes) !== stableStorageJson(firstMemoryHashes)) {
+                unchangedTurnsStable = false;
+              }
+            }
+            const keys = (await listPluginStorageKeys()).filter(key => key.startsWith(PREFIX) && key.includes(scope));
+            const stateBlobCount = keys.filter(key => key.startsWith(`${PREFIX}state-blob:${scope}:`)).length;
+            const snapshotBodyCount = keys.filter(key => key.startsWith(`${PREFIX}snapshot-body:${scope}:`)).length;
+            const ring = await loadStateSnapshots(scope);
+            const newest = await restoreStateSnapshotEntry(await loadStateSnapshotEntry(scope, ring[0]), 'novel');
+            const oldest = await restoreStateSnapshotEntry(await loadStateSnapshotEntry(scope, ring[ring.length - 1]), 'novel');
+            return {
+              exactReportedFixtureChunkCount: initialChunkCount === 900,
+              nineUnchangedTurnsReuseEveryMemoryBlob: unchangedTurnsStable,
+              memoryBlobGenerationRemainsSingle: stateBlobCount === 75
+                && currentMemoryHashes?.length === 75
+                && firstMemoryHashes?.length === 75,
+              tenSnapshotsRetained: ring.length === 10 && snapshotBodyCount === 10,
+              totalScopedKeysRemainBounded: keys.length <= 90,
+              oldestAndNewestSnapshotsRestoreAllMemories: oldest?.memoryLedger?.length === 900
+                && newest?.memoryLedger?.length === 900,
+              stateBlobCount,
+              totalScopedKeys: keys.length,
             };
           } finally {
             await removeScopeStorage(scope);
@@ -61455,6 +62515,10 @@ function normalizeAdaptiveQualityState(value) {
           if (head?.chunk) {
             head.chunk.extracted = true;
             head.chunk.extractionError = 'preserve-me';
+            head.chunk.syncedAtTurn = 2;
+          }
+          if (head?.evidence?.[0]) {
+            head.evidence[0].at = '2000-01-01T00:00:00.000Z';
           }
           if (tail?.chunk) {
             tail.chunk.extracted = true;
@@ -61463,6 +62527,7 @@ function normalizeAdaptiveQualityState(value) {
           state.coldStart.processedHashes = [oldTailHash];
           state.coldStart.failed = [{ hash: oldTailHash, attempts: 1 }];
           state.coldStart.inFlight = [{ hash: oldTailHash, startedTurn: 5 }];
+          state.turn = 6;
           const unchanged = syncChatLongMemoryLedger(state, initialMessages, 4, 4, { reconcileSameEpoch: true });
           const unchangedHead = state.memoryLedger.find(item => item?.id === head?.id);
           const appendedMessages = initialMessages.concat({ id: 'm10', role: 'user', content: 'message 10' });
@@ -61533,6 +62598,8 @@ function normalizeAdaptiveQualityState(value) {
             unchangedKeepsExtracted: unchangedHead?.chunk?.extracted === true
               && unchangedHead?.chunk?.extractionError === 'preserve-me'
               && unchanged.unchanged >= 1,
+            unchangedKeepsStableSyncBookkeeping: unchangedHead?.chunk?.syncedAtTurn === 2
+              && unchangedHead?.evidence?.[0]?.at === '2000-01-01T00:00:00.000Z',
             partialTailStableId: revisedTail?.id === tailId,
             partialTailSingleEntry: revisedTailCount === 1,
             partialTailRevised: revised.revised >= 1,
@@ -65027,23 +66094,70 @@ function normalizeAdaptiveQualityState(value) {
     Runtime.communicationPanelRoot = null;
     Runtime.communicationPanelListenerIds = [];
     Runtime.communicationPanelListenerSession = null;
+    const liveBinding = Runtime.communicationPanelLiveBinding;
+    if (!expectedSession || !liveBinding?.session || liveBinding.session === expectedSession) {
+      Runtime.communicationPanelLiveBinding = null;
+      if (liveBinding) liveBinding.measureEpoch = Math.max(0, Number(liveBinding.measureEpoch || 0)) + 1;
+    }
     for (const item of listeners) {
       try { await root?.removeEventListener?.(item.type, item.id); } catch (_) {}
     }
+  }
+
+  function communicationPanelWarmSnapshotMap() {
+    if (!(Runtime.communicationPanelWarmSnapshots instanceof Map)) {
+      Runtime.communicationPanelWarmSnapshots = new Map();
+    }
+    return Runtime.communicationPanelWarmSnapshots;
+  }
+
+  function rememberCommunicationPanelWarmSnapshot() {
+    const mounted = Runtime.communicationPanelMountedData;
+    const scope = cleanString(mounted?.session?.context?.scope || mounted?.index?.scope, '');
+    if (!scope || !mounted?.conf || !mounted?.session || !mounted?.index) return null;
+    const snapshot = {
+      scope,
+      conf: mounted.conf,
+      session: { ...mounted.session, index: mounted.index },
+      index: mounted.index,
+      thread: mounted.thread || null,
+      threadId: cleanString(Runtime.communicationPanelThreadId, ''),
+      selfPicker: Runtime.communicationPanelSelfPicker === true,
+      contactPicker: Runtime.communicationPanelContactPicker === true,
+      cachedAt: Date.now(),
+    };
+    const cache = communicationPanelWarmSnapshotMap();
+    cache.delete(scope);
+    cache.set(scope, snapshot);
+    while (cache.size > 4) cache.delete(cache.keys().next().value);
+    return snapshot;
+  }
+
+  function communicationPanelWarmSnapshot(scope = communicationLauncherScope()) {
+    const key = cleanString(scope, '');
+    if (!key) return null;
+    return communicationPanelWarmSnapshotMap().get(key) || null;
   }
 
   async function resetCommunicationPanelState(expectedSession = Runtime.communicationPanelSession) {
     if (expectedSession && Runtime.communicationPanelSession
       && Runtime.communicationPanelSession !== expectedSession) return false;
     const wasOpen = Runtime.communicationPanelOpen === true;
+    if (wasOpen) rememberCommunicationPanelWarmSnapshot();
     Runtime.communicationPanelOpen = false;
     if (!expectedSession || Runtime.communicationPanelSession === expectedSession) {
       Runtime.communicationPanelSession = null;
     }
     Runtime.communicationPanelBusy = false;
+    Runtime.communicationPanelActivity = null;
     if (Runtime.communicationPanelRefreshTimer && typeof clearTimeout === 'function') clearTimeout(Runtime.communicationPanelRefreshTimer);
     Runtime.communicationPanelRefreshTimer = null;
     Runtime.communicationPanelThreadId = '';
+    Runtime.communicationPanelScope = '';
+    Runtime.communicationPanelSelfPicker = false;
+    Runtime.communicationPanelContactPicker = false;
+    Runtime.communicationPanelMountedData = null;
+    Runtime.communicationIdentityInputOpen = false;
     await clearCommunicationPanelListeners(expectedSession);
     return wasOpen;
   }
@@ -65052,17 +66166,114 @@ function normalizeAdaptiveQualityState(value) {
     const index = register.length;
     register.push({ command, value, disabled: options.disabled === true, clipId: cleanString(options.clipId, '') });
     const tone = options.tone === 'danger'
-      ? 'background:#6e3442;color:#fff;border-color:#7f4350;'
+      ? 'background:#522c37;color:#ffe8ed;border-color:#77404f;'
       : options.tone === 'primary'
-        ? 'background:#4f3a65;color:#fff;border-color:#665078;'
-        : 'background:#fffaf6;color:#3f3146;border-color:rgba(91,62,93,.28);';
-    return `<button id="${communicationPanelControlId(index)}" type="button" ${options.disabled ? 'disabled aria-disabled="true"' : ''} style="box-sizing:border-box;min-width:44px;min-height:44px;padding:9px 12px;border:1px solid;border-radius:12px;font:inherit;font-weight:700;cursor:${options.disabled ? 'not-allowed' : 'pointer'};touch-action:manipulation;${tone}">${escHtml(label)}</button>`;
+        ? 'background:var(--et-comm-accent);color:var(--et-comm-accent-text);border-color:var(--et-comm-accent);'
+        : 'background:var(--et-comm-raised);color:var(--et-comm-text);border-color:var(--et-comm-line);';
+    const content = typeof options.contentHtml === 'string' ? options.contentHtml : escHtml(label);
+    const compact = options.compact === true
+      ? 'min-width:28px;width:28px;min-height:28px;height:28px;padding:0;'
+      : 'min-width:36px;min-height:36px;padding:7px 10px;';
+    return `<button id="${communicationPanelControlId(index)}" type="button" aria-label="${escHtml(options.ariaLabel || label)}" title="${escHtml(options.title || options.ariaLabel || label)}" ${options.disabled ? 'disabled aria-disabled="true"' : ''} style="box-sizing:border-box;${compact}border:1px solid;border-radius:${options.radius || '9px'};font:inherit;font-weight:750;line-height:1.25;cursor:${options.disabled ? 'not-allowed' : 'pointer'};touch-action:manipulation;transition:transform .12s ease,filter .12s ease,background .16s ease;${tone}${options.style || ''}">${content}</button>`;
+  }
+
+  function communicationPanelDraftMap() {
+    if (!(Runtime.communicationPanelDrafts instanceof Map)) Runtime.communicationPanelDrafts = new Map();
+    return Runtime.communicationPanelDrafts;
+  }
+
+  function communicationPanelDraftKey(scope = '', threadId = '') {
+    return `${cleanString(scope, 'global')}|${cleanString(threadId, 'home')}`;
+  }
+
+  function communicationPanelComposerId() {
+    return `${UI_ID_IN_CHAT_PANEL}-communication-composer`;
+  }
+
+  function communicationContactAvatarAsset(contact, context = null) {
+    const assets = normalizeRisuAdditionalAssets(readCharacterField(context?.character, 'additionalAssets'));
+    if (!contact) return null;
+    const contactTerms = uniqueStrings([contact.name].concat(normalizeStringArray(contact.aliases)))
+      .map(value => String(value || '').replace(/[_.-]+/g, ' ').trim())
+      .filter(Boolean);
+    const contactKeys = identityLookupKeys(contactTerms);
+    const currentCardTerms = uniqueStrings([
+      context?.character?.name, context?.character?.data?.name,
+      context?.characterId, context?.character?.id, context?.character?.data?.id,
+    ]).filter(Boolean);
+    const isCurrentCard = contact.source === 'chatbot'
+      && Array.from(identityLookupKeys(currentCardTerms)).some(key => contactKeys.has(key));
+    if (!assets.length) {
+      const directPath = cleanString(firstNonEmpty(
+        readCharacterField(context?.character, 'avatar'),
+        readCharacterField(context?.character, 'image'),
+        readCharacterField(context?.character, 'portrait'),
+      ), '');
+      if (!isCurrentCard || !directPath) return null;
+      const ext = cleanString(directPath.split(/[?#]/, 1)[0].split('.').pop(), 'png').toLowerCase();
+      return { name: `${contact.name}.profile`, path: directPath, ext: /^(?:png|jpe?g|webp|gif)$/i.test(ext) ? ext.replace('jpeg', 'jpg') : 'png' };
+    }
+    const ranked = assets.map((asset, order) => {
+      const stem = nativeImageAssetIdentityStem(asset.name).replace(/[_.-]+/g, ' ').trim();
+      const assetKey = normalizeIdentityLookupKey(stem);
+      const exact = assetKey && contactKeys.has(assetKey);
+      const contained = contactTerms.some(term => {
+        const a = normalizeIdentityLookupKey(term);
+        return a.length >= 2 && assetKey.length >= 2 && (assetKey.includes(a) || a.includes(assetKey));
+      });
+      const preferredVariant = /(?:^|[._-])(?:default|profile|portrait|face|normal)(?:$|[._-])/i.test(asset.name);
+      const score = (exact ? 120 : contained ? 80 : 0)
+        + (isCurrentCard ? 24 : 0)
+        + (preferredVariant ? 12 : 0)
+        - order / 100;
+      return { asset, score };
+    }).sort((a, b) => b.score - a.score);
+    const best = ranked[0];
+    if (!best || best.score < (isCurrentCard ? 20 : 70)) return null;
+    return best.asset;
+  }
+
+  function communicationContactAvatarHtml(viewModel, contact, slot = 'contact', size = 38) {
+    const safeSize = Math.max(28, Math.min(52, Number(size || 38)));
+    const asset = viewModel.contactAvatarAssets instanceof Map
+      ? viewModel.contactAvatarAssets.get(contact?.id) : null;
+    const bindingIndex = Array.isArray(viewModel.avatarBindings) ? viewModel.avatarBindings.length : 0;
+    const baseId = `${UI_ID_IN_CHAT_PANEL}-communication-avatar-${slug(`${slot}-${contact?.id || bindingIndex}`)}-${bindingIndex}`;
+    const wrapperStyle = `position:relative;display:grid;place-items:center;width:${safeSize}px;height:${safeSize}px;flex:none;overflow:hidden;border:1px solid var(--et-comm-line);border-radius:${Math.round(safeSize * .32)}px;background:linear-gradient(145deg,var(--et-comm-raised),var(--et-comm-card));color:var(--et-comm-accent);box-shadow:inset 0 1px rgba(255,255,255,.04),0 5px 14px rgba(0,0,0,.16);font-size:${Math.round(safeSize * .34)}px;font-weight:900`;
+    if (!asset) return `<span aria-hidden="true" style="${wrapperStyle}">${escHtml(communicationIdentityGlyph(contact?.name))}</span>`;
+    const directSrc = /^(?:data:|blob:|https?:)/i.test(asset.path) ? asset.path : '';
+    if (!Array.isArray(viewModel.avatarBindings)) viewModel.avatarBindings = [];
+    viewModel.avatarBindings.push({
+      imgId: `${baseId}-img`, glyphId: `${baseId}-glyph`, asset,
+    });
+    return `<span aria-hidden="true" style="${wrapperStyle}"><span id="${baseId}-glyph" style="${directSrc ? 'display:none;' : ''}">${escHtml(communicationIdentityGlyph(contact?.name))}</span><img id="${baseId}-img" ${directSrc ? `src="${escHtml(directSrc)}"` : ''} alt="" loading="lazy" style="${directSrc ? 'display:block;' : 'display:none;'}position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center 22%"></span>`;
+  }
+
+  async function hydrateCommunicationPanelAvatars(root, viewModel) {
+    const bindings = Array.isArray(viewModel?.avatarBindings) ? viewModel.avatarBindings.slice(0, 48) : [];
+    await Promise.all(bindings.map(async binding => {
+      if (/^(?:data:|blob:|https?:)/i.test(binding.asset?.path || '')) return;
+      try {
+        const src = await getAlbumAssetPreviewUrlCached({
+          assetPath: binding.asset?.path,
+          ext: binding.asset?.ext,
+          mime: binding.asset?.ext === 'jpg' ? 'image/jpeg' : `image/${binding.asset?.ext || 'png'}`,
+        });
+        if (!src || Runtime.communicationPanelLiveBinding?.viewModel !== viewModel) return;
+        const img = await root?.getElementById?.(binding.imgId);
+        const glyph = await root?.getElementById?.(binding.glyphId);
+        await img?.setAttribute?.('src', src);
+        await img?.setAttribute?.('style', 'display:block;position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center 22%');
+        await glyph?.setAttribute?.('style', 'display:none');
+      } catch (_) {}
+    }));
   }
 
   function buildCommunicationPanelViewModel(session, index, thread = null) {
     const state = session?.state || createDefaultState(session?.context?.mode || 'rp');
     const context = session?.context || null;
     const normalizedIndex = normalizeCommunicationIndex(index, context?.scope || '');
+    const selfIdentity = communicationSelfIdentity(state, context, normalizedIndex);
     const activeCall = normalizeCommunicationCall(normalizedIndex.activeCall);
     const activeContact = activeCall ? communicationContactById(normalizedIndex, activeCall.contactId) : null;
     const selectedThreadId = cleanString(Runtime.communicationPanelThreadId, thread?.id || '');
@@ -65070,18 +66281,37 @@ function normalizeAdaptiveQualityState(value) {
     const selectedContact = selectedSummary
       ? communicationContactById(normalizedIndex, selectedSummary.contactId)
       : thread ? communicationContactById(normalizedIndex, thread.contactId) : null;
+    const contactCandidates = Runtime.communicationPanelContactPicker === true
+      ? communicationContactCandidates(state, context, normalizedIndex) : [];
+    const contactAvatarAssets = new Map();
+    normalizedIndex.contacts.concat(contactCandidates).forEach(contact => {
+      const asset = communicationContactAvatarAsset(contact, context);
+      if (asset) contactAvatarAssets.set(contact.id, asset);
+    });
     return {
       index: normalizedIndex,
       thread: thread ? normalizeCommunicationThread(thread, thread.id, thread.contactId) : null,
-      presentation: communicationPresentation(normalizedIndex, state),
+      presentation: communicationPresentation(normalizedIndex, state, context, selectedContact),
       activeCall,
       activeContact,
       selectedContact,
+      selfIdentity,
+      selfProfile: communicationSelfIdentityProfile(selfIdentity, context),
+      selfCandidates: communicationSelfIdentityCandidates(state, context).slice(0, 24),
+      selfPicker: Runtime.communicationPanelSelfPicker === true,
+      contactCandidates,
+      contactPicker: Runtime.communicationPanelContactPicker === true,
+      originalWorkHints: communicationOriginalWorkHints(state, context),
+      originalRoster: communicationOriginalRosterForContext(state, context, normalizedIndex),
       busy: Runtime.communicationPanelBusy === true,
+      activity: Runtime.communicationPanelActivity,
+      draft: communicationPanelDraftMap().get(communicationPanelDraftKey(context?.scope, selectedThreadId)) || '',
+      contactAvatarAssets,
+      avatarBindings: [],
     };
   }
 
-  function renderCommunicationPanel(viewModel) {
+  function renderCommunicationPanelLegacy(viewModel) {
     const controls = viewModel.controls = [];
     const scrollId = `${UI_ID_IN_CHAT_PANEL}-communication-scroll`;
     const presentation = viewModel.presentation;
@@ -65093,7 +66323,7 @@ function normalizeAdaptiveQualityState(value) {
     }[skin] || ['#f8f0e8', '#563c5f', '#fffdfa'];
     const badge = communicationBadgeFromIndex(viewModel.index);
     const close = communicationPanelButton(controls, 'close', '닫기');
-    const skinButton = communicationPanelButton(controls, 'cycle-skin', `외형 · ${skin}`);
+    const skinButton = '';
     const header = `<div style="display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid rgba(70,45,76,.15);flex:0 0 auto;background:${palette[0]}"><img src="${COMMUNICATION_ICON_DATA_URI}" alt="" width="38" height="38" style="width:38px;height:38px;image-rendering:pixelated"><div style="min-width:0;flex:1"><div style="font-size:15px;font-weight:900;overflow-wrap:anywhere">${escHtml(COMMUNICATION_AGENT_NAME)}</div><div style="font-size:11px;opacity:.72">${escHtml(presentation.device)} · 미확인 ${badge.unread} · 부재중 ${badge.missed}</div></div>${skinButton}${close}</div>`;
     const notice = viewModel.busy
       ? '<div role="status" aria-live="polite" style="padding:9px 12px;background:#fff4d9;color:#684b20;font-size:12px;font-weight:700;flex:0 0 auto">상대의 반응을 기다리는 중…</div>'
@@ -65136,7 +66366,7 @@ function normalizeAdaptiveQualityState(value) {
         const end = communicationPanelButton(controls, 'end-call', '연락 끊기', '', { tone: 'danger', disabled: viewModel.busy });
         composer = `<div style="display:flex;gap:8px;padding:10px 12px;border-top:1px solid rgba(70,45,76,.14);background:${palette[0]};flex:0 0 auto">${speak}${end}</div>`;
       } else {
-        const compose = communicationPanelButton(controls, 'compose', `${presentation.message} 쓰기`, contact.id, { tone: 'primary', disabled: viewModel.busy || pendingCall });
+        const compose = communicationPanelButton(controls, 'compose', `${presentation.message} 쓰기`, contact.id, { tone: 'primary', disabled: viewModel.busy });
         composer = `<div style="display:flex;gap:8px;padding:10px 12px;border-top:1px solid rgba(70,45,76,.14);background:${palette[0]};flex:0 0 auto">${compose}<div style="align-self:center;font-size:10px;opacity:.62">자유 입력 · 답장을 보장하지 않음</div></div>`;
       }
     } else {
@@ -65151,12 +66381,257 @@ function normalizeAdaptiveQualityState(value) {
         }).join('')
         : '<div style="padding:36px 16px;text-align:center"><div style="font-weight:900;margin-bottom:7px">알려진 연락처가 아직 없습니다.</div><div style="font-size:12px;opacity:.68">이야기에서 직접 만나거나 정체를 알게 된 인물만 여기에 나타납니다.</div></div>';
       body = `<div id="${scrollId}" class="et-comm-scroll" style="min-height:0;flex:1;overflow-y:auto;overscroll-behavior:contain;background:${palette[2]}">${activeCard}${contacts}</div>`;
-      composer = `<div style="padding:9px 12px;border-top:1px solid rgba(70,45,76,.14);background:${palette[0]};font-size:11px;opacity:.72;flex:0 0 auto">세계관 외형은 표시만 바꾸며, 연락 수단·도달 가능성을 새로 만들지 않습니다.</div>`;
+      composer = `<div style="padding:9px 12px;border-top:1px solid rgba(70,45,76,.14);background:${palette[0]};font-size:11px;opacity:.72;flex:0 0 auto">개인 연락 · ${viewModel.index.contacts.length}명</div>`;
     }
     return `<div id="${communicationPanelSurfaceId()}" data-et-communication-skin="${escHtml(skin)}" style="box-sizing:border-box;width:100%;height:min(70vh,680px);min-height:240px;display:flex;flex-direction:column;overflow:hidden;background:${palette[2]};color:#332a38;font-family:system-ui,sans-serif"><style>@media(max-width:360px){#${communicationPanelSurfaceId()} button{padding-left:8px!important;padding-right:8px!important;font-size:12px!important}}</style>${header}${notice}${body}${composer}</div>`;
   }
 
-  async function bindCommunicationPanel(viewModel, session = Runtime.communicationPanelSession) {
+  function communicationMessageTime(value) {
+    return cleanString(value, '').replace(/\s+/g, ' ').slice(0, 120);
+  }
+
+  function communicationMessageStatusLabel(value, presentation = null) {
+    const status = cleanString(value, '');
+    const channel = cleanString(presentation?.channelLabel, '');
+    if (status === 'refused' && channel && !['개인 연락', '메신저'].includes(channel)) return `${channel} 연결 거부`;
+    if (status === 'unreachable' && channel && !['개인 연락', '메신저'].includes(channel)) return `${channel} 연결 불가`;
+    return ({
+      sending: '보내는 중', sent: '전송됨', delivered: '전달됨', read: '읽음',
+      ignored: '읽고 무시함', 'no-response': '무응답', delayed: '답장 지연',
+      refused: '응답 거부', unreachable: '연결 불가', 'send-failed': '전송 실패',
+      spoken: '말함', heard: '들음',
+    })[status] || '';
+  }
+
+  function communicationCallStatusPresentation(call, contactName = '', presentation = null) {
+    const status = cleanString(call?.status, '');
+    const liveTerm = cleanString(presentation?.call, '통화');
+    const labels = {
+      'ringing-out': [`${liveTerm} 연결 중`, `${contactName}에게 연결을 시도하고 있어요`],
+      'ringing-in': [`${liveTerm} 수신`, `${contactName}에게서 연락이 왔어요`],
+      active: [`${liveTerm} 연결됨`, `${contactName}와 실시간으로 대화 중이에요`],
+      declined: [`${liveTerm} 거절됨`, `${contactName}이(가) 연결을 거부했어요`],
+      missed: [`${liveTerm} 부재중`, '응답이 없어 부재중 연락으로 남았어요'],
+      unreachable: [`${liveTerm} 연결 불가`, '현재 연락 수단으로는 닿을 수 없어요'],
+      ended: [`${liveTerm} 종료`, '실시간 대화가 끝났어요'],
+      dropped: [`${liveTerm} 끊김`, '대화 도중 상대 또는 통신 상태로 연결이 끊겼어요'],
+      'transport-error': ['연결 오류', '모델 호출 중 오류가 발생했어요'],
+      aborted: ['연결 취소', '완료되지 않은 연결을 정리했어요'],
+    };
+    const [label, detail] = labels[status] || ['', ''];
+    return { status, label, detail };
+  }
+
+  function communicationIdentityGlyph(name) {
+    return Array.from(cleanString(name, '?'))[0] || '?';
+  }
+
+  function renderCommunicationPanel(viewModel) {
+    const controls = viewModel.controls = [];
+    const scrollId = `${UI_ID_IN_CHAT_PANEL}-communication-scroll`;
+    const presentation = viewModel.presentation;
+    const skin = presentation.skin;
+    const themes = {
+      neutral: ['#17151c', '#211e27', '#2a2630', '#d6aa72', '#1b1510', '#f4eee8', '#aaa0ad'],
+      modern: ['#121820', '#19232d', '#21313e', '#72b7e3', '#10202b', '#edf7ff', '#91a8ba'],
+      fantasy: ['#17131e', '#231c2d', '#30243e', '#c49be8', '#24152f', '#f7edff', '#b2a0bf'],
+      wuxia: ['#191512', '#261f1a', '#332720', '#d3a267', '#28190f', '#f8eee2', '#b5a292'],
+      historical: ['#1a1512', '#281e19', '#34251e', '#c98d68', '#291810', '#f7eee8', '#b7a095'],
+      scifi: ['#101918', '#172625', '#1e3432', '#69d3c7', '#0e2522', '#e8fffb', '#8fb7b2'],
+      ninjutsu: ['#111a18', '#192724', '#213630', '#73c9a4', '#10251f', '#effcf6', '#91afa2'],
+      'spiritual-sense': ['#121a19', '#1b2926', '#233934', '#77d1b1', '#10251f', '#edfff8', '#91b5aa'],
+      'sound-transmission': ['#191512', '#261f1a', '#332720', '#d3a267', '#28190f', '#f8eee2', '#b5a292'],
+      telepathy: ['#141421', '#202034', '#2b2a46', '#9d9bea', '#19182d', '#f3f2ff', '#a8a6c7'],
+      magic: ['#17131e', '#231c2d', '#30243e', '#c49be8', '#24152f', '#f7edff', '#b2a0bf'],
+    };
+    const palette = themes[presentation.channel] || themes[skin] || themes.neutral;
+    const badge = communicationBadgeFromIndex(viewModel.index);
+    const close = communicationPanelButton(controls, 'close', '닫기', '', {
+      compact: true, style: 'width:26px;min-width:26px;height:26px;min-height:26px;border-color:transparent;background:transparent;',
+      contentHtml: '<span aria-hidden="true" style="font-size:15px;font-weight:500;line-height:1">×</span>',
+    });
+    const self = viewModel.selfProfile || { name: '나', label: '현재 사용자', description: '' };
+    const changeSelf = communicationPanelButton(controls, 'toggle-self-picker', viewModel.selfPicker ? '완료' : '바꾸기', '', {
+      compact: true,
+      ariaLabel: viewModel.selfPicker ? '내 정보 선택 닫기' : '내 정보 바꾸기',
+      title: viewModel.selfPicker ? '내 정보 선택 닫기' : '내 정보 직접 선택·입력',
+      style: 'width:26px;min-width:26px;height:26px;min-height:26px;border-color:transparent;background:transparent;',
+      contentHtml: viewModel.selfPicker ? '<span aria-hidden="true" style="font-size:12px">✓</span>' : '<span aria-hidden="true" style="font-size:12px">✎</span>',
+    });
+    const brand = `<header style="display:flex;align-items:center;gap:8px;padding:8px 9px;border-bottom:1px solid var(--et-comm-line);background:linear-gradient(135deg,var(--et-comm-raised),var(--et-comm-bg));flex:0 0 auto"><span style="display:grid;place-items:center;width:34px;height:34px;flex:none;border:1px solid var(--et-comm-line);border-radius:11px;background:var(--et-comm-card);box-shadow:0 6px 16px rgba(0,0,0,.2)"><img src="${COMMUNICATION_ICON_DATA_URI}" alt="" width="28" height="28" style="display:block;width:28px;height:28px;image-rendering:pixelated"></span><div style="min-width:0;flex:1"><div style="font-size:12px;font-weight:900;letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(COMMUNICATION_AGENT_NAME)}</div><div style="display:flex;align-items:center;gap:5px;margin-top:2px;color:var(--et-comm-muted);font-size:8px;white-space:nowrap;overflow:hidden"><strong style="color:var(--et-comm-text);overflow:hidden;text-overflow:ellipsis">${escHtml(self.name)}</strong><b style="display:inline-flex;align-items:center;gap:3px;padding:1px 5px;border:1px solid var(--et-comm-line);border-radius:999px;color:var(--et-comm-accent);font-size:7px">${escHtml(presentation.channelIcon || '⌁')} ${escHtml(presentation.channelLabel || presentation.device)}</b>${badge.unread ? `<span style="color:var(--et-comm-accent)">${badge.unread} 안 읽음</span>` : ''}${badge.missed ? `<span style="color:#e89aa8">${badge.missed} 부재중</span>` : ''}</div></div><div style="display:flex;align-items:center;gap:1px">${changeSelf}${close}</div></header>`;
+    const notice = '';
+    let body = '';
+    let composer = '';
+    if (viewModel.loading) {
+      body = '<div role="status" aria-live="polite" style="display:grid;place-items:center;min-height:0;flex:1;padding:34px 16px;text-align:center"><div><span aria-hidden="true" style="display:inline-block;width:19px;height:19px;border:2px solid var(--et-comm-muted);border-top-color:var(--et-comm-accent);border-radius:50%"></span><strong style="display:block;margin-top:9px;font-size:10px">현재 대화와 연락처를 불러오는 중…</strong><span style="display:block;margin-top:4px;color:var(--et-comm-muted);font-size:8px">잠시만 기다려 주세요.</span></div></div>';
+    } else if (viewModel.selfPicker) {
+      const autoSelected = viewModel.selfIdentity?.automatic === true;
+      const auto = communicationPanelButton(controls, 'select-self-auto', '현재 Risu 페르소나', '', {
+        tone: autoSelected ? 'primary' : '', clipId: scrollId,
+        style: 'width:100%;text-align:left;',
+        contentHtml: `<span style="display:flex;align-items:center;gap:9px"><span aria-hidden="true" style="display:grid;place-items:center;width:30px;height:30px;border-radius:9px;background:rgba(255,255,255,.08);font-size:14px">👤</span><span style="min-width:0"><strong style="display:block;font-size:10px">현재 Risu 페르소나 자동 사용</strong><small style="display:block;margin-top:2px;opacity:.68;font-size:8px">채팅에 연결된 페르소나가 바뀌면 함께 바뀝니다.</small></span>${autoSelected ? '<b style="margin-left:auto">✓</b>' : ''}</span>`,
+      });
+      const candidates = (viewModel.selfCandidates || []).map(candidate => {
+        const selected = !autoSelected && candidate.id === viewModel.selfIdentity?.id;
+        return communicationPanelButton(controls, 'select-self', candidate.name, candidate.id, {
+          tone: selected ? 'primary' : '', clipId: scrollId,
+          style: 'width:100%;text-align:left;',
+          contentHtml: `<span style="display:flex;align-items:center;gap:9px"><span aria-hidden="true" style="display:grid;place-items:center;width:30px;height:30px;flex:none;border-radius:9px;background:rgba(255,255,255,.08);font-size:12px;font-weight:900">${escHtml(communicationIdentityGlyph(candidate.name))}</span><span style="min-width:0;flex:1"><strong style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px">${escHtml(candidate.name)}</strong><small style="display:block;margin-top:2px;opacity:.66;font-size:8px">${escHtml(communicationSelfIdentityLabel({ ...candidate, automatic: false }))}</small></span>${selected ? '<b>✓</b>' : ''}</span>`,
+        });
+      }).join('');
+      const direct = communicationPanelButton(controls, 'select-self-query', '이름으로 직접 찾기', '', {
+        clipId: scrollId, style: 'width:100%;', contentHtml: '<span aria-hidden="true">＋</span> 이름·별칭으로 직접 찾기',
+      });
+      body = `<div id="${scrollId}" class="et-comm-scroll" style="min-height:0;flex:1;overflow-y:auto;overscroll-behavior:contain;padding:4px 9px 10px"><div style="padding:4px 2px 8px"><strong style="font-size:11px">누가 ‘나’인지 선택</strong><p style="margin:3px 0 0;color:var(--et-comm-muted);font-size:8px;line-height:1.45">이 선택은 모시모씨의 연락에만 적용되며 Risu의 실제 페르소나는 바꾸지 않습니다.</p></div><div style="display:grid;gap:5px">${auto}${candidates}${direct}</div></div>`;
+    } else if (viewModel.contactPicker) {
+      const back = communicationPanelButton(controls, 'home', '대화 목록으로', '', {
+        compact: true,
+        style: 'width:26px;min-width:26px;height:26px;min-height:26px;border-color:transparent;background:transparent;',
+        contentHtml: '<span aria-hidden="true" style="font-size:14px">‹</span>',
+      });
+      const candidates = (viewModel.contactCandidates || []).map(contact => (
+        communicationPanelButton(controls, 'add-contact', `${contact.name} 연락처에 추가`, contact.id, {
+          clipId: scrollId,
+          style: 'width:100%;text-align:left;',
+          contentHtml: `<span style="display:flex;align-items:center;gap:9px">${communicationContactAvatarHtml(viewModel, contact, 'picker', 36)}<span style="min-width:0;flex:1"><strong style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px">${escHtml(contact.name)}</strong><small style="display:block;margin-top:2px;color:var(--et-comm-muted);font-size:8px">${escHtml(communicationContactSourceLabel(contact))}</small></span><b aria-hidden="true" style="font-size:13px;color:var(--et-comm-accent)">＋</b></span>`,
+        })
+      )).join('');
+      const direct = communicationPanelButton(controls, 'add-contact-query', '현재 채팅봇 인물 이름으로 찾기', '', {
+        clipId: scrollId,
+        style: 'width:auto;min-width:0;min-height:27px;height:27px;padding:4px 8px;justify-self:start;font-size:8px;',
+        contentHtml: '<span aria-hidden="true">⌕</span> 이 채팅봇 인물을 이름·별칭으로 찾기',
+      });
+      const originalRoster = viewModel.originalRoster;
+      const originalTitle = firstNonEmpty(originalRoster?.workTitle, viewModel.originalWorkHints?.[0]);
+      const original = communicationPanelButton(controls, 'discover-original-roster', originalRoster ? '원작 인물 다시 확인' : '원작 인물 확인', '', {
+        clipId: scrollId,
+        disabled: viewModel.busy,
+        style: 'width:100%;text-align:left;',
+        contentHtml: `<span style="display:flex;align-items:center;gap:9px"><span aria-hidden="true" style="display:grid;place-items:center;width:34px;height:34px;flex:none;border-radius:11px;background:rgba(255,255,255,.08);color:var(--et-comm-accent);font-size:15px">◎</span><span style="min-width:0;flex:1"><strong style="display:block;font-size:10px">${originalRoster ? '원작 인물 다시 확인' : '원작 인물 확인'}</strong><small style="display:block;margin-top:2px;color:var(--et-comm-muted);font-size:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(originalTitle || '현재 카드와 로어에서 원작 여부를 확인합니다')}${originalRoster ? ` · ${originalRoster.characters.length}명` : ''}</small></span></span>`,
+      });
+      const empty = candidates ? '' : '<div style="padding:14px 10px;text-align:center;color:var(--et-comm-muted);font-size:8px;line-height:1.5">현재 채팅봇에 등록된 다른 인물이 아직 없어요.</div>';
+      body = `<div id="${scrollId}" class="et-comm-scroll" style="min-height:0;flex:1;overflow-y:auto;overscroll-behavior:contain;padding:4px 9px 10px"><div style="display:flex;align-items:flex-start;gap:5px;padding:4px 0 8px">${back}<div style="min-width:0"><strong style="font-size:11px">연락처 추가</strong><p style="margin:3px 0 0;color:var(--et-comm-muted);font-size:8px;line-height:1.45">로어 키워드 활성화와 상관없이 현재 채팅봇의 주 캐릭터, Psyche와 세계관 인물을 표시합니다. 추가하면 바로 메시지 창이 열립니다.</p></div></div><div style="display:grid;gap:5px">${direct}${candidates}${empty}${original}</div></div>`;
+    } else if (viewModel.selectedContact && viewModel.thread) {
+      const contact = viewModel.selectedContact;
+      const back = communicationPanelButton(controls, 'home', '대화 목록', '', {
+        compact: true,
+        style: 'width:26px;min-width:26px;height:26px;min-height:26px;border-color:transparent;background:transparent;',
+        contentHtml: '<span aria-hidden="true" style="font-size:14px">‹</span>',
+      });
+      const call = communicationPanelButton(controls, 'start-call', presentation.call, contact.id, {
+        compact: true, disabled: viewModel.busy || Boolean(viewModel.activeCall), tone: 'primary',
+        style: 'width:28px;min-width:28px;height:28px;min-height:28px;border-color:var(--et-comm-line);background:var(--et-comm-raised);color:var(--et-comm-accent);',
+        contentHtml: '<span aria-hidden="true" style="font-size:11px">☎</span>',
+      });
+      const activeForThread = viewModel.activeCall?.threadId === viewModel.thread.id ? viewModel.activeCall : null;
+      const pendingCall = activeForThread?.status === 'ringing-in';
+      const callActive = activeForThread?.status === 'active';
+      const activityForThread = viewModel.activity?.threadId === viewModel.thread.id ? viewModel.activity : null;
+      const dialing = activityForThread?.kind === 'dialing';
+      const connecting = activityForThread?.kind === 'connecting';
+      const typing = activityForThread?.kind === 'typing';
+      const lastCall = viewModel.thread.calls.slice(-1)[0] || null;
+      const threadHeader = `<div style="display:flex;align-items:center;gap:7px;padding:6px 8px 7px;border-bottom:1px solid var(--et-comm-line);flex:0 0 auto">${back}${communicationContactAvatarHtml(viewModel, contact, 'thread', 34)}<div style="flex:1;min-width:0"><div style="font-size:10px;font-weight:900;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(contact.name)}</div><div style="display:flex;align-items:center;gap:4px;margin-top:1px;color:${dialing || connecting ? 'var(--et-comm-accent)' : 'var(--et-comm-muted)'};font-size:7px;font-weight:${dialing || connecting ? '850' : '650'}">${dialing ? escHtml(`${presentation.call} 연결 중…`) : connecting ? escHtml(`${presentation.channelIcon || ''} ${presentation.connecting || '연결 중'}…`) : callActive ? escHtml(`${presentation.call} 연결됨`) : `<span>${escHtml(presentation.channelIcon || '⌁')}</span><span>${escHtml(presentation.channelLabel || presentation.message)}</span>`}</div></div>${call}</div>`;
+      const rows = viewModel.thread.messages.length
+        ? viewModel.thread.messages.slice(-120).map(message => {
+          const incoming = message.direction === 'incoming';
+          const system = message.direction === 'system';
+          const text = message.kind === 'call-line' ? `“${message.content}”` : message.content;
+          const align = system ? 'center' : incoming ? 'flex-start' : 'flex-end';
+          const bubble = system
+            ? 'background:transparent;color:var(--et-comm-muted);font-size:8px;text-align:center;'
+            : incoming
+              ? 'background:var(--et-comm-raised);color:var(--et-comm-text);border:1px solid var(--et-comm-line);border-bottom-left-radius:4px;'
+              : 'background:var(--et-comm-accent);color:var(--et-comm-accent-text);border:1px solid var(--et-comm-accent);border-bottom-right-radius:4px;';
+          const time = communicationMessageTime(message.displayTime);
+          const status = message.direction === 'outgoing' ? communicationMessageStatusLabel(message.status, presentation) : '';
+          return `<div style="display:flex;justify-content:${align};margin:5px 0"><div style="max-width:82%;padding:${system ? '3px 7px' : '7px 9px'};border-radius:12px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:10px;line-height:1.45;box-shadow:${system ? 'none' : '0 4px 11px rgba(0,0,0,.13)'};${bubble}">${escHtml(text)}${!system && (time || status) ? `<div style="display:flex;justify-content:flex-end;gap:4px;margin-top:3px;font-size:7px;opacity:.58">${time ? `<span>${escHtml(time)}</span>` : ''}${status ? `<span>${escHtml(status)}</span>` : ''}</div>` : ''}</div></div>`;
+        }).join('')
+        : `<div style="display:grid;place-items:center;min-height:100%;padding:28px 12px;text-align:center;color:var(--et-comm-muted)"><div><div aria-hidden="true" style="font-size:24px;opacity:.55">✦</div><strong style="display:block;margin-top:6px;color:var(--et-comm-text);font-size:10px">${escHtml(contact.name)}와 새 대화</strong><span style="display:block;margin-top:3px;font-size:8px">먼저 메시지를 보내거나 연락을 걸어보세요.</span></div></div>`;
+      const typingRow = typing
+        ? `<div role="status" aria-label="답장 수신 중" aria-live="polite" style="display:flex;justify-content:flex-start;margin:5px 0"><div style="display:flex;align-items:center;padding:7px 10px;border:1px solid var(--et-comm-line);border-radius:12px 12px 12px 4px;background:var(--et-comm-raised);color:var(--et-comm-muted)"><span class="et-comm-typing" aria-hidden="true"></span></div></div>`
+        : '';
+      let callCard = '';
+      if (dialing) {
+        callCard = `<div role="status" aria-live="polite" style="display:flex;align-items:center;gap:9px;padding:8px 10px;margin:6px 5px;border:1px solid var(--et-comm-line);border-radius:11px;background:var(--et-comm-card)"><span class="et-comm-call-pulse" aria-hidden="true"><i></i><i></i><i></i></span><span><strong style="display:block;font-size:9px">${escHtml(contact.name)}에게 연결 중</strong><small style="display:block;margin-top:2px;color:var(--et-comm-muted);font-size:7px">응답 여부를 확인하고 있어요</small></span></div>`;
+      } else if (pendingCall) {
+        const answer = communicationPanelButton(controls, 'answer-call', '받기', '', { tone: 'primary', disabled: viewModel.busy, clipId: scrollId });
+        const decline = communicationPanelButton(controls, 'decline-call', '거절', '', { tone: 'danger', disabled: viewModel.busy, clipId: scrollId });
+        callCard = `<div role="alert" style="padding:10px;margin:6px 5px;border:1px solid var(--et-comm-accent);border-radius:11px;background:var(--et-comm-card);text-align:center;box-shadow:0 7px 18px rgba(0,0,0,.18)"><div style="font-size:9px;font-weight:900;margin-bottom:7px">${escHtml(contact.name)}에게서 연락이 왔어요</div><div style="display:flex;justify-content:center;gap:6px">${answer}${decline}</div></div>`;
+      } else if (callActive) {
+        callCard = `<div role="status" style="padding:6px 9px;margin:5px;border:1px solid var(--et-comm-accent);border-radius:9px;background:var(--et-comm-card);color:var(--et-comm-accent);font-size:8px;font-weight:850;text-align:center"><span class="et-comm-live-dot" aria-hidden="true"></span>${escHtml(contact.name)}와 연결됨</div>`;
+      } else if (lastCall) {
+        const callStatus = communicationCallStatusPresentation(lastCall, contact.name, presentation);
+        if (callStatus.label) callCard = `<div role="status" style="display:flex;align-items:center;gap:7px;padding:6px 9px;margin:5px;border:1px solid var(--et-comm-line);border-radius:9px;background:rgba(255,255,255,.025);font-size:8px"><span aria-hidden="true" style="color:var(--et-comm-accent);font-size:10px">☎</span><span><strong style="display:block;font-size:8px">${escHtml(callStatus.label)}</strong><small style="display:block;margin-top:1px;color:var(--et-comm-muted);font-size:7px">${escHtml(callStatus.detail)}</small></span></div>`;
+      }
+      body = `${threadHeader}<div id="${scrollId}" class="et-comm-scroll" style="min-height:0;flex:1;overflow-y:auto;overscroll-behavior:contain;padding:5px 9px 9px;background:linear-gradient(180deg,var(--et-comm-bg),rgba(0,0,0,.08))">${callCard}${rows}${typingRow}</div>`;
+      if (callActive) {
+        const callDraft = normalizeCommunicationUserText(viewModel.draft, 1200);
+        const editCall = communicationPanelButton(controls, 'edit-call-draft', '통화 내용 작성', contact.id, {
+          disabled: viewModel.busy,
+          ariaLabel: '통화로 전할 내용 작성',
+          style: 'min-width:0;width:auto;min-height:32px;height:auto;max-height:88px;flex:1;overflow:hidden;padding:8px 10px;text-align:left;border-radius:12px;background:var(--et-comm-bg);color:var(--et-comm-text);font-size:9px;font-weight:500;',
+          contentHtml: callDraft
+            ? `<span style="display:block;max-height:54px;overflow:hidden;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.45">${escHtml(callDraft)}</span>`
+            : '<span style="display:block;color:var(--et-comm-muted);opacity:.78">통화로 말할 내용을 입력하세요</span>',
+        });
+        const speak = communicationPanelButton(controls, 'call-turn', '말하기', contact.id, {
+          compact: true, tone: 'primary', disabled: viewModel.busy,
+          style: 'width:30px;min-width:30px;height:30px;min-height:30px;border-radius:9px;',
+          contentHtml: '<span aria-hidden="true" style="font-size:11px">➤</span>',
+        });
+        const end = communicationPanelButton(controls, 'end-call', '끊기', '', {
+          compact: true, tone: 'danger', disabled: viewModel.busy,
+          style: 'width:30px;min-width:30px;height:30px;min-height:30px;border-radius:9px;font-size:9px;',
+          contentHtml: '<span aria-hidden="true" style="font-size:10px">×</span>',
+        });
+        composer = `<div style="display:flex;align-items:flex-end;gap:6px;padding:7px 8px;border-top:1px solid var(--et-comm-line);background:var(--et-comm-card);flex:0 0 auto">${editCall}${speak}${end}</div>`;
+      } else {
+        const messageDraft = normalizeCommunicationUserText(viewModel.draft, 1600);
+        const editMessage = communicationPanelButton(controls, 'edit-message-draft', `${presentation.message} 작성`, contact.id, {
+          disabled: viewModel.busy,
+          ariaLabel: `${contact.name}에게 ${presentation.message} 작성`,
+          style: 'min-width:0;width:auto;min-height:32px;height:auto;max-height:88px;flex:1;overflow:hidden;padding:8px 10px;text-align:left;border-radius:12px;background:var(--et-comm-bg);color:var(--et-comm-text);font-size:9px;font-weight:500;',
+          contentHtml: messageDraft
+            ? `<span style="display:block;max-height:54px;overflow:hidden;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.45">${escHtml(messageDraft)}</span>`
+            : `<span style="display:block;color:var(--et-comm-muted);opacity:.78">${escHtml(contact.name)}에게 ${escHtml(presentation.message)} 보내기</span>`,
+        });
+        const compose = communicationPanelButton(controls, 'compose', `${presentation.message} 보내기`, contact.id, {
+          compact: true, tone: 'primary', disabled: viewModel.busy,
+          style: 'width:30px;min-width:30px;height:30px;min-height:30px;border-radius:9px;',
+          contentHtml: '<span aria-hidden="true" style="font-size:11px">➤</span>',
+        });
+        composer = `<div style="display:flex;align-items:flex-end;gap:6px;padding:7px 8px;border-top:1px solid var(--et-comm-line);background:var(--et-comm-card);flex:0 0 auto">${editMessage}${compose}</div>`;
+      }
+    } else {
+      const activeStatus = viewModel.activeCall && viewModel.activeContact
+        ? communicationCallStatusPresentation(viewModel.activeCall, viewModel.activeContact.name, presentation) : null;
+      const activeCard = activeStatus?.label
+        ? `<div style="display:flex;align-items:center;gap:7px;margin:6px 9px;padding:7px 9px;border:1px solid var(--et-comm-accent);border-radius:10px;background:var(--et-comm-card);font-size:8px"><span aria-hidden="true" style="color:var(--et-comm-accent)">☎</span><span><strong style="display:block;color:var(--et-comm-accent)">${escHtml(activeStatus.label)}</strong><small style="display:block;margin-top:1px;color:var(--et-comm-muted);font-size:7px">${escHtml(activeStatus.detail)}</small></span></div>` : '';
+      const contacts = viewModel.index.contacts.length
+        ? viewModel.index.contacts.map(contact => {
+          const summary = communicationThreadSummary(viewModel.index, communicationThreadIdForContact(contact.id));
+          const preview = summary?.lastPreview || '새 대화를 시작해 보세요.';
+          const meta = [summary?.unread ? `${summary.unread}개 안 읽음` : '', summary?.missed ? `${summary.missed}개 부재중` : ''].filter(Boolean).join(' · ');
+          return communicationPanelButton(controls, 'open-thread', contact.name, contact.id, {
+            clipId: scrollId, radius: '0', ariaLabel: `${contact.name} 대화 열기`,
+            style: 'width:100%;border-width:0 0 1px;text-align:left;padding:8px 9px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.012));',
+            contentHtml: `<span style="display:flex;align-items:center;gap:9px">${communicationContactAvatarHtml(viewModel, contact, 'list', 40)}<span style="min-width:0;flex:1"><span style="display:flex;align-items:center;gap:5px"><strong style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px">${escHtml(contact.name)}</strong><small style="padding:1px 4px;border:1px solid var(--et-comm-line);border-radius:5px;color:var(--et-comm-muted);font-size:6px;font-weight:650">${escHtml(communicationContactSourceLabel(contact))}</small>${summary?.unread ? `<b style="display:grid;place-items:center;min-width:15px;height:15px;padding:0 4px;border-radius:8px;background:var(--et-comm-accent);color:var(--et-comm-accent-text);font-size:7px">${summary.unread}</b>` : ''}</span><small style="display:block;margin-top:3px;color:${meta ? 'var(--et-comm-accent)' : 'var(--et-comm-muted)'};font-size:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(meta || preview)}</small></span><span aria-hidden="true" style="color:var(--et-comm-muted);font-size:12px">›</span></span>`,
+          });
+        }).join('')
+        : '<div style="display:grid;place-items:center;min-height:100%;padding:30px 16px;text-align:center;color:var(--et-comm-muted)"><div><div aria-hidden="true" style="font-size:27px;opacity:.5">⌁</div><strong style="display:block;margin-top:7px;color:var(--et-comm-text);font-size:10px">아직 추가한 연락처가 없어요</strong><span style="display:block;max-width:250px;margin-top:4px;font-size:8px;line-height:1.5">현재 장면의 인물은 자동으로 나타나며, 아래 ‘연락처 추가’에서 직접 고를 수도 있어요.</span></div></div>';
+      body = `${activeCard}<div id="${scrollId}" class="et-comm-scroll" style="min-height:0;flex:1;overflow-y:auto;overscroll-behavior:contain">${contacts}</div>`;
+      const addContact = communicationPanelButton(controls, 'toggle-contact-picker', '연락처 추가', '', {
+        compact: true,
+        style: 'width:auto;min-width:auto;height:32px;min-height:32px;padding:0 10px;',
+        contentHtml: '<span aria-hidden="true">＋</span> 연락처 추가',
+      });
+      composer = `<footer style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 9px;border-top:1px solid var(--et-comm-line);background:var(--et-comm-card);color:var(--et-comm-muted);font-size:8px;flex:0 0 auto"><span>${viewModel.index.contacts.length}명과 연결됨</span>${addContact}</footer>`;
+    }
+    return `<div id="${communicationPanelSurfaceId()}" data-et-communication-skin="${escHtml(skin)}" data-et-communication-channel="${escHtml(presentation.channel || 'contact')}" style="--et-comm-bg:${palette[0]};--et-comm-card:${palette[1]};--et-comm-raised:${palette[2]};--et-comm-accent:${palette[3]};--et-comm-accent-text:${palette[4]};--et-comm-text:${palette[5]};--et-comm-muted:${palette[6]};--et-comm-line:rgba(255,255,255,.09);box-sizing:border-box;width:100%;height:min(70vh,680px);min-height:300px;display:flex;flex-direction:column;overflow:hidden;border:1px solid var(--et-comm-line);border-radius:13px;background:var(--et-comm-bg);color:var(--et-comm-text);font-family:inherit;box-shadow:0 14px 34px rgba(0,0,0,.28)"><style>@keyframes etCommTyping{0%,25%{content:"."}26%,60%{content:".."}61%,100%{content:"..."}}@keyframes etCommCallPulse{0%,100%{transform:scaleY(.35);opacity:.45}50%{transform:scaleY(1);opacity:1}}@keyframes etCommLive{0%,100%{opacity:.45}50%{opacity:1}}#${communicationPanelSurfaceId()} button:not(:disabled):active{transform:scale(.97);filter:brightness(1.08)}#${communicationPanelSurfaceId()} button:focus-visible{outline:1px solid var(--et-comm-accent);outline-offset:1px}.et-comm-typing::after{display:inline-block;min-width:18px;color:var(--et-comm-accent);font-size:12px;line-height:1;font-weight:900;letter-spacing:1px;content:".";animation:etCommTyping 1.05s steps(1,end) infinite}.et-comm-call-pulse{display:flex;align-items:center;gap:2px;height:16px;color:var(--et-comm-accent)}.et-comm-call-pulse i{display:block;width:2px;height:12px;border-radius:2px;background:currentColor;animation:etCommCallPulse .8s ease-in-out infinite}.et-comm-call-pulse i:nth-child(2){animation-delay:.13s}.et-comm-call-pulse i:nth-child(3){animation-delay:.26s}.et-comm-live-dot{display:inline-block;width:5px;height:5px;margin-right:5px;border-radius:50%;background:currentColor;animation:etCommLive 1.2s ease-in-out infinite}@media(max-width:360px){#${communicationPanelSurfaceId()} button{font-size:9px!important}}</style>${brand}${notice}${body}${composer}</div>`;
+  }
+
+  async function bindCommunicationPanelLegacy(viewModel, session = Runtime.communicationPanelSession) {
     await clearCommunicationPanelListeners();
     const active = () => inChatPanelSessionIsCurrent(session)
       && session.owner === 'communication'
@@ -65296,9 +66771,262 @@ function normalizeAdaptiveQualityState(value) {
     return { interactive: true };
   }
 
+  function communicationPanelIndexedControls(viewModel) {
+    return (viewModel?.controls || []).map((control, index) => ({
+      ...control, id: communicationPanelControlId(index),
+    }));
+  }
+
+  function communicationPanelControlKey(control) {
+    return [cleanString(control?.command, ''), cleanString(control?.value, '')].join('\u001f');
+  }
+
+  function recordCommunicationPanelPerformance(kind, startedAt, details = {}) {
+    const entry = {
+      kind: cleanString(kind, 'unknown'),
+      durationMs: Math.max(0, Date.now() - Number(startedAt || Date.now())),
+      at: nowIso(),
+      ...(details && typeof details === 'object' ? details : {}),
+    };
+    const trace = Array.isArray(Runtime.communicationPanelPerformanceTrace)
+      ? Runtime.communicationPanelPerformanceTrace : [];
+    trace.push(entry);
+    Runtime.communicationPanelPerformanceTrace = trace.slice(-24);
+    if (entry.durationMs >= 750 && typeof console !== 'undefined' && typeof console.info === 'function') {
+      console.info('[Eros Tower] communication panel timing', entry);
+    }
+    return entry;
+  }
+
+  async function bindCommunicationPanel(viewModel, session = Runtime.communicationPanelSession) {
+    await clearCommunicationPanelListeners();
+    const active = () => inChatPanelSessionIsCurrent(session)
+      && session.owner === 'communication'
+      && Runtime.communicationPanelSession === session
+      && Runtime.communicationPanelOpen === true;
+    if (!active()) return { interactive: false, stale: true };
+    let root;
+    try {
+      root = await api.getRootDocument();
+      if (!root) throw new Error('main DOM unavailable');
+    } catch (err) {
+      return { interactive: false, reason: err?.message || 'main-dom-unavailable' };
+    }
+    if (!active()) return { interactive: false, stale: true };
+    const entries = communicationPanelIndexedControls(viewModel);
+    const controlElements = await gameplayComposerControlElements(root, entries);
+    const controlBounds = await gameplayComposerControlBounds(controlElements);
+    const surfaceElement = await root.getElementById?.(communicationPanelSurfaceId());
+    const surfaceRect = await surfaceElement?.getBoundingClientRect?.() || gameplayComposerBoundsEnvelope(controlBounds);
+    const binding = {
+      session, root, viewModel, entries, controlElements, controlBounds,
+      surfaceElement, surfaceRect, measureEpoch: 0,
+    };
+    const listenerIds = [];
+    const removeLocalListeners = async () => {
+      const pending = listenerIds.splice(0);
+      await Promise.all(pending.map(async item => {
+        try { await root?.removeEventListener?.(item.type, item.id); } catch (_) {}
+      }));
+    };
+    let boundsRefresh = null;
+    const refreshBounds = () => {
+      if (boundsRefresh) return boundsRefresh;
+      const measureEpoch = binding.measureEpoch;
+      boundsRefresh = Promise.all([
+        gameplayComposerControlBounds(binding.controlElements),
+        binding.surfaceElement?.getBoundingClientRect?.(),
+      ]).then(([nextBounds, nextSurfaceRect]) => {
+        if (binding.measureEpoch !== measureEpoch || Runtime.communicationPanelLiveBinding !== binding) {
+          return binding.controlBounds;
+        }
+        binding.controlBounds = nextBounds;
+        binding.surfaceRect = nextSurfaceRect || gameplayComposerBoundsEnvelope(nextBounds) || null;
+        return nextBounds;
+      }).finally(() => { boundsRefresh = null; });
+      return boundsRefresh;
+    };
+    let pointerStart = null;
+    let pointerDownRefresh = null;
+    let pointerSequence = 0;
+    const pointerDownPromise = root.addEventListener('pointerdown', event => {
+      if (!active() || !gameplayComposerPointerCanActivate(event)) {
+        pointerSequence += 1;
+        pointerStart = null;
+        pointerDownRefresh = null;
+        return;
+      }
+      const sequence = ++pointerSequence;
+      const start = {
+        clientX: Number(event?.clientX), clientY: Number(event?.clientY),
+        pointerId: gameplayComposerPointerIdentity(event),
+      };
+      const cached = binding.controlBounds.find(item => (
+        !item?.entry?.clipId && gameplayComposerPointInRect(item?.rect, start)
+      )) || null;
+      if (cached) {
+        pointerStart = { ...start, control: cached.entry };
+        pointerDownRefresh = null;
+        return;
+      }
+      pointerStart = null;
+      pointerDownRefresh = (async () => {
+        // Scrollable contact rows are remeasured so a cached pre-scroll row can
+        // never dispatch the wrong person. Fixed header/composer controls use
+        // their current cache and respond without a SafeDOM measurement trip.
+        binding.controlElements = await gameplayComposerControlElements(root, binding.entries);
+        await refreshBounds().catch(() => {});
+        if (!active() || sequence !== pointerSequence || !gameplayComposerPointInRect(binding.surfaceRect, start)) return;
+        const control = gameplayComposerControlAtPoint(binding.controlBounds, start);
+        if (control) pointerStart = { ...start, control };
+      })();
+      pointerDownRefresh.catch(() => {});
+    });
+    const pointerUpPromise = root.addEventListener('pointerup', async event => {
+      const sequence = pointerSequence;
+      if (pointerDownRefresh) await pointerDownRefresh.catch(() => {});
+      if (!active() || sequence !== pointerSequence) return;
+      const start = pointerStart;
+      if (!gameplayComposerSamePointer(start, event)) return;
+      pointerStart = null;
+      pointerDownRefresh = null;
+      pointerSequence += 1;
+      if (!gameplayComposerPointerStayedTap(start, event)) return;
+      const control = start?.control;
+      if (control && !control.disabled && active()) {
+        handleCommunicationPanelCommand(control.command, control.value, {
+          panelSession: session,
+          index: binding.viewModel.index,
+        }).catch(() => {});
+      }
+    });
+    const pointerCancelPromise = root.addEventListener('pointercancel', event => {
+      if (pointerStart && !gameplayComposerSamePointer(pointerStart, event)) return;
+      pointerSequence += 1;
+      pointerStart = null;
+      pointerDownRefresh = null;
+    });
+    const keyPromise = root.addEventListener('keydown', async event => {
+      if (!active()) return;
+      const key = String(event?.key || '');
+      if (key === 'Escape') {
+        handleCommunicationPanelCommand(
+          Runtime.communicationPanelSelfPicker
+            ? 'toggle-self-picker'
+            : Runtime.communicationPanelContactPicker ? 'toggle-contact-picker' : 'close',
+          '', { panelSession: session },
+        ).catch(() => {});
+        return;
+      }
+      if (!['Enter', ' ', 'Spacebar'].includes(key)) return;
+      for (let index = 0; index < binding.entries.length; index += 1) {
+        const element = await root.getElementById?.(binding.entries[index].id);
+        if (!binding.entries[index].disabled && active() && await element?.matches?.(':focus')) {
+          handleCommunicationPanelCommand(binding.entries[index].command, binding.entries[index].value, {
+            panelSession: session,
+            index: binding.viewModel.index,
+          }).catch(() => {});
+          break;
+        }
+      }
+    });
+    const [pointerDownId, pointerUpId, pointerCancelId, keyId] = await Promise.all([
+      pointerDownPromise, pointerUpPromise, pointerCancelPromise, keyPromise,
+    ]);
+    [
+      ['pointerdown', pointerDownId], ['pointerup', pointerUpId],
+      ['pointercancel', pointerCancelId], ['keydown', keyId],
+    ].forEach(([type, id]) => { if (id) listenerIds.push({ type, id }); });
+    if (!active()) {
+      await removeLocalListeners();
+      return { interactive: false, stale: true };
+    }
+    Runtime.communicationPanelRoot = root;
+    Runtime.communicationPanelListenerIds = listenerIds;
+    Runtime.communicationPanelListenerSession = session;
+    Runtime.communicationPanelLiveBinding = binding;
+    hydrateCommunicationPanelAvatars(root, viewModel).catch(err => {
+      Runtime.lastError = `communication avatar hydrate: ${err?.message || err}`;
+    });
+    return { interactive: true };
+  }
+
+  function communicationPanelRemapCachedBounds(binding, entries) {
+    const previous = Array.isArray(binding?.controlBounds) ? binding.controlBounds : [];
+    const byKey = new Map(previous.map(item => [communicationPanelControlKey(item?.entry), item?.rect]));
+    return entries.map(entry => {
+      const rect = byKey.get(communicationPanelControlKey(entry));
+      return rect && !entry.clipId ? { entry, rect } : null;
+    }).filter(Boolean);
+  }
+
+  async function refreshCommunicationPanelLiveBinding(binding, entries, measureEpoch) {
+    const startedAt = Date.now();
+    const controlElements = await gameplayComposerControlElements(binding.root, entries);
+    const [controlBounds, surfaceRect] = await Promise.all([
+      gameplayComposerControlBounds(controlElements),
+      binding.surfaceElement?.getBoundingClientRect?.(),
+    ]);
+    if (Runtime.communicationPanelLiveBinding !== binding
+      || binding.measureEpoch !== measureEpoch
+      || !inChatPanelSessionIsCurrent(binding.session)) {
+      return { refreshed: false, stale: true };
+    }
+    binding.controlElements = controlElements;
+    binding.controlBounds = controlBounds;
+    binding.surfaceRect = surfaceRect || gameplayComposerBoundsEnvelope(controlBounds) || binding.surfaceRect || null;
+    recordCommunicationPanelPerformance('fast-surface-measure', startedAt, {
+      controls: entries.length, measured: controlBounds.length,
+    });
+    return { refreshed: true, controls: controlBounds.length };
+  }
+
+  async function patchCommunicationPanelSurface(viewModel, session, html) {
+    const binding = Runtime.communicationPanelLiveBinding;
+    if (!binding || binding.session !== session || !binding.surfaceElement
+      || typeof binding.surfaceElement.setInnerHTML !== 'function'
+      || !inChatPanelSessionIsCurrent(session)) {
+      return { patched: false, reason: 'live-surface-unavailable' };
+    }
+    const previousSkin = cleanString(binding.viewModel?.presentation?.skin, 'neutral');
+    const nextSkin = cleanString(viewModel?.presentation?.skin, 'neutral');
+    if (previousSkin !== nextSkin) return { patched: false, reason: 'presentation-theme-changed' };
+    const innerHtml = gameplayComposerPanelInnerHtml(html);
+    if (!innerHtml) return { patched: false, reason: 'panel-inner-html-unavailable' };
+    const startedAt = Date.now();
+    const entries = communicationPanelIndexedControls(viewModel);
+    const optimisticBounds = communicationPanelRemapCachedBounds(binding, entries);
+    const renderEpoch = Math.max(0, Number(Runtime.communicationPanelRenderEpoch || 0)) + 1;
+    Runtime.communicationPanelRenderEpoch = renderEpoch;
+    await binding.surfaceElement.setInnerHTML(innerHtml);
+    if (Runtime.communicationPanelLiveBinding !== binding
+      || binding.session !== session
+      || !inChatPanelSessionIsCurrent(session)
+      || Runtime.communicationPanelRenderEpoch !== renderEpoch) {
+      return { patched: false, stale: true };
+    }
+    binding.viewModel = viewModel;
+    binding.entries = entries;
+    binding.controlElements = [];
+    binding.controlBounds = optimisticBounds;
+    binding.measureEpoch = Math.max(0, Number(binding.measureEpoch || 0)) + 1;
+    const measureEpoch = binding.measureEpoch;
+    hydrateCommunicationPanelAvatars(binding.root, viewModel).catch(err => {
+      Runtime.lastError = `communication avatar hydrate: ${err?.message || err}`;
+    });
+    recordCommunicationPanelPerformance('fast-surface-paint', startedAt, {
+      controls: entries.length, cachedBounds: optimisticBounds.length,
+    });
+    refreshCommunicationPanelLiveBinding(binding, entries, measureEpoch).catch(err => {
+      Runtime.lastError = `communication fast surface measure: ${err?.message || err}`;
+    });
+    return { mounted: true, interactive: true, patched: true, fastSurface: true };
+  }
+
   function adoptCommunicationUiScope(session, index = session?.index) {
     const scope = cleanString(session?.context?.scope || index?.scope, '');
     if (!scope) return;
+    if (!Runtime.communicationPanelScope) Runtime.communicationPanelScope = scope;
     Runtime.communicationUiScope = scope;
     setCommunicationCurrentScope(scope, { reconcile: false });
     communicationBadgeMap().set(scope, communicationBadgeFromIndex(index));
@@ -65313,6 +67041,11 @@ function normalizeAdaptiveQualityState(value) {
     const resolvedSession = session || await loadCommunicationSession([], conf);
     if (!inChatPanelSessionIsCurrent(panelSession)) return { mounted: false, stale: true };
     const resolvedIndex = index || resolvedSession.index;
+    const resolvedScope = cleanString(resolvedSession?.context?.scope || resolvedIndex?.scope, '');
+    if (Runtime.communicationPanelScope && resolvedScope
+      && Runtime.communicationPanelScope !== resolvedScope) {
+      return { mounted: false, stale: true, scopeMismatch: true };
+    }
     adoptCommunicationUiScope(resolvedSession, resolvedIndex);
     let resolvedThread = thread;
     if (!resolvedThread && Runtime.communicationPanelThreadId) {
@@ -65329,9 +67062,35 @@ function normalizeAdaptiveQualityState(value) {
     if (!inChatPanelSessionIsCurrent(panelSession)) return { mounted: false, stale: true };
     const viewModel = buildCommunicationPanelViewModel(resolvedSession, resolvedIndex, resolvedThread);
     const html = renderCommunicationPanel(viewModel);
+    Runtime.communicationPanelMountedData = {
+      conf,
+      session: { ...resolvedSession, index: resolvedIndex },
+      index: resolvedIndex,
+      thread: resolvedThread,
+      panelSession,
+    };
+    const patched = await patchCommunicationPanelSurface(viewModel, panelSession, html);
+    if (patched?.patched || patched?.stale) return patched;
     return await setOwnedChatPanel('communication', panelSession, html, {
       className: 'eros-tower-communication-panel',
     }, async () => await bindCommunicationPanel(viewModel, panelSession));
+  }
+
+  async function paintMountedCommunicationPanel(options = {}) {
+    const panelSession = options.panelSession || Runtime.communicationPanelSession;
+    const mounted = Runtime.communicationPanelMountedData;
+    if (!mounted || mounted.panelSession !== panelSession || !inChatPanelSessionIsCurrent(panelSession)) {
+      return { mounted: false, stale: true };
+    }
+    const index = normalizeCommunicationIndex(options.index || mounted.index, mounted.index?.scope || '');
+    const thread = Object.prototype.hasOwnProperty.call(options, 'thread') ? options.thread : mounted.thread;
+    return await mountCommunicationPanel(
+      mounted.conf,
+      { ...mounted.session, index },
+      index,
+      thread,
+      panelSession,
+    );
   }
 
   async function refreshCommunicationPanel(panelSession = Runtime.communicationPanelSession) {
@@ -65342,6 +67101,10 @@ function normalizeAdaptiveQualityState(value) {
     if (!inChatPanelSessionIsCurrent(panelSession)) return { mounted: false, stale: true };
     const session = await loadCommunicationSession([], conf);
     if (!inChatPanelSessionIsCurrent(panelSession)) return { mounted: false, stale: true };
+    if (Runtime.communicationPanelScope && session.context.scope !== Runtime.communicationPanelScope) {
+      await unmountCommunicationPanel({ session: panelSession });
+      return { mounted: false, stale: true, scopeMismatch: true };
+    }
     let index = session.index;
     adoptCommunicationUiScope(session, index);
     if (threadId) {
@@ -65372,25 +67135,159 @@ function normalizeAdaptiveQualityState(value) {
     return cleanString(value, '').slice(0, 1600);
   }
 
+  function promptCommunicationIdentity() {
+    if (Runtime.communicationIdentityInputOpen) return null;
+    Runtime.communicationIdentityInputOpen = true;
+    try {
+      return promptCommunicationText('모시모씨에서 ‘나’로 사용할 인물의 정확한 이름이나 별칭을 입력하세요.');
+    } finally {
+      Runtime.communicationIdentityInputOpen = false;
+    }
+  }
+
+  function promptCommunicationDraft(options = {}) {
+    const scope = cleanString(options.scope, Runtime.communicationUiScope);
+    const threadId = cleanString(options.threadId, Runtime.communicationPanelThreadId);
+    const key = communicationPanelDraftKey(scope, threadId);
+    const limit = options.call === true ? 1200 : 1600;
+    const current = normalizeCommunicationUserText(
+      options.initial !== undefined ? options.initial : communicationPanelDraftMap().get(key),
+      limit,
+    );
+    const contactName = cleanString(options.contactName, '상대');
+    const messageTerm = cleanString(options.messageTerm, '메시지');
+    const label = options.call === true
+      ? `${contactName}에게 실시간으로 전할 말을 입력하세요.`
+      : `${contactName}에게 보낼 ${messageTerm}를 입력하세요.`;
+    const entered = promptCommunicationText(label, current);
+    if (entered === null) return null;
+    const draft = normalizeCommunicationUserText(entered, limit);
+    communicationPanelDraftMap().set(key, draft);
+    return draft;
+  }
+
+  function normalizeCommunicationUserText(value, limit = 1600) {
+    const text = cleanString(value, '').slice(0, Math.max(1, Number(limit || 1600)));
+    if (/sendRequest\s*\(\s*['"]CALL_INSTANCE['"]|^\s*\(\.\.\.args\)\s*=>/i.test(text)) return '';
+    return text;
+  }
+
+  async function readCommunicationPanelDraft(scope = '', threadId = Runtime.communicationPanelThreadId) {
+    const key = communicationPanelDraftKey(scope, threadId);
+    const value = normalizeCommunicationUserText(communicationPanelDraftMap().get(key), 1600);
+    communicationPanelDraftMap().set(key, value);
+    return cleanString(value, '');
+  }
+
   async function handleCommunicationPanelCommand(command, value = '', options = {}) {
     const panelSession = options?.panelSession || Runtime.communicationPanelSession;
     if (!inChatPanelSessionIsCurrent(panelSession) || panelSession?.owner !== 'communication'
       || Runtime.communicationPanelSession !== panelSession) return { stale: true };
     if (Runtime.communicationPanelBusy && !['close'].includes(command)) return { busy: true };
     if (command === 'close') return await unmountCommunicationPanel({ session: panelSession });
+    if (command === 'toggle-self-picker') {
+      Runtime.communicationPanelContactPicker = false;
+      Runtime.communicationPanelSelfPicker = !Runtime.communicationPanelSelfPicker;
+      return await paintMountedCommunicationPanel({ panelSession });
+    }
+    if (command === 'toggle-contact-picker') {
+      Runtime.communicationPanelSelfPicker = false;
+      Runtime.communicationPanelContactPicker = !Runtime.communicationPanelContactPicker;
+      return await paintMountedCommunicationPanel({ panelSession });
+    }
     if (command === 'home') {
+      Runtime.communicationPanelSelfPicker = false;
+      Runtime.communicationPanelContactPicker = false;
       Runtime.communicationPanelThreadId = '';
-      return await refreshCommunicationPanel(panelSession);
+      return await paintMountedCommunicationPanel({ panelSession, thread: null });
     }
     if (command === 'open-thread') {
-      const contact = communicationContactById(options.index, value);
+      Runtime.communicationPanelSelfPicker = false;
+      Runtime.communicationPanelContactPicker = false;
+      const mounted = Runtime.communicationPanelMountedData;
+      const index = normalizeCommunicationIndex(options.index || mounted?.index, mounted?.index?.scope || '');
+      const contact = communicationContactById(index, value);
       if (!contact) throw new Error('연락처를 찾지 못했습니다.');
       Runtime.communicationPanelThreadId = communicationThreadIdForContact(contact.id);
-      return await refreshCommunicationPanel(panelSession);
+      const summary = communicationThreadSummary(index, Runtime.communicationPanelThreadId);
+      if (summary) {
+        summary.unread = 0;
+        summary.missed = 0;
+      }
+      setCommunicationRuntimeBadge(index);
+      const thread = await loadCommunicationThread(
+        index.scope,
+        Runtime.communicationPanelThreadId,
+        contact.id,
+      );
+      if (!inChatPanelSessionIsCurrent(panelSession)) return { stale: true };
+      const painted = await paintMountedCommunicationPanel({ panelSession, index, thread });
+      markCommunicationThreadRead(index.scope, Runtime.communicationPanelThreadId).catch(err => {
+        Runtime.lastError = `communication read marker: ${err?.message || err}`;
+      });
+      return painted;
+    }
+    if (command === 'edit-message-draft' || command === 'edit-call-draft') {
+      const mounted = Runtime.communicationPanelMountedData;
+      const index = normalizeCommunicationIndex(options.index || mounted?.index, mounted?.index?.scope || '');
+      const summary = communicationThreadSummary(index, Runtime.communicationPanelThreadId);
+      const contact = communicationContactById(index, cleanString(value, summary?.contactId));
+      if (!contact) throw new Error('연락 상대를 찾지 못했습니다.');
+      const presentation = communicationPresentation(
+        index, mounted?.session?.state, mounted?.session?.context, contact,
+      );
+      const draft = promptCommunicationDraft({
+        scope: index.scope,
+        threadId: Runtime.communicationPanelThreadId,
+        contactName: contact.name,
+        messageTerm: presentation.message,
+        call: command === 'edit-call-draft',
+      });
+      if (draft === null) return { cancelled: true };
+      return await paintMountedCommunicationPanel({ panelSession, index, thread: mounted?.thread || null });
+    }
+    if (command === 'compose' || command === 'call-turn') {
+      const draftScope = cleanString(
+        options?.index?.scope || Runtime.communicationPanelMountedData?.index?.scope,
+        Runtime.communicationUiScope,
+      );
+      let draft = await readCommunicationPanelDraft(draftScope, Runtime.communicationPanelThreadId);
+      if (!draft) {
+        const mounted = Runtime.communicationPanelMountedData;
+        const index = normalizeCommunicationIndex(options.index || mounted?.index, draftScope);
+        const summary = communicationThreadSummary(index, Runtime.communicationPanelThreadId);
+        const contact = communicationContactById(index, cleanString(value, summary?.contactId));
+        if (!contact) throw new Error('연락 상대를 찾지 못했습니다.');
+        const presentation = communicationPresentation(
+          index, mounted?.session?.state, mounted?.session?.context, contact,
+        );
+        draft = promptCommunicationDraft({
+          scope: draftScope,
+          threadId: Runtime.communicationPanelThreadId,
+          contactName: contact.name,
+          messageTerm: presentation.message,
+          call: command === 'call-turn',
+        });
+        if (draft === null) return { cancelled: true };
+      }
+      Runtime.communicationPanelActivity = {
+        kind: 'connecting',
+        threadId: Runtime.communicationPanelThreadId,
+        contactId: cleanString(value, ''),
+        operationId: `panel-${command}`,
+      };
+    } else if (command === 'start-call') {
+      Runtime.communicationPanelActivity = {
+        kind: 'dialing',
+        threadId: Runtime.communicationPanelThreadId,
+        contactId: cleanString(value, ''),
+        operationId: 'panel-start-call',
+      };
     }
     Runtime.communicationPanelBusy = true;
     let session = null;
     try {
+      await paintMountedCommunicationPanel({ panelSession }).catch(() => {});
       const conf = await getConfig();
       if (!inChatPanelSessionIsCurrent(panelSession)) return { stale: true };
       session = await loadCommunicationSession([], conf);
@@ -65398,27 +67295,114 @@ function normalizeAdaptiveQualityState(value) {
       adoptCommunicationUiScope(session, session.index);
       const index = await loadCommunicationIndex(session.context.scope);
       if (!inChatPanelSessionIsCurrent(panelSession)) return { stale: true };
-      if (command === 'cycle-skin') {
-        const order = COMMUNICATION_SKINS;
-        index.skinMode = order[(order.indexOf(index.skinMode) + 1) % order.length];
+      if (command === 'select-self-auto' || command === 'select-self' || command === 'select-self-query') {
+        if (normalizeCommunicationCall(index.activeCall)) throw new Error('진행 중인 연락을 끝낸 뒤 내 정보를 바꿀 수 있습니다.');
+        let identity = null;
+        if (command === 'select-self') {
+          const actor = communicationSelfIdentityCandidates(session.state, session.context)
+            .find(candidate => candidate.id === cleanString(value, ''));
+          if (!actor) throw new Error('선택한 인물 정보를 다시 찾지 못했습니다.');
+          identity = normalizeCommunicationSelfIdentity({
+            ...actor,
+            profile: actor.profile || safeJsonStringify(actor.canonicalSubject || actor.character || {}),
+          });
+        } else if (command === 'select-self-query') {
+          const query = promptCommunicationIdentity();
+          if (query === null) return { cancelled: true };
+          if (!query) throw new Error('사용할 인물 이름을 입력하세요.');
+          const resolved = resolveGameplayActorQuery(session.state, session.context, query);
+          if (resolved.matches.length > 1) {
+            throw new Error('같거나 비슷한 이름이 여러 명입니다. 위 목록에서 정확한 인물을 선택하세요.');
+          }
+          const actor = resolved.actor;
+          identity = normalizeCommunicationSelfIdentity(actor ? {
+            ...actor,
+            profile: actor.profile || safeJsonStringify(actor.canonicalSubject || actor.character || {}),
+          } : {
+            id: `user:${slug(resolved.createName || query)}`,
+            name: resolved.createName || query,
+            source: 'user',
+            profile: `User-selected private communication identity: ${resolved.createName || query}`,
+          });
+        }
+        index.selfIdentity = command === 'select-self-auto' ? null : identity;
+        index.contacts = discoverCommunicationContacts(session.state, session.context, index.contacts, index);
         await saveCommunicationIndex(session.context.scope, index);
+        Runtime.communicationPanelSelfPicker = false;
+        Runtime.communicationPanelContactPicker = false;
+        Runtime.communicationPanelThreadId = '';
+      } else if (command === 'discover-original-roster') {
+        const roster = await runCommunicationOriginalRosterDiscovery(conf, session.context, session.state);
+        if (!roster) {
+          throw new Error('현재 카드와 로어에서 확실한 원작 및 원작 인물을 확인하지 못했습니다. 원작명을 카드나 로어에 명시해 주세요.');
+        }
+        index.originalRoster = roster;
+        await saveCommunicationIndex(session.context.scope, index);
+        Runtime.communicationPanelSelfPicker = false;
+        Runtime.communicationPanelContactPicker = true;
+        Runtime.communicationPanelThreadId = '';
+      } else if (command === 'add-contact' || command === 'add-contact-query') {
+        const selfIdentity = communicationSelfIdentity(session.state, session.context, index);
+        const manuallySelected = Boolean(normalizeCommunicationSelfIdentity(index.selfIdentity));
+        let contact = null;
+        if (command === 'add-contact') {
+          contact = communicationContactCandidates(session.state, session.context, index)
+            .find(candidate => candidate.id === cleanString(value, '')) || null;
+          if (!contact) throw new Error('선택한 인물 정보를 다시 찾지 못했습니다. 연락처 목록을 새로 열어 주세요.');
+        } else {
+          const query = promptCommunicationText('현재 채팅봇에서 연락처에 추가할 인물의 정확한 이름이나 별칭을 입력하세요.');
+          if (query === null) return { cancelled: true };
+          if (!query) throw new Error('추가할 인물 이름을 입력하세요.');
+          const resolved = resolveCommunicationContactActorQuery(session.state, session.context, index, query);
+          if (resolved.matches.length > 1) {
+            throw new Error('같거나 비슷한 이름이 여러 명입니다. 연락처 추가 목록에서 정확한 인물을 선택하세요.');
+          }
+          const actor = resolved.actor;
+          if (!actor) throw new Error('현재 채팅봇의 등장인물에서 해당 이름을 찾지 못했습니다.');
+          contact = communicationContactFromActor(actor, selfIdentity, manuallySelected, { addedByUser: true });
+        }
+        if (!contact) throw new Error('이 이름으로 연락처를 만들 수 없습니다.');
+        const selfKeys = communicationRecordIdentityKeys(selfIdentity);
+        if (Array.from(communicationRecordIdentityKeys(contact)).some(key => selfKeys.has(key))) {
+          throw new Error('현재 내 정보로 선택한 인물은 연락처에 추가할 수 없습니다.');
+        }
+        const existing = communicationContactById(index, contact.id);
+        const added = mergeCommunicationContactRecords(existing, { ...contact, addedByUser: true });
+        index.contacts = index.contacts.filter(item => item.id !== added.id)
+          .concat(added).slice(-COMMUNICATION_CONTACT_MAX);
+        await saveCommunicationIndex(session.context.scope, index);
+        Runtime.communicationPanelSelfPicker = false;
+        Runtime.communicationPanelContactPicker = false;
+        Runtime.communicationPanelThreadId = communicationThreadIdForContact(added.id);
       } else if (command === 'compose') {
         const contactId = cleanString(value, communicationThreadSummary(index, Runtime.communicationPanelThreadId)?.contactId);
-        const text = promptCommunicationText('보낼 메시지를 자유롭게 입력하세요.');
-        if (text === null) return { cancelled: true };
+        const draftKey = communicationPanelDraftKey(session.context.scope, Runtime.communicationPanelThreadId);
+        const text = await readCommunicationPanelDraft(session.context.scope);
         if (!text) throw new Error('빈 메시지는 보낼 수 없습니다.');
+        communicationPanelDraftMap().delete(draftKey);
         await mountCommunicationPanel(conf, session, index, null, panelSession);
-        await sendCommunicationText(contactId, text, { session: { ...session, index } });
+        try {
+          await sendCommunicationText(contactId, text, { session: { ...session, index } });
+        } catch (err) {
+          communicationPanelDraftMap().set(draftKey, text);
+          throw err;
+        }
       } else if (command === 'start-call') {
         const contactId = cleanString(value, communicationThreadSummary(index, Runtime.communicationPanelThreadId)?.contactId);
         await mountCommunicationPanel(conf, session, index, null, panelSession);
         await startCommunicationCall(contactId, { session: { ...session, index } });
       } else if (command === 'call-turn') {
-        const text = promptCommunicationText('통화로 전할 말을 자유롭게 입력하세요.');
-        if (text === null) return { cancelled: true };
+        const draftKey = communicationPanelDraftKey(session.context.scope, Runtime.communicationPanelThreadId);
+        const text = await readCommunicationPanelDraft(session.context.scope);
         if (!text) throw new Error('빈 말은 전할 수 없습니다.');
+        communicationPanelDraftMap().delete(draftKey);
         await mountCommunicationPanel(conf, session, index, null, panelSession);
-        await continueCommunicationCall(text, { session: { ...session, index } });
+        try {
+          await continueCommunicationCall(text, { session: { ...session, index } });
+        } catch (err) {
+          communicationPanelDraftMap().set(draftKey, text);
+          throw err;
+        }
       } else if (command === 'end-call') {
         await endCommunicationCall('user-ended', { session: { ...session, index } });
       } else if (command === 'answer-call') {
@@ -65438,17 +67422,49 @@ function normalizeAdaptiveQualityState(value) {
       );
       return { handled: false, error: err?.message || String(err || '') };
     } finally {
-      if (Runtime.communicationPanelSession === panelSession) Runtime.communicationPanelBusy = false;
+      if (Runtime.communicationPanelSession === panelSession) {
+        Runtime.communicationPanelBusy = false;
+        Runtime.communicationPanelActivity = null;
+      }
       if (Runtime.communicationPanelOpen && inChatPanelSessionIsCurrent(panelSession)) {
         await refreshCommunicationPanel(panelSession).catch(() => {});
       }
     }
   }
 
+  async function mountCommunicationLoadingPanel(panelSession) {
+    if (!inChatPanelSessionIsCurrent(panelSession)) return { mounted: false, stale: true };
+    const index = createDefaultCommunicationIndex('');
+    const viewModel = {
+      index,
+      thread: null,
+      presentation: { skin: 'neutral', device: '연락', message: '메시지', call: '통화' },
+      activeCall: null,
+      activeContact: null,
+      selectedContact: null,
+      selfIdentity: { id: 'user:loading', name: '확인 중', source: 'user', automatic: true },
+      selfProfile: { id: 'user:loading', name: '확인 중', source: 'user', label: '내 정보', description: '' },
+      selfCandidates: [],
+      selfPicker: false,
+      contactCandidates: [],
+      contactPicker: false,
+      originalWorkHints: [],
+      originalRoster: null,
+      busy: false,
+      loading: true,
+    };
+    const html = renderCommunicationPanel(viewModel);
+    return await setOwnedChatPanel('communication', panelSession, html, {
+      className: 'eros-tower-communication-panel',
+    }, async () => await bindCommunicationPanel(viewModel, panelSession));
+  }
+
   async function toggleCommunicationPanel() {
     if (Runtime.communicationPanelOpen && Runtime.inChatPanelOwner === 'communication') {
       return await unmountCommunicationPanel({ session: Runtime.communicationPanelSession });
     }
+    const warmScope = communicationLauncherScope();
+    const warmSnapshot = communicationPanelWarmSnapshot(warmScope);
     const previousGameplaySession = Runtime.gameplayComposerPanelSession;
     const panelSession = claimInChatPanelOwner('communication');
     Runtime.communicationPanelSession = panelSession;
@@ -65458,8 +67474,24 @@ function normalizeAdaptiveQualityState(value) {
     }
     if (!inChatPanelSessionIsCurrent(panelSession)) return { opened: false, stale: true };
     Runtime.communicationPanelOpen = true;
-    Runtime.communicationPanelThreadId = '';
+    Runtime.communicationPanelThreadId = cleanString(warmSnapshot?.threadId, '');
+    Runtime.communicationPanelScope = cleanString(warmSnapshot?.scope, '');
+    Runtime.communicationPanelSelfPicker = warmSnapshot?.selfPicker === true;
+    Runtime.communicationPanelContactPicker = warmSnapshot?.contactPicker === true;
+    Runtime.communicationPanelMountedData = null;
     await reconcileCommunicationLauncherForPanelState();
+    if (warmSnapshot) {
+      await mountCommunicationPanel(
+        warmSnapshot.conf,
+        { ...warmSnapshot.session, index: warmSnapshot.index },
+        warmSnapshot.index,
+        warmSnapshot.thread,
+        panelSession,
+      );
+    } else {
+      await mountCommunicationLoadingPanel(panelSession);
+    }
+    if (!inChatPanelSessionIsCurrent(panelSession)) return { opened: false, stale: true };
     try {
       const conf = await getConfig();
       if (!inChatPanelSessionIsCurrent(panelSession)) return { opened: false, stale: true };
@@ -65482,8 +67514,13 @@ function normalizeAdaptiveQualityState(value) {
       }
       if (active) {
         Runtime.communicationPanelThreadId = active.threadId;
+      } else if (Runtime.communicationPanelThreadId) {
+        const cachedContactStillExists = session.index.contacts.some(contact => (
+          communicationThreadIdForContact(contact.id) === Runtime.communicationPanelThreadId
+        ));
+        if (!cachedContactStillExists) Runtime.communicationPanelThreadId = '';
       }
-      return await refreshCommunicationPanel(panelSession);
+      return await mountCommunicationPanel(conf, session, session.index, null, panelSession);
     } catch (err) {
       if (!inChatPanelSessionIsCurrent(panelSession)) return { opened: false, stale: true };
       Runtime.lastError = `communication panel open: ${err?.message || err}`;
@@ -65525,7 +67562,7 @@ function normalizeAdaptiveQualityState(value) {
 
   function communicationLauncherMarkup() {
     const label = COMMUNICATION_AGENT_NAME + ' 열기';
-    return '<button id="' + escHtml(UI_ID_COMMUNICATION_LAUNCHER) + '" type="button" aria-label="' + escHtml(label) + '" title="' + escHtml(label) + '" style="pointer-events:auto;position:relative;box-sizing:border-box;width:36px;min-width:36px;height:36px;min-height:36px;padding:3px;border:1px solid rgba(103,75,120,.62);border-radius:10px;background:linear-gradient(135deg,#f6ecff,#fffaf6);cursor:pointer;touch-action:manipulation;box-shadow:0 3px 10px rgba(50,31,64,.22)"><img src="' + COMMUNICATION_ICON_DATA_URI + '" alt="" width="28" height="28" style="display:block;width:28px;height:28px;image-rendering:pixelated"><span id="' + escHtml(communicationLauncherBadgeId()) + '" aria-hidden="true" style="display:none"></span></button><div id="' + escHtml(communicationLauncherNoticeId()) + '" role="status" aria-live="polite" style="display:none"><strong id="' + escHtml(communicationLauncherNoticeNameId()) + '"></strong><span id="' + escHtml(communicationLauncherNoticeContentId()) + '"></span></div>';
+    return '<button id="' + escHtml(UI_ID_COMMUNICATION_LAUNCHER) + '" type="button" aria-label="' + escHtml(label) + '" title="' + escHtml(label) + '" style="pointer-events:auto;position:relative;box-sizing:border-box;width:44px;min-width:44px;height:44px;min-height:44px;padding:5px;border:1px solid rgba(198,153,218,.48);border-radius:12px;background:linear-gradient(145deg,#211b29,#31243b);cursor:pointer;touch-action:manipulation;box-shadow:0 7px 18px rgba(25,15,33,.3),inset 0 1px rgba(255,255,255,.06)"><img src="' + COMMUNICATION_ICON_DATA_URI + '" alt="" width="32" height="32" style="display:block;width:32px;height:32px;image-rendering:pixelated"><span id="' + escHtml(communicationLauncherBadgeId()) + '" aria-hidden="true" style="display:none"></span></button><div id="' + escHtml(communicationLauncherNoticeId()) + '" role="status" aria-live="polite" style="display:none"><strong id="' + escHtml(communicationLauncherNoticeNameId()) + '"></strong><span id="' + escHtml(communicationLauncherNoticeContentId()) + '"></span></div>';
   }
 
   function setGameplayLauncherDesired(desired) {
@@ -65919,12 +67956,12 @@ function normalizeAdaptiveQualityState(value) {
     await badge.setTextContent?.(visual.badgeText);
     await badge.setStyleAttribute?.(
       (visual.badgeText ? 'display:inline-flex;' : 'display:none;')
-      + 'position:absolute;right:-5px;top:-6px;align-items:center;justify-content:center;box-sizing:content-box;min-width:15px;height:15px;padding:0 2px;border:2px solid #fff;border-radius:10px;background:#d9405f;color:#fff;font:800 9px/15px system-ui;text-align:center;'
+      + 'position:absolute;right:-5px;top:-6px;align-items:center;justify-content:center;box-sizing:content-box;min-width:15px;height:15px;padding:0 2px;border:2px solid #211b29;border-radius:10px;background:#e45f7b;color:#fff;font:800 9px/15px system-ui;text-align:center;'
     );
     if (visual.notice) {
       await noticeName?.setTextContent?.(visual.notice.contactName || COMMUNICATION_AGENT_NAME);
       await noticeContent?.setTextContent?.(visual.notice.content || '');
-      await notice.setStyleAttribute?.('display:flex;pointer-events:none;box-sizing:border-box;width:min(220px,calc(100vw - 24px));padding:8px 10px;flex-direction:column;gap:2px;border:1px solid rgba(91,62,93,.28);border-radius:12px;background:#fffaf6;color:#3f3146;box-shadow:0 4px 14px rgba(45,28,53,.18);font:700 11px/1.35 system-ui;overflow-wrap:anywhere;');
+      await notice.setStyleAttribute?.('display:flex;pointer-events:none;box-sizing:border-box;width:min(220px,calc(100vw - 24px));padding:8px 10px;flex-direction:column;gap:2px;border:1px solid rgba(198,153,218,.35);border-radius:12px;background:#211b29;color:#f5edf8;box-shadow:0 7px 18px rgba(25,15,33,.3);font:700 11px/1.35 system-ui;overflow-wrap:anywhere;');
     } else {
       await noticeName?.setTextContent?.('');
       await noticeContent?.setTextContent?.('');
